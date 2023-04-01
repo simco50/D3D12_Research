@@ -14,7 +14,7 @@
 VisualizeTexture::VisualizeTexture(GraphicsDevice* pDevice)
 {
 	m_pVisualizeRS = new RootSignature(pDevice);
-	m_pVisualizeRS->AddConstantBufferView(0);
+	m_pVisualizeRS->AddRootCBV(0);
 	m_pVisualizeRS->Finalize("Common");
 	m_pVisualizePSO = pDevice->CreateComputePipeline(m_pVisualizeRS, "ImageVisualize.hlsl", "CSMain");
 

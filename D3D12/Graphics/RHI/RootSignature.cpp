@@ -17,7 +17,7 @@ uint32 RootSignature::AddRootConstants(uint32 shaderRegister, uint32 constantCou
 	return rootIndex;
 }
 
-uint32 RootSignature::AddConstantBufferView(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+uint32 RootSignature::AddRootCBV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
 	uint32 rootIndex = m_NumParameters;
 	Get(rootIndex).InitAsConstantBufferView(shaderRegister, 0u, visibility);
@@ -60,6 +60,7 @@ void RootSignature::AddDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex,
 void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc)
 {
 	m_StaticSamplers.push_back(CD3DX12_STATIC_SAMPLER_DESC(samplerDesc));
+	m_StaticSamplers.back().RegisterSpace = 1;
 }
 
 void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags)
@@ -72,11 +73,11 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 
 	if (!GetParent()->GetCapabilities().SupportsMeshShading())
 	{
-		visibilityFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS
-			| D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
+		visibilityFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS;
+		visibilityFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
 	}
 
-	int staticSamplerRegisterSlot = 10;
+	int staticSamplerRegisterSlot = 0;
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP));
 	AddStaticSampler(CD3DX12_STATIC_SAMPLER_DESC(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER, 0.0f, 16u, D3D12_COMPARISON_FUNC_LESS_EQUAL, D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK));

@@ -16,7 +16,7 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 	{
 		m_pGlobalRS = new RootSignature(pDevice);
 		m_pGlobalRS->AddRootConstants(0, 1);
-		m_pGlobalRS->AddConstantBufferView(100);
+		m_pGlobalRS->AddRootCBV(100);
 		m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
 		m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
 		m_pGlobalRS->Finalize("Global");

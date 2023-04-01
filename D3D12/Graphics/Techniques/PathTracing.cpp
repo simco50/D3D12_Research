@@ -17,8 +17,8 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	}
 
 	m_pRS = new RootSignature(pDevice);
-	m_pRS->AddConstantBufferView(0);
-	m_pRS->AddConstantBufferView(100);
+	m_pRS->AddRootCBV(0);
+	m_pRS->AddRootCBV(100);
 	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
 	m_pRS->Finalize("Global");
 

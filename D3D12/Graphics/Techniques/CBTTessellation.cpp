@@ -338,8 +338,8 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 
 	m_pCBTRS = new RootSignature(pDevice);
 	m_pCBTRS->AddRootConstants<Vector4i>(0);
-	m_pCBTRS->AddConstantBufferView(1);
-	m_pCBTRS->AddConstantBufferView(100);
+	m_pCBTRS->AddRootCBV(1);
+	m_pCBTRS->AddRootCBV(100);
 	m_pCBTRS->Finalize("CBT");
 
 	{

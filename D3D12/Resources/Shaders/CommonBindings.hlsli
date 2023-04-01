@@ -7,18 +7,18 @@
 ConstantBuffer<ViewUniforms> cView : 						register(b100);
 
 //Static samplers
-SamplerState sLinearWrap :								  	register(s10);
-SamplerState sLinearClamp :								 	register(s11);
-SamplerState sLinearBorder :								register(s12);
-SamplerState sPointWrap :								   	register(s13);
-SamplerState sPointClamp :								  	register(s14);
-SamplerState sPointBorder :								 	register(s15);
-SamplerState sAnisoWrap :								   	register(s16);
-SamplerState sAnisoClamp :								  	register(s17);
-SamplerState sAnisoBorder :									register(s18);
-SamplerState sMaterialSampler :							 	register(s19);
-SamplerComparisonState sLinearClampComparisonGreater :		register(s20);
-SamplerComparisonState sLinearWrapComparisonGreater :		register(s21);
+SamplerState sLinearWrap :								  	register(s0,  space1);
+SamplerState sLinearClamp :								 	register(s1,  space1);
+SamplerState sLinearBorder :								register(s2,  space1);
+SamplerState sPointWrap :								   	register(s3,  space1);
+SamplerState sPointClamp :								  	register(s4,  space1);
+SamplerState sPointBorder :								 	register(s5,  space1);
+SamplerState sAnisoWrap :								   	register(s6,  space1);
+SamplerState sAnisoClamp :								  	register(s7,  space1);
+SamplerState sAnisoBorder :									register(s8,  space1);
+SamplerState sMaterialSampler :							 	register(s9,  space1);
+SamplerComparisonState sLinearClampComparisonGreater :		register(s10, space1);
+SamplerComparisonState sLinearWrapComparisonGreater :		register(s11, space1);
 
 template<typename T>
 T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)

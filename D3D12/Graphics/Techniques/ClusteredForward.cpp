@@ -29,8 +29,8 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	//Light Culling
 	{
 		m_pLightCullingRS = new RootSignature(pDevice);
-		m_pLightCullingRS->AddConstantBufferView(0);
-		m_pLightCullingRS->AddConstantBufferView(100);
+		m_pLightCullingRS->AddRootCBV(0);
+		m_pLightCullingRS->AddRootCBV(100);
 		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
 		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
 		m_pLightCullingRS->Finalize("Light Culling");
@@ -43,8 +43,8 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	{
 		m_pDiffuseRS = new RootSignature(pDevice);
 		m_pDiffuseRS->AddRootConstants(0, 3);
-		m_pDiffuseRS->AddConstantBufferView(1);
-		m_pDiffuseRS->AddConstantBufferView(100);
+		m_pDiffuseRS->AddRootCBV(1);
+		m_pDiffuseRS->AddRootCBV(100);
 		m_pDiffuseRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
 		m_pDiffuseRS->Finalize("Diffuse");
 
@@ -110,7 +110,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	//Cluster debug rendering
 	{
 		m_pVisualizeLightClustersRS = new RootSignature(pDevice);
-		m_pVisualizeLightClustersRS->AddConstantBufferView(100);
+		m_pVisualizeLightClustersRS->AddRootCBV(100);
 		m_pVisualizeLightClustersRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
 		m_pVisualizeLightClustersRS->Finalize("Visualize Light Clusters");
 
@@ -130,8 +130,8 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 
 	{
 		m_pVisualizeLightsRS = new RootSignature(pDevice);
-		m_pVisualizeLightsRS->AddConstantBufferView(0);
-		m_pVisualizeLightsRS->AddConstantBufferView(100);
+		m_pVisualizeLightsRS->AddRootCBV(0);
+		m_pVisualizeLightsRS->AddRootCBV(100);
 		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
 		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
 		m_pVisualizeLightsRS->Finalize("Light Density Visualization");
@@ -141,8 +141,8 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 
 	{
 		m_pVolumetricLightingRS = new RootSignature(pDevice);
-		m_pVolumetricLightingRS->AddConstantBufferView(0);
-		m_pVolumetricLightingRS->AddConstantBufferView(100);
+		m_pVolumetricLightingRS->AddRootCBV(0);
+		m_pVolumetricLightingRS->AddRootCBV(100);
 		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
 		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
 		m_pVolumetricLightingRS->Finalize("Inject Fog Lighting");

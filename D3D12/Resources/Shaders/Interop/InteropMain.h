@@ -20,6 +20,7 @@ struct MaterialData
 	float MetalnessFactor;
 	float RoughnessFactor;
 	float AlphaCutoff;
+	PAD;
 };
 
 struct MeshData
@@ -71,6 +72,8 @@ struct InstanceData
 	uint ID;
 	uint MaterialIndex;
 	uint MeshIndex;
+	PAD;
+	PAD;
 };
 
 struct Light
@@ -111,6 +114,7 @@ struct DDGIVolume
 	uint DepthIndex;
 	uint ProbeOffsetIndex;
 	uint ProbeStatesIndex;
+	PAD;
 };
 
 struct ViewUniforms

@@ -19,8 +19,8 @@ GlobalResource<PipelineState> CloudsPSO;
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
 	CloudsRS = new RootSignature(pDevice);
-	CloudsRS->AddConstantBufferView(0);
-	CloudsRS->AddConstantBufferView(100);
+	CloudsRS->AddRootCBV(0);
+	CloudsRS->AddRootCBV(100);
 	CloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
 	CloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 5);
 	CloudsRS->Finalize("Clouds RS");

@@ -42,7 +42,7 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
 	//Rootsignature
 	m_pRS = new RootSignature(pDevice);
-	m_pRS->AddConstantBufferView(100);
+	m_pRS->AddRootCBV(100);
 	m_pRS->Finalize("Diffuse", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	//Opaque

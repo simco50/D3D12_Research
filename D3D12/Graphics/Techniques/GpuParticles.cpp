@@ -62,7 +62,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	{
 		m_pSimulateRS = new RootSignature(pDevice);
 		m_pSimulateRS->AddRootConstants(0, 4);
-		m_pSimulateRS->AddConstantBufferView(100);
+		m_pSimulateRS->AddRootCBV(100);
 		m_pSimulateRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 6);
 		m_pSimulateRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
 		m_pSimulateRS->Finalize("Particle Simulation");
@@ -75,7 +75,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	}
 	{
 		m_pRenderParticlesRS = new RootSignature(pDevice);
-		m_pRenderParticlesRS->AddConstantBufferView(100);
+		m_pRenderParticlesRS->AddRootCBV(100);
 		m_pRenderParticlesRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
 		m_pRenderParticlesRS->Finalize("Particle Rendering");
 

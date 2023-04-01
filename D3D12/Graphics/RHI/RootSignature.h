@@ -9,8 +9,6 @@
 	We keep a bitmask to later dynamically copy CPU descriptors to the GPU when rendering
 */
 
-class ShaderBase;
-
 using RootSignatureMask = BitField16;
 static constexpr int MAX_NUM_ROOT_PARAMETERS = RootSignatureMask::Size();
 
@@ -25,7 +23,7 @@ public:
 		return AddRootConstants(shaderRegister, sizeof(T) / sizeof(uint32), visibility);
 	}
 	uint32 AddRootConstants(uint32 shaderRegister, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
-	uint32 AddConstantBufferView(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
+	uint32 AddRootCBV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
 	uint32 AddRootSRV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
 	uint32 AddRootUAV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
 	uint32 AddDescriptorTable(uint32 rangeCount, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);

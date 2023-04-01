@@ -1234,7 +1234,7 @@ void DemoApp::InitializePipelines()
 	// Common Root Signature - Make it 12 DWORDs as is often recommended by IHVs
 	m_pCommonRS = new RootSignature(m_pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
-	m_pCommonRS->AddConstantBufferView(100);
+	m_pCommonRS->AddRootCBV(100);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 6);
 	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
 	m_pCommonRS->Finalize("Common");
