@@ -31,8 +31,8 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 		m_pLightCullingRS = new RootSignature(pDevice);
 		m_pLightCullingRS->AddRootCBV(0);
 		m_pLightCullingRS->AddRootCBV(100);
-		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-		m_pLightCullingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
+		m_pLightCullingRS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+		m_pLightCullingRS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 		m_pLightCullingRS->Finalize("Light Culling");
 
 		m_pCreateAabbPSO = pDevice->CreateComputePipeline(m_pLightCullingRS, "ClusterAABBGeneration.hlsl", "GenerateAABBs");
@@ -45,7 +45,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 		m_pDiffuseRS->AddRootConstants(0, 3);
 		m_pDiffuseRS->AddRootCBV(1);
 		m_pDiffuseRS->AddRootCBV(100);
-		m_pDiffuseRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+		m_pDiffuseRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 		m_pDiffuseRS->Finalize("Diffuse");
 
 		constexpr ResourceFormat formats[] = {
@@ -111,7 +111,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	{
 		m_pVisualizeLightClustersRS = new RootSignature(pDevice);
 		m_pVisualizeLightClustersRS->AddRootCBV(100);
-		m_pVisualizeLightClustersRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
+		m_pVisualizeLightClustersRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 		m_pVisualizeLightClustersRS->Finalize("Visualize Light Clusters");
 
 		PipelineStateInitializer psoDesc;
@@ -132,8 +132,8 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 		m_pVisualizeLightsRS = new RootSignature(pDevice);
 		m_pVisualizeLightsRS->AddRootCBV(0);
 		m_pVisualizeLightsRS->AddRootCBV(100);
-		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
-		m_pVisualizeLightsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
+		m_pVisualizeLightsRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+		m_pVisualizeLightsRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 		m_pVisualizeLightsRS->Finalize("Light Density Visualization");
 
 		m_pVisualizeLightsPSO = pDevice->CreateComputePipeline(m_pVisualizeLightsRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
@@ -143,8 +143,8 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 		m_pVolumetricLightingRS = new RootSignature(pDevice);
 		m_pVolumetricLightingRS->AddRootCBV(0);
 		m_pVolumetricLightingRS->AddRootCBV(100);
-		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3);
-		m_pVolumetricLightingRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 3);
+		m_pVolumetricLightingRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+		m_pVolumetricLightingRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 		m_pVolumetricLightingRS->Finalize("Inject Fog Lighting");
 
 		m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "InjectFogLightingCS");

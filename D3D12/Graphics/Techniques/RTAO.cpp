@@ -17,8 +17,8 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 		m_pCommonRS = new RootSignature(pDevice);
 		m_pCommonRS->AddRootConstants(0, 4);
 		m_pCommonRS->AddRootCBV(100);
-		m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
+		m_pCommonRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+		m_pCommonRS->AddDescriptorTable(0, 4, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 		m_pCommonRS->Finalize("Global");
 
 		StateObjectInitializer stateDesc;

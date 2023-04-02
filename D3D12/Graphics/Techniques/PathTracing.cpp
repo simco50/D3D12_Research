@@ -19,7 +19,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	m_pRS = new RootSignature(pDevice);
 	m_pRS->AddRootCBV(0);
 	m_pRS->AddRootCBV(100);
-	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
+	m_pRS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 	m_pRS->Finalize("Global");
 
 	StateObjectInitializer desc{};

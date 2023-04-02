@@ -29,8 +29,8 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 		gCommonRS = new RootSignature(context.GetParent());
 		gCommonRS->AddRootConstants(0, 1);
 		gCommonRS->AddRootCBV(100);
-		gCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		gCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1);
+		gCommonRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+		gCommonRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 		gCommonRS->Finalize("Update TLAS");
 
 		gUpdateTLASPSO = context.GetParent()->CreateComputePipeline(gCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");

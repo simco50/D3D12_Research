@@ -21,8 +21,8 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 	CloudsRS = new RootSignature(pDevice);
 	CloudsRS->AddRootCBV(0);
 	CloudsRS->AddRootCBV(100);
-	CloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-	CloudsRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 5);
+	CloudsRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+	CloudsRS->AddDescriptorTable(0, 5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	CloudsRS->Finalize("Clouds RS");
 
 	const char* pCloudShapesShader = "CloudsShapes.hlsl";

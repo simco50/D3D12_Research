@@ -27,8 +27,8 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
 	m_pCommonRS->AddRootCBV(100);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 16);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 64);
+	m_pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+	m_pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pCommonRS->Finalize("Common");
 
 	ShaderDefineHelper defines;

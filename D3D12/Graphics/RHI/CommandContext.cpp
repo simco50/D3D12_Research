@@ -302,7 +302,7 @@ void CommandContext::SetRootCBV(uint32 rootIndex, const void* pData, uint32 data
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
 
-	bool isRootConstants = m_pCurrentRS->GetRootConstantsMask().GetBit(rootIndex);
+	bool isRootConstants = m_pCurrentRS->IsRootConstant(rootIndex);
 	if (isRootConstants)
 	{
 		check(dataSize % sizeof(uint32) == 0);

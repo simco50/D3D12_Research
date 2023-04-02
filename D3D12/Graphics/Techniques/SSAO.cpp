@@ -13,8 +13,8 @@ SSAO::SSAO(GraphicsDevice* pDevice)
 	m_pSSAORS = new RootSignature(pDevice);
 	m_pSSAORS->AddRootConstants(0, 4);
 	m_pSSAORS->AddRootCBV(100);
-	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pSSAORS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2);
+	m_pSSAORS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+	m_pSSAORS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pSSAORS->Finalize("SSAO");
 
 	m_pSSAOPSO = pDevice->CreateComputePipeline(m_pSSAORS, "PostProcessing/SSAO.hlsl", "CSMain");

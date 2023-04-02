@@ -161,7 +161,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	gImGuiRS = new RootSignature(pDevice);
 	gImGuiRS->AddRootCBV(0, D3D12_SHADER_VISIBILITY_VERTEX);
-	gImGuiRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, D3D12_SHADER_VISIBILITY_PIXEL);
+	gImGuiRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, D3D12_SHADER_VISIBILITY_PIXEL);
 	gImGuiRS->Finalize("ImGui RS", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	PipelineStateInitializer psoDesc;

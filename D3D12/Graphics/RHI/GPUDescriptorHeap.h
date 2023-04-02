@@ -83,9 +83,8 @@ private:
 		uint32 StartIndex = 0xFFFFFFFF;
 		uint32 Capacity = 0;
 	};
-	std::array<StagedDescriptorTable, MAX_NUM_ROOT_PARAMETERS> m_StagedDescriptors = {};
-
-	RootSignatureMask m_StaleRootParameters {};
+	std::array<StagedDescriptorTable, RootSignature::sMaxNumParameters> m_StagedDescriptors = {};
+	BitField<RootSignature::sMaxNumParameters, uint8> m_StaleRootParameters{};
 
 	GPUDescriptorHeap* m_pHeapAllocator;
 	DescriptorHeapBlock* m_pCurrentHeapBlock = nullptr;

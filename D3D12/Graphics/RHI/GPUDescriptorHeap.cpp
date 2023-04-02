@@ -179,7 +179,12 @@ void DynamicGPUDescriptorAllocator::ParseRootSignature(const RootSignature* pRoo
 	for (uint32 i = 0; i < (uint32)m_StagedDescriptors.size(); ++i)
 	{
 		StagedDescriptorTable& table = m_StagedDescriptors[i];
-		table.Capacity = pRootSignature->GetDescriptorTableSizes()[i];
+		table.StartIndex = 0xFFFFFFF;
+
+		if (i < pRootSignature->GetNumRootParameters())
+			table.Capacity = pRootSignature->GetDescriptorTableSize(i);
+		else
+			table.Capacity = 0;
 	}
 	m_StaleRootParameters.ClearAll();
 }
