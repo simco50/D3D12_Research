@@ -99,15 +99,16 @@ RasterContext::RasterContext(RGGraph& graph, const std::string contextString, RG
 	};
 
 	const BufferDesc meshletCandidateDesc = BufferDesc::CreateStructured(maxNumMeshlets, sizeof(MeshletCandidate));
-	pCandidateMeshlets = graph.Create("GPURender.CandidateMeshlets", meshletCandidateDesc);
-	// 0: Num Total | 1: Num Phase 1 | 2: Num Phase 2
-	pCandidateMeshletsCounter = graph.Create("GPURender.CandidateMeshlets.Counter", BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
-	pVisibleMeshlets = graph.Create("GPURender.VisibleMeshlets", meshletCandidateDesc);
-	// 0: Num Phase 1 | 1: Num Phase 2
-	pVisibleMeshletsCounter = graph.Create("GPURender.VisibleMeshlets.Counter", BufferDesc::CreateTyped(2, ResourceFormat::R32_UINT));
 
-	pOccludedInstances = graph.Create("GPURender.OccludedInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
-	pOccludedInstancesCounter = graph.Create("GPURender.OccludedInstances.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	pCandidateMeshlets			= graph.Create("GPURender.CandidateMeshlets", meshletCandidateDesc);
+	// 0: Num Total | 1: Num Phase 1 | 2: Num Phase 2
+	pCandidateMeshletsCounter	= graph.Create("GPURender.CandidateMeshlets.Counter", BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
+	pVisibleMeshlets			= graph.Create("GPURender.VisibleMeshlets", meshletCandidateDesc);
+	// 0: Num Phase 1 | 1: Num Phase 2
+	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter", BufferDesc::CreateTyped(2, ResourceFormat::R32_UINT));
+
+	pOccludedInstances			= graph.Create("GPURender.OccludedInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
+	pOccludedInstancesCounter	= graph.Create("GPURender.OccludedInstances.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
 }
 
 void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView, bool isFirstPhase, const RasterContext& rasterContext, RasterResult& outResult)
@@ -199,16 +200,16 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 			});
 
 	constexpr uint32 numBins = 2;
-	RGBuffer* pMeshletOffsetAndCounts = graph.Create("Meshlet offset and counts", BufferDesc::CreateStructured(numBins, sizeof(Vector4u), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource | BufferFlag::IndirectArguments));
+	RGBuffer* pMeshletOffsetAndCounts = graph.Create("GpuRender.Classify.MeshletOffsetAndCounts", BufferDesc::CreateStructured(numBins, sizeof(Vector4u), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource | BufferFlag::IndirectArguments));
 	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
-	RGBuffer* pBinnedMeshlets = graph.Create("BinnedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32)));
+	RGBuffer* pBinnedMeshlets = graph.Create("GpuRender.Classify.BinnedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32)));
 
 	{
 		RG_GRAPH_SCOPE("Classify Shader Types", graph);
 
-		RGBuffer* pMeshletCounts = graph.Create("Meshlet Counts", BufferDesc::CreateTyped(numBins, ResourceFormat::R32_UINT));
-		RGBuffer* pGlobalCount = graph.Create("Global Count", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
-		RGBuffer* pClassifyArgs = graph.Create("GPURender.ClassificationArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
+		RGBuffer* pMeshletCounts	= graph.Create("GpuRender.Classify.MeshletCounts", BufferDesc::CreateTyped(numBins, ResourceFormat::R32_UINT));
+		RGBuffer* pGlobalCount		= graph.Create("GpuRender.Classify.GlobalCount", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+		RGBuffer* pClassifyArgs		= graph.Create("GPURender.Classify.Args", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 
 		struct ClassifyParams
 		{
@@ -346,7 +347,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 
 	if (rasterContext.EnableDebug)
 	{
-		outResult.pDebugData = graph.Create("Debug Data", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
+		outResult.pDebugData = graph.Create("GpuRender.DebugData", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
 	}
 
 #if 0

@@ -105,8 +105,6 @@ public:
 	OnShaderRecompiled& OnShaderRecompiledEvent() { return m_OnShaderRecompiledEvent; }
 
 private:
-	bool CompileShader(Shader* pShader);
-
 	using ShaderStringHash = TStringHash<false>;
 
 	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, const Span<ShaderDefine>& defines);
