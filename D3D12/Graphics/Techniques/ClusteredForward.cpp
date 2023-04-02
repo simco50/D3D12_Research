@@ -26,18 +26,16 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	m_pHeatMapTexture = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Textures/Heatmap.png", true, "Color Heatmap");
 	pContext->Execute(true);
 
-	//Light Culling
-	{
-		m_pLightCullingRS = new RootSignature(pDevice);
-		m_pLightCullingRS->AddRootCBV(0);
-		m_pLightCullingRS->AddRootCBV(100);
-		m_pLightCullingRS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-		m_pLightCullingRS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-		m_pLightCullingRS->Finalize("Light Culling");
+	m_pCommonRS = new RootSignature(pDevice);
+	m_pCommonRS->AddRootCBV(0);
+	m_pCommonRS->AddRootCBV(100);
+	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+	m_pCommonRS->Finalize("Light Density Visualization");
 
-		m_pCreateAabbPSO = pDevice->CreateComputePipeline(m_pLightCullingRS, "ClusterAABBGeneration.hlsl", "GenerateAABBs");
-		m_pLightCullingPSO = pDevice->CreateComputePipeline(m_pLightCullingRS, "ClusteredLightCulling.hlsl", "LightCulling");
-	}
+	//Light Culling
+	m_pCreateAabbPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ClusterAABBGeneration.hlsl", "GenerateAABBs");
+	m_pLightCullingPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ClusteredLightCulling.hlsl", "LightCulling");
 
 	//Diffuse
 	{
@@ -109,11 +107,6 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 
 	//Cluster debug rendering
 	{
-		m_pVisualizeLightClustersRS = new RootSignature(pDevice);
-		m_pVisualizeLightClustersRS->AddRootCBV(100);
-		m_pVisualizeLightClustersRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-		m_pVisualizeLightClustersRS->Finalize("Visualize Light Clusters");
-
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetDepthWrite(false);
@@ -121,35 +114,18 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetBlendMode(BlendMode::Additive, false);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-		psoDesc.SetRootSignature(m_pVisualizeLightClustersRS);
+		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetVertexShader("VisualizeLightClusters.hlsl", "VSMain");
 		psoDesc.SetGeometryShader("VisualizeLightClusters.hlsl", "GSMain");
 		psoDesc.SetName("Visualize Light Clusters");
 		m_pVisualizeLightClustersPSO = pDevice->CreatePipeline(psoDesc);
 	}
 
-	{
-		m_pVisualizeLightsRS = new RootSignature(pDevice);
-		m_pVisualizeLightsRS->AddRootCBV(0);
-		m_pVisualizeLightsRS->AddRootCBV(100);
-		m_pVisualizeLightsRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-		m_pVisualizeLightsRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-		m_pVisualizeLightsRS->Finalize("Light Density Visualization");
+	m_pVisualizeLightsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
 
-		m_pVisualizeLightsPSO = pDevice->CreateComputePipeline(m_pVisualizeLightsRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
-	}
-
-	{
-		m_pVolumetricLightingRS = new RootSignature(pDevice);
-		m_pVolumetricLightingRS->AddRootCBV(0);
-		m_pVolumetricLightingRS->AddRootCBV(100);
-		m_pVolumetricLightingRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-		m_pVolumetricLightingRS->AddDescriptorTable(0, 3, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-		m_pVolumetricLightingRS->Finalize("Inject Fog Lighting");
-
-		m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
-		m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(m_pVolumetricLightingRS, "VolumetricFog.hlsl", "AccumulateFogCS");
-	}
+	// Volumetric fog
+	m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
+	m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VolumetricFog.hlsl", "AccumulateFogCS");
 }
 
 ClusteredForward::~ClusteredForward()
@@ -180,7 +156,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pCreateAabbPSO);
-				context.SetComputeRootSignature(m_pLightCullingRS);
+				context.SetComputeRootSignature(m_pCommonRS);
 
 				struct
 				{
@@ -215,7 +191,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pLightCullingPSO);
-				context.SetComputeRootSignature(m_pLightCullingRS);
+				context.SetComputeRootSignature(m_pCommonRS);
 
 				// Clear the light grid because we're accumulating the light count in the shader
 				Buffer* pLightGrid = cullData.pLightGrid->Get();
@@ -266,16 +242,16 @@ void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView,
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pVisualizeLightClustersPSO);
-				context.SetGraphicsRootSignature(m_pVisualizeLightClustersRS);
+				context.SetGraphicsRootSignature(m_pCommonRS);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 
 				ShaderInterop::ViewUniforms viewData = Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get());
 				viewData.Projection = cullData.DebugClustersViewMatrix * pView->View.ViewProjection;
-				context.BindRootCBV(0, viewData);
-				context.BindResources(1, {
+				context.BindRootCBV(1, viewData);
+				context.BindResources(3, {
 					cullData.pAABBs->Get()->GetSRV(),
 					pDebugLightGrid->Get()->GetSRV(),
-				m_pHeatMapTexture->GetSRV(),
+					m_pHeatMapTexture->GetSRV(),
 					});
 				context.Draw(0, cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z);
 			});
@@ -322,7 +298,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 			{
 				Texture* pTarget = pTargetVolume->Get();
 
-				context.SetComputeRootSignature(m_pVolumetricLightingRS);
+				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
 				context.BindRootCBV(0, constantBuffer);
@@ -349,7 +325,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 			{
 				Texture* pFinalFog = pFinalVolumeFog->Get();
 
-				context.SetComputeRootSignature(m_pVolumetricLightingRS);
+				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
 				context.BindRootCBV(0, constantBuffer);
@@ -417,7 +393,6 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 					GPU_PROFILE_SCOPE("Opaque - Masked", &context);
 					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseMaskedPSO : m_pDiffuseMaskedPSO);
 					Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
-
 				}
 				{
 					GPU_PROFILE_SCOPE("Transparant", &context);
@@ -454,16 +429,15 @@ void ClusteredForward::VisualizeLightDensity(RGGraph& graph, const SceneView* pV
 				constantBuffer.LightGridParams = lightGridParams;
 
 				context.SetPipelineState(m_pVisualizeLightsPSO);
-				context.SetComputeRootSignature(m_pVisualizeLightsRS);
+				context.SetComputeRootSignature(m_pCommonRS);
 				context.BindRootCBV(0, constantBuffer);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
-
-				context.BindResources(2, {
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, {
 					sceneTextures.pColorTarget->Get()->GetSRV(),
 					sceneTextures.pDepth->Get()->GetSRV(),
 					pLightGrid->Get()->GetSRV(),
 					});
-				context.BindResources(3, pTarget->GetUAV());
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(
 					pTarget->GetWidth(), 16,

@@ -54,7 +54,6 @@ private:
 	// AABB
 	RefCountPtr<PipelineState> m_pCreateAabbPSO;
 	// Light Culling
-	RefCountPtr<RootSignature> m_pLightCullingRS;
 	RefCountPtr<PipelineState> m_pLightCullingPSO;
 
 	// Lighting
@@ -68,15 +67,13 @@ private:
 	RefCountPtr<PipelineState> m_pMeshShaderDiffuseTransparancyPSO;
 
 	//Cluster debug rendering
-	RefCountPtr<RootSignature> m_pVisualizeLightClustersRS;
 	RefCountPtr<PipelineState> m_pVisualizeLightClustersPSO;
 
 	//Visualize Light Count
-	RefCountPtr<RootSignature> m_pVisualizeLightsRS;
+	RefCountPtr<RootSignature> m_pCommonRS;
 	RefCountPtr<PipelineState> m_pVisualizeLightsPSO;
 
 	//Volumetric Fog
-	RefCountPtr<RootSignature> m_pVolumetricLightingRS;
 	RefCountPtr<PipelineState> m_pInjectVolumeLightPSO;
 	RefCountPtr<PipelineState> m_pAccumulateVolumeLightPSO;
 };

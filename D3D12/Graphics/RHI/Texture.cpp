@@ -31,12 +31,8 @@ D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetRTV() const
 UnorderedAccessView* Texture::GetSubResourceUAV(uint32 subresourceIndex)
 {
 	if (m_SubresourceUAVs.empty())
-	{
 		m_SubresourceUAVs.resize(m_Desc.Mips);
-	}
 	if (!m_SubresourceUAVs[subresourceIndex])
-	{
 		m_SubresourceUAVs[subresourceIndex] = GetParent()->CreateUAV(this, TextureUAVDesc((uint8)subresourceIndex));
-	}
 	return m_SubresourceUAVs[subresourceIndex];
 }
