@@ -3,6 +3,9 @@
 #include "Shader.h"
 #include "Graphics.h"
 
+static D3D12_DESCRIPTOR_RANGE_FLAGS sDefaultTableFlags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE | D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+static D3D12_ROOT_DESCRIPTOR_FLAGS sDefaultRootDescriptorFlags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+
 RootSignature::RootSignature(GraphicsDevice* pParent)
 	: GraphicsObject(pParent),
 	m_NumParameters(0)
@@ -20,21 +23,21 @@ uint32 RootSignature::AddRootConstants(uint32 shaderRegister, uint32 constantCou
 uint32 RootSignature::AddRootCBV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
 	uint32 rootIndex = m_NumParameters;
-	Get(rootIndex).InitAsConstantBufferView(shaderRegister, 0u, visibility);
+	Get(rootIndex).InitAsConstantBufferView(shaderRegister, 0u, sDefaultRootDescriptorFlags, visibility);
 	return rootIndex;
 }
 
 uint32 RootSignature::AddRootSRV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
 	uint32 rootIndex = m_NumParameters;
-	Get(rootIndex).InitAsShaderResourceView(shaderRegister, 0u, visibility);
+	Get(rootIndex).InitAsShaderResourceView(shaderRegister, 0u, sDefaultRootDescriptorFlags, visibility);
 	return rootIndex;
 }
 
 uint32 RootSignature::AddRootUAV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
 {
 	uint32 rootIndex = m_NumParameters;
-	Get(rootIndex).InitAsUnorderedAccessView(shaderRegister, 0u, visibility);
+	Get(rootIndex).InitAsUnorderedAccessView(shaderRegister, 0u, sDefaultRootDescriptorFlags, visibility);
 	return rootIndex;
 }
 
@@ -54,7 +57,7 @@ uint32 RootSignature::AddDescriptorTableSimple(uint32 startRegisterSlot, D3D12_D
 
 void RootSignature::AddDescriptorTableRange(uint32 rootIndex, uint32 rangeIndex, uint32 startRegisterSlot, uint32 space, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 count, uint32 offsetFromTableStart)
 {
-	GetRange(rootIndex, rangeIndex).Init(type, count, startRegisterSlot, space, offsetFromTableStart);
+	GetRange(rootIndex, rangeIndex).Init(type, count, startRegisterSlot, space, sDefaultTableFlags, offsetFromTableStart);
 }
 
 void RootSignature::AddStaticSampler(const D3D12_STATIC_SAMPLER_DESC& samplerDesc)
@@ -96,7 +99,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 
 	for (size_t i = 0; i < m_NumParameters; ++i)
 	{
-		D3D12_ROOT_PARAMETER& rootParameter = m_RootParameters[i];
+		D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
 		switch (rootParameter.ShaderVisibility)
 		{
 		case D3D12_SHADER_VISIBILITY_VERTEX:
@@ -133,7 +136,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 			rootParameter.DescriptorTable.pDescriptorRanges = m_DescriptorTableRanges[i].data();
 			for (uint32 j = 0; j < rootParameter.DescriptorTable.NumDescriptorRanges; ++j)
 			{
-				const D3D12_DESCRIPTOR_RANGE& range = rootParameter.DescriptorTable.pDescriptorRanges[j];
+				const D3D12_DESCRIPTOR_RANGE1& range = rootParameter.DescriptorTable.pDescriptorRanges[j];
 				m_DescriptorTableSizes[i] = range.NumDescriptors;
 			}
 		}
@@ -158,7 +161,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 	}
 
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
-	desc.Init_1_0(m_NumParameters, m_RootParameters.data(), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
+	desc.Init_1_1(m_NumParameters, m_RootParameters.data(), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
 	RefCountPtr<ID3DBlob> pDataBlob, pErrorBlob;
 	D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
 	if (pErrorBlob)
@@ -176,7 +179,7 @@ uint32 RootSignature::GetDWordSize() const
 	uint32 count = 0;
 	for (size_t i = 0; i < m_NumParameters; ++i)
 	{
-		const D3D12_ROOT_PARAMETER& rootParameter = m_RootParameters[i];
+		const D3D12_ROOT_PARAMETER1& rootParameter = m_RootParameters[i];
 		switch (rootParameter.ParameterType)
 		{
 		case D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS:

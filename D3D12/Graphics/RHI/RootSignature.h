@@ -42,24 +42,24 @@ public:
 	uint32 GetDWordSize() const;
 private:
 
-	CD3DX12_ROOT_PARAMETER& Get(uint32 index)
+	CD3DX12_ROOT_PARAMETER1& Get(uint32 index)
 	{
 		check(index < MAX_NUM_ROOT_PARAMETERS);
 		m_NumParameters = Math::Max(index + 1, m_NumParameters);
 		return m_RootParameters[index];
 	}
 
-	CD3DX12_DESCRIPTOR_RANGE& GetRange(uint32 rootIndex, uint32 rangeIndex)
+	CD3DX12_DESCRIPTOR_RANGE1& GetRange(uint32 rootIndex, uint32 rangeIndex)
 	{
 		check(rootIndex < MAX_NUM_ROOT_PARAMETERS);
 		m_DescriptorTableRanges[rootIndex].resize(Math::Max<uint32>((uint32)m_DescriptorTableRanges[rootIndex].size(), rangeIndex + 1));
 		return m_DescriptorTableRanges[rootIndex][rangeIndex];
 	}
 
-	std::array<CD3DX12_ROOT_PARAMETER, MAX_NUM_ROOT_PARAMETERS> m_RootParameters{};
+	std::array<CD3DX12_ROOT_PARAMETER1, MAX_NUM_ROOT_PARAMETERS> m_RootParameters{};
 	std::array<uint32, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableSizes{};
 	std::vector<CD3DX12_STATIC_SAMPLER_DESC> m_StaticSamplers;
-	std::array<std::vector<CD3DX12_DESCRIPTOR_RANGE>, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableRanges{};
+	std::array<std::vector<CD3DX12_DESCRIPTOR_RANGE1>, MAX_NUM_ROOT_PARAMETERS> m_DescriptorTableRanges{};
 	RefCountPtr<ID3D12RootSignature> m_pRootSignature;
 
 	RootSignatureMask m_RootConstantsMask;
