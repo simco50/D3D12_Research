@@ -129,23 +129,8 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 		}
 		if (rootParameter.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		{
-			//Fixup the table ranges because the rootsignature can be dynamically resized
+			// Fixup the table ranges because the rootsignature can be dynamically resized
 			rootParameter.DescriptorTable.pDescriptorRanges = m_DescriptorTableRanges[i].data();
-			switch (rootParameter.DescriptorTable.pDescriptorRanges->RangeType)
-			{
-			case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:
-			case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:
-			case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:
-				m_DescriptorTableMask.SetBit((uint32)i);
-				break;
-			case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:
-				m_SamplerMask.SetBit((uint32)i);
-				break;
-			default:
-				noEntry();
-				break;
-			}
-
 			for (uint32 j = 0; j < rootParameter.DescriptorTable.NumDescriptorRanges; ++j)
 			{
 				const D3D12_DESCRIPTOR_RANGE& range = rootParameter.DescriptorTable.pDescriptorRanges[j];

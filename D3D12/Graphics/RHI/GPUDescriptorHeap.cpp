@@ -133,72 +133,61 @@ DynamicGPUDescriptorAllocator::~DynamicGPUDescriptorAllocator()
 	ReleaseUsedHeaps(syncPoint);
 }
 
-void DynamicGPUDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, const Span< D3D12_CPU_DESCRIPTOR_HANDLE>& handles)
+void DynamicGPUDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles)
 {
-	RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-	if (!m_StaleRootParameters.GetBit(rootIndex))
-	{
-		uint32 tableSize = entry.TableSize;
-		checkf(tableSize != ~0u, "Descriptor table at RootIndex '%d' is unbounded and should not use the descriptor allocator", rootIndex);
-		checkf(offset + handles.GetSize() <= tableSize, "Attempted to set a descriptor (Offset: %d, Range: %d) out of the descriptor table bounds (Size: %d)", offset, handles.GetSize(), rootIndex);
-		
-		entry.Descriptor = Allocate(tableSize);
-		m_StaleRootParameters.SetBit(rootIndex);
-	}
+	m_StaleRootParameters.SetBit(rootIndex);
 
-	DescriptorHandle targetHandle = entry.Descriptor.Offset(offset, m_pHeapAllocator->GetDescriptorSize());
-	for(uint32 i = 0; i < handles.GetSize(); ++i)
-	{
-		checkf(handles[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr, "Invalid Descriptor provided (RootIndex: %d, Offset: %d)", rootIndex, offset + i);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, targetHandle.CpuHandle, handles[i], m_Type);
-		targetHandle.OffsetInline(1, m_pHeapAllocator->GetDescriptorSize());
-	}
+	StagedDescriptorTable& table = m_StagedDescriptors[rootIndex];
+	checkf(table.Capacity != 0, "Root parameter at index '%d' is not a descriptor table", rootIndex);
+	checkf(offset + handles.GetSize() <= table.Capacity, "Descriptor table at root index '%d' is too small (is %d but requires %d)", rootIndex, table.Capacity, offset + handles.GetSize());
+
+	table.Descriptors.resize(Math::Max((uint32)table.Descriptors.size(), offset + handles.GetSize()));
+	table.StartIndex = Math::Min(offset, table.StartIndex);
+	for (int i = 0; i < (int)handles.GetSize(); ++i)
+		table.Descriptors[offset + i] = handles[i];
 }
 
 void DynamicGPUDescriptorAllocator::BindStagedDescriptors(CommandContext& context, CommandListContext descriptorTableType)
 {
 	for (uint32 rootIndex : m_StaleRootParameters)
 	{
-		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-		switch (descriptorTableType)
+		StagedDescriptorTable& table = m_StagedDescriptors[rootIndex];
+		DescriptorHandle handle = Allocate((uint32)table.Descriptors.size());
+		for (int i = table.StartIndex; i < table.Descriptors.size(); ++i)
 		{
-		case CommandListContext::Graphics:
-			context.GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-			break;
-		case CommandListContext::Compute:
-			context.GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-			break;
-		default:
-			noEntry();
-			break;
+			if (table.Descriptors[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr)
+			{
+				DescriptorHandle target = handle.Offset(i, m_pHeapAllocator->GetDescriptorSize());
+				GetParent()->GetDevice()->CopyDescriptorsSimple(1, target.CpuHandle, table.Descriptors[i], m_Type);
+			}
 		}
-	}
+		table.Descriptors.clear();
+		table.StartIndex = 0xFFFFFFFF;
 
+		if (descriptorTableType == CommandListContext::Graphics)
+			context.GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, handle.GpuHandle);
+		else if (descriptorTableType == CommandListContext::Compute)
+			context.GetCommandList()->SetComputeRootDescriptorTable(rootIndex, handle.GpuHandle);
+		else
+			noEntry();
+	}
 	m_StaleRootParameters.ClearAll();
 }
 
 void DynamicGPUDescriptorAllocator::ParseRootSignature(const RootSignature* pRootSignature)
 {
-	m_RootDescriptorMask = m_Type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ?
-		pRootSignature->GetSamplerTableMask() : pRootSignature->GetDescriptorTableMask();
-
-	m_StaleRootParameters.ClearAll();
-
-	const std::array<uint32, MAX_NUM_ROOT_PARAMETERS>& descriptorTableSizes = pRootSignature->GetDescriptorTableSizes();
-	for (uint32 rootIndex : m_RootDescriptorMask)
+	for (uint32 i = 0; i < (uint32)m_StagedDescriptors.size(); ++i)
 	{
-		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-		entry.TableSize = descriptorTableSizes[rootIndex];
-		entry.Descriptor.Reset();
+		StagedDescriptorTable& table = m_StagedDescriptors[i];
+		table.Capacity = pRootSignature->GetDescriptorTableSizes()[i];
 	}
+	m_StaleRootParameters.ClearAll();
 }
 
 void DynamicGPUDescriptorAllocator::ReleaseUsedHeaps(const SyncPoint& syncPoint)
 {
 	for (DescriptorHeapBlock* pBlock : m_ReleasedBlocks)
-	{
 		m_pHeapAllocator->FreeDynamicBlock(syncPoint, pBlock);
-	}
 	m_ReleasedBlocks.clear();
 }
 
@@ -207,9 +196,7 @@ DescriptorHandle DynamicGPUDescriptorAllocator::Allocate(uint32 descriptorCount)
 	if (!m_pCurrentHeapBlock || m_pCurrentHeapBlock->Size - m_pCurrentHeapBlock->CurrentOffset < descriptorCount)
 	{
 		if (m_pCurrentHeapBlock)
-		{
 			m_ReleasedBlocks.push_back(m_pCurrentHeapBlock);
-		}
 		m_pCurrentHeapBlock = m_pHeapAllocator->AllocateDynamicBlock();
 	}
 

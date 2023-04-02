@@ -325,14 +325,10 @@ void CommandContext::SetRootCBV(uint32 rootIndex, const void* pData, uint32 data
 
 void CommandContext::BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset)
 {
-	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, 16> descriptors;
-	check(pViews.GetSize() < descriptors.size());
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> descriptors(pViews.GetSize());
 	for (uint32 i = 0; i < pViews.GetSize(); ++i)
-	{
-		checkf(pViews[i], "ResourceView bound to root index %d with offset %d is null", rootIndex, offset + i);
-		descriptors[i] = pViews[i]->GetDescriptor();
-	}
-	BindResources(rootIndex, Span<D3D12_CPU_DESCRIPTOR_HANDLE>(descriptors.data(), pViews.GetSize()), offset);
+		descriptors[i] = pViews[i] ? pViews[i]->GetDescriptor() : DescriptorHandle::InvalidCPUHandle;
+	BindResources(rootIndex, descriptors, offset);
 }
 
 void CommandContext::BindResources(uint32 rootIndex, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles, uint32 offset)

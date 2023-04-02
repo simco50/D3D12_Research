@@ -1235,8 +1235,8 @@ void DemoApp::InitializePipelines()
 	m_pCommonRS = new RootSignature(m_pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
 	m_pCommonRS->AddRootCBV(100);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 6);
-	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8);
+	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 16);
+	m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 64);
 	m_pCommonRS->Finalize("Common");
 
 	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix

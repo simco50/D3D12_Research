@@ -75,14 +75,16 @@ public:
 
 private:
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
-	struct RootDescriptorEntry
-	{
-		uint32 TableSize = 0;
-		DescriptorHandle Descriptor;
-	};
-	std::array<RootDescriptorEntry, MAX_NUM_ROOT_PARAMETERS> m_RootDescriptorTable = {};
 
-	RootSignatureMask m_RootDescriptorMask {};
+	// Structure holding staged descriptors for a table.
+	struct StagedDescriptorTable
+	{
+		std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> Descriptors;
+		uint32 StartIndex = 0xFFFFFFFF;
+		uint32 Capacity = 0;
+	};
+	std::array<StagedDescriptorTable, MAX_NUM_ROOT_PARAMETERS> m_StagedDescriptors = {};
+
 	RootSignatureMask m_StaleRootParameters {};
 
 	GPUDescriptorHeap* m_pHeapAllocator;

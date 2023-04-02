@@ -68,7 +68,6 @@ private:
 	RefCountPtr<PipelineState> m_pMeshletAllocateBinRanges;
 	RefCountPtr<PipelineState> m_pMeshletWriteBins;
 
-	RefCountPtr<RootSignature> m_pHZBRS;
 	RefCountPtr<PipelineState> m_pHZBInitializePSO;
 	RefCountPtr<PipelineState> m_pHZBCreatePSO;
 };
