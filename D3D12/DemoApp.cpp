@@ -36,79 +36,6 @@
 #include "imgui_internal.h"
 #include "IconsFontAwesome4.h"
 
-void EditTransform(const Camera& camera, Matrix& matrix)
-{
-	static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
-	static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
-
-	if (!Input::Instance().IsMouseDown(VK_LBUTTON))
-	{
-		if (Input::Instance().IsKeyPressed('W'))
-			mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
-		else if (Input::Instance().IsKeyPressed('E'))
-			mCurrentGizmoOperation = ImGuizmo::ROTATE;
-		else if (Input::Instance().IsKeyPressed('R'))
-			mCurrentGizmoOperation = ImGuizmo::SCALE;
-	}
-
-	if (ImGui::RadioButton("Translate", mCurrentGizmoOperation == ImGuizmo::TRANSLATE))
-		mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
-	ImGui::SameLine();
-	if (ImGui::RadioButton("Rotate", mCurrentGizmoOperation == ImGuizmo::ROTATE))
-		mCurrentGizmoOperation = ImGuizmo::ROTATE;
-	ImGui::SameLine();
-	if (ImGui::RadioButton("Scale", mCurrentGizmoOperation == ImGuizmo::SCALE))
-		mCurrentGizmoOperation = ImGuizmo::SCALE;
-	float matrixTranslation[3], matrixRotation[3], matrixScale[3];
-	ImGuizmo::DecomposeMatrixToComponents(&matrix.m[0][0], matrixTranslation, matrixRotation, matrixScale);
-	ImGui::InputFloat3("Tr", matrixTranslation);
-	ImGui::InputFloat3("Rt", matrixRotation);
-	ImGui::InputFloat3("Sc", matrixScale);
-	ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, &matrix.m[0][0]);
-
-	if (mCurrentGizmoOperation != ImGuizmo::SCALE)
-	{
-		if (ImGui::RadioButton("Local", mCurrentGizmoMode == ImGuizmo::LOCAL))
-			mCurrentGizmoMode = ImGuizmo::LOCAL;
-		ImGui::SameLine();
-		if (ImGui::RadioButton("World", mCurrentGizmoMode == ImGuizmo::WORLD))
-			mCurrentGizmoMode = ImGuizmo::WORLD;
-
-		if (Input::Instance().IsKeyPressed(VK_SPACE))
-		{
-			mCurrentGizmoMode = mCurrentGizmoMode == ImGuizmo::LOCAL ? ImGuizmo::WORLD : ImGuizmo::LOCAL;
-		}
-	}
-
-	static Vector3 translationSnap = Vector3(1);
-	static float rotateSnap = 5;
-	static float scaleSnap = 0.1f;
-	float* pSnapValue = &translationSnap.x;
-
-	switch (mCurrentGizmoOperation)
-	{
-	case ImGuizmo::TRANSLATE:
-		ImGui::InputFloat3("Snap", &translationSnap.x);
-		pSnapValue = &translationSnap.x;
-		break;
-	case ImGuizmo::ROTATE:
-		ImGui::InputFloat("Angle Snap", &rotateSnap);
-		pSnapValue = &rotateSnap;
-		break;
-	case ImGuizmo::SCALE:
-		ImGui::InputFloat("Scale Snap", &scaleSnap);
-		pSnapValue = &scaleSnap;
-		break;
-	default:
-		break;
-	}
-
-	Matrix view = camera.GetView();
-	Matrix projection = camera.GetProjection();
-	Math::ReverseZProjection(projection);
-	ImGuizmo::Manipulate(&view.m[0][0], &projection.m[0][0], mCurrentGizmoOperation, mCurrentGizmoMode, &matrix.m[0][0], NULL, pSnapValue);
-}
-
 namespace Tweakables
 {
 	ConsoleVariable g_Vsync("r.Vsync", true);
@@ -171,10 +98,6 @@ namespace Tweakables
 DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	: m_Window(window)
 {
-	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetNearPlane(80.0f);
-	m_pCamera->SetFarPlane(0.1f);
-
 	E_LOG(Info, "Graphics::InitD3D()");
 
 	GraphicsDeviceOptions options;
@@ -217,17 +140,9 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	OnResizeOrMove(windowRect.x, windowRect.y);
 	OnResizeViewport(windowRect.x, windowRect.y);
 
-	{
-		CommandContext* pContext = m_pDevice->AllocateCommandContext();
-		SetupScene(*pContext);
-		pContext->Execute(true);
-	}
-
-	constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
-	if (m_RenderPath == RenderPath::Visibility)
-		m_RenderPath = m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
-	if (m_RenderPath == RenderPath::PathTracing)
-		m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
+	CommandContext* pContext = m_pDevice->AllocateCommandContext();
+	SetupScene(*pContext);
+	pContext->Execute(false);
 }
 
 DemoApp::~DemoApp()
@@ -241,6 +156,9 @@ DemoApp::~DemoApp()
 
 void DemoApp::SetupScene(CommandContext& context)
 {
+	m_pCamera = std::make_unique<FreeCamera>();
+	m_pCamera->SetNearPlane(80.0f);
+	m_pCamera->SetFarPlane(0.1f);
 	m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
@@ -281,6 +199,12 @@ void DemoApp::SetupScene(CommandContext& context)
 
 void DemoApp::Update()
 {
+	constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
+	if (m_RenderPath == RenderPath::Visibility)
+		m_RenderPath = m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
+	if (m_RenderPath == RenderPath::PathTracing)
+		m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
+
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	Profiler::Get()->Resolve(pContext);
 
@@ -294,30 +218,26 @@ void DemoApp::Update()
 		m_pCamera->Update();
 		m_RenderGraphPool->Tick();
 
+		RenderPath newRenderPath = m_RenderPath;
+		if (!ImGui::IsAnyItemActive())
 		{
-			if (!ImGui::IsAnyItemActive())
-			{
-				if (Input::Instance().IsKeyPressed('1'))
-				{
-					m_RenderPath = RenderPath::Clustered;
-				}
-				else if (Input::Instance().IsKeyPressed('2'))
-				{
-					m_RenderPath = RenderPath::Tiled;
-				}
-				else if (Input::Instance().IsKeyPressed('3') && m_pDevice->GetCapabilities().SupportsMeshShading())
-				{
-					m_RenderPath = RenderPath::Visibility;
-				}
-				else if (Input::Instance().IsKeyPressed('4') && m_pDevice->GetCapabilities().SupportsRaytracing())
-				{
-					m_RenderPath = RenderPath::PathTracing;
-				}
-			}
-
-			Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedAO : false;
-			Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() ? Tweakables::g_RaytracedReflections : false;
+			if (Input::Instance().IsKeyPressed('1'))
+				newRenderPath = RenderPath::Clustered;
+			else if (Input::Instance().IsKeyPressed('2'))
+				newRenderPath = RenderPath::Tiled;
+			else if (Input::Instance().IsKeyPressed('3'))
+				newRenderPath = RenderPath::Visibility;
+			else if (Input::Instance().IsKeyPressed('4'))
+				newRenderPath = RenderPath::PathTracing;
 		}
+		if (newRenderPath == RenderPath::Visibility && !m_pDevice->GetCapabilities().SupportsMeshShading())
+			newRenderPath = RenderPath::Clustered;
+		if (newRenderPath == RenderPath::PathTracing && !m_pDevice->GetCapabilities().SupportsRaytracing())
+			newRenderPath = RenderPath::Clustered;
+		m_RenderPath = newRenderPath;
+
+		Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() && Tweakables::g_RaytracedAO;
+		Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() && Tweakables::g_RaytracedReflections;
 
 		if (Tweakables::g_RenderObjectBounds)
 		{
