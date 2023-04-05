@@ -137,12 +137,12 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	Profiler::Get()->Initialize(m_pDevice);
 	DebugRenderer::Get()->Initialize(m_pDevice);
 
-	OnResizeOrMove(windowRect.x, windowRect.y);
-	OnResizeViewport(windowRect.x, windowRect.y);
-
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	SetupScene(*pContext);
 	pContext->Execute(false);
+
+	OnResizeOrMove(windowRect.x, windowRect.y);
+	OnResizeViewport(windowRect.x, windowRect.y);
 }
 
 DemoApp::~DemoApp()
@@ -315,53 +315,45 @@ void DemoApp::Update()
 			if (Tweakables::g_Screenshot)
 			{
 				Tweakables::g_Screenshot = false;
+				TaskContext taskContext;
+				TaskQueue::Execute([this](uint32)
+					{
+						// Use copy queue, make it wait for the graphics queue to be finished rendering to the color output.
+						CommandContext* pScreenshotContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+						m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->InsertWait(m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
 
-				Texture* pSource = m_pColorOutput;
-				D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-				D3D12_RESOURCE_DESC resourceDesc = m_pColorOutput->GetResource()->GetDesc();
-				m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
-				RefCountPtr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
-				pContext->InsertResourceBarrier(m_pColorOutput, D3D12_RESOURCE_STATE_COPY_SOURCE);
-				pContext->InsertResourceBarrier(pScreenshotBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
-				pContext->CopyTexture(m_pColorOutput, pScreenshotBuffer, CD3DX12_BOX(0, 0, m_pColorOutput->GetWidth(), m_pColorOutput->GetHeight()));
+						// Grab the last color output, null it so the next frame doesn't write over it while we copy.
+						RefCountPtr<Texture> pSource = m_pColorOutput;
+						m_pColorOutput = nullptr;
 
-				Fence* pFence = m_pDevice->GetFrameFence();
-				ScreenshotRequest& request = m_ScreenshotBuffers.emplace();
-				request.Width = pSource->GetWidth();
-				request.Height = pSource->GetHeight();
-				request.RowPitch = textureFootprint.Footprint.RowPitch;
-				request.pBuffer = pScreenshotBuffer;
-				request.SyncPoint = SyncPoint(pFence, pFence->GetCurrentValue());
+						uint32 width = pSource->GetWidth();
+						uint32 height = pSource->GetHeight();
 
-			}
+						D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+						D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
+						m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+						RefCountPtr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
+						pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
+						pScreenshotContext->InsertResourceBarrier(pScreenshotBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
+						pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
+						pScreenshotContext->Execute(true);
 
-			if (!m_ScreenshotBuffers.empty())
-			{
-				while (!m_ScreenshotBuffers.empty() && m_ScreenshotBuffers.front().SyncPoint.IsComplete())
-				{
-					const ScreenshotRequest& request = m_ScreenshotBuffers.front();
-
-					TaskContext taskContext;
-					TaskQueue::Execute([request](uint32)
+						char* pData = (char*)pScreenshotBuffer->GetMappedData();
+						Image img(width, height, 1, ResourceFormat::RGBA8_UNORM, 1);
+						uint32 imageRowPitch = width * 4;
+						uint32 targetOffset = 0;
+						for (uint32 i = 0; i < height; ++i)
 						{
-							char* pData = (char*)request.pBuffer->GetMappedData();
-							Image img(request.Width, request.Height, 1, ResourceFormat::RGBA8_UNORM, 1);
-							uint32 imageRowPitch = request.Width * 4;
-							uint32 targetOffset = 0;
-							for (uint32 i = 0; i < request.Height; ++i)
-							{
-								img.SetData((uint32*)pData, targetOffset, imageRowPitch);
-								pData += request.RowPitch;
-								targetOffset += imageRowPitch;
-							}
+							img.SetData((uint32*)pData, targetOffset, imageRowPitch);
+							pData += textureFootprint.Footprint.RowPitch;
+							targetOffset += imageRowPitch;
+						}
 
-							SYSTEMTIME time;
-							GetSystemTime(&time);
-							Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-							img.Save(Sprintf("%sScreenshot_%s.jpg", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
-						}, taskContext);
-					m_ScreenshotBuffers.pop();
-				}
+						SYSTEMTIME time;
+						GetSystemTime(&time);
+						Paths::CreateDirectoryTree(Paths::ScreenshotDir());
+						img.Save(Sprintf("%sScreenshot_%s.jpg", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
+					}, taskContext);
 			}
 		}
 
@@ -1109,6 +1101,7 @@ void DemoApp::Update()
 			.Bind([=](CommandContext& context)
 				{
 					context.InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
+					context.InsertResourceBarrier(sceneTextures.pColorTarget->Get(), D3D12_RESOURCE_STATE_COMMON);
 				});
 
 		graph.Compile();

@@ -90,15 +90,6 @@ private:
 	WindowHandle m_Window = nullptr;
 	std::unique_ptr<Camera> m_pCamera;
 
-	struct ScreenshotRequest
-	{
-		SyncPoint SyncPoint;
-		uint32 Width;
-		uint32 Height;
-		uint32 RowPitch;
-		RefCountPtr<Buffer> pBuffer;
-	};
-	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
 	RenderPath m_RenderPath = RenderPath::Visibility;
 
 	World m_World;
