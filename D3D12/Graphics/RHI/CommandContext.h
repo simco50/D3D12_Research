@@ -162,8 +162,8 @@ public:
 	CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager);
 
 	void Reset();
-	SyncPoint Execute(bool wait);
-	static SyncPoint Execute(const Span<CommandContext* const>& contexts, bool wait);
+	SyncPoint Execute();
+	static SyncPoint Execute(const Span<CommandContext* const>& contexts);
 	void Free(const SyncPoint& syncPoint);
 
 	void InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);

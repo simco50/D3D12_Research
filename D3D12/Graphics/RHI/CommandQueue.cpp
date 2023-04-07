@@ -22,7 +22,7 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 	VERIFY_HR(m_pCommandQueue->GetTimestampFrequency(&m_TimestampFrequency));
 }
 
-SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& contexts, bool wait)
+SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& contexts)
 {
 	check(contexts.GetSize());
 
@@ -59,11 +59,6 @@ SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& c
 	m_SyncPoint = SyncPoint(m_pFence, fenceValue);
 
 	pBarrierCommandlist->Free(m_SyncPoint);
-
-	if (wait)
-	{
-		m_SyncPoint.Wait();
-	}
 
 	return m_SyncPoint;
 }

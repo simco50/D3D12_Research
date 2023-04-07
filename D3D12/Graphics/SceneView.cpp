@@ -340,7 +340,7 @@ namespace GraphicsCommon
 		DefaultTextures[(int)DefaultTexture::ColorNoise256] = CreateTextureFromFile(context, "Resources/Textures/Noise.png", false, "Noise");
 		DefaultTextures[(int)DefaultTexture::BlueNoise512] = CreateTextureFromFile(context, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");
 
-		context.Execute(true);
+		context.Execute();
 
 		{
 			CommandSignatureInitializer sigDesc;

@@ -51,12 +51,12 @@ void CommandContext::Reset()
 	}
 }
 
-SyncPoint CommandContext::Execute(bool wait)
+SyncPoint CommandContext::Execute()
 {
-	return Execute(this, wait);
+	return Execute({ this });
 }
 
-SyncPoint CommandContext::Execute(const Span<CommandContext* const>& contexts, bool wait)
+SyncPoint CommandContext::Execute(const Span<CommandContext* const>& contexts)
 {
 	check(contexts.GetSize() > 0);
 	CommandQueue* pQueue = contexts[0]->GetParent()->GetCommandQueue(contexts[0]->GetType());
@@ -66,7 +66,7 @@ SyncPoint CommandContext::Execute(const Span<CommandContext* const>& contexts, b
 			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContext->GetType()));
 		pContext->FlushResourceBarriers();
 	}
-	SyncPoint syncPoint = pQueue->ExecuteCommandLists(contexts, wait);
+	SyncPoint syncPoint = pQueue->ExecuteCommandLists(contexts);
 	for (CommandContext* pContext : contexts)
 	{
 		pContext->Free(syncPoint);

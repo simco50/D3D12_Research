@@ -24,7 +24,7 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 {
 	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	m_pHeatMapTexture = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Textures/Heatmap.png", true, "Color Heatmap");
-	pContext->Execute(true);
+	pContext->Execute();
 
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootCBV(0);

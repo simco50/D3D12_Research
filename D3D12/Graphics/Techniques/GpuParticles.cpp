@@ -54,10 +54,9 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	pContext->WriteBuffer(m_pDeadList, deadList.data(), sizeof(uint32) * deadList.size());
 	uint32 aliveCount = cMaxParticleCount;
 	pContext->WriteBuffer(m_pCountersBuffer, &aliveCount, sizeof(uint32), 0);
-
 	m_pParticleBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)), "Particle Buffer");
 
-	pContext->Execute(true);
+	pContext->Execute();
 
 	{
 		m_pSimulateRS = new RootSignature(pDevice);

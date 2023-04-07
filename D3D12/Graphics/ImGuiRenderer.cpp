@@ -157,7 +157,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	data.RowPitch = RHI::GetRowPitch(ResourceFormat::RGBA8_UNORM, width);
 	data.SlicePitch = RHI::GetSlicePitch(ResourceFormat::RGBA8_UNORM, width, height);
 	pContext->WriteTexture(gFontTexture, data, 0);
-	pContext->Execute(true);
+	pContext->Execute();
 
 	gImGuiRS = new RootSignature(pDevice);
 	gImGuiRS->AddRootCBV(0, D3D12_SHADER_VISIBILITY_VERTEX);

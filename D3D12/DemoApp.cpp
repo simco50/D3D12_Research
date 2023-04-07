@@ -139,7 +139,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	SetupScene(*pContext);
-	pContext->Execute(false);
+	pContext->Execute();
 
 	OnResizeOrMove(windowRect.x, windowRect.y);
 	OnResizeViewport(windowRect.x, windowRect.y);
@@ -199,19 +199,21 @@ void DemoApp::SetupScene(CommandContext& context)
 
 void DemoApp::Update()
 {
-	constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
-	if (m_RenderPath == RenderPath::Visibility)
-		m_RenderPath = m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
-	if (m_RenderPath == RenderPath::PathTracing)
-		m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
-
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	Profiler::Get()->Resolve(pContext);
 
 	{
 		GPU_PROFILE_SCOPE("Update", pContext);
+
+		constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
+		if (m_RenderPath == RenderPath::Visibility)
+			m_RenderPath = m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
+		if (m_RenderPath == RenderPath::PathTracing)
+			m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
+
 		m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 		ImGuiRenderer::NewFrame();
+
 		UpdateImGui();
 
 		m_pCamera->SetJitter(Tweakables::g_TAA && m_RenderPath != RenderPath::PathTracing);
@@ -261,6 +263,13 @@ void DemoApp::Update()
 			}
 		}
 
+		if (m_World.DDGIVolumes.size() > 0)
+		{
+			DDGIVolume& volume = m_World.DDGIVolumes[0];
+			volume.Origin = m_SceneData.SceneAABB.Center;
+			volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
+		}
+
 		CreateShadowViews(m_SceneData, m_World);
 		m_SceneData.View = m_pCamera->GetViewTransform();
 		m_SceneData.FrameIndex = m_Frame;
@@ -278,26 +287,13 @@ void DemoApp::Update()
 				boundsSet = true;
 			}
 		}
-
-		if (m_World.DDGIVolumes.size() > 0)
-		{
-			DDGIVolume& volume = m_World.DDGIVolumes[0];
-			volume.Origin = m_SceneData.SceneAABB.Center;
-			volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
-		}
-
-		m_SceneData.VisibilityMask.SetAll();
-		for (ShadowView& shadowView : m_SceneData.ShadowViews)
-		{
-			shadowView.Visibility.SetAll();
-		}
-
 		{
 			PROFILE_SCOPE("Frustum Culling");
 
 			TaskContext cullingContext;
 			TaskQueue::Execute([&](int)
 				{
+					m_SceneData.VisibilityMask.SetAll();
 					BoundingFrustum frustum = m_pCamera->GetFrustum();
 					for (const Batch& b : m_SceneData.Batches)
 					{
@@ -307,6 +303,7 @@ void DemoApp::Update()
 			TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
 				{
 					ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
+					shadowView.Visibility.SetAll();
 					for (const Batch& b : m_SceneData.Batches)
 					{
 						shadowView.Visibility.AssignBit(b.InstanceID, shadowView.IsPerspective ? shadowView.PerspectiveFrustum.Contains(b.Bounds) : shadowView.OrtographicFrustum.Contains(b.Bounds));
@@ -314,6 +311,9 @@ void DemoApp::Update()
 				}, cullingContext, (uint32)m_SceneData.ShadowViews.size(), 1);
 			TaskQueue::Join(cullingContext);
 		}
+	}
+	{
+		GPU_PROFILE_SCOPE("Render", pContext);
 
 		{
 			if (Tweakables::g_Screenshot)
@@ -322,14 +322,8 @@ void DemoApp::Update()
 				TaskContext taskContext;
 				TaskQueue::Execute([this](uint32)
 					{
-						// Use copy queue, make it wait for the graphics queue to be finished rendering to the color output.
-						CommandContext* pScreenshotContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
-						m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->InsertWait(m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
-
-						// Grab the last color output, null it so the next frame doesn't write over it while we copy.
+						CommandContext* pScreenshotContext = m_pDevice->AllocateCommandContext();
 						RefCountPtr<Texture> pSource = m_pColorOutput;
-						m_pColorOutput = nullptr;
-
 						uint32 width = pSource->GetWidth();
 						uint32 height = pSource->GetHeight();
 
@@ -340,7 +334,9 @@ void DemoApp::Update()
 						pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
 						pScreenshotContext->InsertResourceBarrier(pScreenshotBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
 						pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
-						pScreenshotContext->Execute(true);
+
+						SyncPoint fence = pScreenshotContext->Execute();
+						fence.Wait();
 
 						char* pData = (char*)pScreenshotBuffer->GetMappedData();
 						Image img(width, height, 1, ResourceFormat::RGBA8_UNORM, 1);
@@ -380,13 +376,13 @@ void DemoApp::Update()
 				CommandContext* pCopyContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 				Renderer::UploadSceneData(*pCopyContext, pViewMut, pWorldMut);
 
-				pCopyContext->Execute(false);
-				pComputeQueue->InsertWait(pCopyQueue);
+				SyncPoint copySync = pCopyContext->Execute();
+				pComputeQueue->InsertWait(copySync);
 				CommandContext* pComputeContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 				pViewMut->AccelerationStructure.Build(*pComputeContext, *pView);
 
-				pComputeContext->Execute(false);
-				pDirectQueue->InsertWait(pComputeQueue);
+				SyncPoint computeSync = pComputeContext->Execute();
+				pDirectQueue->InsertWait(computeSync);
 			}
 			else
 			{
@@ -1118,7 +1114,7 @@ void DemoApp::Update()
 
 	}
 
-	pContext->Execute(false);
+	pContext->Execute();
 
 	{
 		PROFILE_SCOPE("Present");
@@ -1270,7 +1266,7 @@ void DemoApp::UpdateImGui()
 					m_World.Meshes.clear();
 					CommandContext* pContext = m_pDevice->AllocateCommandContext();
 					LoadMesh(ofn.lpstrFile, *pContext, m_World);
-					pContext->Execute(true);
+					pContext->Execute();
 				}
 			}
 			ImGui::EndMenu();

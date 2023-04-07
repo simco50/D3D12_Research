@@ -25,7 +25,7 @@ VisualizeTexture::VisualizeTexture(GraphicsDevice* pDevice)
 		0xFF000000, 0xFFFFFFFF
 	};
 	m_pCheckerPattern = GraphicsCommon::CreateTextureFromImage(context, Image(2, 2, 1, ResourceFormat::RGBA8_UNORM, 1, checkerPixels), false, "Checker Pattern");
-	context.Execute(false);
+	context.Execute();
 }
 
 void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)

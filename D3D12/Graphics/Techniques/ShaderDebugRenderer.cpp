@@ -75,7 +75,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 
 	constexpr uint32 ATLAS_RESOLUTION = 512;
 	BuildFontAtlas(*pContext, Vector2i(ATLAS_RESOLUTION, ATLAS_RESOLUTION));
-	pContext->Execute(true);
+	pContext->Execute();
 }
 
 void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
