@@ -214,7 +214,6 @@ public:
 	void BindDynamicVertexBuffer(uint32 slot, uint32 elementCount, uint32 elementSize, const void* pData);
 	void BindDynamicIndexBuffer(uint32 elementCount, const void* pData, ResourceFormat format);
 	void BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset = 0);
-	void BindResources(uint32 rootIndex, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles, uint32 offset = 0);
 	void BindRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void BindRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void SetRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize);

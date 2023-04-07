@@ -328,12 +328,7 @@ void CommandContext::BindResources(uint32 rootIndex, const Span<const ResourceVi
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> descriptors(pViews.GetSize());
 	for (uint32 i = 0; i < pViews.GetSize(); ++i)
 		descriptors[i] = pViews[i] ? pViews[i]->GetDescriptor() : DescriptorHandle::InvalidCPUHandle;
-	BindResources(rootIndex, descriptors, offset);
-}
-
-void CommandContext::BindResources(uint32 rootIndex, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles, uint32 offset)
-{
-	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, handles);
+	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, descriptors);
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
