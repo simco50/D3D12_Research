@@ -294,21 +294,25 @@ void DemoApp::Update()
 
 		{
 			PROFILE_SCOPE("Frustum Culling");
-			{
-				BoundingFrustum frustum = m_pCamera->GetFrustum();
-				for (const Batch& b : m_SceneData.Batches)
-				{
-					m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
-				}
-			}
 
-			for (ShadowView& shadowView : m_SceneData.ShadowViews)
-			{
-				for (const Batch& b : m_SceneData.Batches)
+			TaskContext cullingContext;
+			TaskQueue::Execute([&](int)
 				{
-					shadowView.Visibility.AssignBit(b.InstanceID, shadowView.IsPerspective ? shadowView.PerspectiveFrustum.Contains(b.Bounds) : shadowView.OrtographicFrustum.Contains(b.Bounds));
-				}
-			}
+					BoundingFrustum frustum = m_pCamera->GetFrustum();
+					for (const Batch& b : m_SceneData.Batches)
+					{
+						m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
+					}
+				}, cullingContext);
+			TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
+				{
+					ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
+					for (const Batch& b : m_SceneData.Batches)
+					{
+						shadowView.Visibility.AssignBit(b.InstanceID, shadowView.IsPerspective ? shadowView.PerspectiveFrustum.Contains(b.Bounds) : shadowView.OrtographicFrustum.Contains(b.Bounds));
+					}
+				}, cullingContext, (uint32)m_SceneData.ShadowViews.size(), 1);
+			TaskQueue::Join(cullingContext);
 		}
 
 		{
