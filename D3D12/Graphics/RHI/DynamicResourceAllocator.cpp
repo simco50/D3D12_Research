@@ -3,7 +3,7 @@
 #include "Graphics.h"
 #include "Buffer.h"
 
-constexpr static uint64 PAGE_SIZE = Math::MegaBytesToBytes * 2;
+constexpr static uint64 PAGE_SIZE = Math::MegaBytesToBytes * 1;
 
 DynamicAllocationManager::DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags)
 	: GraphicsObject(pParent), m_BufferFlags(bufferFlags)

@@ -17,17 +17,11 @@ public:
 	void OffsetInline(uint32 numDescriptors, uint32 descriptorSize)
 	{
 		if (CpuHandle != InvalidCPUHandle)
-		{
 			CpuHandle.Offset(numDescriptors, descriptorSize);
-		}
 		if (GpuHandle != InvalidGPUHandle)
-		{
 			GpuHandle.Offset(numDescriptors, descriptorSize);
-		}
 		if (HeapIndex != InvalidHeapIndex)
-		{
 			HeapIndex += numDescriptors;
-		}
 	}
 
 	DescriptorHandle Offset(uint32 numDescriptors, uint32 descriptorSize)

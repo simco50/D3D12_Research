@@ -8,9 +8,9 @@
 class CommandContext;
 enum class CommandListContext;
 
-struct DescriptorHeapBlock
+struct DescriptorHeapPage
 {
-	DescriptorHeapBlock(DescriptorHandle startHandle, uint32 size)
+	DescriptorHeapPage(DescriptorHandle startHandle, uint32 size)
 		: StartHandle(startHandle), Size(size), CurrentOffset(0)
 	{}
 	DescriptorHandle StartHandle;
@@ -22,15 +22,15 @@ struct DescriptorHeapBlock
 class GPUDescriptorHeap : public GraphicsObject
 {
 public:
-	GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors);
+	GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicPageSize, uint32 numDescriptors);
 	~GPUDescriptorHeap();
 
 	DescriptorHandle AllocatePersistent();
 	void FreePersistent(uint32& heapIndex);
 
-	DescriptorHeapBlock* AllocateDynamicBlock();
-	void FreeDynamicBlock(const SyncPoint& syncPoint, DescriptorHeapBlock* pBlock);
-	uint32 GetDynamicBlockSize() const { return m_DynamicBlockSize; }
+	DescriptorHeapPage* AllocateDynamicPage();
+	void FreeDynamicPage(const SyncPoint& syncPoint, DescriptorHeapPage* pPage);
+	uint32 GetDynamicPageSize() const { return m_DynamicPageSize; }
 
 	uint32 GetDescriptorSize() const { return m_DescriptorSize; }
 	ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
@@ -46,12 +46,12 @@ private:
 	uint32 m_DescriptorSize = 0;
 	DescriptorHandle m_StartHandle;
 
-	std::mutex m_DynamicBlockAllocateMutex;
-	uint32 m_DynamicBlockSize;
+	std::mutex m_DynamicPageAllocateMutex;
+	uint32 m_DynamicPageSize;
 	uint32 m_NumDynamicDescriptors;
-	std::vector<std::unique_ptr<DescriptorHeapBlock>> m_DynamicBlocks;
-	std::queue<DescriptorHeapBlock*> m_ReleasedDynamicBlocks;
-	std::vector<DescriptorHeapBlock*> m_FreeDynamicBlocks;
+	std::vector<std::unique_ptr<DescriptorHeapPage>> m_DynamicPages;
+	std::queue<DescriptorHeapPage*> m_ReleasedDynamicPages;
+	std::vector<DescriptorHeapPage*> m_FreeDynamicPages;
 
 	FreeList<false> m_PersistentHandles;
 	uint32 m_NumPersistentDescriptors;
@@ -87,6 +87,6 @@ private:
 	BitField<RootSignature::sMaxNumParameters, uint8> m_StaleRootParameters{};
 
 	GPUDescriptorHeap* m_pHeapAllocator;
-	DescriptorHeapBlock* m_pCurrentHeapBlock = nullptr;
-	std::vector<DescriptorHeapBlock*> m_ReleasedBlocks;
+	DescriptorHeapPage* m_pCurrentHeapPage = nullptr;
+	std::vector<DescriptorHeapPage*> m_ReleasedPages;
 };

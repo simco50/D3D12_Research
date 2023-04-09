@@ -10,8 +10,7 @@ CPUDescriptorHeap::CPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_H
 
 CPUDescriptorHeap::~CPUDescriptorHeap()
 {
-	//#todo: ImGui descriptor leaks
-	//checkf(m_FreeList.GetNumAllocations() == 0, "Leaked descriptors");
+	checkf(m_FreeList.GetNumAllocations() == 0, "Leaked descriptors");
 }
 
 CD3DX12_CPU_DESCRIPTOR_HANDLE CPUDescriptorHeap::AllocateDescriptor()
