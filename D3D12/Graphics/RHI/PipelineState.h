@@ -1,6 +1,7 @@
 #pragma once
 #include "GraphicsResource.h"
 #include "Shader.h"
+#include "Core/TaskQueue.h"
 
 class ShaderManager;
 class RootSignature;
@@ -161,7 +162,7 @@ public:
 	PipelineState(const PipelineState& rhs) = delete;
 	PipelineState& operator=(const PipelineState& rhs) = delete;
 	~PipelineState();
-	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState.Get(); }
+	ID3D12PipelineState* GetPipelineState();
 	void Create(const PipelineStateInitializer& initializer);
 	void ConditionallyReload();
 	PipelineStateType GetType() const { return m_Desc.m_Type; }
@@ -173,4 +174,5 @@ private:
 	PipelineStateInitializer m_Desc;
 	DelegateHandle m_ReloadHandle;
 	bool m_NeedsReload = false;
+	TaskContext m_CompileToken = 0;
 };

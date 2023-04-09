@@ -48,15 +48,19 @@ StateObject::StateObject(GraphicsDevice* pParent)
 
 void StateObject::Create(const StateObjectInitializer& initializer)
 {
+	TaskQueue::Join(m_CompileToken);
 	GetParent()->DeferReleaseObject(m_pStateObject.Detach());
 
 	m_Desc = initializer;
-	StateObjectStream stateObjectStream;
-	m_Desc.CreateStateObjectStream(stateObjectStream, GetParent());
-	VERIFY_HR(GetParent()->GetRaytracingDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
-	D3D::SetObjectName(m_pStateObject, m_Desc.Name.c_str());
-	VERIFY_HR(m_pStateObject->QueryInterface(m_pStateObjectProperties.ReleaseAndGetAddressOf()));
-	//m_Desc.SetMaxPipelineStackSize(this); #todo: This is causing trouble with recursion!
+	TaskQueue::Execute([this](int)
+		{
+			StateObjectStream stateObjectStream;
+			m_Desc.CreateStateObjectStream(stateObjectStream, GetParent());
+			VERIFY_HR(GetParent()->GetRaytracingDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
+			D3D::SetObjectName(m_pStateObject, m_Desc.Name.c_str());
+			VERIFY_HR(m_pStateObject->QueryInterface(m_pStateObjectProperties.ReleaseAndGetAddressOf()));
+			//m_Desc.SetMaxPipelineStackSize(this); #todo: This is causing trouble with recursion!
+		}, m_CompileToken);
 }
 
 void StateObject::ConditionallyReload()
@@ -67,6 +71,12 @@ void StateObject::ConditionallyReload()
 		m_NeedsReload = false;
 		E_LOG(Info, "Reloaded State Object: %s", m_Desc.Name.c_str());
 	}
+}
+
+ID3D12StateObject* StateObject::GetStateObject()
+{
+	TaskQueue::Join(m_CompileToken);
+	return m_pStateObject;
 }
 
 void StateObject::OnLibraryReloaded(Shader* pLibrary)
