@@ -1,5 +1,5 @@
 #pragma once
-#include "../RenderGraph/RenderGraphDefinitions.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 class GraphicsDevice;
 class RootSignature;
 class Texture;

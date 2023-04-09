@@ -1,6 +1,7 @@
 #pragma once
 #include "GraphicsResource.h"
 #include "GPUDescriptorHeap.h"
+#include "DynamicResourceAllocator.h"
 
 class GraphicsResource;
 class Texture;
@@ -8,15 +9,12 @@ class DynamicGPUDescriptorAllocator;
 class RootSignature;
 class PipelineState;
 class StateObject;
-class DynamicResourceAllocator;
-class DynamicAllocationManager;
 class Buffer;
 class CommandSignature;
 class ShaderBindingTable;
 class ResourceView;
 struct VertexBufferView;
 struct IndexBufferView;
-struct DynamicAllocation;
 
 enum class CommandListContext
 {
@@ -122,19 +120,6 @@ struct RenderPassInfo
 	DepthTargetInfo DepthStencilTarget{};
 };
 
-class ResourceBarrierBatcher
-{
-public:
-	void AddTransition(ID3D12Resource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, uint32 subResource);
-	void AddUAV(ID3D12Resource* pResource);
-	void Flush(ID3D12GraphicsCommandList* pCmdList);
-	void Reset();
-	bool HasWork() const { return m_QueuedBarriers.size() > 0; }
-
-private:
-	std::vector<D3D12_RESOURCE_BARRIER> m_QueuedBarriers;
-};
-
 namespace ComputeUtils
 {
 	inline Vector3i GetNumThreadGroups(uint32 threadsX = 1, uint32 groupSizeX = 1, uint32 threadsY = 1, uint32 groupSizeY = 1, uint32 threadsZ = 1, uint32 groupSizeZ = 1)
@@ -235,6 +220,7 @@ public:
 
 private:
 	void PrepareDraw();
+	void AddBarrier(const D3D12_RESOURCE_BARRIER& barrier);
 
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
 	D3D12_RESOURCE_STATES GetLocalResourceState(GraphicsResource* pResource, uint32 subResource) const
@@ -250,17 +236,22 @@ private:
 		uint32 Subresource;
 	};
 
-	std::vector<PendingBarrier> m_PendingBarriers;
 	DynamicGPUDescriptorAllocator m_ShaderResourceDescriptorAllocator;
-	ResourceBarrierBatcher m_BarrierBatcher;
-	std::unique_ptr<DynamicResourceAllocator> m_pDynamicAllocator;
+	DynamicResourceAllocator m_DynamicAllocator;
+
 	RefCountPtr<ID3D12CommandList> m_pCommandListBase;
 	RefCountPtr<ID3D12GraphicsCommandList> m_pCommandList;
 	RefCountPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
 	RefCountPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
 	RefCountPtr<ID3D12CommandAllocator> m_pAllocator;
-	D3D12_COMMAND_LIST_TYPE m_Type;
+
+	static constexpr uint32 MaxNumBatchedBarriers = 64;
+	std::array<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers> m_BatchedBarriers;
+	uint32 m_NumBatchedBarriers = 0;
+	std::vector<PendingBarrier> m_PendingBarriers;
 	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
+
+	D3D12_COMMAND_LIST_TYPE m_Type;
 	CommandListContext m_CurrentCommandContext = CommandListContext::Invalid;
 	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubResourceParameters{};
 	RenderPassInfo m_CurrentRenderPassInfo;

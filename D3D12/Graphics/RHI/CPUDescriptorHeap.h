@@ -15,7 +15,7 @@ private:
 	void AllocateNewHeap();
 
 	std::vector<RefCountPtr<ID3D12DescriptorHeap>> m_Heaps;
-	FreeList<true> m_FreeList;
+	FreeList<false> m_FreeList;
 	uint32 m_DescriptorsPerHeap;
 	uint32 m_DescriptorSize = 0;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;

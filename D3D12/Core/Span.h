@@ -34,12 +34,12 @@ public:
 		m_pValue(&value), m_Count(1)
 	{}
 
-	Span Subspan(uint32 from, uint32 count = 0xFFFFFFFF)
+	Span Subspan(uint32 from, uint32 count = 0xFFFFFFFF) const
 	{
-		uint32 count = count == 0xFFFFFFFF ? m_Count : count;
+		uint32 num = count == 0xFFFFFFFF ? m_Count - from : count;
 		check(from < m_Count);
-		check(from + count < m_Count);
-		return Span(m_pValue + from, count);
+		check(from + count <= m_Count);
+		return Span(m_pValue + from, num);
 	}
 
 	std::vector<T> Copy() const

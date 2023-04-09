@@ -29,8 +29,8 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 		gCommonRS = new RootSignature(context.GetParent());
 		gCommonRS->AddRootConstants(0, 1);
 		gCommonRS->AddRootCBV(100);
-		gCommonRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-		gCommonRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+		gCommonRS->AddRootUAV(0);
+		gCommonRS->AddRootSRV(0);
 		gCommonRS->Finalize("Update TLAS");
 
 		gUpdateTLASPSO = context.GetParent()->CreateComputePipeline(gCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
@@ -167,7 +167,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			uint32 numInstances = Math::AlignUp(Math::Max(1u, (uint32)blasInstances.size()), 128u);
 			if (!m_pBLASInstancesSourceBuffer || m_pBLASInstancesSourceBuffer->GetNumElements() < numInstances)
 			{
-				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceTargetDescs");
+				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceSourceDescs");
 				m_pBLASInstancesTargetBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceTargetDescs");
 			}
 			
@@ -176,17 +176,15 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
 				context.WriteBuffer(m_pBLASInstancesSourceBuffer, blasInstances.data(), sizeof(BLASInstance) * blasInstances.size());
 				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.SetComputeRootSignature(gCommonRS);
 				context.SetPipelineState(gUpdateTLASPSO);
 				context.BindRootCBV(0, (uint32)blasInstances.size());
 				context.BindRootCBV(1, Renderer::GetViewUniforms(&view));
-				context.BindResources(2, m_pBLASInstancesTargetBuffer->GetUAV());
-				context.BindResources(3, m_pBLASInstancesSourceBuffer->GetSRV());
+				context.BindRootUAV(2, m_pBLASInstancesTargetBuffer->GetGpuHandle());
+				context.BindRootSRV(3, m_pBLASInstancesSourceBuffer->GetGpuHandle());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
-
-				context.InsertUavBarrier(m_pBLASInstancesTargetBuffer);
-				context.FlushResourceBarriers();
 			}
 		}
 
@@ -203,6 +201,8 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			asDesc.Inputs.NumDescs = (uint32)blasInstances.size();
 			asDesc.SourceAccelerationStructureData = 0;
 
+			context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.FlushResourceBarriers();
 			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 			context.InsertUavBarrier(m_pTLAS);
 		}
