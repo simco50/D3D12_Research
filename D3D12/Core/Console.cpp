@@ -40,7 +40,7 @@ namespace Win32Console
 
 static HANDLE sConsoleHandle = nullptr;
 static std::mutex sLogMutex;
-static std::queue<Console::LogEntry> sMessageQueue;
+static std::vector<Console::LogEntry> sMessageQueue;
 static LogType sVerbosity;
 static std::deque<Console::LogEntry> sHistory;
 
@@ -61,12 +61,52 @@ void Console::Shutdown()
 void Console::Log(const char* message, LogType type)
 {
 	if ((int)type < (int)sVerbosity)
-	{
 		return;
+
+	LogEntry entry(message, type);
+	if (Thread::IsMainThread())
+	{
+		FlushLog(entry);
+
+		std::scoped_lock<std::mutex> lock(sLogMutex);
+		for(const LogEntry& e : sMessageQueue)
+			FlushLog(e);
+		sMessageQueue.clear();
+	}
+	else
+	{
+		std::scoped_lock<std::mutex> lock(sLogMutex);
+		sMessageQueue.push_back(LogEntry(message, type));
 	}
 
+	if (type == LogType::FatalError)
+		abort();
+}
+
+void Console::LogFormat(LogType type, const char* format, ...)
+{
+	static char sConvertBuffer[8196];
+	va_list ap;
+	va_start(ap, format);
+	FormatStringVars(sConvertBuffer, ARRAYSIZE(sConvertBuffer), format, ap);
+	va_end(ap);
+	Log(sConvertBuffer, type);
+}
+
+void Console::SetVerbosity(LogType type)
+{
+	sVerbosity = type;
+}
+
+const std::deque<Console::LogEntry>& Console::GetHistory()
+{
+	return sHistory;
+}
+
+void Console::FlushLog(const LogEntry& log)
+{
 	const char* pVerbosityMessage = "";
-	switch (type)
+	switch (log.Type)
 	{
 	case LogType::Info:
 		if (sConsoleHandle)
@@ -89,81 +129,18 @@ void Console::Log(const char* message, LogType type)
 	}
 
 	char messageBuffer[4096];
-	FormatString(messageBuffer, ARRAYSIZE(messageBuffer), "%s %s\n", pVerbosityMessage, message);
-	printf("%s %s\n", pVerbosityMessage, message);
+	FormatString(messageBuffer, ARRAYSIZE(messageBuffer), "%s %s\n", pVerbosityMessage, log.pMessage);
+	printf("%s %s\n", pVerbosityMessage, log.pMessage);
 	OutputDebugStringA(messageBuffer);
+
+	sHistory.push_back(log);
+	while (sHistory.size() > 50)
+	{
+		sHistory.pop_front();
+	}
 
 	if (sConsoleHandle)
 	{
 		SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
 	}
-
-	if (Thread::IsMainThread())
-	{
-		{
-			std::scoped_lock<std::mutex> lock(sLogMutex);
-			while (!sMessageQueue.empty())
-			{
-				const LogEntry& e = sMessageQueue.front();
-				sHistory.push_back(e);
-				sMessageQueue.pop();
-			}
-		}
-
-		sHistory.push_back(LogEntry(message, type));
-		while (sHistory.size() > 50)
-		{
-			sHistory.pop_front();
-		}
-	}
-	else
-	{
-		std::scoped_lock<std::mutex> lock(sLogMutex);
-		sMessageQueue.push(LogEntry(message, type));
-	}
-
-	if (type == LogType::Error)
-	{
-			if (IsDebuggerPresent())
-			{
-				LPCSTR msg = &message[0];
-				int res = MessageBoxA(NULL, msg, "Assert failed", MB_YESNOCANCEL | MB_ICONERROR);
-				if (res == IDYES)
-				{
-#if _MSC_VER >= 1400
-					__debugbreak();
-#else
-					_asm int 0x03;
-#endif
-				}
-				else if (res == IDCANCEL)
-				{
-					abort();
-				}
-			}
-	}
-	else if (type == LogType::FatalError)
-	{
-		abort();
-	}
-}
-
-void Console::LogFormat(LogType type, const char* format, ...)
-{
-	static char sConvertBuffer[8196];
-	va_list ap;
-	va_start(ap, format);
-	FormatStringVars(sConvertBuffer, ARRAYSIZE(sConvertBuffer), format, ap);
-	va_end(ap);
-	Log(sConvertBuffer, type);
-}
-
-void Console::SetVerbosity(LogType type)
-{
-	sVerbosity = type;
-}
-
-const std::deque<Console::LogEntry>& Console::GetHistory()
-{
-	return sHistory;
 }

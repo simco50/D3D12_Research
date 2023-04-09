@@ -17,10 +17,14 @@ class Console
 public:
 	struct LogEntry
 	{
-		LogEntry(const std::string& message, const LogType type)
-			: Message(message), Type(type)
-		{}
-		std::string Message;
+		static const uint32 MAX_LOG_LENGTH = 128;
+
+		LogEntry(const char* pMsg, const LogType type)
+			: Type(type)
+		{
+			strcpy_s(pMessage, pMsg);
+		}
+		char pMessage[MAX_LOG_LENGTH];
 		LogType Type;
 	};
 	static void Initialize();
@@ -30,4 +34,7 @@ public:
 	static void SetVerbosity(LogType type);
 
 	static const std::deque<LogEntry>& GetHistory();
+
+private:
+	static void FlushLog(const LogEntry& entry);
 };

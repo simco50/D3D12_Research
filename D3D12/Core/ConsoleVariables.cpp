@@ -112,16 +112,16 @@ void ImGuiConsole::Update()
 					case LogType::Verbose:
 					case LogType::Info:
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
-						ImGui::TextWrapped("[Info] %s", entry.Message.c_str());
+						ImGui::TextWrapped("[Info] %s", entry.pMessage);
 						break;
 					case LogType::Warning:
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
-						ImGui::TextWrapped("[Warning] %s", entry.Message.c_str());
+						ImGui::TextWrapped("[Warning] %s", entry.pMessage);
 						break;
 					case LogType::Error:
 					case LogType::FatalError:
 						ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0, 0, 1));
-						ImGui::TextWrapped("[Error] %s", entry.Message.c_str());
+						ImGui::TextWrapped("[Error] %s", entry.pMessage);
 						break;
 					}
 					ImGui::PopStyleColor();
