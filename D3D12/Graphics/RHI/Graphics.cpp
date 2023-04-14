@@ -335,8 +335,6 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	}
 
 	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
-	check(m_pDevice.As(&m_pDevice4));
-	m_pDevice.As(&m_pRaytracingDevice);
 
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
@@ -453,7 +451,7 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 		else
 		{
 			RefCountPtr<ID3D12CommandList> pCommandList;
-			VERIFY_HR(m_pDevice4->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf())));
+			VERIFY_HR(m_pDevice->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled %s Commandlist %d", D3D::CommandlistTypeToString(type), m_CommandListPool[typeIndex].size()).c_str());
 			pContext = m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, pCommandList, type, m_pGlobalViewHeap, m_pDynamicAllocationManager));
 		}

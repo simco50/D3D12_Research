@@ -20,8 +20,6 @@ public:
 	void SetFoV(float fov);
 	void SetClippingPlanes(float nearPlane, float farPlane);
 
-	void SetOrthographic(bool orthographic, float size = -1.0);
-
 	void SetNearPlane(float nearPlane);
 	void SetFarPlane(float farPlane);
 

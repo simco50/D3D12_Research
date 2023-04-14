@@ -201,18 +201,17 @@ public:
 	void BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset = 0);
 	void BindRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void BindRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize);
+	void BindRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize);
 	template<typename T>
 	void BindRootCBV(uint32 rootIndex, const T& data)
 	{
 		static_assert(!std::is_pointer<T>::value, "Provided type is a pointer. This is probably unintentional.");
-		SetRootCBV(rootIndex, &data, sizeof(T));
+		BindRootCBV(rootIndex, &data, sizeof(T));
 	}
 
 	DynamicAllocation AllocateTransientMemory(uint64 size, uint32 alignment = 256u);
 
-	ID3D12GraphicsCommandList* GetCommandList() const { return m_pCommandList; }
-	ID3D12GraphicsCommandList4* GetRaytracingCommandList() const { return  m_pRaytracingCommandList.Get(); }
+	ID3D12GraphicsCommandList6* GetCommandList() const { return m_pCommandList; }
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 	const PipelineState* GetCurrentPSO() const { return m_pCurrentPSO; }
@@ -239,10 +238,7 @@ private:
 	DynamicGPUDescriptorAllocator m_ShaderResourceDescriptorAllocator;
 	DynamicResourceAllocator m_DynamicAllocator;
 
-	RefCountPtr<ID3D12CommandList> m_pCommandListBase;
-	RefCountPtr<ID3D12GraphicsCommandList> m_pCommandList;
-	RefCountPtr<ID3D12GraphicsCommandList4> m_pRaytracingCommandList;
-	RefCountPtr<ID3D12GraphicsCommandList6> m_pMeshShadingCommandList;
+	RefCountPtr<ID3D12GraphicsCommandList6> m_pCommandList;
 	RefCountPtr<ID3D12CommandAllocator> m_pAllocator;
 
 	static constexpr uint32 MaxNumBatchedBarriers = 64;

@@ -110,7 +110,7 @@ namespace Renderer
 		return parameters;
 	}
 
-	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld)
+	void UploadSceneData(CommandContext& context, SceneView* pView, const World* pWorld)
 	{
 		GPU_PROFILE_SCOPE("Upload Scene Data", &context);
 
@@ -199,7 +199,7 @@ namespace Renderer
 		if (Tweakables::g_EnableDDGI)
 		{
 			ddgiVolumes.reserve(pWorld->DDGIVolumes.size());
-			for (DDGIVolume& ddgiVolume : pWorld->DDGIVolumes)
+			for (const DDGIVolume& ddgiVolume : pWorld->DDGIVolumes)
 			{
 				ShaderInterop::DDGIVolume& ddgi = ddgiVolumes.emplace_back();
 				ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;

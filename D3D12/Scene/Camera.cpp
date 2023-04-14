@@ -34,16 +34,6 @@ void Camera::SetClippingPlanes(float nearPlane, float farPlane)
 	OnDirty();
 }
 
-void Camera::SetOrthographic(bool orthographic, float size)
-{
-	m_Transform.Perspective = !orthographic;
-	if (orthographic)
-	{
-		m_Transform.OrthographicSize = size;
-	}
-	OnDirty();
-}
-
 void Camera::SetNearPlane(float nearPlane)
 {
 	m_Transform.NearPlane = nearPlane;
@@ -115,14 +105,7 @@ void Camera::UpdateMatrices() const
 		m_Transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
 		m_Transform.ViewInverse.Invert(m_Transform.View);
 		float aspect = m_Transform.Viewport.GetWidth() / m_Transform.Viewport.GetHeight();
-		if (m_Transform.Perspective)
-		{
-			m_Transform.Projection = Math::CreatePerspectiveMatrix(m_Transform.FoV, aspect, m_Transform.NearPlane, m_Transform.FarPlane);
-		}
-		else
-		{
-			m_Transform.Projection = Math::CreateOrthographicMatrix(m_Transform.OrthographicSize * aspect, m_Transform.OrthographicSize, m_Transform.NearPlane, m_Transform.FarPlane);
-		}
+		m_Transform.Projection = Math::CreatePerspectiveMatrix(m_Transform.FoV, aspect, m_Transform.NearPlane, m_Transform.FarPlane);
 
 		if (m_Jitter)
 		{

@@ -32,7 +32,6 @@ struct ViewTransform
 	Matrix ViewProjectionPrev;
 	Matrix ViewInverse;
 	Matrix ProjectionInverse;
-	bool Perspective = true;
 	Vector3 Position;
 	Vector3 PositionPrev;
 
@@ -40,7 +39,6 @@ struct ViewTransform
 	float FoV = 60.0f * Math::PI / 180;
 	float NearPlane = 1.0f;
 	float FarPlane = 500.0f;
-	float OrthographicSize = 1;
 	int JitterIndex = 0;
 	Vector2 Jitter;
 	Vector2 JitterPrev;
@@ -119,7 +117,7 @@ namespace Renderer
 	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes);
 	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes);
 	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget = nullptr);
-	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld);
+	void UploadSceneData(CommandContext& context, SceneView* pView, const World* pWorld);
 }
 
 enum class DefaultTexture

@@ -16,12 +16,9 @@ CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12Comman
 	: GraphicsObject(pParent),
 	m_ShaderResourceDescriptorAllocator(pDescriptorHeap),
 	m_DynamicAllocator(pDynamicMemoryManager),
-	m_pCommandListBase(pCommandList),
 	m_Type(type)
 {
-	pCommandList.As(&m_pCommandList);
-	pCommandList.As(&m_pRaytracingCommandList);
-	pCommandList.As(&m_pMeshShadingCommandList);
+	VERIFY_HR(pCommandList.As(&m_pCommandList));
 }
 
 void CommandContext::Reset()
@@ -258,10 +255,9 @@ void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/
 {
 	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Mesh);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
-	check(m_pMeshShadingCommandList);
 	
 	PrepareDraw();
-	m_pMeshShadingCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
+	m_pCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
 
 void CommandContext::DispatchMesh(const Vector3i& groupCounts)
@@ -333,7 +329,7 @@ void CommandContext::BindRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS add
 		m_pCommandList->SetComputeRootUnorderedAccessView(rootIndex, address);
 }
 
-void CommandContext::SetRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize)
+void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize)
 {
 	check(m_CurrentCommandContext != CommandListContext::Invalid);
 
@@ -369,14 +365,12 @@ void CommandContext::BindResources(uint32 rootIndex, const Span<const ResourceVi
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
 {
-	check(m_pMeshShadingCommandList);
-	m_pMeshShadingCommandList->RSSetShadingRate(shadingRate, nullptr);
+	m_pCommandList->RSSetShadingRate(shadingRate, nullptr);
 }
 
 void CommandContext::SetShadingRateImage(Texture* pTexture)
 {
-	check(m_pMeshShadingCommandList);
-	m_pMeshShadingCommandList->RSSetShadingRateImage(pTexture->GetResource());
+	m_pCommandList->RSSetShadingRateImage(pTexture->GetResource());
 }
 
 DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, uint32 alignment /*= 256*/)
@@ -547,7 +541,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	}
 
 	FlushResourceBarriers();
-	m_pRaytracingCommandList->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs, renderPassInfo.DepthStencilTarget.Target ? &renderPassDepthStencilDesc : nullptr, renderPassFlags);
+	m_pCommandList->BeginRenderPass(renderPassInfo.RenderTargetCount, renderTargetDescs, renderPassInfo.DepthStencilTarget.Target ? &renderPassDepthStencilDesc : nullptr, renderPassFlags);
 
 	m_InRenderPass = true;
 	m_CurrentRenderPassInfo = renderPassInfo;
@@ -573,7 +567,7 @@ void CommandContext::EndRenderPass()
 		return D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS;
 	};
 
-	m_pRaytracingCommandList->EndRenderPass();
+	m_pCommandList->EndRenderPass();
 
 	for (uint32 i = 0; i < m_CurrentRenderPassInfo.RenderTargetCount; ++i)
 	{
@@ -608,14 +602,13 @@ void CommandContext::DispatchRays(ShaderBindingTable& table, uint32 width /*= 1*
 {
 	check(m_pCurrentSO);
 	check(m_CurrentCommandContext == CommandListContext::Compute);
-	check(m_pRaytracingCommandList);
 	D3D12_DISPATCH_RAYS_DESC desc{};
 	table.Commit(*this, desc);
 	desc.Width = width;
 	desc.Height = height;
 	desc.Depth = depth;
 	PrepareDraw();
-	m_pRaytracingCommandList->DispatchRays(&desc);
+	m_pCommandList->DispatchRays(&desc);
 }
 
 void CommandContext::ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color /*= Color(0.15f, 0.15f, 0.15f, 1.0f)*/)
@@ -653,11 +646,10 @@ void CommandContext::SetPipelineState(PipelineState* pPipelineState)
 
 void CommandContext::SetPipelineState(StateObject* pStateObject)
 {
-	check(m_pRaytracingCommandList);
 	if (m_pCurrentSO != pStateObject)
 	{
 		pStateObject->ConditionallyReload();
-		m_pRaytracingCommandList->SetPipelineState1(pStateObject->GetStateObject());
+		m_pCommandList->SetPipelineState1(pStateObject->GetStateObject());
 		m_pCurrentSO = pStateObject;
 	}
 }

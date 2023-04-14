@@ -129,8 +129,8 @@ void Console::FlushLog(const LogEntry& log)
 	}
 
 	char messageBuffer[4096];
-	FormatString(messageBuffer, ARRAYSIZE(messageBuffer), "%s %s\n", pVerbosityMessage, log.pMessage);
-	printf("%s %s\n", pVerbosityMessage, log.pMessage);
+	FormatString(messageBuffer, ARRAYSIZE(messageBuffer), "%s %s\n", pVerbosityMessage, log.Message.c_str());
+	printf("%s %s\n", pVerbosityMessage, log.Message.c_str());
 	OutputDebugStringA(messageBuffer);
 
 	sHistory.push_back(log);

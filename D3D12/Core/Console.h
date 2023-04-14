@@ -17,14 +17,11 @@ class Console
 public:
 	struct LogEntry
 	{
-		static const uint32 MAX_LOG_LENGTH = 128;
-
 		LogEntry(const char* pMsg, const LogType type)
-			: Type(type)
+			: Message(pMsg), Type(type)
 		{
-			strcpy_s(pMessage, pMsg);
 		}
-		char pMessage[MAX_LOG_LENGTH];
+		std::string Message;
 		LogType Type;
 	};
 	static void Initialize();

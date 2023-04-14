@@ -41,7 +41,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 	{
 		GPU_PROFILE_SCOPE("Build Acceleration Structures", &context);
 
-		ID3D12GraphicsCommandList4* pCmd = context.GetRaytracingCommandList();
+		ID3D12GraphicsCommandList4* pCmd = context.GetCommandList();
 
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
@@ -94,7 +94,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				prebuildInfo.pGeometryDescs = &geometryDesc;
 
 				D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-				pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+				pDevice->GetDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
 				RefCountPtr<Buffer> pBLASScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::NoBindless), "BLAS.ScratchBuffer");
 				RefCountPtr<Buffer> pBLAS = pDevice->CreateBuffer(BufferDesc::CreateBLAS(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT)), "BLAS.Buffer");
@@ -156,7 +156,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			prebuildInfo.NumDescs = (uint32)blasInstances.size();
 
 			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
-			pDevice->GetRaytracingDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
+			pDevice->GetDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
 			if (!m_pTLAS || m_pTLAS->GetSize() < info.ResultDataMaxSizeInBytes)
 			{
@@ -232,7 +232,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 		{
 			uint64 size = *pPostCompactSizes++;
 			RefCountPtr<Buffer> pTargetBLAS = context.GetParent()->CreateBuffer(BufferDesc::CreateBLAS(size), "BLAS.Compacted");
-			context.GetRaytracingCommandList()->CopyRaytracingAccelerationStructure(pTargetBLAS->GetGpuHandle(), (*pSourceBLAS)->GetGpuHandle(), D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
+			context.GetCommandList()->CopyRaytracingAccelerationStructure(pTargetBLAS->GetGpuHandle(), (*pSourceBLAS)->GetGpuHandle(), D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
 			*pSourceBLAS = pTargetBLAS;
 		}
 		//E_LOG(Info, "Compacted %d BLAS instances", m_ActiveRequests.size());
@@ -272,7 +272,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 		context.InsertResourceBarrier(m_pPostBuildInfoBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		context.FlushResourceBarriers();
 
-		context.GetRaytracingCommandList()->EmitRaytracingAccelerationStructurePostbuildInfo(&desc, (uint32)blasAddresses.size(), blasAddresses.data());
+		context.GetCommandList()->EmitRaytracingAccelerationStructurePostbuildInfo(&desc, (uint32)blasAddresses.size(), blasAddresses.data());
 
 		context.InsertUavBarrier(m_pPostBuildInfoBuffer);
 		context.InsertResourceBarrier(m_pPostBuildInfoBuffer, D3D12_RESOURCE_STATE_COPY_SOURCE);

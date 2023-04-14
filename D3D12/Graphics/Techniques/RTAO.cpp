@@ -104,7 +104,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pDenoisePSO);
 
-				//context.SetRootCBV(0, parameters);
+				//context.BindRootCBV(0, parameters);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {

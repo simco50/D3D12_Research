@@ -176,8 +176,7 @@ public:
 
 	GPUDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
 	GPUDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
-	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
-	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
+	ID3D12Device5* GetDevice() const { return m_pDevice.Get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	const GraphicsCapabilities& GetCapabilities() const { return m_Capabilities; }
 	Fence* GetFrameFence() const { return m_pFrameFence; }
@@ -192,9 +191,7 @@ private:
 	GraphicsCapabilities m_Capabilities;
 
 	RefCountPtr<IDXGIFactory6> m_pFactory;
-	RefCountPtr<ID3D12Device> m_pDevice;
-	RefCountPtr<ID3D12Device4> m_pDevice4;
-	RefCountPtr<ID3D12Device5> m_pRaytracingDevice;
+	RefCountPtr<ID3D12Device5> m_pDevice;
 
 	class DRED
 	{
