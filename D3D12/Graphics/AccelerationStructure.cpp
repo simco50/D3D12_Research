@@ -204,7 +204,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.FlushResourceBarriers();
 			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
-			context.InsertUavBarrier(m_pTLAS);
+			context.InsertUAVBarrier(m_pTLAS);
 		}
 	}
 }
@@ -274,7 +274,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 
 		context.GetCommandList()->EmitRaytracingAccelerationStructurePostbuildInfo(&desc, (uint32)blasAddresses.size(), blasAddresses.data());
 
-		context.InsertUavBarrier(m_pPostBuildInfoBuffer);
+		context.InsertUAVBarrier(m_pPostBuildInfoBuffer);
 		context.InsertResourceBarrier(m_pPostBuildInfoBuffer, D3D12_RESOURCE_STATE_COPY_SOURCE);
 		context.FlushResourceBarriers();
 

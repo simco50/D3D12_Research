@@ -46,10 +46,16 @@ public:
 	void PrintStats(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext);
 
 private:
+	enum class RasterPhase
+	{
+		Phase1,
+		Phase2,
+	};
+
 	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions, RefCountPtr<Texture>* pExportTarget = nullptr) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
-	void CullAndRasterize(RGGraph& graph, const SceneView* pView, bool isFirstPhase, const RasterContext& context, RasterResult& outResult);
+	void CullAndRasterize(RGGraph& graph, const SceneView* pView, RasterPhase rasterPhase, const RasterContext& context, RasterResult& outResult);
 
 	RefCountPtr<RootSignature> m_pCommonRS;
 	

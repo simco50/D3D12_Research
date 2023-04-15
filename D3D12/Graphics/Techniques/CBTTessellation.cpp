@@ -177,7 +177,7 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 
 				context.SetPipelineState(m_pCBTUpdatePSO);
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDispatchArgsOffset);
-				context.InsertUavBarrier(pCBTBuffer->Get());
+				context.InsertUAVBarrier(pCBTBuffer->Get());
 			});
 	}
 
@@ -290,7 +290,7 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 
 					context.SetPipelineState(m_pCBTSumReductionPSO);
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
-					context.InsertUavBarrier(pCBTBuffer->Get());
+					context.InsertUAVBarrier(pCBTBuffer->Get());
 				}
 			});
 

@@ -153,7 +153,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 					});
 
 				context.Dispatch(1);
-				context.InsertUavBarrier();
+				context.InsertUAVBarrier();
 			});
 
 	graph.AddPass("Emit", RGPassFlag::Compute | RGPassFlag::NeverCull)
@@ -185,7 +185,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 					});
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, IndirectArgOffsets::Emit * sizeof(uint32));
-				context.InsertUavBarrier();
+				context.InsertUAVBarrier();
 			});
 
 	graph.AddPass("Simulate", RGPassFlag::Compute | RGPassFlag::NeverCull)
@@ -218,7 +218,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 					});
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, IndirectArgOffsets::Simulate * sizeof(uint32));
-				context.InsertUavBarrier();
+				context.InsertUAVBarrier();
 			});
 
 	graph.AddPass("Simulate End", RGPassFlag::Compute)
@@ -246,7 +246,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 					});
 
 				context.Dispatch(1);
-				context.InsertUavBarrier();
+				context.InsertUAVBarrier();
 			});
 
 	std::swap(m_pAliveList1, m_pAliveList2);

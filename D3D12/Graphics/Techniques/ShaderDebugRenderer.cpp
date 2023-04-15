@@ -90,7 +90,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 		.Write({ pDrawArgs, pRenderData })
 		.Bind([=](CommandContext& context)
 			{
-				context.InsertUavBarrier();
+				context.InsertUAVBarrier();
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pBuildIndirectDrawArgsPSO);

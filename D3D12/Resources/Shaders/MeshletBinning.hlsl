@@ -36,9 +36,7 @@ uint GetNumMeshlets()
 void PrepareArgsCS()
 {
 	for(uint i = 0; i < cBinningParams.NumBins; ++i)
-	{
 		uMeshletCounts[i] = 0;
-	}
 	uGlobalMeshletCounter[0] = 0;
 
 	D3D12_DISPATCH_ARGUMENTS args;
@@ -49,9 +47,8 @@ void PrepareArgsCS()
 uint GetBin(uint meshletIndex)
 {
 	if(cBinningParams.IsSecondPhase)
-	{
 		meshletIndex += tCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
-	}
+
 	MeshletCandidate candidate = tVisibleMeshlets[meshletIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);

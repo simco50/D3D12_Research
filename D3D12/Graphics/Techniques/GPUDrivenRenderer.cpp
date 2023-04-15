@@ -13,9 +13,45 @@
 #include "SPD/ffx_a.h"
 #include "SPD/ffx_spd.h"
 
+/*
+	The GPU driver renderer aims to lift the weight of frustum culling, occlusion culling, draw recording off the CPU
+	and performs as much of this work as possible in parallel on the GPU.
+	In order for this to work, all scene data required to render the entire scene must be accessible by the GPU at once.
+
+	Geometry is split up into 'Meshlets', so there is a two level hierarchy of culling: Instances and Meshlets.
+
+	This system implements the "Two Phase Occlusion Culling" algorithm presented by Sebastian Aaltonen at SIGGRAPH 2015.
+	It presents an accurrate GPU-driven method of performing frustum and occlusion culling and revolves around using the
+	depth buffer of the previous frame to make an initial conservative approximation of visible objects, and completes the
+	missing objects in a seconday phase. This works well with the assumption that objects that were visible last frame,
+	are likely to be visible in the current.
+
+	As mentioned the system works in 2 phases:
+
+		In Phase 1, all instances are frustum culled against the current frame's view frustum, if inside the frustum,
+		we test whether the instances _was_ occluded last frame by using last frame's HZB and transforms.
+		If the object is unoccluded, it gets queued to get its individual meshlets test in a similar fashion.
+		If the object is occluded, it means the object was occluded last frame but it may have become visible this frame.
+		These objects are queued in a second list to be re-tested in Phase 2.
+		Once the same process is done for meshlets, all visible meshlets in Phase 1 are drawn with an indirect draw.
+		At this point an HZB is built from the depth buffer which has all things that have been rendered in Phase 1.
+
+		In Phase 2, the list of occluded objects from Phase 1 get retested, but this time using the HZB created in Phase 1
+		and using the current frame's transforms.
+		This again outputs a list of objects which were occluded last frame, but no longer are in the current frame.
+		The same process is done for meshlets and all the visible meshlets are rendered with another indirect draw.
+		To finish off, the HZB gets recreated with the final depth buffer, to be used by Phase 1 in the next frame.
+
+	All visible meshlets are written to a single list in an unordered fashion. So in order to support different
+	PSOs, a classification must happen in each phase which buckets each meshlet in a bin associated with a PSO.
+	These bins can then be drawn successively, each with its own PSO.
+*/
+
 namespace Tweakables
 {
+	// ~ 1.000.000 meshlets x MeshletCandidate (8 bytes) == 8MB (x2 visible/candidate meshlets)
 	constexpr uint32 MaxNumMeshlets = 1 << 20u;
+	// ~ 16.000 instances x Instance (4 bytes) == 64KB
 	constexpr uint32 MaxNumInstances = 1 << 14u;
 }
 
@@ -81,40 +117,42 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 
 	m_pPrintStatsPSO =				pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
-
-	m_pHZBInitializePSO =		pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
-	m_pHZBCreatePSO =			pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
+	m_pHZBInitializePSO =			pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBInitCS");
+	m_pHZBCreatePSO =				pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
 }
 
 RasterContext::RasterContext(RGGraph& graph, const std::string contextString, RGTexture* pDepth, RefCountPtr<Texture>* pPreviousHZB, RasterType type)
 	: ContextString(contextString), pDepth(pDepth), pPreviousHZB(pPreviousHZB), Type(type)
 {
-	constexpr uint32 maxNumInstances = Tweakables::MaxNumInstances;
-	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
-
+	/// Must be kept in sync with shader! See "VisibilityBuffer.hlsli"
 	struct MeshletCandidate
 	{
 		uint32 InstanceID;
 		uint32 MeshletIndex;
 	};
 
-	const BufferDesc meshletCandidateDesc = BufferDesc::CreateStructured(maxNumMeshlets, sizeof(MeshletCandidate));
+	pCandidateMeshlets			= graph.Create("GPURender.CandidateMeshlets",			BufferDesc::CreateStructured(Tweakables::MaxNumMeshlets, sizeof(MeshletCandidate)));
+	pVisibleMeshlets			= graph.Create("GPURender.VisibleMeshlets",				BufferDesc::CreateStructured(Tweakables::MaxNumMeshlets, sizeof(MeshletCandidate)));
 
-	pCandidateMeshlets			= graph.Create("GPURender.CandidateMeshlets", meshletCandidateDesc);
+	pOccludedInstances			= graph.Create("GPURender.OccludedInstances",			BufferDesc::CreateStructured(Tweakables::MaxNumInstances, sizeof(uint32)));
+	pOccludedInstancesCounter	= graph.Create("GPURender.OccludedInstances.Counter",	BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+
 	// 0: Num Total | 1: Num Phase 1 | 2: Num Phase 2
-	pCandidateMeshletsCounter	= graph.Create("GPURender.CandidateMeshlets.Counter", BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
-	pVisibleMeshlets			= graph.Create("GPURender.VisibleMeshlets", meshletCandidateDesc);
+	pCandidateMeshletsCounter	= graph.Create("GPURender.CandidateMeshlets.Counter",	BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
 	// 0: Num Phase 1 | 1: Num Phase 2
-	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter", BufferDesc::CreateTyped(2, ResourceFormat::R32_UINT));
-
-	pOccludedInstances			= graph.Create("GPURender.OccludedInstances", BufferDesc::CreateStructured(maxNumInstances, sizeof(uint32)));
-	pOccludedInstancesCounter	= graph.Create("GPURender.OccludedInstances.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter",		BufferDesc::CreateTyped(2, ResourceFormat::R32_UINT));
 }
 
-void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView, bool isFirstPhase, const RasterContext& rasterContext, RasterResult& outResult)
+void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView, RasterPhase rasterPhase, const RasterContext& rasterContext, RasterResult& outResult)
 {
 	RGBuffer* pInstanceCullArgs = nullptr;
-	if(!isFirstPhase)
+
+	// PSO index to use based on current phase, if the PSO has permutations
+	const int psoPhaseIndex = rasterPhase == RasterPhase::Phase1 ? 0 : 1;
+
+	// In Phase 2, build the indirect arguments based on the instance culling results of Phase 1.
+	// These are the list of instances which within the frustum, but were considered occluded by Phase 1.
+	if(rasterPhase == RasterPhase::Phase2)
 	{
 		pInstanceCullArgs = graph.Create("GPURender.InstanceCullArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 		graph.AddPass("Build Instance Cull Arguments", RGPassFlag::Compute)
@@ -131,13 +169,16 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				});
 	}
 
+	// Process instances and output meshlets of each visible instance.
+	// In Phase 1, also output instances which are occluded according to the previous frame's HZB, and have to be retested in Phase 2.
+	// In Phase 2, outputs visible meshlets which were considered occluded before, but are not based on the updated HZB created in Phase 1.
 	RGPass& cullInstancePass = graph.AddPass("Cull Instances", RGPassFlag::Compute)
 		.Read(outResult.pHZB)
 		.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pCullInstancesPSO[isFirstPhase ? 0 : 1]);
+				context.SetPipelineState(m_pCullInstancesPSO[psoPhaseIndex]);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
@@ -153,14 +194,16 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					outResult.pHZB->Get()->GetSRV(),
 					});
 
-				if(isFirstPhase)
+				if(rasterPhase == RasterPhase::Phase1)
 					context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
 				else
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pInstanceCullArgs->Get());
 			});
-	if (!isFirstPhase)
+	// In Phase 2, use the indirect arguments built before.
+	if (rasterPhase == RasterPhase::Phase2)
 		cullInstancePass.Read(pInstanceCullArgs);
 
+	// Build indirect arguments for the next pass, based on the visible list of meshlets.
 	RGBuffer* pMeshletCullArgs = graph.Create("GPURender.MeshletCullArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 	graph.AddPass("Build Meshlet Cull Arguments", RGPassFlag::Compute)
 		.Read(rasterContext.pCandidateMeshletsCounter)
@@ -168,13 +211,16 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pBuildMeshletCullArgsPSO[isFirstPhase ? 0 : 1]);
+				context.SetPipelineState(m_pBuildMeshletCullArgsPSO[psoPhaseIndex]);
 
 				context.BindResources(2, pMeshletCullArgs->Get()->GetUAV());
 				context.BindResources(3, rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(), 1);
 				context.Dispatch(1);
 			});
 
+	// Process the list of meshlets and output a list of visible meshlets.
+	// In Phase 1, also output meshlets which were occluded according to the previous frame's HZB, and have to be retested in Phase 2.
+	// In Phase 2, outputs visible meshlets which were considered occluded before, but are not based on the updated HZB created in Phase 1.
 	graph.AddPass("Cull Meshlets", RGPassFlag::Compute)
 		.Read({ pMeshletCullArgs })
 		.Read({ outResult.pHZB })
@@ -182,7 +228,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pCullMeshletsPSO[isFirstPhase ? 0 : 1]);
+				context.SetPipelineState(m_pCullMeshletsPSO[psoPhaseIndex]);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
@@ -199,6 +245,18 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pMeshletCullArgs->Get());
 			});
 
+	/*
+		Visible meshlets are output in a single list and in an unordered fashion.
+		Each of these meshlets can want a different PSO.
+		The following passes perform classification and binning based on desired PSO.
+		With these bins, we build a set of indirect dispatch arguments for each PSO
+		so we can switch PSOs in between each bin.
+
+		The output of the following passes is a buffer with an 'Offset' and 'Size' of each bin,
+		together with an indirection list to retrieve the actual meshlet data.
+	*/
+
+	// #todo: Hardcode number of bins. Only implemented 2 PSOs (ie. Opaque and alpha masked)
 	constexpr uint32 numBins = 2;
 	RGBuffer* pMeshletOffsetAndCounts = graph.Create("GpuRender.Classify.MeshletOffsetAndCounts", BufferDesc::CreateStructured(numBins, sizeof(Vector4u), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource | BufferFlag::IndirectArguments));
 	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
@@ -217,9 +275,10 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 			uint32 IsSecondPhase;
 		} classifyParams;
 		classifyParams.NumBins = numBins;
-		classifyParams.IsSecondPhase = !isFirstPhase;
+		classifyParams.IsSecondPhase = rasterPhase == RasterPhase::Phase2;
 
-		graph.AddPass("Clear UAVs", RGPassFlag::Compute)
+		// Clear counters and initialize indirect draw arguments
+		graph.AddPass("Prepare Classify", RGPassFlag::Compute)
 			.Write({ pMeshletCounts, pGlobalCount, pClassifyArgs })
 			.Read(rasterContext.pVisibleMeshletsCounter)
 			.Bind([=](CommandContext& context)
@@ -237,9 +296,10 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
 						}, 1);
 					context.Dispatch(1);
-					context.InsertUavBarrier();
+					context.InsertUAVBarrier();
 				});
 
+		// For each meshlet, find in which bin it belongs and store how many meshlets are in each bin.
 		graph.AddPass("Count Meshlets", RGPassFlag::Compute)
 			.Read(pClassifyArgs)
 			.Read({ rasterContext.pVisibleMeshletsCounter, rasterContext.pVisibleMeshlets })
@@ -258,6 +318,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pClassifyArgs->Get());
 				});
 
+		// Perform a prefix sum on the bin counts to retrieve the first index of each bin.
 		graph.AddPass("Compute Bin Offsets", RGPassFlag::Compute)
 			.Read({ pMeshletCounts })
 			.Write({ pGlobalCount, pMeshletOffsetAndCounts })
@@ -275,7 +336,9 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(numBins, 64));
 				});
 
-		graph.AddPass("Export Bins", RGPassFlag::Compute)
+		// Write the meshlet index of each meshlet into the appropriate bin.
+		// This will serve as an indirection list to retrieve meshlets.
+		graph.AddPass("Write Bins", RGPassFlag::Compute)
 			.Read(pClassifyArgs)
 			.Read({ rasterContext.pVisibleMeshletsCounter, rasterContext.pVisibleMeshlets })
 			.Write({ pMeshletOffsetAndCounts, pBinnedMeshlets })
@@ -297,10 +360,13 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				});
 	}
 
+	// Finally, using the list of visible meshlets and classification data, rasterize the meshlets.
+	// For each bin, we bind the associated PSO and record an indirect DispatchMesh.
+	const RenderTargetLoadAction depthLoadAction = rasterPhase == RasterPhase::Phase1 ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load;
 	RGPass& drawPass = graph.AddPass("Rasterize", RGPassFlag::Raster)
 		.Read({ rasterContext.pVisibleMeshlets, pMeshletOffsetAndCounts, pBinnedMeshlets })
 		.Write(outResult.pDebugData)
-		.DepthStencil(rasterContext.pDepth, isFirstPhase ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load, true)
+		.DepthStencil(rasterContext.pDepth, depthLoadAction, true)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
@@ -327,9 +393,11 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				}
 			});
 
-	if (rasterContext.Type == RasterType::VisibilityBuffer)
-		drawPass.RenderTarget(outResult.pVisibilityBuffer, isFirstPhase ? RenderTargetLoadAction::DontCare : RenderTargetLoadAction::Load);
+	drawPass.RenderTarget(outResult.pVisibilityBuffer, rasterPhase == RasterPhase::Phase1 ? RenderTargetLoadAction::DontCare : RenderTargetLoadAction::Load);
 
+	// Build the HZB, this HZB must be persistent across frames for this system to work.
+	// In Phase 1, the HZB is built so it can be used in Phase 2 for accurrate occlusion culling.
+	// In Phase 2, the HZB is built to be used by Phase 1 in the next frame.
 	BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
 
@@ -341,24 +409,16 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 	outResult.pHZB = InitHZB(graph, dimensions, rasterContext.pPreviousHZB);
 	outResult.pVisibilityBuffer = nullptr;
 	if (rasterContext.Type == RasterType::VisibilityBuffer)
-	{
 		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
-	}
 
 	if (rasterContext.EnableDebug)
-	{
 		outResult.pDebugData = graph.Create("GpuRender.DebugData", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
-	}
 
-#if 0
 	uint32 numMeshlets = 0;
 	for (const Batch& b : pView->Batches)
-	{
 		numMeshlets += b.pMesh->NumMeshlets;
-	}
-	check(pView->Batches.size() <= maxNumInstances);
-	check(numMeshlets <= maxNumMeshlets);
-#endif
+	check(pView->Batches.size() <= Tweakables::MaxNumInstances);
+	check(numMeshlets <= Tweakables::MaxNumMeshlets);
 
 	RGPass& clearPass = graph.AddPass("Clear UAVs", RGPassFlag::Compute)
 		.Write({ rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshletsCounter })
@@ -371,26 +431,26 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 					context.ClearUAVu(outResult.pDebugData->Get()->GetUAV());
 
 				context.BindResources(2, {
+					nullptr,
 					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
-					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
+					nullptr,
 					rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
-					rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
-					rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
+					nullptr,
 					rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
 					});
 				context.Dispatch(1);
-				context.InsertUavBarrier();
+				context.InsertUAVBarrier();
 			});
 	if (outResult.pDebugData)
 		clearPass.Write(outResult.pDebugData);
 
 	{
 		RG_GRAPH_SCOPE("Phase 1", graph);
-		CullAndRasterize(graph, pView, true, rasterContext, outResult);
+		CullAndRasterize(graph, pView, RasterPhase::Phase1, rasterContext, outResult);
 	}
 	{
 		RG_GRAPH_SCOPE("Phase 2", graph);
-		CullAndRasterize(graph, pView, false, rasterContext, outResult);
+		CullAndRasterize(graph, pView, RasterPhase::Phase2, rasterContext, outResult);
 	}
 
 	outResult.pVisibleMeshlets = rasterContext.pVisibleMeshlets;
@@ -471,7 +531,7 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 		.Bind([=](CommandContext& context)
 			{
 				context.ClearUAVu(pSPDCounter->Get()->GetUAV());
-				context.InsertUavBarrier();
+				context.InsertUAVBarrier();
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pHZBCreatePSO);

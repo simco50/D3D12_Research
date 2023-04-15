@@ -154,7 +154,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	}
 }
 
-void CommandContext::InsertUavBarrier(const GraphicsResource* pBuffer /*= nullptr*/)
+void CommandContext::InsertUAVBarrier(const GraphicsResource* pBuffer /*= nullptr*/)
 {
 	AddBarrier(CD3DX12_RESOURCE_BARRIER::UAV(pBuffer ? pBuffer->GetResource() : nullptr));
 }

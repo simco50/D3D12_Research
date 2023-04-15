@@ -432,8 +432,18 @@ void DemoApp::Update()
 				RG_GRAPH_SCOPE("Shadow Depths", graph);
 				for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 				{
+					auto  LightTypeToString = [](LightType type) -> const char* {
+						switch (type)
+						{
+						case LightType::Directional: return "Directional";
+						case LightType::Point: return "Point";
+						case LightType::Spot: return "Spot";
+						default: return "INVALID";
+						}
+					};
+
 					RGTexture* pShadowmap = graph.TryImport(pView->ShadowViews[i].pDepthTexture);
-					graph.AddPass(Sprintf("View %d", i).c_str(), RGPassFlag::Raster)
+					graph.AddPass(Sprintf("View %d (%s Light)", i, LightTypeToString(pView->ShadowViews[i].pLightSource->Type)).c_str(), RGPassFlag::Raster)
 						.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
 						.Bind([=](CommandContext& context)
 							{
@@ -814,7 +824,7 @@ void DemoApp::Update()
 						Buffer* pHistogram = pLuminanceHistogram->Get();
 
 						context.ClearUAVu(pHistogram->GetUAV());
-						context.InsertUavBarrier(pHistogram);
+						context.InsertUAVBarrier(pHistogram);
 
 						context.SetComputeRootSignature(m_pCommonRS);
 						context.SetPipelineState(m_pLuminanceHistogramPSO);
@@ -879,7 +889,7 @@ void DemoApp::Update()
 					.Bind([=](CommandContext& context)
 						{
 							context.ClearUAVf(pHistogramDebugTexture->Get()->GetUAV());
-							context.InsertUavBarrier(pHistogramDebugTexture->Get());
+							context.InsertUAVBarrier(pHistogramDebugTexture->Get());
 
 							context.SetPipelineState(m_pDrawHistogramPSO);
 							context.SetComputeRootSignature(m_pCommonRS);
@@ -946,7 +956,7 @@ void DemoApp::Update()
 							context.BindResources(2, pDownscaleTarget->Get()->GetSubResourceUAV(i));
 							context.BindResources(3, pSourceTexture->Get()->GetSRV());
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
-							context.InsertUavBarrier();
+							context.InsertUAVBarrier();
 						});
 
 				pSourceTexture = pDownscaleTarget;
@@ -984,7 +994,7 @@ void DemoApp::Update()
 								pPreviousSource->Get()->GetSRV(),
 								});
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
-							context.InsertUavBarrier();
+							context.InsertUAVBarrier();
 						});
 
 				pPreviousSource = pUpscaleTarget;
@@ -1597,6 +1607,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		light.ShadowMaps[shadowMapLightIndex] = pTarget;
 		light.ShadowMapSize = resolution;
 		shadowView.pDepthTexture = pTarget;
+		shadowView.pLightSource = &light;
 		view.ShadowViews.push_back(shadowView);
 		shadowIndex++;
 	};
