@@ -87,8 +87,11 @@ void AllocateBinRangesCS(uint threadID : SV_DispatchThreadID)
 		return;
 
 	uint numMeshlets = tMeshletCounts[bin];
-	uint offset;
-	InterlockedAdd(uGlobalMeshletCounter[0], numMeshlets, offset);
+	uint offset = WavePrefixSum(numMeshlets);
+	uint globalOffset;
+	if(WaveIsFirstLane())
+		InterlockedAdd(uGlobalMeshletCounter[0], numMeshlets, globalOffset);
+	offset += WaveReadLaneFirst(globalOffset);
 	uMeshletOffsetAndCounts[bin] = uint4(0, 1, 1, offset);
 
 #if 0
