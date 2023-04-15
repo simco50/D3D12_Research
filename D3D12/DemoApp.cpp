@@ -473,7 +473,7 @@ void DemoApp::Update()
 			const bool doPrepass = true;
 			const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility;
 
-			RasterContext rasterContext(graph, "Prepass", sceneTextures.pDepth, &m_pHZB, RasterType::VisibilityBuffer);
+			RasterContext rasterContext(graph, "Prepass", sceneTextures.pDepth, &m_pHZB);
 			rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
 			if (doPrepass)
 			{
@@ -1445,6 +1445,7 @@ void DemoApp::UpdateImGui()
 						}
 						return false;
 					}, nullptr, 5);
+				ImGui::Checkbox("Cull statistics", &Tweakables::CullDebugStats.Get());
 			}
 
 			ImGui::Text("Camera");

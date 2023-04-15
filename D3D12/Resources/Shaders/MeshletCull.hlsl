@@ -84,19 +84,6 @@ struct RasterParams
 };
 ConstantBuffer<RasterParams> cRasterParams : register(b0);
 
-[numthreads(1, 1, 1)]
-void ClearUAVs()
-{
-	uCounter_CandidateMeshlets[0] = 0;
-	uCounter_CandidateMeshlets[1] = 0;
-	uCounter_CandidateMeshlets[2] = 0;
-
-	uCounter_VisibleMeshlets[0] = 0;
-	uCounter_VisibleMeshlets[1] = 0;
-
-	uCounter_PhaseTwoInstances[0] = 0;
-}
-
 uint GetCandidateMeshletOffset(bool phase2)
 {
 	return phase2 ? uCounter_CandidateMeshlets[COUNTER_PHASE1_CANDIDATE_MESHLETS] : 0u;

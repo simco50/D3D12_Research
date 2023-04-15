@@ -7,19 +7,13 @@ class PipelineState;
 class Texture;
 struct SceneView;
 
-enum class RasterType
-{
-	VisibilityBuffer,
-};
-
 struct RasterContext
 {
-	RasterContext(RGGraph& graph, const std::string contextString, RGTexture* pDepth, RefCountPtr<Texture>* pPreviousHZB, RasterType type);
+	RasterContext(RGGraph& graph, const std::string contextString, RGTexture* pDepth, RefCountPtr<Texture>* pPreviousHZB);
 
 	std::string ContextString;
 	RGTexture* pDepth = nullptr;
 	RefCountPtr<Texture>* pPreviousHZB = nullptr;
-	RasterType Type;
 	bool EnableDebug = false;
 
 	RGBuffer* pCandidateMeshlets = nullptr;
@@ -59,7 +53,6 @@ private:
 
 	RefCountPtr<RootSignature> m_pCommonRS;
 	
-	RefCountPtr<PipelineState> m_pClearUAVsPSO;
 	RefCountPtr<PipelineState> m_pCullInstancesPSO[2];
 	RefCountPtr<PipelineState> m_pBuildMeshletCullArgsPSO[2];
 	RefCountPtr<PipelineState> m_pBuildCullArgsPSO;

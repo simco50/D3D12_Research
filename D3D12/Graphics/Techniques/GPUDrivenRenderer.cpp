@@ -72,7 +72,6 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	defines.Set("MAX_NUM_INSTANCES", Tweakables::MaxNumInstances);
 	
 	m_pBuildCullArgsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
-	m_pClearUAVsPSO =				pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "ClearUAVs", *defines);
 
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetRootSignature(m_pCommonRS);
@@ -121,8 +120,8 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	m_pHZBCreatePSO =				pDevice->CreateComputePipeline(m_pCommonRS, "HZB.hlsl", "HZBCreateCS");
 }
 
-RasterContext::RasterContext(RGGraph& graph, const std::string contextString, RGTexture* pDepth, RefCountPtr<Texture>* pPreviousHZB, RasterType type)
-	: ContextString(contextString), pDepth(pDepth), pPreviousHZB(pPreviousHZB), Type(type)
+RasterContext::RasterContext(RGGraph& graph, const std::string contextString, RGTexture* pDepth, RefCountPtr<Texture>* pPreviousHZB)
+	: ContextString(contextString), pDepth(pDepth), pPreviousHZB(pPreviousHZB)
 {
 	/// Must be kept in sync with shader! See "VisibilityBuffer.hlsli"
 	struct MeshletCandidate
@@ -403,42 +402,33 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext, RasterResult& outResult)
 {
-	RG_GRAPH_SCOPE("Rasterize (Visibility Buffer)", graph);
+	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
 	Vector2u dimensions = pView->GetDimensions();
 
 	outResult.pHZB = InitHZB(graph, dimensions, rasterContext.pPreviousHZB);
-	outResult.pVisibilityBuffer = nullptr;
-	if (rasterContext.Type == RasterType::VisibilityBuffer)
-		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
+	outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
 
+	// Debug mode outputs an extra debug buffer containing information for debug statistics/visualization
 	if (rasterContext.EnableDebug)
 		outResult.pDebugData = graph.Create("GpuRender.DebugData", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
 
+	// Validate that we don't have more meshlets/instances than allowed.
 	uint32 numMeshlets = 0;
 	for (const Batch& b : pView->Batches)
 		numMeshlets += b.pMesh->NumMeshlets;
 	check(pView->Batches.size() <= Tweakables::MaxNumInstances);
 	check(numMeshlets <= Tweakables::MaxNumMeshlets);
 
+	// Clear all counters
 	RGPass& clearPass = graph.AddPass("Clear UAVs", RGPassFlag::Compute)
 		.Write({ rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshletsCounter })
 		.Bind([=](CommandContext& context)
 			{
-				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pClearUAVsPSO);
-
 				if (outResult.pDebugData)
 					context.ClearUAVu(outResult.pDebugData->Get()->GetUAV());
-
-				context.BindResources(2, {
-					nullptr,
-					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
-					nullptr,
-					rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
-					nullptr,
-					rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
-					});
-				context.Dispatch(1);
+				context.ClearUAVu(rasterContext.pCandidateMeshletsCounter->Get()->GetUAV());
+				context.ClearUAVu(rasterContext.pOccludedInstancesCounter->Get()->GetUAV());
+				context.ClearUAVu(rasterContext.pVisibleMeshletsCounter->Get()->GetUAV());
 				context.InsertUAVBarrier();
 			});
 	if (outResult.pDebugData)
