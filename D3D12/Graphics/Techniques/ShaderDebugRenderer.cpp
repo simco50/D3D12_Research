@@ -64,7 +64,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 			uint32 ColorA;
 			Vector3 B;
 			uint32 ColorB;
-		} Lines[8192];
+		} Lines[32768];
 	};
 
 	constexpr uint32 bufferSize = sizeof(Data);

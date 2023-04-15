@@ -54,10 +54,10 @@ PackedLineInstance PackLineInstance(LineInstance l)
 {
 	PackedLineInstance p;
 	p.A = l.A;
-	p.ColorA = Pack_RGBA8_UNORM(l.ColorA);
+	p.ColorA = Pack_RGBA8_UNORM(l.ColorA) & 0xFFFFFFFE;
+	p.ColorA |= l.ScreenSpace ? 0x1 : 0x0;
 	p.B = l.B;
 	p.ColorB = Pack_RGBA8_UNORM(l.ColorB);
-	p.ColorA = (p.ColorA & 0xFE) | (l.ScreenSpace ? 0x1 : 0x0);
 	return p;
 }
 
@@ -68,7 +68,7 @@ LineInstance UnpackLineInstance(PackedLineInstance p)
 	l.ColorA = Unpack_RGBA8_UNORM(p.ColorA);
 	l.B = p.B;
 	l.ColorB = Unpack_RGBA8_UNORM(p.ColorB);
-	l.ScreenSpace = (p.ColorA & 0x1);
+	l.ScreenSpace = (p.ColorA & 0x1) > 0;
 	return l;
 }
 
