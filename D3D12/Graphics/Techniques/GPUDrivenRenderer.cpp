@@ -82,21 +82,21 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 	// Permutation without alpha masking
 	defines.Set("ALPHA_MASK", false);
 	defines.Set("ENABLE_DEBUG_DATA", false);
-	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
-	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
+	psoDesc.SetMeshShader("MeshletRasterize.hlsl", "MSMain", *defines);
+	psoDesc.SetPixelShader("MeshletRasterize.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsPSO[0] =			pDevice->CreatePipeline(psoDesc);
 	defines.Set("ENABLE_DEBUG_DATA", true);
-	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
+	psoDesc.SetPixelShader("MeshletRasterize.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsDebugModePSO[0] =pDevice->CreatePipeline(psoDesc);
 	// Permutation with alpha masking
 	defines.Set("ALPHA_MASK", true);
 	defines.Set("ENABLE_DEBUG_DATA", false);
 	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-	psoDesc.SetMeshShader("MeshletCull.hlsl", "MSMain", *defines);
-	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
+	psoDesc.SetMeshShader("MeshletRasterize.hlsl", "MSMain", *defines);
+	psoDesc.SetPixelShader("MeshletRasterize.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsPSO[1] =			pDevice->CreatePipeline(psoDesc);
 	defines.Set("ENABLE_DEBUG_DATA", true);
-	psoDesc.SetPixelShader("MeshletCull.hlsl", "PSMain", *defines);
+	psoDesc.SetPixelShader("MeshletRasterize.hlsl", "PSMain", *defines);
 	m_pDrawMeshletsDebugModePSO[1] = pDevice->CreatePipeline(psoDesc);
 
 	defines.Set("OCCLUSION_FIRST_PASS", true);
@@ -374,10 +374,10 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				if (outResult.pDebugData)
 					context.BindResources(2, outResult.pDebugData->Get()->GetUAV());
 				context.BindResources(3, {
+					rasterContext.pVisibleMeshlets->Get()->GetSRV(),
 					pBinnedMeshlets->Get()->GetSRV(),
 					pMeshletOffsetAndCounts->Get()->GetSRV(),
-					rasterContext.pVisibleMeshlets->Get()->GetSRV(),
-					}, 2);
+					});
 				
 				for (uint32 binIndex = 0; binIndex < numBins; ++binIndex)
 				{
