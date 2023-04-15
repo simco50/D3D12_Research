@@ -225,7 +225,7 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 	// No longer need to compute the sum reduction tree for the last 5 layers. Instead, bits in the bitfield are counted directly
 #if 0
 	graph.AddPass("CBT Sum Reduction Prepass", RGPassFlag::Compute)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
 				context.SetComputeRootConstants(0, commonArgs);
@@ -301,14 +301,12 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 		ImGui::Image(data.pDebugVisualizeTexture, size);
 		ImGui::End();
 
+		RGTexture* pVisualizeTarget = graph.Import(data.pDebugVisualizeTexture);
 		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
 			.Read({ pCBTBuffer, pIndirectArgs })
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.RenderTarget(pVisualizeTarget, RenderTargetLoadAction::Load)
+			.Bind([=](CommandContext& context)
 			{
-				context.InsertResourceBarrier(data.pDebugVisualizeTexture, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-				context.BeginRenderPass(RenderPassInfo(data.pDebugVisualizeTexture, RenderPassAccess::Load_Store, nullptr, RenderPassAccess::NoAccess, false));
-
 				context.SetGraphicsRootSignature(m_pCBTRS);
 				context.SetPipelineState(m_pCBTDebugVisualizePSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -318,7 +316,6 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, data.pDebugVisualizeTexture));
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
-				context.EndRenderPass();
 			});
 	}
 }

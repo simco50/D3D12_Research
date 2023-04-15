@@ -119,7 +119,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 		{
 			graph.AddPass("Compute Shape Noise", RGPassFlag::Compute)
 				.Write(pNoiseTexture)
-				.Bind([=](CommandContext& context, const RGPassResources& resources)
+				.Bind([=](CommandContext& context)
 					{
 						uint32 resolution = pNoiseTexture->GetDesc().Width >> i;
 
@@ -142,7 +142,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 		{
 			graph.AddPass("Compute Detail Noise", RGPassFlag::Compute)
 				.Write(pDetailNoiseTexture)
-				.Bind([=](CommandContext& context, const RGPassResources& resources)
+				.Bind([=](CommandContext& context)
 					{
 						uint32 resolution = pDetailNoiseTexture->GetDesc().Width >> i;
 
@@ -164,7 +164,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 
 		graph.AddPass("Height Gradient", RGPassFlag::Compute)
 			.Write(pCloudTypeLUT)
-			.Bind([=](CommandContext& context, const RGPassResources& resources)
+			.Bind([=](CommandContext& context)
 				{
 					Texture* pTarget = pCloudTypeLUT->Get();
 
@@ -187,7 +187,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 	graph.AddPass("Clouds", RGPassFlag::Compute)
 		.Read({ pNoiseTexture, pDetailNoiseTexture, pCloudTypeLUT, sceneTextures.pColorTarget, sceneTextures.pDepth })
 		.Write(pIntermediateColor)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pIntermediateColor->Get();
 

@@ -266,29 +266,25 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 	if (!pData)
 		return;
 
+	RGBuffer* pParticleBuffer = graph.Import(m_pParticleBuffer);
+	RGBuffer* pAliveList1 = graph.Import(m_pAliveList1);
 	graph.AddPass("Render Particles", RGPassFlag::Raster)
 		.Read(pData->pIndirectDrawArguments)
+		.Read({ pParticleBuffer, pAliveList1 })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
-		.Bind([=](CommandContext& context, const RGPassResources& resources)
+		.Bind([=](CommandContext& context)
 			{
-				Texture* pTarget = sceneTextures.pColorTarget->Get();
-				context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pAliveList1, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-
-				context.BeginRenderPass(resources.GetRenderPassInfo());
-
 				context.SetPipelineState(m_pRenderParticlesPS);
 				context.SetGraphicsRootSignature(m_pRenderParticlesRS);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.BindRootCBV(0, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
 				context.BindResources(1, {
 					m_pParticleBuffer->GetSRV(),
 					m_pAliveList1->GetSRV()
 					});
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pData->pIndirectDrawArguments->Get(), nullptr, IndirectArgOffsets::Draw * sizeof(uint32));
-				context.EndRenderPass();
 			});
 }
