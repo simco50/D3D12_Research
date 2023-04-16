@@ -57,7 +57,7 @@ protected:
 		// pResource keeps a raw reference to use during execution
 	}
 
-	char Name[128];
+	char Name[64];
 	int ID;
 	bool IsImported;
 	bool IsExported = false;

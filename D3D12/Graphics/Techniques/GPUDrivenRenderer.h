@@ -7,14 +7,22 @@ class PipelineState;
 class Texture;
 struct SceneView;
 
+enum class RasterMode
+{
+	VisibilityBuffer,
+	Shadows,
+};
+
 struct RasterContext
 {
-	RasterContext(RGGraph& graph, const std::string contextString, RGTexture* pDepth, RefCountPtr<Texture>* pPreviousHZB);
+	RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, RefCountPtr<Texture>* pPreviousHZB);
 
-	std::string ContextString;
 	RGTexture* pDepth = nullptr;
 	RefCountPtr<Texture>* pPreviousHZB = nullptr;
 	bool EnableDebug = false;
+	RasterMode Mode;
+
+	bool EnableOcclusion() const { return Mode != RasterMode::Shadows; }
 
 	RGBuffer* pCandidateMeshlets = nullptr;
 	RGBuffer* pCandidateMeshletsCounter = nullptr;
@@ -46,6 +54,14 @@ private:
 		Phase2,
 	};
 
+	enum class PipelineBin
+	{
+		Opaque,
+		AlphaMasked,
+		Count,
+	};
+	using PipelineStateBinSet = std::array<RefCountPtr<PipelineState>, (int)PipelineBin::Count>;
+
 	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions, RefCountPtr<Texture>* pExportTarget = nullptr) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
@@ -54,13 +70,17 @@ private:
 	RefCountPtr<RootSignature> m_pCommonRS;
 	
 	RefCountPtr<PipelineState> m_pCullInstancesPSO[2];
+	RefCountPtr<PipelineState> m_pCullInstancesNoOcclusionPSO;
 	RefCountPtr<PipelineState> m_pBuildMeshletCullArgsPSO[2];
 	RefCountPtr<PipelineState> m_pBuildCullArgsPSO;
 	RefCountPtr<PipelineState> m_pPrintStatsPSO;
 
 	RefCountPtr<PipelineState> m_pCullMeshletsPSO[2];
-	RefCountPtr<PipelineState> m_pDrawMeshletsPSO[2];
-	RefCountPtr<PipelineState> m_pDrawMeshletsDebugModePSO[2];
+	RefCountPtr<PipelineState> m_pCullMeshletsNoOcclusionPSO;
+
+	PipelineStateBinSet m_pDrawMeshletsPSO;
+	PipelineStateBinSet m_pDrawMeshletsDebugModePSO;
+	PipelineStateBinSet m_pDrawMeshletsDepthOnlyPSO;
 
 	RefCountPtr<PipelineState> m_pMeshletBinPrepareArgs;
 	RefCountPtr<PipelineState> m_pMeshletClassify;

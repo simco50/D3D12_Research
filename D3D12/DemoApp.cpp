@@ -54,6 +54,7 @@ namespace Tweakables
 	ConsoleVariable g_VisualizeShadowCascades("vis.ShadowCascades", false);
 	ConsoleVariable g_ShadowCascades("r.Shadows.CascadeCount", 4);
 	ConsoleVariable g_PSSMFactor("r.Shadow.PSSMFactor", 0.85f);
+	ConsoleVariable g_ShadowsGPUCull("r.Shadows.GPUCull", true);
 
 	// Bloom
 	ConsoleVariable g_Bloom("r.Bloom", true);
@@ -287,30 +288,39 @@ void DemoApp::Update()
 				boundsSet = true;
 			}
 		}
+
 		{
 			PROFILE_SCOPE("Frustum Culling");
 
 			TaskContext cullingContext;
-			TaskQueue::Execute([&](int)
-				{
-					m_SceneData.VisibilityMask.SetAll();
-					BoundingFrustum frustum = m_pCamera->GetFrustum();
-					for (const Batch& b : m_SceneData.Batches)
+			// In Visibility Buffer mode, culling is done on the GPU.
+			if (m_RenderPath != RenderPath::Visibility)
+			{
+				TaskQueue::Execute([&](int)
 					{
-						m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
-					}
-				}, cullingContext);
-			TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
-				{
-					ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
-					shadowView.Visibility.SetAll();
-					for (const Batch& b : m_SceneData.Batches)
+						m_SceneData.VisibilityMask.SetAll();
+						BoundingFrustum frustum = m_pCamera->GetFrustum();
+						for (const Batch& b : m_SceneData.Batches)
+						{
+							m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
+						}
+					}, cullingContext);
+			}
+			if (!Tweakables::g_ShadowsGPUCull)
+			{
+				TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
 					{
-						shadowView.Visibility.AssignBit(b.InstanceID, shadowView.IsPerspective ? shadowView.PerspectiveFrustum.Contains(b.Bounds) : shadowView.OrtographicFrustum.Contains(b.Bounds));
-					}
-				}, cullingContext, (uint32)m_SceneData.ShadowViews.size(), 1);
+						ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
+						shadowView.Visibility.SetAll();
+						for (const Batch& b : m_SceneData.Batches)
+						{
+							shadowView.Visibility.AssignBit(b.InstanceID, shadowView.IsPerspective ? shadowView.PerspectiveFrustum.Contains(b.Bounds) : shadowView.OrtographicFrustum.Contains(b.Bounds));
+						}
+					}, cullingContext, (uint32)m_SceneData.ShadowViews.size(), 1);
+			}
 			TaskQueue::Join(cullingContext);
 		}
+
 	}
 	{
 		GPU_PROFILE_SCOPE("Render", pContext);
@@ -432,48 +442,55 @@ void DemoApp::Update()
 				RG_GRAPH_SCOPE("Shadow Depths", graph);
 				for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 				{
-					auto  LightTypeToString = [](LightType type) -> const char* {
-						switch (type)
-						{
-						case LightType::Directional: return "Directional";
-						case LightType::Point: return "Point";
-						case LightType::Spot: return "Spot";
-						default: return "INVALID";
-						}
-					};
-
+					const ShadowView& shadowView = pView->ShadowViews[i];
+					const std::string passName = Sprintf("View %d (%s)", i, shadowView.DebugName.c_str()).c_str();
 					RGTexture* pShadowmap = graph.TryImport(pView->ShadowViews[i].pDepthTexture);
-					graph.AddPass(Sprintf("View %d (%s Light)", i, LightTypeToString(pView->ShadowViews[i].pLightSource->Type)).c_str(), RGPassFlag::Raster)
-						.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
-						.Bind([=](CommandContext& context)
-							{
-								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-								context.SetGraphicsRootSignature(m_pCommonRS);
 
-								// hack - copy the main viewport and then just modify the viewproj
-								SceneView view = *pView;
-								const ShadowView& shadowView = view.ShadowViews[i];
-								view.View.ViewProjection = shadowView.ViewProjection;
-								context.BindRootCBV(1, Renderer::GetViewUniforms(&view, pShadowmap->Get()));
+					if (Tweakables::g_ShadowsGPUCull)
+					{
+						RG_GRAPH_SCOPE(passName.c_str(), graph);
+						// hack - copy the main viewport and then just modify the viewproj
+						SceneView* pShadowHack = graph.Allocate<SceneView>(*pView);
+						pShadowHack->View.ViewProjection = shadowView.ViewProjection;
 
+						RasterContext context(graph, pShadowmap, RasterMode::Shadows, nullptr);
+						RasterResult result;
+						m_pGPUDrivenRenderer->Render(graph, pShadowHack, context, result);
+					}
+					else
+					{
+						graph.AddPass(passName.c_str(), RGPassFlag::Raster)
+							.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
+							.Bind([=](CommandContext& context)
 								{
-									GPU_PROFILE_SCOPE("Opaque", &context);
-									context.SetPipelineState(m_pShadowsOpaquePSO);
-									Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::Opaque);
-								}
-								{
-									GPU_PROFILE_SCOPE("Masked", &context);
-									context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-									Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
-								}
-							});
+									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+									context.SetGraphicsRootSignature(m_pCommonRS);
+
+									// hack - copy the main viewport and then just modify the viewproj
+									SceneView view = *pView;
+									const ShadowView& shadowView = view.ShadowViews[i];
+									view.View.ViewProjection = shadowView.ViewProjection;
+									context.BindRootCBV(1, Renderer::GetViewUniforms(&view, pShadowmap->Get()));
+
+									{
+										GPU_PROFILE_SCOPE("Opaque", &context);
+										context.SetPipelineState(m_pShadowsOpaquePSO);
+										Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::Opaque);
+									}
+									{
+										GPU_PROFILE_SCOPE("Masked", &context);
+										context.SetPipelineState(m_pShadowsAlphaMaskPSO);
+										Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
+									}
+								});
+					}
 				}
 			}
 
 			const bool doPrepass = true;
 			const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility;
 
-			RasterContext rasterContext(graph, "Prepass", sceneTextures.pDepth, &m_pHZB);
+			RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
 			rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
 			if (doPrepass)
 			{
@@ -1480,6 +1497,7 @@ void DemoApp::UpdateImGui()
 			ImGui::Checkbox("SDSM", &Tweakables::g_SDSM.Get());
 			ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
 			ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
+			ImGui::Checkbox("GPU Cull", &Tweakables::g_ShadowsGPUCull.Get());
 		}
 		if (ImGui::CollapsingHeader("Bloom"))
 		{
@@ -1595,20 +1613,26 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 	auto AddShadowView = [&](Light& light, ShadowView shadowView, uint32 resolution, uint32 shadowMapLightIndex)
 	{
 		if (shadowMapLightIndex == 0)
-		{
 			light.MatrixIndex = shadowIndex;
-		}
 		if (shadowIndex >= (int32)m_ShadowMaps.size())
-		{
 			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::CreateDepth(resolution, resolution, GraphicsCommon::ShadowFormat, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), Sprintf("Shadow Map %d", (uint32)m_ShadowMaps.size()).c_str()));
-		}
 		RefCountPtr<Texture> pTarget = m_ShadowMaps[shadowIndex];
+
+		auto LightTypeToString = [](LightType type) -> const char* {
+			switch (type)
+			{
+			case LightType::Directional: return "Directional";
+			case LightType::Point: return "Point";
+			case LightType::Spot: return "Spot";
+			default: return "INVALID";
+			}
+		};
 
 		light.ShadowMaps.resize(Math::Max(shadowMapLightIndex + 1, (uint32)light.ShadowMaps.size()));
 		light.ShadowMaps[shadowMapLightIndex] = pTarget;
 		light.ShadowMapSize = resolution;
 		shadowView.pDepthTexture = pTarget;
-		shadowView.pLightSource = &light;
+		shadowView.DebugName = Sprintf("%s - Cascade %d", LightTypeToString(light.Type), shadowMapLightIndex);
 		view.ShadowViews.push_back(shadowView);
 		shadowIndex++;
 	};

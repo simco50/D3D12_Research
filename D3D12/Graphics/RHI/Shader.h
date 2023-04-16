@@ -28,6 +28,11 @@ struct ShaderDefine
 class ShaderDefineHelper
 {
 public:
+	ShaderDefineHelper() = default;
+	ShaderDefineHelper(const ShaderDefineHelper& parent)
+		: pParent(&parent)
+	{}
+
 	void Set(const char* pName, const char* pValue)
 	{
 		Get(pName).Value = pValue;
@@ -49,15 +54,22 @@ public:
 	{
 		std::vector<ShaderDefine> defines;
 		defines.reserve(Defines.size());
-		for (const DefineData& v : Defines)
-		{
-			ShaderDefine& define = defines.emplace_back();
-			define.Value = Sprintf("%s=%s", v.Name, v.Value.c_str());
-		}
+		Resolve(defines);
 		return defines;
 	}
 
 private:
+	void Resolve(std::vector<ShaderDefine>& outDefines) const
+	{
+		if (pParent)
+			pParent->Resolve(outDefines);
+		for (const DefineData& v : Defines)
+		{
+			ShaderDefine& define = outDefines.emplace_back();
+			define.Value = Sprintf("%s=%s", v.Name, v.Value.c_str());
+		}
+	}
+
 	struct DefineData
 	{
 		StringHash Hash;
@@ -78,6 +90,7 @@ private:
 		return Defines.emplace_back(DefineData{ hash, pName, "" });
 	}
 
+	const ShaderDefineHelper* pParent = nullptr;
 	std::vector<DefineData> Defines;
 };
 

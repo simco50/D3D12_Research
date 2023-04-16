@@ -93,6 +93,9 @@ public:
 		}
 	}
 
+	uint64 GetSize() const { return m_pCurrentOffset - m_pData; }
+	uint64 GetCapacity() const { return m_Size; }
+
 private:
 	std::vector<AllocatedObject*> m_NonPODAllocations;
 	uint64 m_Size;
@@ -168,9 +171,7 @@ public:
 		checkf(!pExecuteCallback, "Pass is already bound! This may be unintentional");
 		pExecuteCallback = Allocator.Allocate<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
 		if constexpr (RGPassCallback<ExecuteFn>::HasPassResources)
-		{
 			Flags |= RGPassFlag::NoRenderPass;
-		}
 		return *this;
 	}
 
@@ -188,7 +189,7 @@ private:
 
 	void AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state);
 
-	char Name[128];
+	char Name[64];
 	RGGraph& Graph;
 	RGGraphAllocator& Allocator;
 	uint32 ID;
@@ -229,10 +230,11 @@ private:
 	uint32 m_FrameIndex = 0;
 };
 
+
 class RGGraph
 {
 public:
-	RGGraph(RGResourcePool& resourcePool, uint64 allocatorSize = 0xFFFF);
+	RGGraph(RGResourcePool& resourcePool, uint64 allocatorSize = 1024 * 128);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
@@ -245,6 +247,16 @@ public:
 	template<typename T, typename... Args>
 	T* Allocate(Args&&... args)
 	{
+		// For debugging allocations
+#if 0
+		E_LOG(Info, "Allocating %s (%s / %s - %.0f%%)",
+			Math::PrettyPrintDataSize(sizeof(T)).c_str(),
+			Math::PrettyPrintDataSize(m_Allocator.GetSize()).c_str(),
+			Math::PrettyPrintDataSize(m_Allocator.GetCapacity()).c_str(),
+			(float)m_Allocator.GetSize() / m_Allocator.GetCapacity() * 100.0f
+		);
+#endif
+
 		return m_Allocator.Allocate<T>(std::forward<Args&&>(args)...);
 	}
 

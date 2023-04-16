@@ -33,13 +33,22 @@
 #define ENABLE_DEBUG_DATA 0
 #endif
 
+#ifndef OCCLUSION_CULL
+#define OCCLUSION_CULL 1
+#endif
+
 #define NUM_CULL_INSTANCES_THREADS 64
 
-#define COUNTER_TOTAL_CANDIDATE_MESHLETS 0
-#define COUNTER_PHASE1_CANDIDATE_MESHLETS 1
-#define COUNTER_PHASE2_CANDIDATE_MESHLETS 2
-#define COUNTER_PHASE1_VISIBLE_MESHLETS 0
-#define COUNTER_PHASE2_VISIBLE_MESHLETS 1
+// Element index of counter for total amount of candidate meshlets.
+static const int COUNTER_TOTAL_CANDIDATE_MESHLETS 	= 0;
+// Element index of counter for amount of candidate meshlets in Phase 1.
+static const int COUNTER_PHASE1_CANDIDATE_MESHLETS 	= 1;
+// Element index of counter for amount of candidate meshlets in Phase 2.
+static const int COUNTER_PHASE2_CANDIDATE_MESHLETS 	= 2;
+// Element index of counter for amount of visible meshlets in Phase 1.
+static const int COUNTER_PHASE1_VISIBLE_MESHLETS 	= 0;
+// Element index of counter for amount of visible meshlets in Phase 2.
+static const int COUNTER_PHASE2_VISIBLE_MESHLETS 	= 1;
 
 #if OCCLUSION_FIRST_PASS
 static const int MeshletCounterIndex = COUNTER_PHASE1_CANDIDATE_MESHLETS;
@@ -105,6 +114,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 	bool isVisible = cullData.IsVisible;
 	bool wasOccluded = false;
 
+#if OCCLUSION_CULL
 	if(isVisible)
 	{
 #if OCCLUSION_FIRST_PASS
@@ -123,6 +133,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		isVisible = HZBCull(cullData, tHZB);
 #endif
 	}
+#endif
 
 	// If instance is visible and wasn't occluded in the previous frame, submit it
     if(isVisible && !wasOccluded)
@@ -186,6 +197,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 		bool isVisible = cullData.IsVisible;
 		bool wasOccluded = false;
 
+#if OCCLUSION_CULL
 		if(isVisible)
 		{
 #if OCCLUSION_FIRST_PASS
@@ -213,6 +225,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 			isVisible = HZBCull(cullData, tHZB);
 #endif
 		}
+#endif
 
 		// If meshlet is visible and wasn't occluded in the previous frame, submit it
 		if(isVisible && !wasOccluded)

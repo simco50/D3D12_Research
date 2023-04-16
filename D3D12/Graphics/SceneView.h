@@ -66,7 +66,7 @@ using VisibilityMask = BitField<8192>;
 
 struct ShadowView
 {
-	const Light* pLightSource = nullptr;
+	std::string DebugName;
 	Matrix ViewProjection;
 	bool IsPerspective;
 	Texture* pDepthTexture = nullptr;
