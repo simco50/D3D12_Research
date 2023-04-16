@@ -60,9 +60,21 @@ void RGGraph::DrawDebug(bool& enabled) const
 	if (!enabled)
 		return;
 
+	// Hacks to rotate text in ImGui. From https://github.com/ocornut/imgui/issues/1286#issue-251214314
+	int rotation_start_index;
+	auto ImRotateStart = [&]() {	rotation_start_index = ImGui::GetWindowDrawList()->VtxBuffer.Size; };
+	auto ImRotateEnd = [&](float rad, ImVec2 center)
+	{
+		float s = sin(rad), c = cos(rad);
+		center = ImRotate(center, s, c) - center;
+
+		auto& buf = ImGui::GetWindowDrawList()->VtxBuffer;
+		for (int i = rotation_start_index; i < buf.Size; i++)
+			buf[i].pos = ImRotate(buf[i].pos, s, c) - center;
+	};
+
 	if(ImGui::Begin("Resource usage", &enabled, ImGuiWindowFlags_HorizontalScrollbar))
 	{
-		ImDrawList* pCmd = ImGui::GetWindowDrawList();
 		int32 passIndex = 0;
 		int32 resourceIndex = 0;
 
@@ -78,23 +90,28 @@ void RGGraph::DrawDebug(bool& enabled) const
 			return nullptr;
 		};
 
-		ImVec2 cursor = ImGui::GetCursorScreenPos();
 		float passNameHeight = 300.0f;
 		float resourceNameWidth = 300.0f;
-		ImVec2 boxSize = ImVec2(12.0f, ImGui::GetTextLineHeightWithSpacing());
-
-		ImVec2 passNamePos = cursor + ImVec2(resourceNameWidth, passNameHeight);
-
+		ImVec2 boxSize = ImVec2(20.0f, ImGui::GetTextLineHeightWithSpacing());
 		float width = (int)m_RenderPasses.size() * boxSize.x + resourceNameWidth;
 		float height = 1200;
 
 		ImGui::BeginChild("Table", ImVec2(width, height));
+		ImDrawList* pCmd = ImGui::GetWindowDrawList();
+
+		ImVec2 cursor = ImGui::GetCursorScreenPos();
+		ImVec2 passNamePos = cursor + ImVec2(resourceNameWidth, 0);
 
 		const RGPass* pActivePass = nullptr;
 		for (const RGPass* pPass : m_RenderPasses)
 		{
-			ImGui::AddTextVertical(pCmd, pPass->Name, passNamePos + ImVec2(passIndex * boxSize.x, 0.0f), ImColor(1.0f, 1.0f, 1.0f));
-			ImGui::ItemAdd(ImRect(passNamePos + ImVec2(passIndex * boxSize.x, -passNameHeight), passNamePos + ImVec2((passIndex + 1) * boxSize.x, 0.0f)), passIndex);
+			ImRect itemRect(passNamePos + ImVec2(passIndex * boxSize.x, 0.0f), passNamePos + ImVec2((passIndex + 1) * boxSize.x, passNameHeight));
+			pCmd->AddLine(itemRect.Max, itemRect.Max + ImVec2(0, height), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+			ImRotateStart();
+			ImVec2 size = ImGui::CalcTextSize(pPass->Name);
+			pCmd->AddText(itemRect.Max - ImVec2(size.x, 0), ImColor(1.0f, 1.0f, 1.0f), pPass->Name);
+			ImRotateEnd(Math::PI * 2.2f, itemRect.Max + ImVec2(boxSize.x, 0));
+			ImGui::ItemAdd(itemRect, passIndex);
 			bool passActive = ImGui::IsItemHovered();
 			if (passActive)
 			{
@@ -134,9 +151,9 @@ void RGGraph::DrawDebug(bool& enabled) const
 
 			ImRect itemRect(resourceAccessPos + ImVec2(firstPassOffset * boxSize.x + 1, physicalResourceIndex * boxSize.y + 1), resourceAccessPos + ImVec2((lastPassOffset + 1) * boxSize.x - 1, (physicalResourceIndex + 1) * boxSize.y - 1));
 			ImGui::ItemAdd(itemRect, pResource->ID);
-			bool resourceActive = ImGui::IsItemHovered();
+			bool isHovered = ImGui::IsItemHovered();
 
-			if (resourceActive)
+			if (isHovered)
 			{
 				ImGui::BeginTooltip();
 				ImGui::Text("%s", pResource->GetName());
@@ -160,8 +177,11 @@ void RGGraph::DrawDebug(bool& enabled) const
 				ImGui::EndTooltip();
 			}
 
-			ImColor boxColor = resourceActive ? ImColor(1.0f, 1.0f, 1.0f) : ImColor(1.0f, 1.0f, 1.0f, 0.8f);
+			pCmd->AddRectFilled(itemRect.Min, itemRect.Max, pResource->Type == RGResourceType::Texture ? ImColor(1.0f, 0.7f, 0.9f) : ImColor(0.7f, 0.8f, 1.0f));
 
+			ImColor boxColor = ImColor(1.0f, 1.0f, 1.0f, 0.5f);
+
+			bool isActivePass = false;
 			if (pActivePass)
 			{
 				auto it = std::find_if(pActivePass->Accesses.begin(), pActivePass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access)
@@ -171,15 +191,17 @@ void RGGraph::DrawDebug(bool& enabled) const
 
 				if (it != pActivePass->Accesses.end())
 				{
+					isActivePass = true;
 					const RGPass::ResourceAccess& access = *it;
 					if (ResourceState::HasWriteResourceState(access.Access))
-						boxColor = ImColor(1.0f, 0.5f, 0.1f);
+						boxColor = ImColor(1.0f, 0.5f, 0.1f, 0.8f);
 					else
-						boxColor = ImColor(0.0f, 0.9f, 0.3f);
+						boxColor = ImColor(0.0f, 0.9f, 0.3f, 0.8f);
 				}
 			}
 
-			pCmd->AddRectFilled(itemRect.Min, itemRect.Max, boxColor);
+			if(isActivePass || isHovered)
+				pCmd->AddRectFilled(itemRect.Min, itemRect.Max, boxColor);
 		}
 
 		for (auto& resource : resourceToIndex)
