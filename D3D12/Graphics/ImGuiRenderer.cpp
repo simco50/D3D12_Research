@@ -44,6 +44,36 @@ namespace ImGui
 		PopStyleColor(3);
 		return clicked;
 	}
+
+	void AddTextVertical(ImDrawList* DrawList, const char* text, ImVec2 pos, ImU32 text_color)
+	{
+		pos.x = roundf(pos.x);
+		pos.y = roundf(pos.y);
+		ImFont* font = GImGui->Font;
+		const ImFontGlyph* glyph;
+		char c;
+		ImVec2 text_size = CalcTextSize(text);
+		while (*text) {
+			c = *text++;
+
+			glyph = font->FindGlyph(c);
+			if (!glyph) continue;
+
+			DrawList->PrimReserve(6, 4);
+			DrawList->PrimQuadUV(
+				pos + ImVec2(glyph->Y0, -glyph->X0),
+				pos + ImVec2(glyph->Y0, -glyph->X1),
+				pos + ImVec2(glyph->Y1, -glyph->X1),
+				pos + ImVec2(glyph->Y1, -glyph->X0),
+
+				ImVec2(glyph->U0, glyph->V0),
+				ImVec2(glyph->U1, glyph->V0),
+				ImVec2(glyph->U1, glyph->V1),
+				ImVec2(glyph->U0, glyph->V1),
+				text_color);
+			pos.y -= glyph->AdvanceX;
+		}
+	}
 }
 
 void ApplyImGuiStyle()
@@ -201,13 +231,13 @@ void ImGuiRenderer::NewFrame()
 
 void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 {
-	ImGui::Render();
-
 	RG_GRAPH_SCOPE("UI", graph);
 
-	graph.AddPass("Transitions", RGPassFlag::NeverCull)
+	graph.AddPass("ImGui Submit", RGPassFlag::NeverCull)
 		.Bind([=](CommandContext& context)
 			{
+				ImGui::Render();
+
 				ImDrawData* pDrawData = ImGui::GetDrawData();
 				ImVec2 clip_off = pDrawData->DisplayPos;
 				for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
@@ -218,9 +248,7 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 						const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
 						Texture* pTexture = (Texture*)pCmd->GetTexID();
 						if (pTexture)
-						{
 							context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-						}
 					}
 				}
 			});

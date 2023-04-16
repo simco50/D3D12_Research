@@ -243,6 +243,7 @@ public:
 	void Compile();
 	void Execute(CommandContext* pContext);
 	void DumpGraph(const char* pPath) const;
+	void DrawDebug(bool& enabled) const;
 
 	template<typename T, typename... Args>
 	T* Allocate(Args&&... args)

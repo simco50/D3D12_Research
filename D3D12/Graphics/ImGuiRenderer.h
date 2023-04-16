@@ -13,6 +13,8 @@ namespace ImGui
 {
 	ImVec2 GetAutoSize(const ImVec2& dimensions);
 	bool ToggleButton(const char* pText, bool* pValue, const ImVec2& size = ImVec2(0, 0));
+	void AddTextVertical(ImDrawList* DrawList, const char* text, ImVec2 pos, ImU32 text_color);
+
 }
 
 namespace ImGuiRenderer

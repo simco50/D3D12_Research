@@ -82,6 +82,7 @@ namespace Tweakables
 	ConsoleVariable CullDebugStats("r.CullingStats", false);
 
 	bool g_DumpRenderGraph = false;
+	bool g_EnableRenderGraphResourceTracker = false;
 	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
 	bool g_Screenshot = false;
 	ConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = true; });
@@ -1137,6 +1138,9 @@ void DemoApp::Update()
 			graph.DumpGraph(Sprintf("%sRenderGraph.html", Paths::SavedDir().c_str()).c_str());
 			Tweakables::g_DumpRenderGraph = false;
 		}
+
+		graph.DrawDebug(Tweakables::g_EnableRenderGraphResourceTracker);
+
 		graph.Execute(pContext);
 
 	}
@@ -1321,6 +1325,10 @@ void DemoApp::UpdateImGui()
 			if (ImGui::MenuItem("Dump RenderGraph"))
 			{
 				Tweakables::g_DumpRenderGraph = true;
+			}
+			if (ImGui::MenuItem("RenderGraph Resource Tracker"))
+			{
+				Tweakables::g_EnableRenderGraphResourceTracker = true;
 			}
 			if (ImGui::MenuItem("Screenshot"))
 			{
