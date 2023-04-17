@@ -497,17 +497,12 @@ void DemoApp::Update()
 			{
 				if (needVisibilityBuffer)
 				{
-					m_pGPUDrivenRenderer->Render(
-						graph,
-						pView,
-						rasterContext,
-						rasterResult);
-					m_SceneData.HZBDimensions = rasterResult.pHZB->GetDesc().Size2D();
-
+					m_pGPUDrivenRenderer->Render(graph,	pView, rasterContext, rasterResult);
 					if (Tweakables::CullDebugStats)
-					{
 						m_pGPUDrivenRenderer->PrintStats(graph, pView, rasterContext);
-					}
+
+					// #todo: This is actually wrong, as the HZB dimensions should have been communicated before culling.
+					m_SceneData.HZBDimensions = rasterResult.pHZB->GetDesc().Size2D();
 				}
 				else
 				{
