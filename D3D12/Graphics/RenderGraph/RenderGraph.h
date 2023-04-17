@@ -74,12 +74,10 @@ public:
 	}
 
 	template<typename T, typename ...Args>
-	T* Allocate(Args&&... args)
+	T* AllocateObject(Args&&... args)
 	{
 		using AllocatedType = std::conditional_t<std::is_trivial_v<T>, T, TAllocatedObject<T>>;
-		check(m_pCurrentOffset - m_pData + sizeof(AllocatedType) < m_Size);
-		void* pData = m_pCurrentOffset;
-		m_pCurrentOffset += sizeof(AllocatedType);
+		void* pData = Allocate(sizeof(AllocatedType));
 		AllocatedType* pAllocation = new (pData) AllocatedType(std::forward<Args&&>(args)...);
 
 		if constexpr (std::is_trivial_v<T>)
@@ -91,6 +89,14 @@ public:
 			m_NonPODAllocations.push_back(pAllocation);
 			return &pAllocation->Object;
 		}
+	}
+
+	void* Allocate(uint64 size)
+	{
+		check(m_pCurrentOffset - m_pData + size < m_Size);
+		void* pData = m_pCurrentOffset;
+		m_pCurrentOffset += size;
+		return pData;
 	}
 
 	uint64 GetSize() const { return m_pCurrentOffset - m_pData; }
@@ -156,9 +162,8 @@ public:
 	};
 
 	RGPass(RGGraph& graph, RGGraphAllocator& allocator, const char* pName, RGPassFlag flags, uint32 id)
-		: Graph(graph), Allocator(allocator), ID(id), Flags(flags)
+		: Graph(graph), Allocator(allocator), pName(pName), ID(id), Flags(flags)
 	{
-		strcpy_s(Name, pName);
 	}
 
 	RGPass(const RGPass& rhs) = delete;
@@ -169,7 +174,7 @@ public:
 	{
 		static_assert(sizeof(ExecuteFn) < 1024, "The Execute callback exceeds the maximum size");
 		checkf(!pExecuteCallback, "Pass is already bound! This may be unintentional");
-		pExecuteCallback = Allocator.Allocate<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
+		pExecuteCallback = Allocator.AllocateObject<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
 		if constexpr (RGPassCallback<ExecuteFn>::HasPassResources)
 			Flags |= RGPassFlag::NoRenderPass;
 		return *this;
@@ -180,6 +185,8 @@ public:
 	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction access, RGTexture* pResolveTarget = nullptr);
 	RGPass& DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool write, RenderTargetLoadAction stencilAccess = RenderTargetLoadAction::NoAccess);
 
+	const char* GetName() const { return pName; }
+
 private:
 	struct ResourceAccess
 	{
@@ -189,9 +196,9 @@ private:
 
 	void AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state);
 
-	char Name[64];
 	RGGraph& Graph;
 	RGGraphAllocator& Allocator;
+	const char* pName;
 	uint32 ID;
 	RGPassFlag Flags;
 	bool IsCulled = true;
@@ -258,12 +265,12 @@ public:
 		);
 #endif
 
-		return m_Allocator.Allocate<T>(std::forward<Args&&>(args)...);
+		return m_Allocator.AllocateObject<T>(std::forward<Args&&>(args)...);
 	}
 
 	RGPass& AddPass(const char* pName, RGPassFlag flags)
 	{
-		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, pName, flags, (int)m_RenderPasses.size());
+		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, CopyString(pName), flags, (int)m_RenderPasses.size());
 
 		for(const std::string& eventName : m_Events)
 		{
@@ -277,14 +284,14 @@ public:
 
 	RGTexture* Create(const char* pName, const TextureDesc& desc)
 	{
-		RGTexture* pResource = Allocate<RGTexture>(pName, (int)m_Resources.size(), desc);
+		RGTexture* pResource = Allocate<RGTexture>(CopyString(pName), (int)m_Resources.size(), desc);
 		m_Resources.emplace_back(pResource);
 		return pResource;
 	}
 
 	RGBuffer* Create(const char* pName, const BufferDesc& desc)
 	{
-		RGBuffer* pResource = Allocate<RGBuffer>(pName, (int)m_Resources.size(), desc);
+		RGBuffer* pResource = Allocate<RGBuffer>(CopyString(pName), (int)m_Resources.size(), desc);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
@@ -292,7 +299,7 @@ public:
 	RGTexture* Import(Texture* pTexture)
 	{
 		check(pTexture);
-		RGTexture* pResource = Allocate<RGTexture>(pTexture->GetName().c_str(), (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
+		RGTexture* pResource = Allocate<RGTexture>(CopyString(pTexture->GetName()), (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
@@ -305,7 +312,7 @@ public:
 	RGBuffer* Import(Buffer* pBuffer)
 	{
 		check(pBuffer);
-		RGBuffer* pResource = Allocate<RGBuffer>(pBuffer->GetName().c_str(), (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
+		RGBuffer* pResource = Allocate<RGBuffer>(CopyString(pBuffer->GetName()), (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
@@ -336,6 +343,14 @@ public:
 	RGBlackboard Blackboard;
 
 private:
+	const char* CopyString(const char* pStr)
+	{
+		size_t len = strlen(pStr) + 1;
+		char* pNewStr = (char*)m_Allocator.Allocate(len);
+		strcpy_s(pNewStr, len * sizeof(char), pStr);
+		return pNewStr;
+	}
+
 	void ExecutePass(RGPass* pPass, CommandContext& context);
 	void PrepareResources(RGPass* pPass, CommandContext& context);
 	void DestroyData();

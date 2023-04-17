@@ -63,8 +63,8 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	auto it = std::find_if(Accesses.begin(), Accesses.end(), [=](const ResourceAccess& access) { return pResource == access.pResource; });
 	if (it != Accesses.end())
 	{
-		checkf(!EnumHasAllFlags(it->Access, state), "Redundant state set on resource '%s'", pResource->Name);
-		checkf(!ResourceState::HasWriteResourceState(it->Access) || !ResourceState::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->Name);
+		checkf(!EnumHasAllFlags(it->Access, state), "Redundant state set on resource '%s'", pResource->GetName());
+		checkf(!ResourceState::HasWriteResourceState(it->Access) || !ResourceState::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->GetName());
 		it->Access |= state;
 	}
 	else
@@ -205,11 +205,11 @@ void RGGraph::Compile()
 			{
 				if (pResource->Type == RGResourceType::Texture)
 				{
-					pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, static_cast<RGTexture*>(pResource)->Desc));
+					pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
 				}
 				else if (pResource->Type == RGResourceType::Buffer)
 				{
-					pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, static_cast<RGBuffer*>(pResource)->Desc));
+					pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
 				}
 			}
 			check(pResource->pResourceReference);
@@ -233,11 +233,11 @@ void RGGraph::Compile()
 		{
 			if (pResource->Type == RGResourceType::Texture)
 			{
-				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, static_cast<RGTexture*>(pResource)->Desc));
+				pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
 			}
 			else if (pResource->Type == RGResourceType::Buffer)
 			{
-				pResource->SetResource(m_ResourcePool.Allocate(pResource->Name, static_cast<RGBuffer*>(pResource)->Desc));
+				pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
 			}
 		}
 	}
@@ -295,7 +295,7 @@ void RGGraph::Execute(CommandContext* pContext)
 	{
 		check(exportResource.pTexture->pResource);
 		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
-		pTexture->SetName(exportResource.pTexture->Name);
+		pTexture->SetName(exportResource.pTexture->GetName());
 		*exportResource.pTarget = pTexture;
 	}
 
@@ -303,7 +303,7 @@ void RGGraph::Execute(CommandContext* pContext)
 	{
 		check(exportResource.pBuffer->pResource);
 		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
-		pBuffer->SetName(exportResource.pBuffer->Name);
+		pBuffer->SetName(exportResource.pBuffer->GetName());
 		*exportResource.pTarget = pBuffer;
 	}
 
@@ -318,7 +318,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 	}
 
 	{
-		GPU_PROFILE_SCOPE(pPass->Name, &context);
+		GPU_PROFILE_SCOPE(pPass->GetName(), &context);
 		PrepareResources(pPass, context);
 		if (pPass->pExecuteCallback)
 		{

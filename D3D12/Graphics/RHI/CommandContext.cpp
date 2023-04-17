@@ -413,7 +413,7 @@ void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 		D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
 		checkf(CommandContext::IsTransitionAllowed(m_Type, beforeState),
 			"Resource (%s) can not be transitioned from this state (%s) on this queue (%s). Insert a barrier on another queue before executing this one.",
-			pResource->GetName().c_str(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
+			pResource->GetName(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
 
 		D3D12_RESOURCE_STATES afterState = pending.State.Get(subResource);
 		if(NeedsTransition(beforeState, afterState))

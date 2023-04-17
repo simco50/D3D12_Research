@@ -108,15 +108,15 @@ void RGGraph::DrawDebug(bool& enabled) const
 			ImRect itemRect(passNamePos + ImVec2(passIndex * boxSize.x, 0.0f), passNamePos + ImVec2((passIndex + 1) * boxSize.x, passNameHeight));
 			pCmd->AddLine(itemRect.Max, itemRect.Max + ImVec2(0, height), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
 			ImRotateStart();
-			ImVec2 size = ImGui::CalcTextSize(pPass->Name);
-			pCmd->AddText(itemRect.Max - ImVec2(size.x, 0), ImColor(1.0f, 1.0f, 1.0f), pPass->Name);
+			ImVec2 size = ImGui::CalcTextSize(pPass->GetName());
+			pCmd->AddText(itemRect.Max - ImVec2(size.x, 0), ImColor(1.0f, 1.0f, 1.0f), pPass->GetName());
 			ImRotateEnd(Math::PI * 2.2f, itemRect.Max + ImVec2(boxSize.x, 0));
 			ImGui::ItemAdd(itemRect, passIndex);
 			bool passActive = ImGui::IsItemHovered();
 			if (passActive)
 			{
 				ImGui::BeginTooltip();
-				ImGui::Text("%s", pPass->Name);
+				ImGui::Text("%s", pPass->GetName());
 				ImGui::Text("Flags: %s", PassFlagToString(pPass->Flags).c_str());
 				ImGui::Text("Index: %d", passIndex);
 				ImGui::EndTooltip();
@@ -205,7 +205,7 @@ void RGGraph::DrawDebug(bool& enabled) const
 		}
 
 		for (auto& resource : resourceToIndex)
-			pCmd->AddText(ImVec2(cursor.x, cursor.y + resource.second * boxSize.y), ImColor(1.0f, 1.0f, 1.0f), resource.first->GetName().c_str());
+			pCmd->AddText(ImVec2(cursor.x, cursor.y + resource.second * boxSize.y), ImColor(1.0f, 1.0f, 1.0f), resource.first->GetName());
 
 		ImGui::EndChild();
 	}
@@ -279,7 +279,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 	{
 		stream << "Pass" << pPass->ID;
 		stream << "[";
-		stream << "\"" << pPass->Name << "\"<br/>";
+		stream << "\"" << pPass->GetName() << "\"<br/>";
 		stream << "Flags: " << PassFlagToString(pPass->Flags) << "<br/>";
 		stream << "Index: " << passIndex << "<br/>";
 		stream << "Culled: " << (pPass->IsCulled ? "Yes" : "No") << "<br/>";
@@ -299,7 +299,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 		auto PrintResource = [&](RGResource* pResource, uint32 version) {
 			stream << "Resource" << pResource->ID << "_" << version;
 			stream << (pResource->IsImported ? "[(" : "([");
-			stream << "\"" << pResource->Name << "\"<br/>";
+			stream << "\"" << pResource->GetName() << "\"<br/>";
 
 			if (pResource->Type == RGResourceType::Texture)
 			{

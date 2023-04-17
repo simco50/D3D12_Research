@@ -117,7 +117,7 @@ public:
 	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
 
 	void SetName(const char* pName);
-	const std::string& GetName() const { return m_Name; }
+	const char* GetName() const { return m_Name.c_str(); }
 
 	UnorderedAccessView* GetUAV() const { return m_pUav; }
 	ShaderResourceView* GetSRV() const { return m_pSrv; }
