@@ -29,10 +29,8 @@
 #define OCCLUSION_FIRST_PASS 1
 #endif
 
-#ifndef ENABLE_DEBUG_DATA
-#define ENABLE_DEBUG_DATA 0
-#endif
-
+// If enabled, perform 2 phase occlusion culling
+// If disabled, no occlusion culling and only 1 pass.
 #ifndef OCCLUSION_CULL
 #define OCCLUSION_CULL 1
 #endif
@@ -51,65 +49,60 @@ static const int COUNTER_PHASE1_VISIBLE_MESHLETS 	= 0;
 static const int COUNTER_PHASE2_VISIBLE_MESHLETS 	= 1;
 
 #if OCCLUSION_FIRST_PASS
-static const int MeshletCounterIndex = COUNTER_PHASE1_CANDIDATE_MESHLETS;
-static const int VisibleMeshletCounter = COUNTER_PHASE1_VISIBLE_MESHLETS;
+static const int MeshletCounterIndex = COUNTER_PHASE1_CANDIDATE_MESHLETS;	// Index of counter for candidate meshlets in current phase.
+static const int VisibleMeshletCounter = COUNTER_PHASE1_VISIBLE_MESHLETS;	// Index of counter for visible meshlets in current phase.
 #else
-static const int MeshletCounterIndex = COUNTER_PHASE2_CANDIDATE_MESHLETS;
-static const int VisibleMeshletCounter = COUNTER_PHASE2_VISIBLE_MESHLETS;
+static const int MeshletCounterIndex = COUNTER_PHASE2_CANDIDATE_MESHLETS;	// Index of counter for candidate meshlets in current phase.
+static const int VisibleMeshletCounter = COUNTER_PHASE2_VISIBLE_MESHLETS;	// Index of counter for visible meshlets in current phase.
 #endif
 
-RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets : 			register(u0);
-RWBuffer<uint> uCounter_CandidateMeshlets : 						register(u1);
-RWStructuredBuffer<uint> uPhaseTwoInstances : 						register(u2);
-RWBuffer<uint> uCounter_PhaseTwoInstances : 						register(u3);
-RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets :				register(u4);
-RWBuffer<uint> uCounter_VisibleMeshlets : 							register(u5);
+RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets 			: register(u0);	// List of meshlets to process
+RWBuffer<uint> uCounter_CandidateMeshlets 							: register(u1);	// Number of meshlets to process
+RWStructuredBuffer<uint> uPhaseTwoInstances 						: register(u2);	// List of instances which need to be tested in Phase 2
+RWBuffer<uint> uCounter_PhaseTwoInstances 							: register(u3);	// Number of instances which need to be tested in Phase 2
+RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets 				: register(u4);	// List of meshlets to rasterize
+RWBuffer<uint> uCounter_VisibleMeshlets 							: register(u5);	// Number of meshlets to rasterize
+																	
+RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments 	: register(u0); // General purpose dispatch args
+																	
+StructuredBuffer<uint> tPhaseTwoInstances 							: register(t0);	// List of instances which need to be tested in Phase 2
+Buffer<uint> tCounter_CandidateMeshlets 							: register(t1);	// Number of meshlets to process
+Buffer<uint> tCounter_PhaseTwoInstances 							: register(t2);	// Number of instances which need to be tested in Phase 2
+Buffer<uint> tCounter_VisibleMeshlets 								: register(t3);	// List of meshlets to rasterize
+StructuredBuffer<MeshletCandidate> tVisibleMeshlets 				: register(t4);	// List of meshlets to rasterize
+Texture2D<float> tHZB 												: register(t3);	// Current HZB texture
 
-RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : 	register(u0);
 
-StructuredBuffer<uint> tPhaseTwoInstances : 						register(t0);
-Buffer<uint> tCounter_CandidateMeshlets : 							register(t1);
-Buffer<uint> tCounter_PhaseTwoInstances : 							register(t2);
-Buffer<uint> tCounter_VisibleMeshlets : 							register(t3);
-StructuredBuffer<MeshletCandidate> tVisibleMeshlets : 				register(t4);
-Texture2D<float> tHZB : 											register(t3);
-
-StructuredBuffer<uint> tBinnedMeshlets : 							register(t2);
-StructuredBuffer<uint4> tMeshletBinData :							register(t3);
-
+// Returns the offset in the candidate meshlet buffer for the current phase
 uint GetCandidateMeshletOffset(bool phase2)
 {
 	return phase2 ? uCounter_CandidateMeshlets[COUNTER_PHASE1_CANDIDATE_MESHLETS] : 0u;
 }
 
-uint GetNumInstances()
-{
-#if OCCLUSION_FIRST_PASS
-    return cView.NumInstances;
-#else
-    return tCounter_PhaseTwoInstances[0];
-#endif
-}
-
-InstanceData GetInstanceForThread(uint threadID)
-{
-#if OCCLUSION_FIRST_PASS
-    return GetInstance(threadID);
-#else
-	return GetInstance(tPhaseTwoInstances[threadID]);
-#endif
-}
-
+/* 
+	Per-instance culling
+*/
 [numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
 void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 {
-	uint numInstances = GetNumInstances();
-    if(threadID >= numInstances)
+#if OCCLUSION_FIRST_PASS
+	uint numInstances = cView.NumInstances;
+#else
+	uint numInstances = tCounter_PhaseTwoInstances[0];
+#endif
+
+	if(threadID >= numInstances)
         return;
 
-    InstanceData instance = GetInstanceForThread(threadID);
+	uint instanceIndex = threadID;
+#if !OCCLUSION_FIRST_PASS
+	instanceIndex = tPhaseTwoInstances[instanceIndex];
+#endif
+
+	InstanceData instance = GetInstance(instanceIndex);
     MeshData mesh = GetMesh(instance.MeshIndex);
 
+	// Frustum test instance against the current view
 	FrustumCullData cullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, cView.ViewProjection);
 	bool isVisible = cullData.IsVisible;
 	bool wasOccluded = false;
@@ -118,8 +111,13 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 	if(isVisible)
 	{
 #if OCCLUSION_FIRST_PASS
+		// Frustum test instance against the *previous* view to determine if it was visible last frame
 		FrustumCullData prevCullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
-		wasOccluded = !HZBCull(prevCullData, tHZB);
+		if (prevCullData.IsVisible)
+		{
+			// Occlusion test instance against the HZB
+			wasOccluded = !HZBCull(prevCullData, tHZB);
+		}
 
 		// If the instance was occluded the previous frame, we can't be sure it's still occluded this frame.
 		// Add it to the list to re-test in the second phase.
@@ -130,6 +128,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 			uPhaseTwoInstances[elementOffset] = instance.ID;
 		}
 #else
+		// Occlusion test instance against the updated HZB
 		isVisible = HZBCull(cullData, tHZB);
 #endif
 	}
@@ -144,9 +143,9 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		uint clampedNumMeshlets = min(globalMeshletIndex + mesh.MeshletCount, MAX_NUM_MESHLETS);
 		uint numMeshletsToAdd = max(clampedNumMeshlets - globalMeshletIndex, 0);
 
+		// Add all meshlets of current instance to the candidate meshlets
 		uint elementOffset;
 		InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, MeshletCounterIndex, numMeshletsToAdd, elementOffset);
-
 		uint meshletCandidateOffset = GetCandidateMeshletOffset(!OCCLUSION_FIRST_PASS);
 		for(uint i = 0; i < numMeshletsToAdd; ++i)
 		{
@@ -183,6 +182,9 @@ void BuildInstanceCullIndirectArgs()
     uDispatchArguments[0] = args;
 }
 
+/* 
+	Per-meshlet culling
+	*/
 [numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
 void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 {
@@ -192,6 +194,8 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 		MeshletCandidate candidate = uCandidateMeshlets[candidateIndex];
 		InstanceData instance = GetInstance(candidate.InstanceID);
 		MeshData mesh = GetMesh(instance.MeshIndex);
+
+		// Frustum test meshlet against the current view
 		Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
 		FrustumCullData cullData = FrustumCull(bounds.Center, bounds.Extents, instance.LocalToWorld, cView.ViewProjection);
 		bool isVisible = cullData.IsVisible;
@@ -201,9 +205,11 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 		if(isVisible)
 		{
 #if OCCLUSION_FIRST_PASS
+			// Frustum test meshlet against the *previous* view to determine if it was visible last frame
 			FrustumCullData prevCullData = FrustumCull(bounds.Center, bounds.Extents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
 			if(prevCullData.IsVisible)
 			{
+				// Occlusion test meshlet against the HZB
 				wasOccluded = !HZBCull(prevCullData, tHZB);
 			}
 
@@ -222,6 +228,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 				}
 			}
 #else
+			// Occlusion test meshlet against the updated HZB
 			isVisible = HZBCull(cullData, tHZB);
 #endif
 		}
@@ -241,6 +248,9 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 	}
 }
 
+/* 
+	Debug statistics
+*/
 [numthreads(1, 1, 1)]
 void PrintStatsCS()
 {

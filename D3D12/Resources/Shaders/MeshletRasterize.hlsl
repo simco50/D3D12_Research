@@ -1,6 +1,11 @@
 #include "Common.hlsli"
 #include "VisibilityBuffer.hlsli"
 
+/*
+	Mesh/Pixel shader for rasterizing the result of the Meshlet culling passes.
+	Supports visibility buffer and depth-only output.
+*/
+
 #ifndef ALPHA_MASK
 #define ALPHA_MASK 0
 #endif
@@ -9,19 +14,23 @@
 #define DEPTH_ONLY 0
 #endif
 
+#ifndef ENABLE_DEBUG_DATA
+#define ENABLE_DEBUG_DATA 0
+#endif
+
 #define NUM_MESHLET_THREADS 32
 
 struct RasterParams
 {
 	uint BinIndex;
 };
-ConstantBuffer<RasterParams> cRasterParams : register(b0);
+ConstantBuffer<RasterParams> cRasterParams 				: register(b0);
 
-StructuredBuffer<MeshletCandidate> tVisibleMeshlets : 				register(t0);
-StructuredBuffer<uint> tBinnedMeshlets : 							register(t1);
-StructuredBuffer<uint4> tMeshletBinData :							register(t2);
+StructuredBuffer<MeshletCandidate> tVisibleMeshlets 	: register(t0);
+StructuredBuffer<uint> tBinnedMeshlets 					: register(t1);
+StructuredBuffer<uint4> tMeshletBinData 				: register(t2);
 
-RWTexture2D<uint> uDebugData : 										register(u0);
+RWTexture2D<uint> uDebugData 							: register(u0);
 
 
 struct PrimitiveAttribute
