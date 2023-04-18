@@ -273,7 +273,7 @@ void PrintStatsCS()
 
 	TextWriter writer = CreateTextWriter(float2(20, 20));
 
-	writer = writer + '-' + '-' + '-' + 'S' + 'c' + 'e' + 'n' + 'e' + '-' + '-' + '-';
+	writer = writer + '-' + '-' + '-' + ' ' + 'S' + 'c' + 'e' + 'n' + 'e' + ' ' + '-' + '-' + '-';
 	writer.NewLine();
 	writer = writer + 'T' + 'o' + 't' + 'a'  + 'l'  + ' ';
 	writer = writer + 'i' + 'n' + 's' + 't'  + 'a'  + 'n'  + 'c'  + 'e'  + 's' + ' ';
@@ -291,7 +291,7 @@ void PrintStatsCS()
 	writer.Int(processedMeshlets);
 	writer.NewLine();
 
-	writer = writer + '-' + '-' + '-' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '1' + '-' + '-' + '-';
+	writer = writer + '-' + '-' + '-' + ' ' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '1' + ' ' + '-' + '-' + '-';
 	writer.NewLine();
 
 	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
@@ -304,7 +304,7 @@ void PrintStatsCS()
 	writer.Int(phase1VisibleMeshlets);
 	writer.NewLine();
 
-	writer = writer + '-' + '-' + '-' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '2' + '-' + '-' + '-';
+	writer = writer + '-' + '-' + '-' + ' ' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '2' + ' ' + '-' + '-' + '-';
 	writer.NewLine();
 
 	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';

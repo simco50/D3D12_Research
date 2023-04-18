@@ -1,13 +1,12 @@
 #include "stdafx.h"
 #include "GPUDrivenRenderer.h"
-#include "../RHI/Graphics.h"
-#include "../RHI/PipelineState.h"
-#include "../RHI/RootSignature.h"
-#include "../RenderGraph/RenderGraph.h"
-#include "../Profiler.h"
-#include "../SceneView.h"
-#include "../Mesh.h"
 #include "Core/ConsoleVariables.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/PipelineState.h"
+#include "Graphics/RHI/RootSignature.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/Profiler.h"
+#include "Graphics/SceneView.h"
 
 #define A_CPU 1
 #include "SPD/ffx_a.h"
@@ -473,13 +472,6 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 	// Debug mode outputs an extra debug buffer containing information for debug statistics/visualization
 	if (rasterContext.EnableDebug)
 		outResult.pDebugData = graph.Create("GpuRender.DebugData", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
-
-	// Validate that we don't have more meshlets/instances than allowed.
-	uint32 numMeshlets = 0;
-	for (const Batch& b : pView->Batches)
-		numMeshlets += b.pMesh->NumMeshlets;
-	check(pView->Batches.size() <= Tweakables::MaxNumInstances);
-	check(numMeshlets <= Tweakables::MaxNumMeshlets);
 
 	// Clear all counters
 	RGPass& clearPass = graph.AddPass("Clear UAVs", RGPassFlag::Compute)
