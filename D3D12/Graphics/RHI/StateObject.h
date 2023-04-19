@@ -69,13 +69,12 @@ public:
 	void ConditionallyReload();
 	const StateObjectInitializer& GetDesc() const { return m_Desc; }
 
-	ID3D12StateObject* GetStateObject();
+	ID3D12StateObject* GetStateObject() const { return m_pStateObject; }
 	ID3D12StateObjectProperties* GetStateObjectProperties() const { return m_pStateObjectProperties.Get(); }
 
 private:
 	void OnLibraryReloaded(Shader* pLibrary);
 
-	TaskContext m_CompileToken;
 	bool m_NeedsReload = false;
 	RefCountPtr<ID3D12StateObject> m_pStateObject;
 	RefCountPtr<ID3D12StateObjectProperties> m_pStateObjectProperties;

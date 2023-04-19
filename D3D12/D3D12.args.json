@@ -23,10 +23,6 @@
           "Command": "-dumpshaders"
         },
         {
-          "Id": "02b65ba6-c34a-4409-9333-9463a4d2cc05",
-          "Command": "-no_async_pso"
-        },
-        {
           "Id": "105b6371-3768-4e96-a67d-ff8d99170742",
           "Command": "-debugshaders"
         },

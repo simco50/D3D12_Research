@@ -314,55 +314,24 @@ PipelineState::~PipelineState()
 	GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
 }
 
-ID3D12PipelineState* PipelineState::GetPipelineState()
-{
-	TaskQueue::Join(m_CompileToken);
-	return m_pPipelineState.Get();
-}
-
 void PipelineState::Create(const PipelineStateInitializer& initializer)
 {
 	check(initializer.m_Type != PipelineStateType::MAX);
 
-	TaskQueue::Join(m_CompileToken);
 	GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
 
 	m_Desc = initializer;
 
-	auto CompilePSOTask = [this](int)
+	if (m_Desc.m_IlDesc.size() > 0)
 	{
-		if (m_Desc.m_IlDesc.size() > 0)
-		{
-			D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
-			ilDesc.pInputElementDescs = m_Desc.m_IlDesc.data();
-		}
-		RefCountPtr<ID3D12Device2> pDevice2;
-		VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
-		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc(GetParent());
-		VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
-		D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
-	};
-
-	if (CommandLine::GetBool("no_async_pso"))
-	{
-		CompilePSOTask(0);
+		D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
+		ilDesc.pInputElementDescs = m_Desc.m_IlDesc.data();
 	}
-	else
-	{
-		TaskQueue::Execute([this](int)
-			{
-				if (m_Desc.m_IlDesc.size() > 0)
-				{
-					D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
-					ilDesc.pInputElementDescs = m_Desc.m_IlDesc.data();
-				}
-				RefCountPtr<ID3D12Device2> pDevice2;
-				VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
-				D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc(GetParent());
-				VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
-				D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
-			}, m_CompileToken);
-	}
+	RefCountPtr<ID3D12Device2> pDevice2;
+	VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
+	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc(GetParent());
+	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
+	D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
 }
 
 void PipelineState::ConditionallyReload()
