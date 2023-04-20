@@ -9,9 +9,17 @@ struct PassData
 	int2 ClusterSize;
 };
 
+struct PrecomputedLightData
+{
+	float3 ViewSpacePosition;
+	float SpotCosAngle;
+	float3 ViewSpaceDirection;
+	float SpotSinAngle;
+};
+
 ConstantBuffer<PassData> cPass : register(b0);
 
-StructuredBuffer<AABB> tClusterAABBs : register(t0);
+StructuredBuffer<PrecomputedLightData> tLightData : register(t0);
 
 RWStructuredBuffer<uint> uLightIndexList : register(u0);
 RWStructuredBuffer<uint> uOutLightGrid : register(u1);
@@ -70,6 +78,8 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 
 	AABB clusterAABB = ComputeAABB(clusterIndex3D);
+	float clusterRadius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
+
 	uint clusterIndex = Flatten3D(dispatchThreadId, cPass.ClusterDimensions.xyz);
 
 	uint numLights = 0;
@@ -80,9 +90,10 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 		Light light = GetLight(i);
 		if(light.IsPoint)
 		{
-			Sphere sphere = (Sphere)0;
+			PrecomputedLightData lightData = tLightData[i];
+			Sphere sphere;
 			sphere.Radius = light.Range;
-			sphere.Position = mul(float4(light.Position, 1.0f), cView.View).xyz;
+			sphere.Position = lightData.ViewSpacePosition;
 			if (SphereInAABB(sphere, clusterAABB))
 			{
 				uLightIndexList[clusterIndex * MAX_LIGHTS_PER_TILE + numLights] = i;
@@ -91,14 +102,18 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 		}
 		else if(light.IsSpot)
 		{
+			PrecomputedLightData lightData = tLightData[i];
+
 			Sphere sphere;
-			sphere.Radius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
+			sphere.Radius = clusterRadius;
 			sphere.Position = clusterAABB.Center.xyz;
 
-			float3 conePosition = mul(float4(light.Position, 1), cView.View).xyz;
-			float3 coneDirection = mul(light.Direction, (float3x3)cView.View);
-			float angle = acos(light.SpotlightAngles.y);
-			if (ConeInSphere(conePosition, coneDirection, light.Range, float2(sin(angle), light.SpotlightAngles.y), sphere))
+			if (ConeInSphere(
+				lightData.ViewSpacePosition,
+				lightData.ViewSpaceDirection,
+				light.Range,
+				float2(lightData.SpotSinAngle, lightData.SpotCosAngle),
+				sphere))
 			{
 				uLightIndexList[clusterIndex * MAX_LIGHTS_PER_TILE + numLights] = i;
 				++numLights;

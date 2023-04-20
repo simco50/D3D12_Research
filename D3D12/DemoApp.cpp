@@ -275,6 +275,7 @@ void DemoApp::Update()
 		CreateShadowViews(m_SceneData, m_World);
 		m_SceneData.View = m_pCamera->GetViewTransform();
 		m_SceneData.FrameIndex = m_Frame;
+		m_SceneData.pWorld = &m_World;
 
 		bool boundsSet = false;
 		for (const Batch& b : m_SceneData.Batches)

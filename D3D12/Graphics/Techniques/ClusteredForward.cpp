@@ -10,6 +10,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/SceneView.h"
+#include "Graphics/Light.h"
 #include "Core/ConsoleVariables.h"
 
 static constexpr int gLightClusterTexelSize = 64;
@@ -152,8 +153,37 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 	// LightGrid: x : Offset | y : Count
 	cullData.pLightGrid = graph.Create("Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)));
 
+	struct PrecomputedLightData
+	{
+		Vector3 ViewSpacePosition;
+		float SpotCosAngle;
+		Vector3 ViewSpaceDirection;
+		float SpotSinAngle;
+	};
+	uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->NumLights;
+
+	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->NumLights, sizeof(PrecomputedLightData)));
+	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
+		.Write(pPrecomputeData)
+		.Bind([=](CommandContext& context)
+			{
+				DynamicAllocation allocation = context.AllocateTransientMemory(precomputedLightDataSize);
+				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
+
+				Matrix viewMatrix = pView->View.View;
+				for (const Light& light : pView->pWorld->Lights)
+				{
+					PrecomputedLightData& data = *pLightData++;
+					data.ViewSpacePosition = Vector3::Transform(light.Position, viewMatrix);
+					data.ViewSpaceDirection = Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, light.Rotation), viewMatrix);
+					data.SpotCosAngle = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+					data.SpotSinAngle = sin(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+				}
+				context.CopyBuffer(allocation.pBackingResource, pPrecomputeData->Get(), precomputedLightDataSize, allocation.Offset, 0);
+			});
+
 	graph.AddPass("Cull Lights", RGPassFlag::Compute)
-		.Read(cullData.pAABBs)
+		.Read(pPrecomputeData)
 		.Write({ cullData.pLightGrid, cullData.pLightIndexGrid })
 		.Bind([=](CommandContext& context)
 			{
@@ -181,6 +211,9 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 				context.BindResources(2, {
 					cullData.pLightIndexGrid->Get()->GetUAV(),
 					cullData.pLightGrid->Get()->GetUAV(),
+					});
+				context.BindResources(3, {
+					pPrecomputeData->Get()->GetSRV()
 					});
 
 				context.Dispatch(

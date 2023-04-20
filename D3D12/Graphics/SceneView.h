@@ -77,6 +77,7 @@ struct ShadowView
 
 struct SceneView
 {
+	const World* pWorld = nullptr;
 	std::vector<Batch> Batches;
 	RefCountPtr<Buffer> pLightBuffer;
 	RefCountPtr<Buffer> pMaterialBuffer;
