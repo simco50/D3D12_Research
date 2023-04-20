@@ -13,7 +13,7 @@ struct PerViewData
 };
 ConstantBuffer<PerViewData> cPass : register(b0);
 
-Texture2D<uint> tVisibilityTexture : register(t0);
+Texture2DMS<uint> tVisibilityTexture : register(t0);
 Texture2D<float> tAO :	register(t1);
 Texture2D<float> tDepth : register(t2);
 Texture2D tPreviousSceneColor :	register(t3);
@@ -108,10 +108,14 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0);
-	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sLinearClamp, screenUV, 0));
+	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sPointClamp, screenUV, 0));
 	float dither = InterleavedGradientNoise(texel.xy);
 
-	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
+	uint2 rem = texel % 2;
+	uint visSample = rem.x + rem.y * 2;
+	uint2 visPixel = texel >> 1;
+
+	VisBufferData visibility = (VisBufferData)tVisibilityTexture.Load(visPixel, visSample);
 	MeshletCandidate candidate = tVisibleMeshlets[visibility.MeshletCandidateIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
 

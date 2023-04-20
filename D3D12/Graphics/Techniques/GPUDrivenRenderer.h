@@ -17,6 +17,7 @@ struct RasterContext
 {
 	RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, RefCountPtr<Texture>* pPreviousHZB);
 
+	RGTexture* pMSAADepth = nullptr;
 	RGTexture* pDepth = nullptr;
 	RefCountPtr<Texture>* pPreviousHZB = nullptr;
 	bool EnableDebug = false;
@@ -77,6 +78,7 @@ private:
 
 	RefCountPtr<PipelineState> m_pCullMeshletsPSO[2];
 	RefCountPtr<PipelineState> m_pCullMeshletsNoOcclusionPSO;
+	RefCountPtr<PipelineState> m_pResolveDepthPSO;
 
 	PipelineStateBinSet m_pDrawMeshletsPSO;
 	PipelineStateBinSet m_pDrawMeshletsDebugModePSO;

@@ -3,7 +3,7 @@
 #include "VisibilityBuffer.hlsli"
 #include "ColorMaps.hlsli"
 
-Texture2D<uint> tVisibilityTexture : register(t0);
+Texture2DMS<uint> tVisibilityTexture : register(t0);
 StructuredBuffer<MeshletCandidate> tMeshletCandidates : register(t1);
 Texture2D<uint> tDebugData : register(t2);
 RWTexture2D<float4> uColorTarget : register(u0);
@@ -22,7 +22,10 @@ void DebugRenderCS(uint3 dispatchThreadId : SV_DispatchThreadID)
 	if(any(texel >= cView.TargetDimensions))
 		return;
 
-	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
+	uint2 visPixel = texel >> 1;
+	uint visSample = (texel % 2).x + (texel % 2).y * 2;
+
+	VisBufferData visibility = (VisBufferData)tVisibilityTexture.Load(visPixel, visSample);
 	MeshletCandidate candidate = tMeshletCandidates[visibility.MeshletCandidateIndex];
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	uint meshletIndex = candidate.MeshletIndex;

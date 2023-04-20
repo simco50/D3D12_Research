@@ -104,6 +104,9 @@ void PSMain(
 	VertexAttribute vertexData,
 	PrimitiveAttribute primitiveData
 #if !DEPTH_ONLY
+#if ALPHA_MASK
+	, out uint coverage : SV_Coverage
+#endif
 	, out VisBufferData visBufferData : SV_TARGET0
 #endif
 )
@@ -113,10 +116,25 @@ void PSMain(
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	float opacity = material.BaseColorFactor.a;
+#if !DEPTH_ONLY
+	coverage = 0b1111;
+#endif
 	if(material.Diffuse != INVALID_HANDLE)
+	{
+#if DEPTH_ONLY
 		opacity = Sample2D(material.Diffuse, sMaterialSampler, vertexData.UV).w;
+#else
+		coverage = 0;
+		coverage |= SampleLevel2D(material.Diffuse, sMaterialSampler, EvaluateAttributeAtSample(vertexData.UV, 0), 0).w >= material.AlphaCutoff ? 0b0001 : 0;
+		coverage |= SampleLevel2D(material.Diffuse, sMaterialSampler, EvaluateAttributeAtSample(vertexData.UV, 1), 0).w >= material.AlphaCutoff ? 0b0010 : 0;
+		coverage |= SampleLevel2D(material.Diffuse, sMaterialSampler, EvaluateAttributeAtSample(vertexData.UV, 2), 0).w >= material.AlphaCutoff ? 0b0100 : 0;
+		coverage |= SampleLevel2D(material.Diffuse, sMaterialSampler, EvaluateAttributeAtSample(vertexData.UV, 3), 0).w >= material.AlphaCutoff ? 0b1000 : 0;
+#endif
+	}
+#if DEPTH_ONLY
 	if(opacity < material.AlphaCutoff)
 		discard;
+#endif
 #endif
 
 #if !DEPTH_ONLY
