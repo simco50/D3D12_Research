@@ -35,14 +35,13 @@ namespace ShaderCompiler
 
 	struct CompileResult
 	{
-		static constexpr int Version = 4;
+		static constexpr int Version = 5;
 
 		std::string ErrorMessage;
 		ShaderBlob pBlob;
 		RefCountPtr<IUnknown> pReflection;
 		std::vector<std::string> Includes;
 		uint64 ShaderHash[2];
-		bool HasSymbols;
 		bool IsDebug;
 
 		bool Success() const { return pBlob.Get() && ErrorMessage.length() == 0; }
@@ -123,9 +122,6 @@ namespace ShaderCompiler
 			return false;
 
 		s.Serialize(result.ShaderHash);
-		s.Serialize(result.HasSymbols);
-		if (result.HasSymbols != compileJob.EnableSymbols)
-			return false;
 		s.Serialize(result.IsDebug);
 		if (result.IsDebug != compileJob.EnableDebugMode)
 			return false;
@@ -159,7 +155,6 @@ namespace ShaderCompiler
 		uint32 version = CompileResult::Version;
 		s.Serialize(version);
 		s.Serialize(result.ShaderHash);
-		s.Serialize(result.HasSymbols);
 		s.Serialize(result.IsDebug);
 		s.Serialize(result.Includes);
 		void* pBlob = result.pBlob->GetBufferPointer();
@@ -180,10 +175,11 @@ namespace ShaderCompiler
 		StringHash hash(defineKey.c_str());
 
 		std::string cachePath = Sprintf(
-			"%s%s_%s_%x.bin",
+			"%s%s_%s_%s%x.bin",
 			Paths::ShaderCacheDir().c_str(),
 			Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(),
 			compileJob.EntryPoint.c_str(),
+			compileJob.EnableDebugMode ? "_DEBUG" : "",
 			hash.m_Hash
 		);
 		Paths::CreateDirectoryTree(cachePath);
@@ -294,24 +290,15 @@ namespace ShaderCompiler
 			arguments.AddDefine("_PAYLOAD_QUALIFIERS", "0");
 		}
 
-		result.HasSymbols = compileJob.EnableSymbols;
 		result.IsDebug = compileJob.EnableDebugMode;
-		bool enableSymbols = result.HasSymbols || result.IsDebug;
-		bool stripSymbols = enableSymbols && compileJob.EnableSymbols;
 
-		if(compileJob.EnableDebugMode)
+		if (compileJob.EnableDebugMode)
 			arguments.AddArgument(DXC_ARG_SKIP_OPTIMIZATIONS);
 		else
 			arguments.AddArgument(DXC_ARG_OPTIMIZATION_LEVEL3);
 
-		if (enableSymbols)
-		{
-			arguments.AddArgument(DXC_ARG_DEBUG);
-			arguments.AddArgument(stripSymbols ? "-Qstrip_debug" : "-Qembed_debug");
-
-			std::string pdbPath = Sprintf("%s.pdb", Paths::GetFileNameWithoutExtension(cachePath).c_str());
-			arguments.AddArgument("-Fd", pdbPath.c_str());
-		}
+		arguments.AddArgument(DXC_ARG_DEBUG);
+		arguments.AddArgument("-Qembed_debug");
 
 		arguments.AddArgument("-I", Paths::GetDirectoryPath(fullPath).c_str());
 		for (const std::string& includeDir : compileJob.IncludeDirs)
@@ -482,6 +469,7 @@ namespace ShaderCompiler
 		}
 
 		//Symbols
+#if 0
 		{
 			RefCountPtr<IDxcBlobUtf16> pDebugDataPath;
 			RefCountPtr<IDxcBlob> pSymbolsBlob;
@@ -493,6 +481,7 @@ namespace ShaderCompiler
 				str.write((char*)pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize());
 			}
 		}
+#endif
 
 		//Reflection
 		{
@@ -648,7 +637,6 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	if (!result.Success())
 	{
 		E_LOG(Warning, "Failed to compile shader \"%s:%s\": %s", pShaderPath, pEntryPoint, result.ErrorMessage.c_str());
-		check(false);
 		return nullptr;
 	}
 
