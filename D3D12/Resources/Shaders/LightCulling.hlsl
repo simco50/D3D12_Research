@@ -196,7 +196,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 			minAABB = min(minAABB, viewSpace[i]);
 			maxAABB = max(maxAABB, viewSpace[i]);
 		}
-		AABBFromMinMax(GroupAABB, minAABB, maxAABB);
+		GroupAABB = AABBFromMinMax(minAABB, maxAABB);
 	}
 
 	// Convert depth values to view space.

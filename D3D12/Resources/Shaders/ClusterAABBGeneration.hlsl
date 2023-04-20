@@ -21,15 +21,8 @@ float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
 	return t * lineFromOrigin;
 }
 
-[numthreads(1, 1, 32)]
-void GenerateAABBs(uint3 threadID : SV_DispatchThreadID)
+AABB ComputeAABB(uint3 clusterIndex3D)
 {
-	uint3 clusterIndex3D = threadID;
-	if(clusterIndex3D.z >= cPass.ClusterDimensions.z)
-		return;
-
-	uint clusterIndex1D = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
-
 	float2 minPoint_SS = float2(clusterIndex3D.x * cPass.ClusterSize.x, clusterIndex3D.y * cPass.ClusterSize.y);
 	float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cPass.ClusterSize.x, (clusterIndex3D.y + 1) * cPass.ClusterSize.y);
 
@@ -47,5 +40,16 @@ void GenerateAABBs(uint3 threadID : SV_DispatchThreadID)
 	float3 bbMin = min(min(minPointNear, minPointFar), min(maxPointNear, maxPointFar));
 	float3 bbMax = max(max(minPointNear, minPointFar), max(maxPointNear, maxPointFar));
 
-	AABBFromMinMax(uOutAABBs[clusterIndex1D], bbMin, bbMax);
+	return AABBFromMinMax(bbMin, bbMax);
+}
+
+[numthreads(1, 1, 32)]
+void GenerateAABBs(uint3 threadID : SV_DispatchThreadID)
+{
+	uint3 clusterIndex3D = threadID;
+	if(clusterIndex3D.z >= cPass.ClusterDimensions.z)
+		return;
+
+	uint clusterIndex1D = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
+	uOutAABBs[clusterIndex1D] = ComputeAABB(clusterIndex3D);
 }

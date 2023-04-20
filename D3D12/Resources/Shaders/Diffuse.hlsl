@@ -240,7 +240,7 @@ MaterialProperties EvaluateMaterial(MaterialData material, InterpolantsVSToPS at
 	}
 	properties.Specular = 0.5f;
 
-	properties.Normal = attributes.Normal;
+	properties.Normal = normalize(attributes.Normal);
 	if(material.Normal != INVALID_HANDLE)
 	{
 		float3 normalTS = Sample2D(material.Normal, sMaterialSampler, attributes.UV).rgb;

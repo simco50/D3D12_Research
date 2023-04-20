@@ -320,8 +320,7 @@ bool TriangleFrustumIntersect(float3x3 tri)
 {
 	float3 bmin = mul(float4(min(min(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
 	float3 bmax = mul(float4(max(max(tri[0], tri[1]), tri[2]), 1), cUpdateData.World).xyz;
-	AABB aabb;
-	AABBFromMinMax(aabb, bmin, bmax);
+	AABB aabb = AABBFromMinMax(bmin, bmax);
 	return BoxFrustumIntersect(aabb, cView.FrustumPlanes);
 }
 

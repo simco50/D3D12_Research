@@ -200,10 +200,12 @@ float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
 	return ViewFromDepth(screenNormalized, screen.z, projectionInverse);
 }
 
-void AABBFromMinMax(inout AABB aabb, float3 minimum, float3 maximum)
+AABB AABBFromMinMax(float3 minimum, float3 maximum)
 {
+	AABB aabb;
 	aabb.Center = float4((minimum + maximum) / 2.0f, 0);
 	aabb.Extents = float4(maximum, 0) - aabb.Center;
+	return aabb;
 }
 
 template<typename T>
