@@ -34,7 +34,6 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	m_pCommonRS->Finalize("Light Density Visualization");
 
 	//Light Culling
-	m_pCreateAabbPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ClusterAABBGeneration.hlsl", "GenerateAABBs");
 	m_pLightCullingPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ClusteredLightCulling.hlsl", "LightCulling");
 
 	//Diffuse
@@ -149,38 +148,6 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 
-	cullData.pAABBs = graph.Create("Cluster AABBs", BufferDesc::CreateStructured(totalClusterCount, sizeof(Vector4) * 2));
-
-	graph.AddPass("Cluster AABBs", RGPassFlag::Compute)
-		.Write(cullData.pAABBs)
-		.Bind([=](CommandContext& context)
-			{
-				context.SetPipelineState(m_pCreateAabbPSO);
-				context.SetComputeRootSignature(m_pCommonRS);
-
-				struct
-				{
-					Vector4i ClusterDimensions;
-					Vector2i ClusterSize;
-				} constantBuffer;
-
-				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
-				constantBuffer.ClusterDimensions = Vector4i(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
-
-				context.BindRootCBV(0, constantBuffer);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
-				context.BindResources(2, cullData.pAABBs->Get()->GetUAV());
-
-				//Cluster count in z is 32 so fits nicely in a wavefront on Nvidia so make groupsize in shader 32
-				constexpr uint32 threadGroupSize = 32;
-				context.Dispatch(
-					ComputeUtils::GetNumThreadGroups(
-						cullData.ClusterCount.x, 1,
-						cullData.ClusterCount.y, 1,
-						cullData.ClusterCount.z, threadGroupSize)
-				);
-			});
-
 	cullData.pLightIndexGrid = graph.Create("Light Index Grid", BufferDesc::CreateStructured(gMaxLightsPerCluster * totalClusterCount, sizeof(uint32)));
 	// LightGrid: x : Offset | y : Count
 	cullData.pLightGrid = graph.Create("Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)));
@@ -200,10 +167,13 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 
 				struct
 				{
-					Vector3i ClusterDimensions;
+					Vector4i ClusterDimensions;
+					Vector2i ClusterSize;
+
 				} constantBuffer;
 
-				constantBuffer.ClusterDimensions = cullData.ClusterCount;
+				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
+				constantBuffer.ClusterDimensions = Vector4i(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
 
 				context.BindRootCBV(0, constantBuffer);
 
@@ -212,7 +182,6 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 					cullData.pLightIndexGrid->Get()->GetUAV(),
 					cullData.pLightGrid->Get()->GetUAV(),
 					});
-				context.BindResources(3, cullData.pAABBs->Get()->GetSRV());
 
 				context.Dispatch(
 					ComputeUtils::GetNumThreadGroups(
