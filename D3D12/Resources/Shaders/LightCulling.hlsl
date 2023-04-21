@@ -24,7 +24,16 @@ struct Cone
 	float Radius;
 };
 
+struct PrecomputedLightData
+{
+	float3 ViewSpacePosition;
+	float SpotCosAngle;
+	float3 ViewSpaceDirection;
+	float SpotSinAngle;
+};
+
 Texture2D tDepthTexture : register(t0);
+StructuredBuffer<PrecomputedLightData> tLightData : register(t1);
 
 globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
 RWStructuredBuffer<uint> uOpaqueLightIndexList : register(u1);
@@ -226,9 +235,10 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 
 		if(light.IsPoint)
 		{
-			Sphere sphere = (Sphere)0;
+			PrecomputedLightData lightData = tLightData[i];
+			Sphere sphere;
 			sphere.Radius = light.Range;
-			sphere.Position = mul(float4(light.Position, 1.0f), cView.View).xyz;
+			sphere.Position = lightData.ViewSpacePosition;
 			if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
 			{
 				AddLightForTransparant(i);
@@ -246,9 +256,10 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 		}
 		else if(light.IsSpot)
 		{
+			PrecomputedLightData lightData = tLightData[i];
 			Sphere sphere;
 			sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
-			sphere.Position = mul(float4(light.Position, 1), cView.View).xyz + mul(light.Direction, (float3x3)cView.View) * sphere.Radius;
+			sphere.Position = lightData.ViewSpacePosition + lightData.ViewSpaceDirection * sphere.Radius;
 			if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
 			{
 				AddLightForTransparant(i);

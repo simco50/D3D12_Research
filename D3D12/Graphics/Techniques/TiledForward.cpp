@@ -10,6 +10,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Profiler.h"
 #include "Graphics/SceneView.h"
+#include "Graphics/Light.h"
 #include "Core/ConsoleVariables.h"
 
 static constexpr int MAX_LIGHT_DENSITY = 72000;
@@ -70,8 +71,37 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 	resources.pLightIndexListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
 	resources.pLightIndexListTransparant = graph.Create("Light List - Transparant", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
 
+	struct PrecomputedLightData
+	{
+		Vector3 ViewSpacePosition;
+		float SpotCosAngle;
+		Vector3 ViewSpaceDirection;
+		float SpotSinAngle;
+	};
+	uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->NumLights;
+
+	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->NumLights, sizeof(PrecomputedLightData)));
+	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
+		.Write(pPrecomputeData)
+		.Bind([=](CommandContext& context)
+			{
+				DynamicAllocation allocation = context.AllocateTransientMemory(precomputedLightDataSize);
+				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
+
+				Matrix viewMatrix = pView->View.View;
+				for (const Light& light : pView->pWorld->Lights)
+				{
+					PrecomputedLightData& data = *pLightData++;
+					data.ViewSpacePosition = Vector3::Transform(light.Position, viewMatrix);
+					data.ViewSpaceDirection = Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, light.Rotation), viewMatrix);
+					data.SpotCosAngle = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+					data.SpotSinAngle = sin(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+				}
+				context.CopyBuffer(allocation.pBackingResource, pPrecomputeData->Get(), precomputedLightDataSize, allocation.Offset, 0);
+			});
+
 	graph.AddPass("2D Light Culling", RGPassFlag::Compute)
-		.Read(sceneTextures.pDepth)
+		.Read({ sceneTextures.pDepth, pPrecomputeData })
 		.Write({ resources.pLightGridOpaque, resources.pLightIndexListOpaque })
 		.Write({ resources.pLightGridTransparant, resources.pLightIndexListTransparant })
 		.Write({ resources.pLightIndexCounter })
@@ -96,6 +126,7 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 					});
 				context.BindResources(3, {
 					pDepth->GetSRV(),
+					pPrecomputeData->Get()->GetSRV(),
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(
