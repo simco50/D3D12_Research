@@ -210,17 +210,16 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	float3 rayOrigin = cView.ViewLocation;
 	float3 rayDirection = mul(viewRay, (float3x3)cView.ViewInverse);
 
-	// Physically based pitch black earth :-)
 	float2 planetHit;
 	if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit))
 	{
 		float hit = all(planetHit > 0) ? planetHit.x : planetHit.y;
 		if(hit > 0 && hit < linearDepth)
 		{
-			color = 0;
-			linearDepth = hit;
+			linearDepth = 0;
 		}
 	}
+
 
 	float4 scatteringTransmittance = RenderClouds(threadId.xy, rayOrigin, rayDirection, linearDepth);
 	float3 col = color.xyz * scatteringTransmittance.w + scatteringTransmittance.xyz;

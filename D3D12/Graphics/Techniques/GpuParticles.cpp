@@ -59,29 +59,24 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 	pContext->Execute();
 
 	{
-		m_pSimulateRS = new RootSignature(pDevice);
-		m_pSimulateRS->AddRootConstants(0, 4);
-		m_pSimulateRS->AddRootCBV(100);
-		m_pSimulateRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-		m_pSimulateRS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-		m_pSimulateRS->Finalize("Particle Simulation");
+		m_pCommonRS = new RootSignature(pDevice);
+		m_pCommonRS->AddRootConstants(0, 4);
+		m_pCommonRS->AddRootCBV(100);
+		m_pCommonRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+		m_pCommonRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+		m_pCommonRS->Finalize("Particles");
 	}
 	{
-		m_pPrepareArgumentsPS = pDevice->CreateComputePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "UpdateSimulationParameters");
-		m_pEmitPS = pDevice->CreateComputePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "Emit");
-		m_pSimulatePS = pDevice->CreateComputePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "Simulate");
-		m_pSimulateEndPS = pDevice->CreateComputePipeline(m_pSimulateRS, "ParticleSimulation.hlsl", "SimulateEnd");
+		m_pPrepareArgumentsPS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "UpdateSimulationParameters");
+		m_pEmitPS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "Emit");
+		m_pSimulatePS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "Simulate");
+		m_pSimulateEndPS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "SimulateEnd");
 	}
 	{
-		m_pRenderParticlesRS = new RootSignature(pDevice);
-		m_pRenderParticlesRS->AddRootCBV(100);
-		m_pRenderParticlesRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-		m_pRenderParticlesRS->Finalize("Particle Rendering");
-
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetVertexShader("ParticleRendering.hlsl", "VSMain");
 		psoDesc.SetPixelShader("ParticleRendering.hlsl", "PSMain");
-		psoDesc.SetRootSignature(m_pRenderParticlesRS);
+		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
@@ -128,7 +123,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 				context.InsertResourceBarrier(m_pAliveList2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 				context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetComputeRootSignature(m_pSimulateRS);
+				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pPrepareArgumentsPS);
 				struct
 				{
@@ -160,7 +155,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 		.Read({ pDepth, pIndirectArgs })
 		.Bind([=](CommandContext& context)
 			{
-				context.SetComputeRootSignature(m_pSimulateRS);
+				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pEmitPS);
 
 				struct
@@ -192,7 +187,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 		.Read({ pDepth, pIndirectArgs })
 		.Bind([=](CommandContext& context)
 			{
-				context.SetComputeRootSignature(m_pSimulateRS);
+				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pSimulatePS);
 
 				struct
@@ -228,7 +223,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 			{
 				context.InsertResourceBarrier(m_pCountersBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-				context.SetComputeRootSignature(m_pSimulateRS);
+				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pSimulateEndPS);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
@@ -276,12 +271,11 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pRenderParticlesPS);
-				context.SetGraphicsRootSignature(m_pRenderParticlesRS);
+				context.SetGraphicsRootSignature(m_pCommonRS);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.BindRootCBV(0, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
-
-				context.BindResources(1, {
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindResources(3, {
 					m_pParticleBuffer->GetSRV(),
 					m_pAliveList1->GetSRV()
 					});

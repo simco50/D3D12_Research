@@ -5,7 +5,6 @@ class GraphicsDevice;
 class Buffer;
 class PipelineState;
 class RootSignature;
-class Texture;
 class RGGraph;
 struct SceneView;
 struct SceneTextures;
@@ -26,13 +25,13 @@ private:
 	RefCountPtr<Buffer> m_pParticleBuffer;
 	RefCountPtr<Buffer> m_pCountersBuffer;
 
+	RefCountPtr<RootSignature> m_pCommonRS;
+
 	RefCountPtr<PipelineState> m_pPrepareArgumentsPS;
 	RefCountPtr<PipelineState> m_pEmitPS;
-	RefCountPtr<RootSignature> m_pSimulateRS;
 	RefCountPtr<PipelineState> m_pSimulatePS;
 	RefCountPtr<PipelineState> m_pSimulateEndPS;
 
-	RefCountPtr<RootSignature> m_pRenderParticlesRS;
 	RefCountPtr<PipelineState> m_pRenderParticlesPS;
 
 	float m_ParticlesToSpawn = 0;
