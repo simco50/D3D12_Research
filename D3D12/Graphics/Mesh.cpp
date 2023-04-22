@@ -145,7 +145,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				mesh.PositionsStream.resize(pPart->Vertices.size());
 				mesh.NormalsStream.resize(pPart->Vertices.size());
 				mesh.TangentsStream.resize(pPart->Vertices.size());
-				if(pPart->IsMultiMaterial)
+				if (pPart->IsMultiMaterial)
 					mesh.ColorsStream.resize(pPart->Colors.size());
 				for (int j = 0; j < (int)pPart->Vertices.size(); ++j)
 				{
@@ -163,6 +163,18 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 					}
 				}
 
+				for (const Vector3& position : mesh.PositionsStream)
+				{
+					mesh.ScaleFactor = Math::Max(fabs(position.x), mesh.ScaleFactor);
+					mesh.ScaleFactor = Math::Max(fabs(position.y), mesh.ScaleFactor);
+					mesh.ScaleFactor = Math::Max(fabs(position.z), mesh.ScaleFactor);
+				}
+				for (Vector3& position : mesh.PositionsStream)
+				{
+					position /= mesh.ScaleFactor;
+					check(fabs(position.x) <= 1.0f && fabs(position.y) <= 1.0f && fabs(position.z) <= 1.0f);
+				}
+
 				MaterialPartCombination combination;
 				combination.pPart = pPart;
 				combination.Color = instance.Color;
@@ -174,7 +186,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				m_Materials.push_back(material);
 			}
 
-			inst.Transform = Matrix(&instance.Transform.m[0][0]);
+			MeshData meshData = meshDatas[inst.MeshIndex];
+			inst.Transform = Matrix::CreateScale(meshData.ScaleFactor) * Matrix(&instance.Transform.m[0][0]);
 			m_MeshInstances.push_back(inst);
 		}
 	}
@@ -415,7 +428,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		meshopt_remapVertexBuffer(meshData.NormalsStream.data(), meshData.NormalsStream.data(), meshData.NormalsStream.size(), sizeof(Vector3), &remap[0]);
 		meshopt_remapVertexBuffer(meshData.TangentsStream.data(), meshData.TangentsStream.data(), meshData.TangentsStream.size(), sizeof(Vector4), &remap[0]);
 		meshopt_remapVertexBuffer(meshData.UVsStream.data(), meshData.UVsStream.data(), meshData.UVsStream.size(), sizeof(Vector2), &remap[0]);
-		if(!meshData.ColorsStream.empty())
+		if (!meshData.ColorsStream.empty())
 			meshopt_remapVertexBuffer(meshData.ColorsStream.data(), meshData.ColorsStream.data(), meshData.ColorsStream.size(), sizeof(Vector4), &remap[0]);
 
 		// Meshlet generation
