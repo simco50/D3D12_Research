@@ -327,46 +327,44 @@ void DemoApp::Update()
 	{
 		GPU_PROFILE_SCOPE("Render", pContext);
 
+		if (Tweakables::g_Screenshot)
 		{
-			if (Tweakables::g_Screenshot)
-			{
-				Tweakables::g_Screenshot = false;
-				TaskContext taskContext;
-				TaskQueue::Execute([this](uint32)
+			Tweakables::g_Screenshot = false;
+			TaskContext taskContext;
+			TaskQueue::Execute([this](uint32)
+				{
+					CommandContext* pScreenshotContext = m_pDevice->AllocateCommandContext();
+					RefCountPtr<Texture> pSource = m_pColorOutput;
+					uint32 width = pSource->GetWidth();
+					uint32 height = pSource->GetHeight();
+
+					D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+					D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
+					m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+					RefCountPtr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
+					pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
+					pScreenshotContext->InsertResourceBarrier(pScreenshotBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
+					pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
+
+					SyncPoint fence = pScreenshotContext->Execute();
+					fence.Wait();
+
+					char* pData = (char*)pScreenshotBuffer->GetMappedData();
+					Image img(width, height, 1, ResourceFormat::RGBA8_UNORM, 1);
+					uint32 imageRowPitch = width * 4;
+					uint32 targetOffset = 0;
+					for (uint32 i = 0; i < height; ++i)
 					{
-						CommandContext* pScreenshotContext = m_pDevice->AllocateCommandContext();
-						RefCountPtr<Texture> pSource = m_pColorOutput;
-						uint32 width = pSource->GetWidth();
-						uint32 height = pSource->GetHeight();
+						img.SetData((uint32*)pData, targetOffset, imageRowPitch);
+						pData += textureFootprint.Footprint.RowPitch;
+						targetOffset += imageRowPitch;
+					}
 
-						D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-						D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
-						m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
-						RefCountPtr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
-						pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
-						pScreenshotContext->InsertResourceBarrier(pScreenshotBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
-						pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
-
-						SyncPoint fence = pScreenshotContext->Execute();
-						fence.Wait();
-
-						char* pData = (char*)pScreenshotBuffer->GetMappedData();
-						Image img(width, height, 1, ResourceFormat::RGBA8_UNORM, 1);
-						uint32 imageRowPitch = width * 4;
-						uint32 targetOffset = 0;
-						for (uint32 i = 0; i < height; ++i)
-						{
-							img.SetData((uint32*)pData, targetOffset, imageRowPitch);
-							pData += textureFootprint.Footprint.RowPitch;
-							targetOffset += imageRowPitch;
-						}
-
-						SYSTEMTIME time;
-						GetSystemTime(&time);
-						Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-						img.Save(Sprintf("%sScreenshot_%s.jpg", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
-					}, taskContext);
-			}
+					SYSTEMTIME time;
+					GetSystemTime(&time);
+					Paths::CreateDirectoryTree(Paths::ScreenshotDir());
+					img.Save(Sprintf("%sScreenshot_%s.jpg", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
+				}, taskContext);
 		}
 
 		const SceneView* pView = &m_SceneData;

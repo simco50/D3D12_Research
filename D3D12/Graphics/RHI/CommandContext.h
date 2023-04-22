@@ -3,9 +3,7 @@
 #include "GPUDescriptorHeap.h"
 #include "DynamicResourceAllocator.h"
 
-class GraphicsResource;
 class Texture;
-class DynamicGPUDescriptorAllocator;
 class RootSignature;
 class PipelineState;
 class StateObject;
