@@ -138,7 +138,7 @@ groupshared PayloadData gsPayload;
 bool IsVisible(MeshData mesh, float4x4 world, uint meshlet)
 {
 	Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, meshlet, mesh.MeshletBoundsOffset);
-	FrustumCullData cullData = FrustumCull(bounds.Center, bounds.Extents, world, cView.ViewProjection);
+	FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, world, cView.ViewProjection);
 	if(!cullData.IsVisible)
 	{
 		return false;

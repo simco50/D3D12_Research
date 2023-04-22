@@ -62,9 +62,9 @@ RWStructuredBuffer<uint> uPhaseTwoInstances 						: register(u2);	// List of ins
 RWBuffer<uint> uCounter_PhaseTwoInstances 							: register(u3);	// Number of instances which need to be tested in Phase 2
 RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets 				: register(u4);	// List of meshlets to rasterize
 RWBuffer<uint> uCounter_VisibleMeshlets 							: register(u5);	// Number of meshlets to rasterize
-																	
+
 RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments 	: register(u0); // General purpose dispatch args
-																	
+
 StructuredBuffer<uint> tPhaseTwoInstances 							: register(t0);	// List of instances which need to be tested in Phase 2
 Buffer<uint> tCounter_CandidateMeshlets 							: register(t1);	// Number of meshlets to process
 Buffer<uint> tCounter_PhaseTwoInstances 							: register(t2);	// Number of instances which need to be tested in Phase 2
@@ -79,7 +79,7 @@ uint GetCandidateMeshletOffset(bool phase2)
 	return phase2 ? uCounter_CandidateMeshlets[COUNTER_PHASE1_CANDIDATE_MESHLETS] : 0u;
 }
 
-/* 
+/*
 	Per-instance culling
 */
 [numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
@@ -182,7 +182,7 @@ void BuildInstanceCullIndirectArgs()
     uDispatchArguments[0] = args;
 }
 
-/* 
+/*
 	Per-meshlet culling
 	*/
 [numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
@@ -197,7 +197,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 
 		// Frustum test meshlet against the current view
 		Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
-		FrustumCullData cullData = FrustumCull(bounds.Center, bounds.Extents, instance.LocalToWorld, cView.ViewProjection);
+		FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.ViewProjection);
 		bool isVisible = cullData.IsVisible;
 		bool wasOccluded = false;
 
@@ -206,7 +206,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 		{
 #if OCCLUSION_FIRST_PASS
 			// Frustum test meshlet against the *previous* view to determine if it was visible last frame
-			FrustumCullData prevCullData = FrustumCull(bounds.Center, bounds.Extents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
+			FrustumCullData prevCullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
 			if(prevCullData.IsVisible)
 			{
 				// Occlusion test meshlet against the HZB
@@ -248,7 +248,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 	}
 }
 
-/* 
+/*
 	Debug statistics
 */
 [numthreads(1, 1, 1)]

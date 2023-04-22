@@ -457,8 +457,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				min = Vector3::Min(min, p);
 			}
 			ShaderInterop::Meshlet::Bounds& outBounds = meshData.MeshletBounds[i];
-			outBounds.Center = (max + min) / 2;
-			outBounds.Extents = (max - min) / 2;
+			outBounds.LocalCenter = (max + min) / 2;
+			outBounds.LocalExtents = (max - min) / 2;
 
 			// Encode triangles and get rid of 4 byte padding
 			unsigned char* pSourceTriangles = meshletTriangles.data() + meshlet.triangle_offset;

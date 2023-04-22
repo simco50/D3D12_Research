@@ -57,8 +57,8 @@ struct Meshlet
 
 	struct Bounds
 	{
-		float3 Center;
-		float3 Extents;
+		float3 LocalCenter;
+		float3 LocalExtents;
 	};
 };
 

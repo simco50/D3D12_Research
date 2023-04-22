@@ -8,18 +8,22 @@ struct FrustumCullData
 	float3 RectMax;
 };
 
-FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 worldToClip)
+FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 localToWorld, float4x4 worldToClip)
 {
 	FrustumCullData data = (FrustumCullData)0;
 	data.IsVisible = true;
 
-	// Clip space AABB
-	float3x4 axis;
-	axis[0] = mul(float4(aabbExtents.x * 2, 0, 0, 0), worldToClip);
-	axis[1] = mul(float4(0, aabbExtents.y * 2, 0, 0), worldToClip);
-	axis[2] = mul(float4(0, 0, aabbExtents.z * 2, 0), worldToClip);
+	float3 ext = 2.0f * aabbExtents;
+	float4x4 extentsBasis = float4x4(
+		ext.x,		0,		0,	 	0,
+			0,	ext.y,		0, 		0,
+			0,		0,	ext.z, 		0,
+			0, 		0, 		0, 		0
+		);
 
-	float4 pos000 = mul(float4(aabbCenter - aabbExtents, 1), worldToClip);
+	float4x4 axis = mul(mul(extentsBasis, localToWorld), worldToClip);
+
+	float4 pos000 = mul(mul(float4(aabbCenter - aabbExtents, 1), localToWorld), worldToClip);
 	float4 pos100 = pos000 + axis[0];
 	float4 pos010 = pos000 + axis[1];
 	float4 pos110 = pos010 + axis[0];
@@ -81,15 +85,6 @@ FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 worl
 	data.IsVisible &= !any(planeMins > 0.0f);
 
 	return data;
-}
-
-FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 localToWorld, float4x4 worldToClip)
-{
-	// Transform bounds to world space
-	aabbExtents = mul(aabbExtents, (float3x3)localToWorld);
-	aabbCenter = mul(float4(aabbCenter, 1), localToWorld).xyz;
-
-	return FrustumCull(aabbCenter, aabbExtents, worldToClip);
 }
 
 uint ComputeHZBMip(int4 rectPixels, int texelCoverage)
