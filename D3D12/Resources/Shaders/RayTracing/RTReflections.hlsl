@@ -28,7 +28,7 @@ void RayGen()
 	uint2 launchIndex = DispatchRaysIndex().xy;
 	float2 uv = (float2)(launchIndex + 0.5f) * dimInv;
 
-	float depth = tDepth.SampleLevel(sLinearClamp, uv, 0).r;
+	float depth = tDepth.SampleLevel(sPointClamp, uv, 0).r;
 	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, uv, 0);
 	float3 N = DecodeNormalOctahedron(tSceneNormals.SampleLevel(sLinearClamp, uv, 0));
 	float R = tSceneRoughness.SampleLevel(sLinearClamp, uv, 0);
@@ -78,7 +78,7 @@ void RayGen()
 #else
 				attenuation = 0.0f;
 #endif // SECONDARY_SHADOW_RAY
-				
+
 				if(attenuation <= 0.0f)
 					continue;
 

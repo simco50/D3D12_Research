@@ -105,7 +105,7 @@ float4 RenderLinePS(
 {
 	uint2 pixel = position.xy;
 	float2 uv = pixel.xy * cView.TargetDimensionsInv;
-	float depth = tDepth.SampleLevel(sLinearClamp, uv, 0);
+	float depth = tDepth.SampleLevel(sPointClamp, uv, 0);
 
 	bool occluded = depth > position.z;
 	float checkers = any(pixel % 2 == 0) ? 1.0f : 0.0f;

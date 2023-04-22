@@ -108,7 +108,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0);
-	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sLinearClamp, screenUV, 0));
+	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sPointClamp, screenUV, 0));
 	float dither = InterleavedGradientNoise(texel.xy);
 
 	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];

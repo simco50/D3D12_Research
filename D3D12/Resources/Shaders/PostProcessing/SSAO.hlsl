@@ -54,7 +54,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 		// Make sure we're not sampling outside the screen
 		if(all(newTexCoord.xy >= 0) && all(newTexCoord.xy <= 1))
 		{
-			float sampleDepth = tDepthTexture.SampleLevel(sLinearClamp, newTexCoord.xy, 0).r;
+			float sampleDepth = tDepthTexture.SampleLevel(sPointClamp, newTexCoord.xy, 0).r;
 			float depthVpos = LinearizeDepth(sampleDepth);
 			float rangeCheck = smoothstep(0.0f, 1.0f, cPass.AoRadius / (viewPos.z - depthVpos));
 			occlusion += (vpos.z >= depthVpos + cPass.AoDepthThreshold) * rangeCheck;

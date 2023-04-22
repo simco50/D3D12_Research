@@ -263,7 +263,7 @@ void PSMain(InterpolantsVSToPS input,
 {
 	float2 screenUV = (float2)input.Position.xy * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0);
-	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sLinearClamp, screenUV, 0));
+	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sPointClamp, screenUV, 0));
 	float dither = InterleavedGradientNoise(input.Position.xy);
 
 	InstanceData instance = GetInstance(cObject.ID);
