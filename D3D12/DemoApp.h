@@ -148,6 +148,7 @@ private:
 	RefCountPtr<PipelineState> m_pVisibilityDebugRenderPSO;
 	uint32 m_VisibilityDebugRenderMode = 0;
 
+	RefCountPtr<PipelineState> m_pBuildRasterArgsPSO;
 	RefCountPtr<PipelineState> m_pRasterPSO;
 	RefCountPtr<PipelineState> m_pRasterVisualizePSO;
 };

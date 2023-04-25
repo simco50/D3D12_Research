@@ -413,51 +413,6 @@ void DemoApp::Update()
 		sceneTextures.pNormals =			graph.Create("Normals", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 		sceneTextures.pVelocity =			graph.Create("Velocity", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 
-		RGTexture* pRasterOutput = graph.Create("Raster Output", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG32_UINT));
-		graph.AddPass("Raster", RGPassFlag::Compute)
-			.Write(pRasterOutput)
-			.Bind([=](CommandContext& context)
-				{
-					context.ClearUAVu(pRasterOutput->Get()->GetUAV());
-					context.InsertUAVBarrier();
-
-					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pRasterPSO);
-
-					const Batch& b = pView->Batches[0];
-					struct
-					{
-						uint32 InstanceID;
-						uint32 NumPrimitives;
-					} params;
-					params.InstanceID = 0;
-					params.NumPrimitives = b.pMesh->IndicesLocation.Elements / 3;
-
-					context.BindRootCBV(0, params);
-					ShaderInterop::ViewUniforms view = Renderer::GetViewUniforms(pView, pRasterOutput->Get());
-					view.ViewProjection = m_pCamera->GetView() * Math::CreatePerspectiveMatrix(m_pCamera->GetFoV(), (float)pRasterOutput->GetDesc().Width / pRasterOutput->GetDesc().Height, 0.5f, 5.0f);
-					context.BindRootCBV(1, view);
-					context.BindResources(2, pRasterOutput->Get()->GetUAV());
-
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(params.NumPrimitives, 64));
-				});
-
-		RGTexture* pDebug = graph.Create("Output", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
-		graph.AddPass("Raster Debug", RGPassFlag::Compute)
-			.Read(pRasterOutput)
-			.Write(pDebug)
-			.Bind([=](CommandContext& context)
-				{
-					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pRasterVisualizePSO);
-
-					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pDebug->Get()));
-					context.BindResources(2, pDebug->Get()->GetUAV());
-					context.BindResources(3, pRasterOutput->Get()->GetSRV());
-
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(pDebug->GetDesc().Width, 16, pDebug->GetDesc().Height, 16));
-				});
-
 		RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
 		if (Tweakables::g_Sky)
 		{
@@ -547,6 +502,68 @@ void DemoApp::Update()
 
 					// #todo: This is actually wrong, as the HZB dimensions should have been communicated before culling.
 					m_SceneData.HZBDimensions = rasterResult.pHZB->GetDesc().Size2D();
+
+
+					RGBuffer* pRasterArgs = graph.Create("Raster Args", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
+					graph.AddPass("Raster Args", RGPassFlag::Compute)
+						.Read({ rasterContext.pVisibleMeshletsCounter })
+						.Write({ pRasterArgs })
+						.Bind([=](CommandContext& context)
+							{
+								context.SetComputeRootSignature(m_pCommonRS);
+								context.SetPipelineState(m_pBuildRasterArgsPSO);
+
+								context.BindResources(2, pRasterArgs->Get()->GetUAV());
+								context.BindResources(3, rasterContext.pVisibleMeshletsCounter->Get()->GetUAV());
+								context.Dispatch(1);
+							});
+
+					{
+						RGTexture* pRasterOutput = graph.Create("Raster Output", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG32_UINT));
+						graph.AddPass("Raster", RGPassFlag::Compute)
+							.Read({ rasterContext.pVisibleMeshlets, pRasterArgs })
+							.Write(pRasterOutput)
+							.Bind([=](CommandContext& context)
+								{
+									context.ClearUAVu(pRasterOutput->Get()->GetUAV());
+									context.InsertUAVBarrier();
+
+									context.SetComputeRootSignature(m_pCommonRS);
+									context.SetPipelineState(m_pRasterPSO);
+
+									ShaderInterop::ViewUniforms view = Renderer::GetViewUniforms(pView, pRasterOutput->Get());
+									view.ViewProjection = m_pCamera->GetView() * Math::CreatePerspectiveMatrix(m_pCamera->GetFoV(), (float)pRasterOutput->GetDesc().Width / pRasterOutput->GetDesc().Height, 0.1f, 50.0f);
+									context.BindRootCBV(1, view);
+									context.BindResources(2, pRasterOutput->Get()->GetUAV());
+									context.BindResources(3, {
+											rasterContext.pVisibleMeshlets->Get()->GetSRV(),
+										});
+
+									context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pRasterArgs->Get());
+								});
+
+
+						RGTexture* pDebug = graph.Create("Output", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
+						graph.AddPass("Raster Debug", RGPassFlag::Compute)
+							.Read(pRasterOutput)
+							.Write(pDebug)
+							.Bind([=](CommandContext& context)
+								{
+									context.SetComputeRootSignature(m_pCommonRS);
+									context.SetPipelineState(m_pRasterVisualizePSO);
+
+									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pDebug->Get()));
+									context.BindResources(2, pDebug->Get()->GetUAV());
+									context.BindResources(3, pRasterOutput->Get()->GetSRV());
+
+									context.Dispatch(ComputeUtils::GetNumThreadGroups(pDebug->GetDesc().Width, 16, pDebug->GetDesc().Height, 16));
+								});
+					}
+
+
+
+
+
 				}
 				else
 				{
@@ -1224,6 +1241,7 @@ void DemoApp::InitializePipelines()
 
 	m_pRasterPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "RasterizeCS");
 	m_pRasterVisualizePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "ResolveVisBufferCS");
+	m_pBuildRasterArgsPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "BuildRasterArgsCS");
 
 	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
 	{

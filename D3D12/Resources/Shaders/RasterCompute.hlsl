@@ -1,18 +1,16 @@
 #include "Common.hlsli"
 #include "Random.hlsli"
-
-struct Params
-{
-    uint InstanceID;
-    uint NumPrimitives;
-};
-
-ConstantBuffer<Params> cParams : register(b0);
+#include "D3D12.hlsli"
+#include "VisibilityBuffer.hlsli"
 
 RWTexture2D<uint64_t> uOutput : register(u0);
 
 Texture2D<uint64_t> tVisibility : register(t0);
 RWTexture2D<float4> uColorOutput : register(u0);
+
+Buffer<uint> tCounter_VisibleMeshlets : register(t0);
+RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : register(u0);
+StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t0);
 
 void WritePixel(uint2 coord, uint value, float depth)
 {
@@ -28,28 +26,24 @@ struct InterpolantsVSToPS
 
 float EdgeFunction(const float2 a, const float2 b, const float2 c)
 {
-	 return (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x);
+	return (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x);
 };
 
-[numthreads(64, 1, 1)]
-void RasterizeCS(uint threadID : SV_DispatchThreadID)
+void RasterTriangle(Meshlet meshlet, MeshData mesh, InstanceData instance, uint primitiveIndex)
 {
-    if(threadID >= cParams.NumPrimitives)
-        return;
+	Meshlet::Triangle tri = BufferLoad<Meshlet::Triangle>(mesh.BufferIndex, primitiveIndex + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 
-    /*
-        Vertex shader
-    */
-    InstanceData instance = GetInstance(cParams.InstanceID);
-	MeshData mesh = GetMesh(instance.MeshIndex);
+	uint3 indices = uint3(
+		BufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+		BufferLoad<uint>(mesh.BufferIndex, tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+		BufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
+	);
 
-    uint3 vertexIDs = GetPrimitive(mesh, threadID);
+    float3 p0 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[0], mesh.PositionsOffset)).xyz;
+    float3 p1 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[1], mesh.PositionsOffset)).xyz;
+    float3 p2 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[2], mesh.PositionsOffset)).xyz;
 
-    float3 p0 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexIDs[0], mesh.PositionsOffset)).xyz;
-    float3 p1 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexIDs[1], mesh.PositionsOffset)).xyz;
-    float3 p2 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexIDs[2], mesh.PositionsOffset)).xyz;
-
-    float4 csP0 = mul(mul(float4(p0, 1), instance.LocalToWorld), cView.ViewProjection);
+	float4 csP0 = mul(mul(float4(p0, 1), instance.LocalToWorld), cView.ViewProjection);
     float4 csP1 = mul(mul(float4(p1, 1), instance.LocalToWorld), cView.ViewProjection);
     float4 csP2 = mul(mul(float4(p2, 1), instance.LocalToWorld), cView.ViewProjection);
 
@@ -59,6 +53,18 @@ void RasterizeCS(uint threadID : SV_DispatchThreadID)
     csP0.xyz /= csP0.w;
     csP1.xyz /= csP1.w;
     csP2.xyz /= csP2.w;
+
+	if(Min(csP0.z, csP1.z, csP2.z) < 0)
+		return;
+
+	if(Max(csP0.z, csP1.z, csP2.z) > 1)
+		return;
+
+	if(any(Min(csP0.xy, csP1.xy, csP2.xy) < -1))
+		return;
+
+	if(any(Max(csP0.xy, csP1.xy, csP2.xy) > 1))
+		return;
 
     /*
         Viewport transform
@@ -113,7 +119,7 @@ void RasterizeCS(uint threadID : SV_DispatchThreadID)
                 /*
                     Output merger
                 */
-                WritePixel(uint2(x, y), threadID, 1);
+                WritePixel(uint2(x, y), primitiveIndex, 1);
             }
 
 			w0 += A12;
@@ -127,6 +133,28 @@ void RasterizeCS(uint threadID : SV_DispatchThreadID)
     }
 }
 
+[numthreads(64, 1, 1)]
+void RasterizeCS(uint groupThreadID : SV_GroupIndex, uint groupID : SV_GroupID)
+{
+	MeshletCandidate candidate = tVisibleMeshlets[groupID];
+	InstanceData instance = GetInstance(candidate.InstanceID);
+	MeshData mesh = GetMesh(instance.MeshIndex);
+	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletOffset);
+
+	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += 64)
+	{
+		RasterTriangle(meshlet, mesh, instance, i);
+	}
+}
+
+[numthreads(1, 1, 1)]
+void BuildRasterArgsCS()
+{
+    uint numMeshlets = tCounter_VisibleMeshlets[0];
+    D3D12_DISPATCH_ARGUMENTS args;
+    args.ThreadGroupCount = uint3(numMeshlets, 1, 1);
+    uDispatchArguments[0] = args;
+}
 
 [numthreads(16, 16, 1)]
 void ResolveVisBufferCS(uint3 threadID : SV_DispatchThreadID)
