@@ -10,6 +10,7 @@ struct Vertex
 {
 	Vector3 Position;
 	Vector3 Normal;
+	Vector2 UV;
 };
 
 struct Geometry
@@ -75,6 +76,11 @@ Geometry GetMesh(const char* pFilePath)
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
 						check(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].Normal.x, 3));
+				}
+				else if (strcmp(pName, "TEXCOORD_0") == 0)
+				{
+					for (size_t i = 0; i < attribute.data->count; ++i)
+						check(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].UV.x, 2));
 				}
 			}
 		}
@@ -213,10 +219,22 @@ Geometry GetSphere()
 	return geo;
 }
 
+template<typename T>
+T Interpolate(const T& v0, const T& v1, const T& v2, const Vector3& bary)
+{
+	return v0 * bary.x + v1 * bary.y + v2 * bary.z;
+}
+
+
+float EdgeFunction(const Vector2& a, const Vector2& b, const Vector2& c)
+{
+	return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
+};
+
 int Rasterize()
 {
-	int width = 512;
-	int height = 512;
+	int width = 1024;
+	int height = 1024;
 
 	Vector3 viewPos = Vector3(-200.0f, 500.0f, -600.0f);
 	Matrix worldToView = DirectX::XMMatrixLookAtLH(viewPos, Vector3::Zero, Vector3::Up);
@@ -227,14 +245,10 @@ int Rasterize()
 	lightDirection.Normalize();
 
 	Geometry geometries[] = {
-		GetMesh("D:/Data/Downloads/cow_-_farm_animal_-_3december2022/scene.gltf"),
-		GetSphere(),
-		GetCube(),
+		GetMesh("D:/Dev/Repositories/D3D12_Research/D3D12/Resources/Scenes/Sponza/Sponza.gltf"),
 	};
 
-	geometries[0].World = Matrix::CreateScale(0.5f) * Matrix::CreateTranslation(0.0f, 0.0f, 0.0f);
-	geometries[1].World = Matrix::CreateScale(100.0f) * Matrix::CreateTranslation(200.0f, 0.0f, 0.0f);
-	geometries[2].World = Matrix::CreateScale(100.0f) * Matrix::CreateTranslation(-200.0f, 0.0f, 0.0f);
+	geometries[0].World = Matrix::CreateScale(0.15f) * Matrix::CreateTranslation(0.0f, 0.0f, 0.0f);
 
 	uint32* pPixels = new uint32[width * height];
 	float* pDepth = new float[width * height];
@@ -289,13 +303,12 @@ int Rasterize()
 			maxBounds = Vector2::Max(maxBounds, viewportPos[1]);
 			maxBounds = Vector2::Max(maxBounds, viewportPos[2]);
 
-			auto EdgeFunction = [](const Vector2& a, const Vector2& b, const Vector2& c)
-			{
-				return (c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x);
-			};
-
-			float area = EdgeFunction(viewportPos[0], viewportPos[1], viewportPos[2]);
-			float rcpArea = 1.0f / area;
+			Vector2 v01 = viewportPos[1] - viewportPos[0];
+			Vector2 v02 = viewportPos[2] - viewportPos[0];
+			float det = v01.x * v02.y - v01.y * v02.x;
+			if (det >= 0.0f)
+				continue; // backface
+			float rcpDet = -1.0f / det;
 
 			for (uint32 y = (uint32)minBounds.y; y <= (uint32)maxBounds.y; ++y)
 			{
@@ -309,9 +322,9 @@ int Rasterize()
 					if (w0 >= 0.0f && w1 >= 0.0f && w2 >= 0.0f)
 					{
 						// Attribute interpolation
-						w0 *= rcpArea;
-						w1 *= rcpArea;
-						w2 *= rcpArea;
+						w0 *= rcpDet;
+						w1 *= rcpDet;
+						w2 *= rcpDet;
 						float z = clipPositions[0].z * w0 + clipPositions[1].z * w1 + clipPositions[2].z * w2;
 
 						// Depth test
@@ -319,16 +332,18 @@ int Rasterize()
 							continue;
 
 						pDepth[x + y * width] = z;
+						Vector3 bary(w0, w1, w2);
 
 						// Pixel shader
-						Vector3 n = v0.Normal * w0 + v1.Normal * w1 + v2.Normal * w2;
+						Vector3 n = Interpolate(v0.Normal, v1.Normal, v2.Normal, bary);
 						n.Normalize();
+						Vector2 uv = Interpolate(v0.UV, v1.UV, v2.UV, bary);
 
 						float d = n.Dot(-lightDirection);
 						d = Math::Clamp(d, 0.0f, 1.0f);
 
 						// Output
-						Color c(d, d, d, 1.0f);
+						Color c(uv.x, uv.y, 0.0f, 1.0f);
 						pPixels[x + y * width] = Math::Pack_RGBA8_UNORM(c);
 					}
 				}

@@ -26,9 +26,9 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 #endif
 #endif
 
-	return Rasterize();
+	//return Rasterize();
 
-#if 0
+#if 1
 	Thread::SetMainThread();
 	CommandLine::Parse(GetCommandLineA());
 

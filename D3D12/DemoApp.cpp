@@ -87,7 +87,7 @@ namespace Tweakables
 	bool g_Screenshot = false;
 	ConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = true; });
 
-	std::string VisualizeTextureName = "";
+	std::string VisualizeTextureName = "Output";
 	ConsoleCommand<const char*> gVisualizeTexture("vis", [](const char* pName) { VisualizeTextureName = pName; });
 
 	// Lighting
@@ -412,6 +412,51 @@ void DemoApp::Update()
 		sceneTextures.pColorTarget =		graph.Create("Color Target", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
 		sceneTextures.pNormals =			graph.Create("Normals", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 		sceneTextures.pVelocity =			graph.Create("Velocity", TextureDesc::CreateRenderTarget(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+
+		RGTexture* pRasterOutput = graph.Create("Raster Output", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG32_UINT));
+		graph.AddPass("Raster", RGPassFlag::Compute)
+			.Write(pRasterOutput)
+			.Bind([=](CommandContext& context)
+				{
+					context.ClearUAVu(pRasterOutput->Get()->GetUAV());
+					context.InsertUAVBarrier();
+
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pRasterPSO);
+
+					const Batch& b = pView->Batches[0];
+					struct
+					{
+						uint32 InstanceID;
+						uint32 NumPrimitives;
+					} params;
+					params.InstanceID = 0;
+					params.NumPrimitives = b.pMesh->IndicesLocation.Elements / 3;
+
+					context.BindRootCBV(0, params);
+					ShaderInterop::ViewUniforms view = Renderer::GetViewUniforms(pView, pRasterOutput->Get());
+					view.ViewProjection = m_pCamera->GetView() * Math::CreatePerspectiveMatrix(m_pCamera->GetFoV(), (float)pRasterOutput->GetDesc().Width / pRasterOutput->GetDesc().Height, 0.5f, 5.0f);
+					context.BindRootCBV(1, view);
+					context.BindResources(2, pRasterOutput->Get()->GetUAV());
+
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(params.NumPrimitives, 64));
+				});
+
+		RGTexture* pDebug = graph.Create("Output", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
+		graph.AddPass("Raster Debug", RGPassFlag::Compute)
+			.Read(pRasterOutput)
+			.Write(pDebug)
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pRasterVisualizePSO);
+
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pDebug->Get()));
+					context.BindResources(2, pDebug->Get()->GetUAV());
+					context.BindResources(3, pRasterOutput->Get()->GetSRV());
+
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(pDebug->GetDesc().Width, 16, pDebug->GetDesc().Height, 16));
+				});
 
 		RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
 		if (Tweakables::g_Sky)
@@ -1176,6 +1221,9 @@ void DemoApp::InitializePipelines()
 	m_pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 	m_pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pCommonRS->Finalize("Common");
+
+	m_pRasterPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "RasterizeCS");
+	m_pRasterVisualizePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "ResolveVisBufferCS");
 
 	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
 	{

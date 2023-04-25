@@ -447,7 +447,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 			});
 
 	if(outResult.pVisibilityBuffer)
-		drawPass.RenderTarget(outResult.pVisibilityBuffer, rasterPhase == RasterPhase::Phase1 ? RenderTargetLoadAction::DontCare : RenderTargetLoadAction::Load);
+		drawPass.RenderTarget(outResult.pVisibilityBuffer, rasterPhase == RasterPhase::Phase1 ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load);
 
 	// Build the HZB, this HZB must be persistent across frames for this system to work.
 	// In Phase 1, the HZB is built so it can be used in Phase 2 for accurrate occlusion culling.
