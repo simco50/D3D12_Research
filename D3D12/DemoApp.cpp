@@ -531,9 +531,7 @@ void DemoApp::Update()
 									context.SetComputeRootSignature(m_pCommonRS);
 									context.SetPipelineState(m_pRasterPSO);
 
-									ShaderInterop::ViewUniforms view = Renderer::GetViewUniforms(pView, pRasterOutput->Get());
-									view.ViewProjection = m_pCamera->GetView() * Math::CreatePerspectiveMatrix(m_pCamera->GetFoV(), (float)pRasterOutput->GetDesc().Width / pRasterOutput->GetDesc().Height, 0.1f, 50.0f);
-									context.BindRootCBV(1, view);
+									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pRasterOutput->Get()));
 									context.BindResources(2, pRasterOutput->Get()->GetUAV());
 									context.BindResources(3, {
 											rasterContext.pVisibleMeshlets->Get()->GetSRV(),

@@ -6,7 +6,7 @@
 RWTexture2D<uint64_t> uOutput : register(u0);
 
 Texture2D<uint64_t> tVisibility : register(t0);
-RWTexture2D<float4> uColorOutput : register(u0);
+globallycoherent RWTexture2D<float4> uColorOutput : register(u0);
 
 Buffer<uint> tCounter_VisibleMeshlets : register(t0);
 RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : register(u0);
@@ -15,7 +15,7 @@ StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t0);
 void WritePixel(uint2 coord, uint value, float depth)
 {
     uint depthInt = asuint(depth);
-    uint64_t packed = ((uint64_t)depthInt << 32u) | value;
+    uint64_t packed = ((uint64_t)depthInt << 32) | value;
     InterlockedMax(uOutput[coord], packed);
 }
 
@@ -26,26 +26,14 @@ struct InterpolantsVSToPS
 
 float EdgeFunction(const float2 a, const float2 b, const float2 c)
 {
-	return (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x);
+	return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 };
 
-void RasterTriangle(Meshlet meshlet, MeshData mesh, InstanceData instance, uint primitiveIndex)
+void RasterTriangle(float3 p0, float3 p1, float3 p2, uint value)
 {
-	Meshlet::Triangle tri = BufferLoad<Meshlet::Triangle>(mesh.BufferIndex, primitiveIndex + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
-
-	uint3 indices = uint3(
-		BufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
-		BufferLoad<uint>(mesh.BufferIndex, tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
-		BufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
-	);
-
-    float3 p0 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[0], mesh.PositionsOffset)).xyz;
-    float3 p1 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[1], mesh.PositionsOffset)).xyz;
-    float3 p2 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[2], mesh.PositionsOffset)).xyz;
-
-	float4 csP0 = mul(mul(float4(p0, 1), instance.LocalToWorld), cView.ViewProjection);
-    float4 csP1 = mul(mul(float4(p1, 1), instance.LocalToWorld), cView.ViewProjection);
-    float4 csP2 = mul(mul(float4(p2, 1), instance.LocalToWorld), cView.ViewProjection);
+	float4 csP0 = mul(float4(p0, 1), cView.ViewProjection);
+    float4 csP1 = mul(float4(p1, 1), cView.ViewProjection);
+    float4 csP2 = mul(float4(p2, 1), cView.ViewProjection);
 
     /*
         Perspective divide
@@ -104,7 +92,6 @@ void RasterTriangle(Meshlet meshlet, MeshData mesh, InstanceData instance, uint 
 
         for(uint x = (uint)minBounds.x; x <= (uint)maxBounds.x; ++x)
         {
-            float2 pixel = float2(x, y) + 0.5f;
             if(Min(w0, w1, w2) >= 0.0f)
             {
                 float z = csP0.z * w0 + csP1.z * w1 + csP2.z * w2;
@@ -119,7 +106,7 @@ void RasterTriangle(Meshlet meshlet, MeshData mesh, InstanceData instance, uint 
                 /*
                     Output merger
                 */
-                WritePixel(uint2(x, y), primitiveIndex, 1);
+                WritePixel(uint2(x, y), value, z);
             }
 
 			w0 += A12;
@@ -143,7 +130,23 @@ void RasterizeCS(uint groupThreadID : SV_GroupIndex, uint groupID : SV_GroupID)
 
 	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += 64)
 	{
-		RasterTriangle(meshlet, mesh, instance, i);
+		Meshlet::Triangle tri = BufferLoad<Meshlet::Triangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+
+		uint3 indices = uint3(
+			BufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+			BufferLoad<uint>(mesh.BufferIndex, tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+			BufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
+		);
+
+		float3 p0 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[0], mesh.PositionsOffset)).xyz;
+		float3 p1 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[1], mesh.PositionsOffset)).xyz;
+		float3 p2 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[2], mesh.PositionsOffset)).xyz;
+
+		p0 = mul(float4(p0, 1), instance.LocalToWorld).xyz;
+		p1 = mul(float4(p1, 1), instance.LocalToWorld).xyz;
+		p2 = mul(float4(p2, 1), instance.LocalToWorld).xyz;
+
+		RasterTriangle(p0, p1, p2, candidate.MeshletIndex);
 	}
 }
 
