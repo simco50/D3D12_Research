@@ -111,12 +111,15 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sPointClamp, screenUV, 0));
 	float dither = InterleavedGradientNoise(texel.xy);
 
-	VisBufferData visibility = (VisBufferData)tVisibilityTexture[texel];
-	MeshletCandidate candidate = tVisibleMeshlets[visibility.MeshletCandidateIndex];
+	uint candidateIndex, primitiveID;
+	if(!UnpackVisBuffer(tVisibilityTexture[texel], candidateIndex, primitiveID))
+		return;
+
+	MeshletCandidate candidate = tVisibleMeshlets[candidateIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
 
 	// Vertex Shader
-	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, instance, candidate.MeshletIndex, visibility.PrimitiveID);
+	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, instance, candidate.MeshletIndex, primitiveID);
 
 	// Surface Shader
 	MaterialData material = GetMaterial(instance.MaterialIndex);

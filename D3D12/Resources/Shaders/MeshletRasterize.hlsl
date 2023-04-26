@@ -104,7 +104,7 @@ void PSMain(
 	VertexAttribute vertexData,
 	PrimitiveAttribute primitiveData
 #if !DEPTH_ONLY
-	, out VisBufferData visBufferData : SV_TARGET0
+	, out uint visBufferPixel : SV_TARGET0
 #endif
 )
 {
@@ -120,8 +120,7 @@ void PSMain(
 #endif
 
 #if !DEPTH_ONLY
-	visBufferData.MeshletCandidateIndex = primitiveData.CandidateIndex;
-	visBufferData.PrimitiveID = primitiveData.PrimitiveID;
+	visBufferPixel = PackVisBuffer(primitiveData.CandidateIndex, primitiveData.PrimitiveID);
 #endif
 
 #if ENABLE_DEBUG_DATA

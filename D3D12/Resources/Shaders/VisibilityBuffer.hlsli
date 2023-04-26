@@ -7,12 +7,18 @@ struct MeshletCandidate
     uint MeshletIndex;
 };
 
-struct VisBufferData
+bool UnpackVisBuffer(uint data, out uint candidateIndex, out uint primitiveID)
 {
-	// Indirection into MeshletCandidatesBuffer containing InstanceID/MeshletIndex pair
-	uint MeshletCandidateIndex : 25;
-	uint PrimitiveID : 7;
-};
+	primitiveID = data & 0x7F;
+	candidateIndex = data >> 7;
+	candidateIndex -= 1; // Value of 0 means 'Invalid'
+	return candidateIndex != 0xFFFFFFFF;
+}
+
+uint PackVisBuffer(uint candidateIndex, uint primitiveID)
+{
+	return primitiveID | ((candidateIndex + 1) << 7);
+}
 
 template<typename T>
 T BaryInterpolate(T a, T b, T c, float3 barycentrics)
