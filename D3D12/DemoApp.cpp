@@ -26,6 +26,7 @@
 #include "Graphics/Techniques/ShaderDebugRenderer.h"
 #include "Graphics/Techniques/GPUDrivenRenderer.h"
 #include "Graphics/Techniques/VisualizeTexture.h"
+#include "Graphics/Techniques/SoftwareRaster.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
@@ -128,6 +129,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pPathTracing			= std::make_unique<PathTracing>(m_pDevice);
 	m_pCBTTessellation		= std::make_unique<CBTTessellation>(m_pDevice);
 	m_pVisualizeTexture		= std::make_unique<VisualizeTexture>(m_pDevice);
+	m_pSoftwareRaster		= std::make_unique<SoftwareRaster>(m_pDevice);
 
 	FontCreateSettings fontSettings;
 	fontSettings.pName = "Verdana";
@@ -503,65 +505,7 @@ void DemoApp::Update()
 					// #todo: This is actually wrong, as the HZB dimensions should have been communicated before culling.
 					m_SceneData.HZBDimensions = rasterResult.pHZB->GetDesc().Size2D();
 
-
-					RGBuffer* pRasterArgs = graph.Create("Raster Args", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
-					graph.AddPass("Raster Args", RGPassFlag::Compute)
-						.Read({ rasterContext.pVisibleMeshletsCounter })
-						.Write({ pRasterArgs })
-						.Bind([=](CommandContext& context)
-							{
-								context.SetComputeRootSignature(m_pCommonRS);
-								context.SetPipelineState(m_pBuildRasterArgsPSO);
-
-								context.BindResources(2, pRasterArgs->Get()->GetUAV());
-								context.BindResources(3, rasterContext.pVisibleMeshletsCounter->Get()->GetUAV());
-								context.Dispatch(1);
-							});
-
-					{
-						RGTexture* pRasterOutput = graph.Create("Raster Output", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG32_UINT));
-						graph.AddPass("Raster", RGPassFlag::Compute)
-							.Read({ rasterContext.pVisibleMeshlets, pRasterArgs })
-							.Write(pRasterOutput)
-							.Bind([=](CommandContext& context)
-								{
-									context.ClearUAVu(pRasterOutput->Get()->GetUAV());
-									context.InsertUAVBarrier();
-
-									context.SetComputeRootSignature(m_pCommonRS);
-									context.SetPipelineState(m_pRasterPSO);
-
-									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pRasterOutput->Get()));
-									context.BindResources(2, pRasterOutput->Get()->GetUAV());
-									context.BindResources(3, {
-											rasterContext.pVisibleMeshlets->Get()->GetSRV(),
-										});
-
-									context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pRasterArgs->Get());
-								});
-
-
-						RGTexture* pDebug = graph.Create("Output", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
-						graph.AddPass("Raster Debug", RGPassFlag::Compute)
-							.Read(pRasterOutput)
-							.Write(pDebug)
-							.Bind([=](CommandContext& context)
-								{
-									context.SetComputeRootSignature(m_pCommonRS);
-									context.SetPipelineState(m_pRasterVisualizePSO);
-
-									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pDebug->Get()));
-									context.BindResources(2, pDebug->Get()->GetUAV());
-									context.BindResources(3, pRasterOutput->Get()->GetSRV());
-
-									context.Dispatch(ComputeUtils::GetNumThreadGroups(pDebug->GetDesc().Width, 16, pDebug->GetDesc().Height, 16));
-								});
-					}
-
-
-
-
-
+					m_pSoftwareRaster->Render(graph, pView, rasterContext);
 				}
 				else
 				{
@@ -1236,10 +1180,6 @@ void DemoApp::InitializePipelines()
 	m_pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 	m_pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pCommonRS->Finalize("Common");
-
-	m_pRasterPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "RasterizeCS");
-	m_pRasterVisualizePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "ResolveVisBufferCS");
-	m_pBuildRasterArgsPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "BuildRasterArgsCS");
 
 	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
 	{

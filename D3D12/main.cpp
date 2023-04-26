@@ -13,8 +13,6 @@
 #include <crtdbg.h>
 #endif
 
-extern int Rasterize();
-
 #define BREAK_ON_ALLOC 0
 
 int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*lpCmdLine*/, _In_ int /*nShowCmd*/)
@@ -26,9 +24,6 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 #endif
 #endif
 
-	//return Rasterize();
-
-#if 1
 	Thread::SetMainThread();
 	CommandLine::Parse(GetCommandLineA());
 
@@ -70,5 +65,4 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	Console::Shutdown();
 
 	return 0;
-#endif
 }

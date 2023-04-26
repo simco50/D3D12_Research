@@ -25,6 +25,7 @@ class ShaderDebugRenderer;
 class GPUDrivenRenderer;
 class DDGI;
 class VisualizeTexture;
+class SoftwareRaster;
 struct SubMesh;
 struct Material;
 
@@ -82,6 +83,7 @@ private:
 	std::unique_ptr<GPUDrivenRenderer> m_pGPUDrivenRenderer;
 	std::unique_ptr<DDGI> m_pDDGI;
 	std::unique_ptr<VisualizeTexture> m_pVisualizeTexture;
+	std::unique_ptr<SoftwareRaster> m_pSoftwareRaster;
 
 	LightCull2DData m_LightCull2DData;
 	LightCull3DData m_LightCull3DData;
@@ -147,8 +149,4 @@ private:
 	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
 	RefCountPtr<PipelineState> m_pVisibilityDebugRenderPSO;
 	uint32 m_VisibilityDebugRenderMode = 0;
-
-	RefCountPtr<PipelineState> m_pBuildRasterArgsPSO;
-	RefCountPtr<PipelineState> m_pRasterPSO;
-	RefCountPtr<PipelineState> m_pRasterVisualizePSO;
 };
