@@ -311,15 +311,15 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 	// #todo: Hardcode number of bins. Only implemented 2 PSOs (ie. Opaque and alpha masked)
 	constexpr uint32 numBins = 2;
-	RGBuffer* pMeshletOffsetAndCounts = graph.Create("GpuRender.Classify.MeshletOffsetAndCounts", BufferDesc::CreateStructured(numBins, sizeof(Vector4u), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource | BufferFlag::IndirectArguments));
+	RGBuffer* pMeshletOffsetAndCounts = graph.Create("GPURender.Classify.MeshletOffsetAndCounts", BufferDesc::CreateStructured(numBins, sizeof(Vector4u), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource | BufferFlag::IndirectArguments));
 	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
-	RGBuffer* pBinnedMeshlets = graph.Create("GpuRender.Classify.BinnedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32)));
+	RGBuffer* pBinnedMeshlets = graph.Create("GPURender.Classify.BinnedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32)));
 
 	{
 		RG_GRAPH_SCOPE("Classify Shader Types", graph);
 
-		RGBuffer* pMeshletCounts	= graph.Create("GpuRender.Classify.MeshletCounts", BufferDesc::CreateTyped(numBins, ResourceFormat::R32_UINT));
-		RGBuffer* pGlobalCount		= graph.Create("GpuRender.Classify.GlobalCount", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+		RGBuffer* pMeshletCounts	= graph.Create("GPURender.Classify.MeshletCounts", BufferDesc::CreateTyped(numBins, ResourceFormat::R32_UINT));
+		RGBuffer* pGlobalCount		= graph.Create("GPURender.Classify.GlobalCount", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
 		RGBuffer* pClassifyArgs		= graph.Create("GPURender.Classify.Args", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 
 		struct ClassifyParams
@@ -471,7 +471,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 
 	// Debug mode outputs an extra debug buffer containing information for debug statistics/visualization
 	if (rasterContext.EnableDebug)
-		outResult.pDebugData = graph.Create("GpuRender.DebugData", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
+		outResult.pDebugData = graph.Create("GPURender.DebugData", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
 
 	// Clear all counters
 	RGPass& clearPass = graph.AddPass("Clear UAVs", RGPassFlag::Compute)
