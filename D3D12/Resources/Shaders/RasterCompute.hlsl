@@ -64,8 +64,8 @@ void RasterTriangle(float3 p0, float3 p1, float3 p2, uint value)
     /*
         Viewport clamp
     */
-    float2 minBounds = Min(vpP0, vpP1, vpP2);
-    float2 maxBounds = Max(vpP0, vpP1, vpP2);
+    float2 minBounds = floor(Min(vpP0, vpP1, vpP2));
+    float2 maxBounds = floor(Max(vpP0, vpP1, vpP2));
 
 	minBounds = Max(float2(0.0f, 0.0f), minBounds);
 	maxBounds = Min(cView.ViewportDimensions - 1, maxBounds);
@@ -146,7 +146,7 @@ void RasterizeCS(uint groupThreadID : SV_GroupIndex, uint groupID : SV_GroupID)
 		p1 = mul(float4(p1, 1), instance.LocalToWorld).xyz;
 		p2 = mul(float4(p2, 1), instance.LocalToWorld).xyz;
 
-		RasterTriangle(p0, p1, p2, candidate.MeshletIndex);
+		RasterTriangle(p0, p1, p2, i);
 	}
 }
 
