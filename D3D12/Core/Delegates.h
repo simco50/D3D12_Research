@@ -758,7 +758,8 @@ public:
 	NO_DISCARD static Delegate CreateLambda(TLambda&& lambda, Args2... args)
 	{
 		Delegate handler;
-		handler.Bind<LambdaDelegate<TLambda, RetVal(Args...), Args2...>>(std::forward<TLambda>(lambda), std::forward<Args2>(args)...);
+		using LambdaType = std::decay_t<TLambda>;
+		handler.Bind<LambdaDelegate<LambdaType, RetVal(Args...), Args2...>>(std::forward<LambdaType>(lambda), std::forward<Args2>(args)...);
 		return handler;
 	}
 
