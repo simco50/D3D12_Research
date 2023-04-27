@@ -1,19 +1,30 @@
-# D3D12/Windows Toy Renderer
+# D3D12 Toy Renderer
 
 This is a personal toy renderer meant as a playground for experimenting with ideas and rendering techniques.
 
 ## Requirements
 
-- Visual Studio 2019
+- Visual Studio 2022
 - Windows SDK 10.0.19041.0
-- Optionally DXR compatible GPU
+- DXR compatible GPU with Resource Heap Tier 3 support
 
 ## Building
 
-- Run `scripts/Generate_VS2019_Windows.bat` to generate VS project files.
+- Run `scripts/Generate_VS2022_Windows.bat` to generate VS project files.
 - Open `D3D12.sln` and Compile/Run
 
 ## Images
+
+### Visibility Buffer - Deferred Texturing
+
+| 2 Phase Occlusion Culling | Visibility Buffer |
+|---|---|
+| ![](Images/OcclusionCulling.jpg) | ![](Images/VisibilityBuffer.jpg) |
+
+
+GPU Driven rendering with mesh shaders using the 2 Phase Occlusion algorithm to a visibility (ID) buffer. 
+
+Combined with deferred texturing.
 
 ### Dynamic Diffuse Global Illumination (DDGI)
 
@@ -23,6 +34,12 @@ This is a personal toy renderer meant as a playground for experimenting with ide
 |  ![](Images/6_DDGI.jpg) | ![](Images/6_NoDDGI.jpg) | ![](Images/6_PathTraced.jpg) |
 |  ![](Images/4_DDGI.jpg) | ![](Images/4_NoDDGI.jpg) | ![](Images/4_PathTraced.jpg) |
 |  ![](Images/5_DDGI.jpg) | ![](Images/5_NoDDGI.jpg) | ![](Images/5_PathTraced.jpg) |
+
+### Render Graph
+
+| Resource re-use | Graph visualization |
+|---|---|
+|  ![](Images/RenderGraphTracking.jpg) | ![](Images/RenderGraphDump.jpg)  |
 
 ### Tiled and Clustered Light Culling
 
@@ -68,19 +85,22 @@ This is a personal toy renderer meant as a playground for experimenting with ide
 
 ## Some noteable features
 
+- GPU driven rendering
+- 2 phase occlusion culling
+- Render graph
+- Deferred texturing
+- Path tracing mode
 - Tiled light culling (Forward+)
 - Clustered light culling (Clustered Forward+)
 - Cascaded shadow maps
+- Volumetric lighting
+- Bindless resources, no input layouts
 - Compute particles
 - Dynamic eye adaptation
-- Path tracing mode
-- Volumetric lighting
 - Screen space reflections (wip)
 - Raytraced reflections (wip)
 - Screen space ambient occlusion
 - Raytraced ambient occlusion (wip)
-- Bindless resources, no input layouts
 - Temporal anti-aliasing
 - Microfacet BRDF
 - Shader hot-reloading
-
