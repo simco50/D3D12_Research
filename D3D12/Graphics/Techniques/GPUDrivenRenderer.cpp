@@ -432,9 +432,17 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					pBinnedMeshlets->Get()->GetSRV(),
 					pMeshletOffsetAndCounts->Get()->GetSRV(),
 					});
+
+				static constexpr const char* PipelineBinToString[] = {
+					"Opaque",
+					"Alpha Masked"
+				};
+				static_assert(ARRAYSIZE(PipelineBinToString) == (int)PipelineBin::Count);
 				
 				for (uint32 binIndex = 0; binIndex < numBins; ++binIndex)
 				{
+					GPU_PROFILE_SCOPE(Sprintf("Raster Bin - %s", PipelineBinToString[binIndex]).c_str(), &context);
+
 					struct
 					{
 						uint32 BinIndex;
