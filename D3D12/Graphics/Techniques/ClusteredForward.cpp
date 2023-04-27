@@ -23,10 +23,6 @@ static constexpr int gVolumetricNumZSlices = 128;
 ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_pHeatMapTexture = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Textures/Heatmap.png", true, "Color Heatmap");
-	pContext->Execute();
-
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootCBV(0);
 	m_pCommonRS->AddRootCBV(100);
@@ -103,22 +99,6 @@ ClusteredForward::ClusteredForward(GraphicsDevice* pDevice)
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 			m_pMeshShaderDiffuseTransparancyPSO = pDevice->CreatePipeline(psoDesc);
 		}
-	}
-
-	//Cluster debug rendering
-	{
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetPixelShader("VisualizeLightClusters.hlsl", "PSMain");
-		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, GraphicsCommon::DepthStencilFormat, 1);
-		psoDesc.SetBlendMode(BlendMode::Additive, false);
-		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-		psoDesc.SetRootSignature(m_pCommonRS);
-		psoDesc.SetVertexShader("VisualizeLightClusters.hlsl", "VSMain");
-		psoDesc.SetGeometryShader("VisualizeLightClusters.hlsl", "GSMain");
-		psoDesc.SetName("Visualize Light Clusters");
-		m_pVisualizeLightClustersPSO = pDevice->CreatePipeline(psoDesc);
 	}
 
 	m_pVisualizeLightsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
@@ -222,40 +202,6 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 						cullData.ClusterCount.y, 4,
 						cullData.ClusterCount.z, 4)
 				);
-			});
-}
-
-void ClusteredForward::VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull3DData& cullData)
-{
-	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
-	RGBuffer* pDebugLightGrid = RGUtils::CreatePersistent(graph, "Debug Light Grid", BufferDesc::CreateStructured(2 * totalClusterCount, sizeof(uint32)), &cullData.pDebugLightGrid, true);
-
-	if (cullData.DirtyDebugData)
-	{
-		RGUtils::AddCopyPass(graph, cullData.pLightGrid, pDebugLightGrid);
-		cullData.DebugClustersViewMatrix = pView->View.ViewInverse;
-		cullData.DirtyDebugData = false;
-	}
-
-	graph.AddPass("Visualize Clusters", RGPassFlag::Raster)
-		.Read({ pDebugLightGrid, cullData.pAABBs })
-		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
-		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
-		.Bind([=](CommandContext& context)
-			{
-				context.SetPipelineState(m_pVisualizeLightClustersPSO);
-				context.SetGraphicsRootSignature(m_pCommonRS);
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
-
-				ShaderInterop::ViewUniforms viewData = Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get());
-				viewData.Projection = cullData.DebugClustersViewMatrix * pView->View.ViewProjection;
-				context.BindRootCBV(1, viewData);
-				context.BindResources(3, {
-					cullData.pAABBs->Get()->GetSRV(),
-					pDebugLightGrid->Get()->GetSRV(),
-					m_pHeatMapTexture->GetSRV(),
-					});
-				context.Draw(0, cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z);
 			});
 }
 

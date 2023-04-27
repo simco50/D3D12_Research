@@ -8,7 +8,6 @@ struct SceneTextures;
 struct LightCull3DData
 {
 	Vector3i ClusterCount;
-	RGBuffer* pAABBs;
 	RGBuffer* pLightIndexGrid;
 	RGBuffer* pLightGrid;
 	uint32 ClusterSize;
@@ -32,7 +31,6 @@ public:
 	~ClusteredForward();
 
 	void ComputeLightCulling(RGGraph& graph, const SceneView* pView, LightCull3DData& resources);
-	void VisualizeClusters(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull3DData& resources);
 
 	RGTexture* RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const LightCull3DData& cullData, VolumetricFogData& fogData);
 
@@ -43,10 +41,6 @@ public:
 private:
 	GraphicsDevice* m_pDevice;
 
-	RefCountPtr<Texture> m_pHeatMapTexture;
-
-	// AABB
-	RefCountPtr<PipelineState> m_pCreateAabbPSO;
 	// Light Culling
 	RefCountPtr<PipelineState> m_pLightCullingPSO;
 
@@ -59,9 +53,6 @@ private:
 	RefCountPtr<PipelineState> m_pMeshShaderDiffusePSO;
 	RefCountPtr<PipelineState> m_pMeshShaderDiffuseMaskedPSO;
 	RefCountPtr<PipelineState> m_pMeshShaderDiffuseTransparancyPSO;
-
-	//Cluster debug rendering
-	RefCountPtr<PipelineState> m_pVisualizeLightClustersPSO;
 
 	//Visualize Light Count
 	RefCountPtr<RootSignature> m_pCommonRS;
