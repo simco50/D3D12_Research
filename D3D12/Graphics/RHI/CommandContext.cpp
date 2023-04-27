@@ -87,10 +87,16 @@ void CommandContext::Free(const SyncPoint& syncPoint)
 	}
 }
 
-bool NeedsTransition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES& after)
+bool NeedsTransition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES& after, bool allowCombine)
 {
 	if (before == after)
 		return false;
+
+	// When resolving pending resource barriers, combining resource states is not working
+	// This is because the last known resource state of the resource is used to update the resource
+	// And so combining after_state during the result will result in the last known resource state not matching up.
+	if (!allowCombine)
+		return true;
 
 	//Can read from 'write' DSV
 	if (before == D3D12_RESOURCE_STATE_DEPTH_WRITE && after == D3D12_RESOURCE_STATE_DEPTH_READ)
@@ -124,7 +130,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	}
 	else
 	{
-		if (NeedsTransition(beforeState, state))
+		if (NeedsTransition(beforeState, state, true))
 		{
 			checkf(IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 			
@@ -418,15 +424,21 @@ void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 	{
 		uint32 subResource = pending.Subresource;
 		GraphicsResource* pResource = pending.pResource;
+
+		// Retrieve the last known resource state
 		D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
 		checkf(CommandContext::IsTransitionAllowed(m_Type, beforeState),
 			"Resource (%s) can not be transitioned from this state (%s) on this queue (%s). Insert a barrier on another queue before executing this one.",
 			pResource->GetName(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
 
+		// Get the after state of the first use in the current cmdlist
 		D3D12_RESOURCE_STATES afterState = pending.State.Get(subResource);
-		if(NeedsTransition(beforeState, afterState))
+		if(NeedsTransition(beforeState, afterState, false))
 			resolveContext.AddBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource->GetResource(), beforeState, afterState, subResource));
-		pResource->SetResourceState(GetLocalResourceState(pending.pResource, subResource));
+
+		// Update the resource with the last known state of the current cmdlist
+		D3D12_RESOURCE_STATES end_state = GetLocalResourceState(pending.pResource, subResource);
+		pResource->SetResourceState(end_state, subResource);
 	}
 	resolveContext.FlushResourceBarriers();
 	m_PendingBarriers.clear();
