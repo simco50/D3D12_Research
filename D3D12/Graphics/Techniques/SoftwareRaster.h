@@ -14,6 +14,8 @@ public:
 
 	void Render(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext);
 
+	static void RasterizeTest();
+
 private:
 	RefCountPtr<RootSignature> m_pCommonRS;
 	RefCountPtr<PipelineState> m_pBuildRasterArgsPSO;
