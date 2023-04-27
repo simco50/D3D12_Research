@@ -276,8 +276,12 @@ void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, 
 void CommandContext::ClearUAVu(const UnorderedAccessView* pUAV, const Vector4u& values)
 {
 	check(pUAV);
-	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
+	if (gpuHandle.IsNull())
+	{
+		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
+		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	}
 
 	FlushResourceBarriers();
 	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pUAV->GetResource()->GetResource(), &values.x, 0, nullptr);
@@ -286,8 +290,12 @@ void CommandContext::ClearUAVu(const UnorderedAccessView* pUAV, const Vector4u& 
 void CommandContext::ClearUAVf(const UnorderedAccessView* pUAV, const Vector4& values)
 {
 	check(pUAV);
-	DescriptorHandle gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-	GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
+	if (gpuHandle.IsNull())
+	{
+		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
+		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	}
 
 	FlushResourceBarriers();
 	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pUAV->GetResource()->GetResource(), &values.x, 0, nullptr);

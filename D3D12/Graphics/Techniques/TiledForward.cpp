@@ -67,7 +67,7 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 	resources.pLightGridOpaque = graph.Create("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
 	resources.pLightGridTransparant = graph.Create("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
 
-	resources.pLightIndexCounter = graph.Create("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32), BufferFlag::NoBindless));
+	resources.pLightIndexCounter = graph.Create("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32)));
 	resources.pLightIndexListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
 	resources.pLightIndexListTransparant = graph.Create("Light List - Transparant", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
 
