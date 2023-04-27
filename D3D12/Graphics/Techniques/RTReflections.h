@@ -1,10 +1,10 @@
 #pragma once
-class GraphicsDevice;
-class RootSignature;
-class RGGraph;
+
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
+
 struct SceneView;
 struct SceneTextures;
-class StateObject;
 
 class RTReflections
 {

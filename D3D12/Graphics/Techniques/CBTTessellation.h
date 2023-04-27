@@ -1,12 +1,8 @@
 #pragma once
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 #include "CBT.h"
 
-class RootSignature;
-class Buffer;
-class PipelineState;
-class Texture;
-class GraphicsDevice;
-class RGGraph;
 struct SceneView;
 struct SceneTextures;
 

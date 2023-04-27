@@ -1,7 +1,7 @@
 #pragma once
-#include "../RHI/RHI.h"
-#include "../RHI/Texture.h"
-#include "../RenderGraph/RenderGraphDefinitions.h"
+
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
 class VisualizeTexture
 {

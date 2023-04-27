@@ -1,12 +1,7 @@
 #pragma once
-#include "../RHI/StateObject.h"
-#include "../RenderGraph/RenderGraphDefinitions.h"
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
-class RootSignature;
-class StateObject;
-class Texture;
-class GraphicsDevice;
-class RGGraph;
 struct SceneView;
 
 class PathTracing

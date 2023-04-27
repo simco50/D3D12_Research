@@ -1,11 +1,7 @@
 #pragma once
 
+#include "Graphics/RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
-
-class GraphicsDevice;
-class RGGraph;
-class Texture;
-struct SceneView;
 
 using WindowHandle = HWND;
 

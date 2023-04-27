@@ -1,8 +1,7 @@
 #pragma once
+
+#include "Graphics/RHI/RHI.h"
 #include "RHI/CommandQueue.h"
-class Buffer;
-class CommandContext;
-class GraphicsDevice;
 
 #define WITH_PROFILING 1
 

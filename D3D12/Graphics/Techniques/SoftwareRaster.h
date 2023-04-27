@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
 class RGGraph;
 struct SceneView;

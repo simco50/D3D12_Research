@@ -1,13 +1,13 @@
 #include "stdafx.h"
 #include "DDGI.h"
 
-#include "../RHI/Graphics.h"
-#include "../RHI/RootSignature.h"
-#include "../RHI/PipelineState.h"
-#include "../RHI/StateObject.h"
-#include "../RHI/ShaderBindingTable.h"
-#include "../RenderGraph/RenderGraph.h"
-#include "../SceneView.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/StateObject.h"
+#include "Graphics/RHI/RootSignature.h"
+#include "Graphics/RHI/PipelineState.h"
+#include "Graphics/RHI/ShaderBindingTable.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/SceneView.h"
 
 DDGI::DDGI(GraphicsDevice* pDevice)
 {
@@ -48,6 +48,10 @@ DDGI::DDGI(GraphicsDevice* pDevice)
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDDGIVisualizePSO = pDevice->CreatePipeline(psoDesc);
 	}
+}
+
+DDGI::~DDGI()
+{
 }
 
 void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)

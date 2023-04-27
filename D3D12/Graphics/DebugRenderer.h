@@ -1,10 +1,7 @@
 #pragma once
+#include "Graphics/RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 
-class GraphicsDevice;
-class RootSignature;
-class PipelineState;
-class RGGraph;
 struct Light;
 struct SceneView;
 

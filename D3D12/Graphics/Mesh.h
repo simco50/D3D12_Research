@@ -1,11 +1,8 @@
 #pragma once
+
+#include "Graphics/RHI/RHI.h"
 #include "RHI/Buffer.h"
 
-class Buffer;
-class CommandContext;
-class Texture;
-class CommandContext;
-class ShaderResourceView;
 class Mesh;
 struct World;
 

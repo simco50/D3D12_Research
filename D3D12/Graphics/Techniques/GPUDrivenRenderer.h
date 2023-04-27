@@ -1,10 +1,7 @@
 #pragma once
+#include "Graphics/RHI/RHI.h"
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
-class GraphicsDevice;
-class RootSignature;
-class PipelineState;
-class Texture;
 struct SceneView;
 
 enum class RasterMode

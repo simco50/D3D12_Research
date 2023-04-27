@@ -1,5 +1,7 @@
 #pragma once
-#include "../RHI/RHI.h"
+
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
+#include "Graphics/RHI/RHI.h"
 
 class RGGraph;
 struct World;
@@ -23,6 +25,7 @@ class DDGI
 {
 public:
 	DDGI(GraphicsDevice* pDevice);
+	~DDGI();
 
 	void Execute(RGGraph& graph, const SceneView* pView, World* pWorld);
 	void RenderVisualization(RGGraph& graph, const SceneView* pView, const World* pWorld, const SceneTextures& sceneTextures);

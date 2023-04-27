@@ -1,4 +1,6 @@
 #pragma once
+
+#include "Graphics/RHI/RHI.h"
 #include "Core/BitField.h"
 #include "ShaderInterop.h"
 #include "AccelerationStructure.h"
@@ -6,13 +8,7 @@
 #include "Techniques/ShaderDebugRenderer.h"
 #include "Techniques/DDGI.h"
 
-class Texture;
-class Buffer;
 class Mesh;
-class CommandContext;
-class ShaderResourceView;
-class CommandSignature;
-class GraphicsDevice;
 class Image;
 struct SubMesh;
 struct Light;

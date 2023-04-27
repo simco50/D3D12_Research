@@ -1,13 +1,7 @@
 #pragma once
-#include "../RenderGraph/RenderGraphDefinitions.h"
-class GraphicsDevice;
-class PipelineState;
-class RootSignature;
-class Texture;
-class CommandSignature;
-class Buffer;
-class UnorderedAccessView;
-class RGGraph;
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
+
 struct SceneView;
 struct SceneTextures;
 

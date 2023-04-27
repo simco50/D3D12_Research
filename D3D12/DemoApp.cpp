@@ -13,6 +13,7 @@
 #include "Graphics/RHI/Shader.h"
 #include "Graphics/RHI/PipelineState.h"
 #include "Graphics/RHI/ShaderBindingTable.h"
+#include "Graphics/RHI/StateObject.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Graphics/Techniques/RTAO.h"

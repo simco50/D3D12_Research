@@ -4,8 +4,12 @@ class GraphicsDevice;
 class PipelineState;
 class StateObject;
 class Texture;
+struct TextureDesc;
 class Buffer;
+struct BufferDesc;
 class RootSignature;
+class CommandSignature;
+class CommandContext;
 
 enum class ResourceFormat
 {

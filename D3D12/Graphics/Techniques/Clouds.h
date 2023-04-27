@@ -1,9 +1,7 @@
 #pragma once
-#include "../RenderGraph/RenderGraphDefinitions.h"
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
-class Texture;
-class GraphicsDevice;
-class RGGraph;
 struct SceneTextures;
 struct SceneView;
 

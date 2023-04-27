@@ -1,8 +1,8 @@
 #pragma once
+
+#include "Graphics/RHI/RHI.h"
 #include "RHI/Fence.h"
-class Buffer;
-class CommandContext;
-class ShaderResourceView;
+
 struct SceneView;
 struct SubMesh;
 
