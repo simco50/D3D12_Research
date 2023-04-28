@@ -3,13 +3,13 @@
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/RHI/CommandContext.h"
 #include "Graphics/Profiler.h"
-#include "Core/CommandLine.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
 	D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
 	if (EnumHasAnyFlags(Flags, RGPassFlag::Copy))
 		state = D3D12_RESOURCE_STATE_COPY_SOURCE;
+
 	for (RGResource* pResource : resources)
 	{
 		if (pResource)
@@ -30,9 +30,7 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 	for (RGResource* pResource : resources)
 	{
 		if (pResource)
-		{
 			AddAccess(pResource, state);
-		}
 	}
 
 	return *this;
@@ -44,6 +42,7 @@ RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAc
 	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	if(pResolveTarget && pResolveTarget != pResource)
 		AddAccess(pResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+
 	RenderTargets.push_back({ pResource, loadAccess, pResolveTarget });
 	return *this;
 }
@@ -127,9 +126,7 @@ void RGGraph::Compile()
 					if (pIterPass != pPass && WritesTo(access.pResource, pIterPass))
 					{
 						if (std::find(pPass->PassDependencies.begin(), pPass->PassDependencies.end(), pIterPass) == pPass->PassDependencies.end())
-						{
 							pPass->PassDependencies.push_back(pIterPass);
-						}
 					}
 				}
 			}
@@ -149,9 +146,7 @@ void RGGraph::Compile()
 	else
 	{
 		for (RGPass* pPass : m_RenderPasses)
-		{
 			pPass->IsCulled = false;
-		}
 	}
 
 	// Tell the resources when they're first/last accessed and apply usage flags
@@ -205,13 +200,11 @@ void RGGraph::Compile()
 			if (!pResource->pPhysicalResource)
 			{
 				if (pResource->Type == RGResourceType::Texture)
-				{
 					pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
-				}
 				else if (pResource->Type == RGResourceType::Buffer)
-				{
 					pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
-				}
+				else
+					noEntry();
 			}
 			check(pResource->pPhysicalResource);
 		}
@@ -233,13 +226,11 @@ void RGGraph::Compile()
 		if (pResource->IsExported && !pResource->pPhysicalResource)
 		{
 			if (pResource->Type == RGResourceType::Texture)
-			{
 				pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
-			}
 			else if (pResource->Type == RGResourceType::Buffer)
-			{
 				pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
-			}
+			else
+				noEntry();
 		}
 	}
 }
@@ -268,13 +259,9 @@ void RGGraph::PushEvent(const char* pName)
 void RGGraph::PopEvent()
 {
 	if (!m_Events.empty())
-	{
 		m_Events.pop_back();
-	}
 	else
-	{
 		++m_RenderPasses.back()->NumEventsToEnd;
-	}
 }
 
 void RGGraph::Execute(CommandContext* pContext)
@@ -286,15 +273,14 @@ void RGGraph::Execute(CommandContext* pContext)
 			RGPass* pPass = m_RenderPasses[passIndex];
 
 			if (!pPass->IsCulled)
-			{
 				ExecutePass(pPass, *pContext);
-			}
 		}
 	}
 
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
 		check(exportResource.pTexture->pPhysicalResource);
+		// Exported resources don't reduce their ref count, so release here as the refcount increases by exporting.
 		exportResource.pTexture->Release();
 		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
 		pTexture->SetName(exportResource.pTexture->GetName());
@@ -304,6 +290,7 @@ void RGGraph::Execute(CommandContext* pContext)
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
 		check(exportResource.pBuffer->pPhysicalResource);
+		// Exported resources don't reduce their ref count, so release here as the refcount increases by exporting.
 		exportResource.pBuffer->Release();
 		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
 		pBuffer->SetName(exportResource.pBuffer->GetName());
@@ -316,9 +303,7 @@ void RGGraph::Execute(CommandContext* pContext)
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
 	for (const std::string& event : pPass->EventsToStart)
-	{
 		GPU_PROFILE_BEGIN(event.c_str(), &context);
-	}
 
 	{
 		GPU_PROFILE_SCOPE(pPass->GetName(), &context);
@@ -340,9 +325,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 	}
 
 	while (pPass->NumEventsToEnd--)
-	{
 		GPU_PROFILE_END();
-	}
 }
 
 void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
@@ -473,9 +456,7 @@ namespace RGUtils
 	RGPass& AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget)
 	{
 		return graph.AddPass(Sprintf("Resolve [%s -> %s]", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Raster)
-			.RenderTarget(pSource, RenderTargetLoadAction::Load, pTarget)
-			.Bind([=](CommandContext& context)
-				{});
+			.RenderTarget(pSource, RenderTargetLoadAction::Load, pTarget);
 	}
 
 	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport)
@@ -485,9 +466,7 @@ namespace RGUtils
 		if (pStorageTarget->Get())
 		{
 			if (pStorageTarget->Get()->GetDesc().IsCompatible(bufferDesc))
-			{
 				pBuffer = graph.Import(*pStorageTarget);
-			}
 		}
 		if (!pBuffer)
 		{
@@ -505,9 +484,7 @@ namespace RGUtils
 		if (pStorageTarget->Get())
 		{
 			if (pStorageTarget->Get()->GetDesc().IsCompatible(textureDesc))
-			{
 				pTexture = graph.TryImport(*pStorageTarget);
-			}
 		}
 		if (!pTexture)
 		{
