@@ -8,7 +8,6 @@
 
 #include "stb_image.h"
 #include "stb_image_write.h"
-#include <fstream>
 #include "Core/Paths.h"
 
 Image::Image(ResourceFormat format)
@@ -31,15 +30,15 @@ bool Image::Load(const char* inputStream)
 	const std::string extension = Paths::GetFileExtenstion(inputStream);
 	bool success = false;
 
-	std::ifstream s(inputStream, std::ios::binary | std::ios::ate);
-	if (s.fail())
-	{
+	FILE* pFile = nullptr;
+	fopen_s(&pFile, inputStream, "rb");
+	if (!pFile)
 		return false;
-	}
 
-	std::vector<char> data((size_t)s.tellg());
-	s.seekg(0);
-	s.read(data.data(), data.size());
+	fseek(pFile, 0, SEEK_END);
+	std::vector<char> data((size_t)ftell(pFile));
+	fseek(pFile, 0, SEEK_SET);
+	fread(data.data(), data.size(), 1, pFile);
 
 	if (extension == "dds")
 	{

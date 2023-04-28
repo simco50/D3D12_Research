@@ -1,7 +1,5 @@
 #pragma once
-
-class StateObject;
-class CommandContext;
+#include "RHI.h"
 
 class ShaderBindingTable
 {

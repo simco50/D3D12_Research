@@ -3,8 +3,6 @@
 #include "Shader.h"
 #include "Core/TaskQueue.h"
 
-class RootSignature;
-class StateObject;
 class ShaderManager;
 struct Shader;
 

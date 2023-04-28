@@ -3,6 +3,7 @@
 #include "Core/Input.h"
 #include "Paths.h"
 #include "imgui_internal.h"
+#include <fstream>
 
 static std::unordered_map<StringHash, IConsoleObject*> gCvarMap;
 static std::vector<IConsoleObject*> gConsoleObjects;

@@ -4,7 +4,6 @@
 #include "Core/TaskQueue.h"
 
 class ShaderManager;
-class RootSignature;
 
 enum class BlendMode
 {

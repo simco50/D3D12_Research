@@ -1,8 +1,6 @@
 #pragma once
 #include "GraphicsResource.h"
 
-class CommandQueue;
-
 class Fence : public GraphicsObject
 {
 public:

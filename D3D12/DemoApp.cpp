@@ -491,12 +491,12 @@ void DemoApp::Update()
 			const bool doPrepass = true;
 			const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility;
 
-			RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
-			rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
 			if (doPrepass)
 			{
 				if (needVisibilityBuffer)
 				{
+					RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
+					rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
 					m_pGPUDrivenRenderer->Render(graph,	pView, rasterContext, rasterResult);
 					if (Tweakables::CullDebugStats)
 						m_pGPUDrivenRenderer->PrintStats(graph, pView, rasterContext);

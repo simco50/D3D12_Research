@@ -1,5 +1,6 @@
 #pragma once
 
+class CommandQueue;
 class GraphicsDevice;
 class PipelineState;
 class StateObject;
@@ -10,6 +11,12 @@ struct BufferDesc;
 class RootSignature;
 class CommandSignature;
 class CommandContext;
+class ShaderBindingTable;
+class ResourceView;
+class ShaderResourceView;
+class UnorderedAccessView;
+class PipelineStateInitializer;
+class StateObjectInitializer;
 
 enum class ResourceFormat
 {

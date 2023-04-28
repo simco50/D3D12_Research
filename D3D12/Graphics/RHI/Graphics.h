@@ -1,5 +1,5 @@
 #pragma once
-
+#include "RHI.h"
 #include "Shader.h"
 #include "DescriptorHandle.h"
 #include "GraphicsResource.h"
@@ -7,28 +7,12 @@
 #include "D3D.h"
 #include "Fence.h"
 
-class CommandQueue;
-class CommandContext;
 class DynamicAllocationManager;
-class GraphicsResource;
-class RootSignature;
-class Texture;
-class PipelineState;
-class Buffer;
 class ShaderManager;
-class PipelineStateInitializer;
-class StateObject;
-class StateObjectInitializer;
 class GPUDescriptorHeap;
 class CPUDescriptorHeap;
-class ResourceView;
 class SwapChain;
-class Fence;
-class GraphicsDevice;
-class CommandSignature;
 class CommandSignatureInitializer;
-struct TextureDesc;
-struct BufferDesc;
 
 using WindowHandle = HWND;
 

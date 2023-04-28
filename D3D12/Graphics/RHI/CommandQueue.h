@@ -2,8 +2,6 @@
 #include "GraphicsResource.h"
 #include "Fence.h"
 
-class CommandContext;
-
 class CommandQueue : public GraphicsObject
 {
 public:

@@ -1,6 +1,6 @@
 #pragma once
 #include "Buffer.h"
-#include "CommandQueue.h"
+#include "Fence.h"
 
 class SyncPoint;
 

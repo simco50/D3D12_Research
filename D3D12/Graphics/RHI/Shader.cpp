@@ -30,12 +30,11 @@ namespace ShaderCompiler
 		uint8 MajVersion;
 		uint8 MinVersion;
 		bool EnableDebugMode;
-		bool EnableSymbols;
 	};
 
 	struct CompileResult
 	{
-		static constexpr int Version = 5;
+		static constexpr int Version = 6;
 
 		std::string ErrorMessage;
 		ShaderBlob pBlob;
@@ -122,10 +121,6 @@ namespace ShaderCompiler
 			return false;
 
 		s.Serialize(result.ShaderHash);
-		s.Serialize(result.IsDebug);
-		if (result.IsDebug != compileJob.EnableDebugMode)
-			return false;
-
 		s.Serialize(result.Includes);
 
 		// Test if includes sources are not newer than the cached file
@@ -155,7 +150,6 @@ namespace ShaderCompiler
 		uint32 version = CompileResult::Version;
 		s.Serialize(version);
 		s.Serialize(result.ShaderHash);
-		s.Serialize(result.IsDebug);
 		s.Serialize(result.Includes);
 		void* pBlob = result.pBlob->GetBufferPointer();
 		uint32 size = (uint32)result.pBlob->GetBufferSize();
@@ -298,7 +292,8 @@ namespace ShaderCompiler
 			arguments.AddArgument(DXC_ARG_OPTIMIZATION_LEVEL3);
 
 		arguments.AddArgument(DXC_ARG_DEBUG);
-		arguments.AddArgument("-Qembed_debug");
+		arguments.AddArgument("-Qstrip_debug");
+		arguments.AddArgument("-Fd", Sprintf("%s.pdb", Paths::GetFileNameWithoutExtension(cachePath)).c_str());
 
 		arguments.AddArgument("-I", Paths::GetDirectoryPath(fullPath).c_str());
 		for (const std::string& includeDir : compileJob.IncludeDirs)
@@ -411,12 +406,17 @@ namespace ShaderCompiler
 				{
 					std::string filePathBase = Paths::GetFileNameWithoutExtension(cachePath);
 					{
-						std::ofstream str(Sprintf("%s%s.hlsl", Paths::ShaderCacheDir().c_str(), filePathBase.c_str()));
-						str.write(pHLSL->GetStringPointer(), pHLSL->GetStringLength());
+						FILE* pFile = nullptr;
+						fopen_s(&pFile, Sprintf("%s%s.hlsl", Paths::ShaderCacheDir(), filePathBase).c_str(), "w");
+						fwrite(pHLSL->GetStringPointer(), pHLSL->GetStringLength(), 1, pFile);
+						fclose(pFile);
 					}
 					{
-						std::ofstream str(Sprintf("%s%s.bat", Paths::ShaderCacheDir().c_str(), filePathBase.c_str()));
-						str << Sprintf("dxc.exe %s -Fo %s.shaderbin %s.hlsl", arguments.ToString().c_str(), filePathBase.c_str(), filePathBase.c_str());
+						FILE* pFile = nullptr;
+
+						fopen_s(&pFile, Sprintf("%s%s.bat", Paths::ShaderCacheDir(), filePathBase).c_str(), "w");
+						std::string txt = Sprintf("dxc.exe %s -Fo %s.shaderbin %s.hlsl", arguments.ToString(), filePathBase, filePathBase);
+						fwrite(txt.c_str(), txt.size(), 1, pFile);
 					}
 				}
 			}
@@ -469,7 +469,6 @@ namespace ShaderCompiler
 		}
 
 		//Symbols
-#if 0
 		{
 			RefCountPtr<IDxcBlobUtf16> pDebugDataPath;
 			RefCountPtr<IDxcBlob> pSymbolsBlob;
@@ -477,11 +476,13 @@ namespace ShaderCompiler
 			{
 				RefCountPtr<IDxcBlobUtf8> pDebugDataPathUTF8;
 				pUtils->GetBlobAsUtf8(pDebugDataPath.Get(), pDebugDataPathUTF8.GetAddressOf());
-				std::ofstream str(Sprintf("%s%s", Paths::ShaderCacheDir().c_str(), pDebugDataPathUTF8->GetStringPointer()), std::ios::binary);
-				str.write((char*)pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize());
+				std::string symbolsPath = Sprintf("%s%s", Paths::ShaderCacheDir().c_str(), pDebugDataPathUTF8->GetStringPointer());
+				FILE* pFile = nullptr;
+				fopen_s(&pFile, symbolsPath.c_str(), "w");
+				fwrite((char*)pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize(), 1, pFile);
+				fclose(pFile);
 			}
 		}
-#endif
 
 		//Reflection
 		{
@@ -630,7 +631,6 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	job.MinVersion = m_ShaderModelMinor;
 	job.Target = ShaderCompiler::GetShaderTarget(shaderType);
 	job.EnableDebugMode = CommandLine::GetBool("debugshaders");
-	job.EnableSymbols = CommandLine::GetBool("shadersymbols");
 
 	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(job);
 

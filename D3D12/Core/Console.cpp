@@ -43,6 +43,7 @@ static std::mutex sLogMutex;
 static std::vector<Console::LogEntry> sMessageQueue;
 static LogType sVerbosity;
 static std::deque<Console::LogEntry> sHistory;
+std::array<char, 8192> Console::sConvertBuffer;
 
 void Console::Initialize()
 {
@@ -81,16 +82,6 @@ void Console::Log(const char* message, LogType type)
 
 	if (type == LogType::FatalError)
 		abort();
-}
-
-void Console::LogFormat(LogType type, const char* format, ...)
-{
-	static char sConvertBuffer[8196];
-	va_list ap;
-	va_start(ap, format);
-	FormatStringVars(sConvertBuffer, ARRAYSIZE(sConvertBuffer), format, ap);
-	va_end(ap);
-	Log(sConvertBuffer, type);
 }
 
 void Console::SetVerbosity(LogType type)

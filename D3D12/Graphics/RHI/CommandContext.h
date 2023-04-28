@@ -1,16 +1,9 @@
 #pragma once
+#include "RHI.h"
 #include "GraphicsResource.h"
 #include "GPUDescriptorHeap.h"
 #include "DynamicResourceAllocator.h"
 
-class Texture;
-class RootSignature;
-class PipelineState;
-class StateObject;
-class Buffer;
-class CommandSignature;
-class ShaderBindingTable;
-class ResourceView;
 struct VertexBufferView;
 struct IndexBufferView;
 

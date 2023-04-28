@@ -2,10 +2,6 @@
 #include "GraphicsResource.h"
 #include "DescriptorHandle.h"
 
-class Buffer;
-class Texture;
-class GraphicsResource;
-
 struct BufferUAVDesc
 {
 	BufferUAVDesc(ResourceFormat format = ResourceFormat::Unknown, bool raw = false, bool counter = false)

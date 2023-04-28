@@ -55,24 +55,13 @@ inline int FormatString(char* pBuffer, int bufferSize, const char* pFormat, ...)
 	return w;
 }
 
-inline int FormatStringVars(char* pBuffer, size_t bufferSize, const char* pFormat, va_list args)
-{
-	int w = stbsp_vsnprintf(pBuffer, (int)bufferSize, pFormat, args);
-	if (pBuffer == NULL)
-		return w;
-	if (w == -1 || w >= (int)bufferSize)
-		w = (int)bufferSize - 1;
-	pBuffer[w] = 0;
-	return w;
-}
-
 template <class T>
-decltype(auto) GetFormatArgument(T const& arg)
+decltype(auto) GetFormatArgument(const T& arg)
 {
 	return arg;
 }
 
-inline const char* GetFormatArgument(std::string const& arg)
+inline const char* GetFormatArgument(const std::string& arg)
 {
 	return arg.c_str();
 }
@@ -80,10 +69,10 @@ inline const char* GetFormatArgument(std::string const& arg)
 template<typename... Args>
 std::string Sprintf(const char* pFormat, Args&&... args)
 {
-	int length = FormatString(nullptr, 0, pFormat, GetFormatArgument<Args>(std::forward<Args&&>(args))...);
+	int length = FormatString(nullptr, 0, pFormat, GetFormatArgument(std::forward<Args&&>(args))...);
 	std::string str;
 	str.resize(length);
-	FormatString(str.data(), length + 1, pFormat, GetFormatArgument<Args>(std::forward<Args&&>(args))...);
+	FormatString(str.data(), length + 1, pFormat, GetFormatArgument(std::forward<Args&&>(args))...);
 	return str;
 }
 

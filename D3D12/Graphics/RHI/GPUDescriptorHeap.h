@@ -5,7 +5,6 @@
 #include "RootSignature.h"
 #include "CommandQueue.h"
 
-class CommandContext;
 enum class CommandListContext;
 
 struct DescriptorHeapPage
