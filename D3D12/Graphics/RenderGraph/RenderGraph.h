@@ -202,8 +202,8 @@ private:
 	uint32 ID;
 	RGPassFlag Flags;
 	bool IsCulled = true;
-	uint32 m_NumEventsToEnd = 0;
-	std::vector<std::string> m_EventsToStart;
+	uint32 NumEventsToEnd = 0;
+	std::vector<std::string> EventsToStart;
 
 	std::vector<ResourceAccess> Accesses;
 	std::vector<RGPass*> PassDependencies;
@@ -274,7 +274,7 @@ public:
 
 		for(const std::string& eventName : m_Events)
 		{
-			pPass->m_EventsToStart.push_back(eventName);
+			pPass->EventsToStart.push_back(eventName);
 		}
 		m_Events.clear();
 

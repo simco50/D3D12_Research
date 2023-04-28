@@ -163,6 +163,7 @@ void RGGraph::Compile()
 		for (const RGPass::ResourceAccess& access : pPass->Accesses)
 		{
 			RGResource* pResource = access.pResource;
+			pResource->pFirstAccess = pResource->pFirstAccess ? pResource->pFirstAccess : pPass;
 			pResource->pLastAccess = pPass;
 
 			D3D12_RESOURCE_STATES state = access.Access;
@@ -201,7 +202,7 @@ void RGGraph::Compile()
 		for (const RGPass::ResourceAccess& access : pPass->Accesses)
 		{
 			RGResource* pResource = access.pResource;
-			if (pResource->pResourceReference == nullptr)
+			if (!pResource->pPhysicalResource)
 			{
 				if (pResource->Type == RGResourceType::Texture)
 				{
@@ -212,7 +213,7 @@ void RGGraph::Compile()
 					pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
 				}
 			}
-			check(pResource->pResourceReference);
+			check(pResource->pPhysicalResource);
 		}
 
 		for (const RGPass::ResourceAccess& access : pPass->Accesses)
@@ -220,7 +221,7 @@ void RGGraph::Compile()
 			RGResource* pResource = access.pResource;
 			if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
 			{
-				check(pResource->pResourceReference);
+				check(pResource->pPhysicalResource);
 				pResource->Release();
 			}
 		}
@@ -229,7 +230,7 @@ void RGGraph::Compile()
 	// #todo Should exported resources that are not used actually be exported?
 	for (RGResource* pResource : m_Resources)
 	{
-		if (pResource->IsExported && !pResource->pResourceReference)
+		if (pResource->IsExported && !pResource->pPhysicalResource)
 		{
 			if (pResource->Type == RGResourceType::Texture)
 			{
@@ -272,7 +273,7 @@ void RGGraph::PopEvent()
 	}
 	else
 	{
-		++m_RenderPasses.back()->m_NumEventsToEnd;
+		++m_RenderPasses.back()->NumEventsToEnd;
 	}
 }
 
@@ -293,7 +294,8 @@ void RGGraph::Execute(CommandContext* pContext)
 
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
-		check(exportResource.pTexture->pResource);
+		check(exportResource.pTexture->pPhysicalResource);
+		exportResource.pTexture->Release();
 		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
 		pTexture->SetName(exportResource.pTexture->GetName());
 		*exportResource.pTarget = pTexture;
@@ -301,7 +303,8 @@ void RGGraph::Execute(CommandContext* pContext)
 
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
-		check(exportResource.pBuffer->pResource);
+		check(exportResource.pBuffer->pPhysicalResource);
+		exportResource.pBuffer->Release();
 		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
 		pBuffer->SetName(exportResource.pBuffer->GetName());
 		*exportResource.pTarget = pBuffer;
@@ -312,7 +315,7 @@ void RGGraph::Execute(CommandContext* pContext)
 
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
-	for (const std::string& event : pPass->m_EventsToStart)
+	for (const std::string& event : pPass->EventsToStart)
 	{
 		GPU_PROFILE_BEGIN(event.c_str(), &context);
 	}
@@ -336,7 +339,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 		}
 	}
 
-	while (pPass->m_NumEventsToEnd--)
+	while (pPass->NumEventsToEnd--)
 	{
 		GPU_PROFILE_END();
 	}
@@ -347,9 +350,9 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 	for (const RGPass::ResourceAccess& access : pPass->Accesses)
 	{
 		RGResource* pResource = access.pResource;
-		checkf(pResource->pResource, "Resource was not allocated during the graph compile phase");
-		checkf(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
-		context.InsertResourceBarrier(pResource->pResource, access.Access);
+		checkf(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
+		checkf(pResource->IsImported || pResource->IsExported || pResource->pPhysicalResource->GetNumRefs() == 1, "If resource is not external, it's reference should be released during the graph compile phase");
+		context.InsertResourceBarrier(pResource->pPhysicalResource, access.Access);
 	}
 
 	context.FlushResourceBarriers();
@@ -463,7 +466,7 @@ namespace RGUtils
 			.Write(pTarget)
 			.Bind([=](CommandContext& context)
 				{
-					context.CopyResource(pSource->GetRaw(), pTarget->GetRaw());
+					context.CopyResource(pSource->GetPhysical(), pTarget->GetPhysical());
 				});
 	}
 

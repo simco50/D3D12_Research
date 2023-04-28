@@ -78,18 +78,6 @@ void RGGraph::DrawDebug(bool& enabled) const
 		int32 passIndex = 0;
 		int32 resourceIndex = 0;
 
-		auto GetResourceFirstUse = [this](const RGResource* pResource) -> const RGPass* {
-			for (RGPass* pPass : m_RenderPasses)
-			{
-				for (const RGPass::ResourceAccess& access : pPass->Accesses)
-				{
-					if (access.pResource == pResource)
-						return pPass;
-				}
-			}
-			return nullptr;
-		};
-
 		float passNameHeight = 300.0f;
 		float resourceNameWidth = 300.0f;
 		ImVec2 boxSize = ImVec2(20.0f, ImGui::GetTextLineHeightWithSpacing());
@@ -132,16 +120,16 @@ void RGGraph::DrawDebug(bool& enabled) const
 		std::unordered_map<GraphicsResource*, int> resourceToIndex;
 		for (const RGResource* pResource : m_Resources)
 		{
-			if (pResource->GetRaw() == nullptr)
+			if (pResource->GetPhysical() == nullptr)
 				continue;
 			if (pResource->IsImported)
 				continue;
 
-			if (resourceToIndex.find(pResource->GetRaw()) == resourceToIndex.end())
-				resourceToIndex[pResource->GetRaw()] = resourceIndex++;
-			int physicalResourceIndex = resourceToIndex[pResource->GetRaw()];
+			if (resourceToIndex.find(pResource->GetPhysical()) == resourceToIndex.end())
+				resourceToIndex[pResource->GetPhysical()] = resourceIndex++;
+			int physicalResourceIndex = resourceToIndex[pResource->GetPhysical()];
 
-			const RGPass* pFirstPass = GetResourceFirstUse(pResource);
+			const RGPass* pFirstPass = pResource->pFirstAccess;
 			const RGPass* pLastPass = pResource->pLastAccess;
 			if (pFirstPass == nullptr || pLastPass == nullptr)
 				continue;
@@ -256,8 +244,8 @@ void RGGraph::DumpGraph(const char* pPath) const
 	std::unordered_map<GraphicsResource*, std::string> resourceMap;
 	for (RGResource* pResource : m_Resources)
 	{
-		std::string& s = resourceMap[pResource->GetRaw()];
-		s = Sprintf("|%-60s| ", pResource->GetRaw()->GetName().c_str());
+		std::string& s = resourceMap[pResource->GetPhysical()];
+		s = Sprintf("|%-60s| ", pResource->GetPhysical()->GetName().c_str());
 	}
 	for (auto& resource : resourceMap)
 	{
@@ -265,7 +253,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 		for (int passIndex = 0; passIndex < (int)m_RenderPasses.size(); ++passIndex)
 		{
 			RGPass* pPass = m_RenderPasses[passIndex];
-			auto access = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource->GetRaw() == pResource; });
+			auto access = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource->GetPhysical() == pResource; });
 			resource.second += access != pPass->Accesses.end() ? "#" : " ";
 		}
 	}

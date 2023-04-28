@@ -35,25 +35,27 @@ public:
 	friend class RGGraph;
 	friend class RGPass;
 
-	RGResource(const char* pName, int id, RGResourceType type, GraphicsResource* pResource = nullptr)
-		: pName(pName), ID(id), IsImported(!!pResource), Type(type), pResourceReference(pResource), pResource(pResource)
+	RGResource(const char* pName, int id, RGResourceType type, GraphicsResource* pPhysicalResource = nullptr)
+		: pName(pName), ID(id), IsImported(!!pPhysicalResource), Type(type), pPhysicalResource(pPhysicalResource)
 	{
 	}
 
 	const char* GetName() const { return pName; }
-	GraphicsResource* GetRaw() const { return pResource; }
+	GraphicsResource* GetPhysical() const { return pPhysicalResource; }
 
 protected:
 	void SetResource(RefCountPtr<GraphicsResource> resource)
 	{
-		pResourceReference = resource;
-		pResource = resource;
+		pPhysicalResource = resource;
+
+		// Add a reference to tell the resource allocator it can't currently be re-used.
+		pPhysicalResource->AddRef();
 	}
 
 	void Release()
 	{
-		pResourceReference = nullptr;
-		// pResource keeps a raw reference to use during execution
+		// Remove reference to tell the resource allocator it can be returned to the pool.
+		pPhysicalResource->Release();
 	}
 
 	const char* pName;
@@ -61,8 +63,8 @@ protected:
 	bool IsImported;
 	bool IsExported = false;
 	RGResourceType Type;
-	RefCountPtr<GraphicsResource> pResourceReference;
-	GraphicsResource* pResource = nullptr;
+	GraphicsResource* pPhysicalResource = nullptr;
+	const RGPass* pFirstAccess = nullptr;
 	const RGPass* pLastAccess = nullptr;
 };
 
@@ -73,14 +75,14 @@ public:
 	friend class RGGraph;
 	using TDesc = typename RGResourceTypeTraits<T>::TDesc;
 
-	RGResourceT(const char* pName, int id, const TDesc& desc, T* pResource = nullptr)
-		: RGResource(pName, id, RGResourceTypeTraits<T>::Type, pResource), Desc(desc)
+	RGResourceT(const char* pName, int id, const TDesc& desc, T* pPhysicalResource = nullptr)
+		: RGResource(pName, id, RGResourceTypeTraits<T>::Type, pPhysicalResource), Desc(desc)
 	{}
 
 	T* Get() const
 	{
-		check(pResource);
-		return static_cast<T*>(pResource);
+		check(pPhysicalResource);
+		return static_cast<T*>(pPhysicalResource);
 	}
 
 	const TDesc& GetDesc() const { return Desc; }
