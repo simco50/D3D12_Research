@@ -186,6 +186,16 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 {
 	RGBuffer* pInstanceCullArgs = nullptr;
 
+	// In Phase 1, read from the previous frame's HZB
+	RGTexture* pSourceHZB = nullptr;
+	if (rasterContext.pPreviousHZB)
+	{
+		if (rasterPhase == RasterPhase::Phase1)
+			pSourceHZB = graph.TryImport(*rasterContext.pPreviousHZB, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
+		else
+			pSourceHZB = outResult.pHZB;
+	}
+
 	// PSO index to use based on current phase, if the PSO has permutations
 	const int psoPhaseIndex = rasterPhase == RasterPhase::Phase1 ? 0 : 1;
 
@@ -243,9 +253,9 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					});
 
 				if (rasterContext.EnableOcclusion())
-					context.BindResources(3, outResult.pHZB->Get()->GetSRV(), 3);
+					context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
 
-				if(rasterPhase == RasterPhase::Phase1)
+				if (rasterPhase == RasterPhase::Phase1)
 					context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
 				else
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pInstanceCullArgs->Get());
@@ -254,7 +264,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	if (rasterPhase == RasterPhase::Phase2)
 		cullInstancePass.Read(pInstanceCullArgs);
 	if (rasterContext.EnableOcclusion())
-		cullInstancePass.Read(outResult.pHZB);
+		cullInstancePass.Read(pSourceHZB);
 
 	// Build indirect arguments for the next pass, based on the visible list of meshlets.
 	RGBuffer* pMeshletCullArgs = graph.Create("GPURender.MeshletCullArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
@@ -292,12 +302,12 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
 					});
 				if (rasterContext.EnableOcclusion())
-					context.BindResources(3, outResult.pHZB->Get()->GetSRV(), 3);
+					context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pMeshletCullArgs->Get());
 			});
 	if (rasterContext.EnableOcclusion())
-		meshletCullPass.Read(outResult.pHZB);
+		meshletCullPass.Read(pSourceHZB);
 	/*
 		Visible meshlets are output in a single list and in an unordered fashion.
 		Each of these meshlets can want a different PSO.
@@ -473,7 +483,8 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 	outResult.pVisibilityBuffer = nullptr;
 	if (rasterContext.Mode == RasterMode::VisibilityBuffer)
 	{
-		outResult.pHZB = InitHZB(graph, dimensions, rasterContext.pPreviousHZB);
+		outResult.pHZB = InitHZB(graph, dimensions);
+		graph.Export(outResult.pHZB, rasterContext.pPreviousHZB);
 		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
 	}
 
@@ -529,27 +540,14 @@ void GPUDrivenRenderer::PrintStats(RGGraph& graph, const SceneView* pView, const
 			});
 }
 
-RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2u& viewDimensions, RefCountPtr<Texture>* pExportTarget) const
+RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const
 {
-	RGTexture* pHZB = nullptr;
-	if (pExportTarget && *pExportTarget)
-		pHZB = graph.TryImport(*pExportTarget);
-
 	Vector2u hzbDimensions;
 	hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(viewDimensions.x) >> 1u, 1u);
 	hzbDimensions.y = Math::Max(Math::NextPowerOfTwo(viewDimensions.y) >> 1u, 1u);
 	uint32 numMips = (uint32)Math::Floor(log2f((float)Math::Max(hzbDimensions.x, hzbDimensions.y)));
 	TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R16_FLOAT, TextureFlag::UnorderedAccess, 1, numMips);
-
-	if (!pHZB || pHZB->GetDesc() != desc)
-	{
-		pHZB = graph.Create("HZB", desc);
-		if (pExportTarget)
-		{
-			graph.Export(pHZB, pExportTarget);
-		}
-	}
-	return pHZB;
+	return graph.Create("HZB", desc);
 }
 
 void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB)

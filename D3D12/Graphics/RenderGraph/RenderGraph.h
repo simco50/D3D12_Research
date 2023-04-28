@@ -304,9 +304,11 @@ public:
 		return pResource;
 	}
 
-	RGTexture* TryImport(Texture* pTexture)
+	RGTexture* TryImport(Texture* pTexture, Texture* pFallback = nullptr)
 	{
-		return pTexture ? Import(pTexture) : nullptr;
+		if (pTexture)
+			return Import(pTexture);
+		return pFallback ? Import(pFallback) : nullptr;
 	}
 
 	RGBuffer* Import(Buffer* pBuffer)
@@ -317,9 +319,11 @@ public:
 		return pResource;
 	}
 
-	RGBuffer* TryImport(Buffer* pBuffer)
+	RGBuffer* TryImport(Buffer* pBuffer, Buffer* pFallback = nullptr)
 	{
-		return pBuffer ? Import(pBuffer) : nullptr;
+		if (pBuffer)
+			return Import(pBuffer);
+		return pFallback ? Import(pFallback) : nullptr;
 	}
 
 	void Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget);

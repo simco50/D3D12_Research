@@ -59,7 +59,7 @@ private:
 	};
 	using PipelineStateBinSet = std::array<RefCountPtr<PipelineState>, (int)PipelineBin::Count>;
 
-	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions, RefCountPtr<Texture>* pExportTarget = nullptr) const;
+	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
 	void CullAndRasterize(RGGraph& graph, const SceneView* pView, RasterPhase rasterPhase, const RasterContext& context, RasterResult& outResult);
