@@ -39,6 +39,10 @@ SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& c
 	CommandContext* pBarrierCommandlist = GetParent()->AllocateCommandContext(m_Type);
 	CommandContext* pCurrentContext = pBarrierCommandlist;
 
+	// Executing a commandlist will update the last sync point and resource state tracking.
+	// Can't have multiple threads do this at the same time.
+	std::lock_guard lock(m_ExecuteLock);
+
 	for(CommandContext* pNextContext : contexts)
 	{
 		check(pNextContext);

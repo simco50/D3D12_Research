@@ -32,4 +32,5 @@ private:
 	SyncPoint m_SyncPoint;
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	uint64 m_TimestampFrequency;
+	std::mutex m_ExecuteLock;
 };
