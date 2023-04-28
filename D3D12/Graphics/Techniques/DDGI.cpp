@@ -90,13 +90,13 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 		Vector2i ddgiIrradianceDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeIrradianceTexels);
 		TextureDesc ddgiIrradianceDesc = TextureDesc::Create2D(ddgiIrradianceDimensions.x, ddgiIrradianceDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::UnorderedAccess);
 		RGTexture* pIrradianceTarget = graph.Create("DDGI Irradiance Target", ddgiIrradianceDesc);
-		RGTexture* pIrradianceHistory = RGUtils::CreatePersistent(graph, "DDGI Irradiance History", ddgiIrradianceDesc, &ddgi.pIrradianceHistory, false);
+		RGTexture* pIrradianceHistory = graph.TryImport(ddgi.pIrradianceHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 		graph.Export(pIrradianceTarget, &ddgi.pIrradianceHistory);
 
 		Vector2i ddgiDepthDimensions = ProbeTextureDimensions(ddgi.NumProbes, probeDepthTexel);
 		TextureDesc ddgiDepthDesc = TextureDesc::Create2D(ddgiDepthDimensions.x, ddgiDepthDimensions.y, ResourceFormat::RG16_FLOAT, TextureFlag::UnorderedAccess);
 		RGTexture* pDepthTarget = graph.Create("DDGI Depth Target", ddgiDepthDesc);
-		RGTexture* pDepthHistory = RGUtils::CreatePersistent(graph, "DDGI Depth History", ddgiDepthDesc, &ddgi.pDepthHistory, false);
+		RGTexture* pDepthHistory = graph.TryImport(ddgi.pDepthHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 		graph.Export(pDepthTarget, &ddgi.pDepthHistory);
 
 		RGBuffer* pRayBuffer = graph.Create("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, ResourceFormat::RGBA16_FLOAT));
