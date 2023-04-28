@@ -42,7 +42,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 	RGTexture* pAmbientOcclusion = graph.Create("RTAO", aoDesc);
 	RGTexture* pRayTraceTarget = graph.Create("AO Target 0", aoDesc);
 	RGTexture* pDenoiseTarget = graph.Create("AO Target 1", aoDesc);
-	RGTexture* pAOHistory = graph.TryImport(m_pHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
+	RGTexture* pAOHistory = m_pHistory ? graph.Import(m_pHistory) : graph.Create("AO History", aoDesc);
 	graph.Export(pAmbientOcclusion, &m_pHistory);
 
 	static float g_AoPower = 1.0f;
@@ -142,7 +142,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
-				 pDenoiseTarget->Get()->GetSRV()
+					pDenoiseTarget->Get()->GetSRV()
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 256, pTarget->GetHeight(), 1));

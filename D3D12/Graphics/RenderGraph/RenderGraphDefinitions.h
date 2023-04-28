@@ -36,7 +36,7 @@ public:
 	friend class RGPass;
 
 	RGResource(const char* pName, int id, RGResourceType type, GraphicsResource* pPhysicalResource = nullptr)
-		: pName(pName), ID(id), IsImported(!!pPhysicalResource), Type(type), pPhysicalResource(pPhysicalResource)
+		: pName(pName), ID(id), IsImported(!!pPhysicalResource), Type(type), pResourceReference(pPhysicalResource), pPhysicalResource(pPhysicalResource)
 	{
 	}
 
@@ -46,16 +46,14 @@ public:
 protected:
 	void SetResource(RefCountPtr<GraphicsResource> resource)
 	{
+		pResourceReference = resource;
 		pPhysicalResource = resource;
-
-		// Add a reference to tell the resource allocator it can't currently be re-used.
-		pPhysicalResource->AddRef();
 	}
 
 	void Release()
 	{
-		// Remove reference to tell the resource allocator it can be returned to the pool.
-		pPhysicalResource->Release();
+		pResourceReference = nullptr;
+		// pResource keeps a raw reference to use during execution
 	}
 
 	const char* pName;
@@ -63,6 +61,7 @@ protected:
 	bool IsImported;
 	bool IsExported = false;
 	RGResourceType Type;
+	RefCountPtr<GraphicsResource> pResourceReference;
 	GraphicsResource* pPhysicalResource = nullptr;
 	const RGPass* pFirstAccess = nullptr;
 	const RGPass* pLastAccess = nullptr;

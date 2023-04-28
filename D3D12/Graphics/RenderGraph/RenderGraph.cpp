@@ -261,7 +261,7 @@ void RGGraph::PopEvent()
 	if (!m_Events.empty())
 		m_Events.pop_back();
 	else
-		++m_RenderPasses.back()->NumEventsToEnd;
+		++m_RenderPasses.back()->m_NumEventsToEnd;
 }
 
 void RGGraph::Execute(CommandContext* pContext)
@@ -280,8 +280,6 @@ void RGGraph::Execute(CommandContext* pContext)
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
 		check(exportResource.pTexture->pPhysicalResource);
-		// Exported resources don't reduce their ref count, so release here as the refcount increases by exporting.
-		exportResource.pTexture->Release();
 		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
 		pTexture->SetName(exportResource.pTexture->GetName());
 		*exportResource.pTarget = pTexture;
@@ -290,8 +288,6 @@ void RGGraph::Execute(CommandContext* pContext)
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
 		check(exportResource.pBuffer->pPhysicalResource);
-		// Exported resources don't reduce their ref count, so release here as the refcount increases by exporting.
-		exportResource.pBuffer->Release();
 		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
 		pBuffer->SetName(exportResource.pBuffer->GetName());
 		*exportResource.pTarget = pBuffer;
@@ -302,7 +298,7 @@ void RGGraph::Execute(CommandContext* pContext)
 
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
-	for (const std::string& event : pPass->EventsToStart)
+	for (const std::string& event : pPass->m_EventsToStart)
 		GPU_PROFILE_BEGIN(event.c_str(), &context);
 
 	{
@@ -324,7 +320,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 		}
 	}
 
-	while (pPass->NumEventsToEnd--)
+	while (pPass->m_NumEventsToEnd--)
 		GPU_PROFILE_END();
 }
 
@@ -334,7 +330,7 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 	{
 		RGResource* pResource = access.pResource;
 		checkf(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
-		checkf(pResource->IsImported || pResource->IsExported || pResource->pPhysicalResource->GetNumRefs() == 1, "If resource is not external, it's reference should be released during the graph compile phase");
+		checkf(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
 		context.InsertResourceBarrier(pResource->pPhysicalResource, access.Access);
 	}
 
