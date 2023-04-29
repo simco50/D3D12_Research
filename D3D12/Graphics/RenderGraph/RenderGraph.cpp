@@ -267,6 +267,21 @@ void RGGraph::PopEvent()
 void RGGraph::Execute(CommandContext* pContext)
 {
 	GPU_PROFILE_SCOPE("Render", pContext);
+
+	// Export resources first so they can be available during pass execution.
+	for (ExportedTexture& exportResource : m_ExportTextures)
+	{
+		check(exportResource.pTexture->pPhysicalResource);
+		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
+		*exportResource.pTarget = pTexture;
+	}
+	for (ExportedBuffer& exportResource : m_ExportBuffers)
+	{
+		check(exportResource.pBuffer->pPhysicalResource);
+		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
+		*exportResource.pTarget = pBuffer;
+	}
+
 	{
 		for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{
@@ -277,21 +292,11 @@ void RGGraph::Execute(CommandContext* pContext)
 		}
 	}
 
+	// Update exported resource names
 	for (ExportedTexture& exportResource : m_ExportTextures)
-	{
-		check(exportResource.pTexture->pPhysicalResource);
-		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
-		pTexture->SetName(exportResource.pTexture->GetName());
-		*exportResource.pTarget = pTexture;
-	}
-
+		exportResource.pTexture->pPhysicalResource->SetName(exportResource.pTexture->GetName());
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
-	{
-		check(exportResource.pBuffer->pPhysicalResource);
-		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
-		pBuffer->SetName(exportResource.pBuffer->GetName());
-		*exportResource.pTarget = pBuffer;
-	}
+		exportResource.pBuffer->pPhysicalResource->SetName(exportResource.pBuffer->GetName());
 
 	DestroyData();
 }

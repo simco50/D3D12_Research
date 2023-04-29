@@ -95,14 +95,14 @@ namespace Renderer
 		parameters.CascadeDepths = pView->ShadowCascadeDepths;
 		parameters.NumCascades = pView->NumShadowCascades;
 
-		parameters.TLASIndex = pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.MeshesIndex = pView->pMeshBuffer->GetSRVIndex();
-		parameters.MaterialsIndex = pView->pMaterialBuffer->GetSRVIndex();
-		parameters.InstancesIndex = pView->pInstanceBuffer->GetSRVIndex();
-		parameters.LightsIndex = pView->pLightBuffer->GetSRVIndex();
-		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
-		parameters.NumDDGIVolumes = pView->NumDDGIVolumes;
+		parameters.TLASIndex =			pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.MeshesIndex =		pView->pMeshBuffer->GetSRVIndex();
+		parameters.MaterialsIndex =		pView->pMaterialBuffer->GetSRVIndex();
+		parameters.InstancesIndex =		pView->pInstanceBuffer->GetSRVIndex();
+		parameters.LightsIndex =		pView->pLightBuffer->GetSRVIndex();
+		parameters.SkyIndex =			pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.DDGIVolumesIndex =	pView->pDDGIVolumesBuffer->GetSRVIndex();
+		parameters.NumDDGIVolumes =		pView->NumDDGIVolumes;
 
 		parameters.FontDataIndex = pView->DebugRenderData.FontDataSRV;
 		parameters.DebugRenderDataIndex = pView->DebugRenderData.RenderDataUAV;
