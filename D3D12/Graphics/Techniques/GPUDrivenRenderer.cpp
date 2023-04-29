@@ -615,7 +615,8 @@ void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				context.BindRootCBV(0, parameters);
 				uint32 uavIndex = 0;
 				context.BindResources(2, pSPDCounter->Get()->GetUAV(), uavIndex++);
-				context.BindResources(2, pHZB->Get()->GetSubResourceUAV(6), uavIndex++);
+				if(pHZB->GetDesc().Mips > 6)
+					context.BindResources(2, pHZB->Get()->GetSubResourceUAV(6), uavIndex++);
 				for (uint8 mipIndex = 0; mipIndex < mips; ++mipIndex)
 				{
 					context.BindResources(2, pHZB->Get()->GetSubResourceUAV(mipIndex), uavIndex++);

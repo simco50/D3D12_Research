@@ -978,6 +978,7 @@ void DemoApp::Update()
 				pSourceTexture = pDownscaleTarget;
 			}
 
+			numMips = Math::Max(2u, numMips);
 			RGTexture* pUpscaleTarget = graph.Create("Upscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::None, 1, numMips - 1));
 			RGTexture* pPreviousSource = pDownscaleTarget;
 
@@ -1423,44 +1424,28 @@ void DemoApp::UpdateImGui()
 			{
 				m_pSwapchain->SetVSync(Tweakables::g_Vsync);
 			}
-			ImGui::Combo("Render Path", (int*)&m_RenderPath, [](void* /*data*/, int index, const char** outText)
-				{
-					RenderPath p = (RenderPath)index;
-					switch (p)
-					{
-					case RenderPath::Tiled:
-						*outText = "Tiled";
-						break;
-					case RenderPath::Clustered:
-						*outText = "Clustered";
-						break;
-					case RenderPath::PathTracing:
-						*outText = "Path Tracing";
-						break;
-					case RenderPath::Visibility:
-						*outText = "Visibility";
-						break;
-					default:
-						noEntry();
-						break;
-					}
-					return true;
-				}, nullptr, (int)RenderPath::MAX);
+
+			static constexpr const char* pPathNames[] =
+			{
+				"Tiled",
+				"Clustered",
+				"Path Tracing",
+				"Visibility",
+			};
+			ImGui::Combo("Render Path", (int*)&m_RenderPath, pPathNames, ARRAYSIZE(pPathNames));
 
 			if (m_RenderPath == RenderPath::Visibility)
 			{
-				ImGui::Combo("VisBuffer Debug View", (int*)&m_VisibilityDebugRenderMode, [](void* /*data*/, int index, const char** outText)
-					{
-						switch (index)
-						{
-						case 0:	*outText = "Off"; return true;
-						case 1:	*outText = "InstanceID"; return true;
-						case 2:	*outText = "MeshletID"; return true;
-						case 3:	*outText = "PrimitiveID"; return true;
-						case 4:	*outText = "Overdraw"; return true;
-						}
-						return false;
-					}, nullptr, 5);
+				static constexpr const char* pDebugViewNames[] =
+				{
+					"Off",
+					"InstanceID",
+					"MeshletID",
+					"PrimitiveID",
+					"Overdraw",
+				};
+				ImGui::Combo("VisBuffer Debug View", (int*)&m_VisibilityDebugRenderMode, pDebugViewNames, ARRAYSIZE(pDebugViewNames));
+
 				ImGui::Checkbox("Cull statistics", &Tweakables::CullDebugStats.Get());
 			}
 
@@ -1513,24 +1498,14 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
 			ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
 
-			ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), [](void* /*data*/, int index, const char** outText)
-				{
-					constexpr static const char* tonemappers[] = {
-						"Reinhard",
-						"Reinhard Extended",
-						"ACES Fast",
-						"Unreal 3",
-						"Uncharted 2",
-					};
-
-					if (index < (int)ARRAYSIZE(tonemappers))
-					{
-						*outText = tonemappers[index];
-						return true;
-					}
-					noEntry();
-					return false;
-				}, nullptr, 5);
+			static constexpr const char* pTonemapperNames[] = {
+				"Reinhard",
+				"Reinhard Extended",
+				"ACES Fast",
+				"Unreal 3",
+				"Uncharted 2",
+			};
+			ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), pTonemapperNames, ARRAYSIZE(pTonemapperNames));
 		}
 
 		if (ImGui::CollapsingHeader("Misc"))
