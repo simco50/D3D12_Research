@@ -73,7 +73,7 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 
 		parameters.RandomVector = Math::RandVector();
 		parameters.RandomAngle = Math::RandomRange(0.0f, 2.0f * Math::PI);
-		parameters.HistoryBlendWeight = 0.98f;
+		parameters.HistoryBlendWeight = pView->CameraCut ? 0.0f : 0.98f;
 		parameters.VolumeIndex = randomIndex;
 
 		const uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
@@ -103,7 +103,18 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 		RGBuffer* pProbeStates = RGUtils::CreatePersistent(graph, "DDGI States Buffer", BufferDesc::CreateTyped(numProbes, ResourceFormat::R8_UINT), &ddgi.pProbeStates, true);
 		RGBuffer* pProbeOffsets = RGUtils::CreatePersistent(graph, "DDGI Probe Offsets", BufferDesc::CreateTyped(numProbes, ResourceFormat::RGBA16_FLOAT), &ddgi.pProbeOffset, true);
 
-		graph.AddPass("DDGI Raytrace", RGPassFlag::Compute)
+		if (pView->CameraCut)
+		{
+			graph.AddPass("Activate Probes", RGPassFlag::Compute)
+				.Write(pProbeStates)
+				.Bind([=](CommandContext& context)
+					{
+						context.ClearUAVu(pProbeStates->Get()->GetUAV(), Vector4u(1, 1, 1, 1));
+						context.InsertUAVBarrier(pProbeStates->Get());
+					});
+		}
+
+		graph.AddPass("Raytrace", RGPassFlag::Compute)
 			.Read(pProbeStates)
 			.Write(pRayBuffer)
 			.Bind([=](CommandContext& context)
@@ -122,9 +133,10 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 					bindingTable.BindHitGroup("MaterialHG", 0);
 
 					context.DispatchRays(bindingTable, ddgi.NumRays, numProbes);
+					context.InsertUAVBarrier(pRayBuffer->Get());
 				});
 
-		graph.AddPass("DDGI Update Irradiance", RGPassFlag::Compute)
+		graph.AddPass("Update Irradiance", RGPassFlag::Compute)
 			.Read({ pIrradianceHistory, pRayBuffer, pProbeStates })
 			.Write(pIrradianceTarget)
 			.Bind([=](CommandContext& context)
@@ -140,9 +152,10 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 						});
 
 					context.Dispatch(numProbes);
+					context.InsertUAVBarrier(pIrradianceTarget->Get());
 				});
 
-		graph.AddPass("DDGI Update Depth", RGPassFlag::Compute)
+		graph.AddPass("Update Depth", RGPassFlag::Compute)
 			.Read({ pDepthHistory, pRayBuffer, pProbeStates })
 			.Write(pDepthTarget)
 			.Bind([=](CommandContext& context)
@@ -160,9 +173,10 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 						});
 
 					context.Dispatch(numProbes);
+					context.InsertUAVBarrier(pDepthTarget->Get());
 				});
 
-		graph.AddPass("DDGI Update Probe States", RGPassFlag::Compute)
+		graph.AddPass("Update Probe States", RGPassFlag::Compute)
 			.Read(pRayBuffer)
 			.Write({ pProbeOffsets, pProbeStates })
 			.Bind([=](CommandContext& context)

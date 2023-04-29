@@ -83,6 +83,7 @@ struct SceneView
 	uint32 NumDDGIVolumes = 0;
 	RefCountPtr<Texture> pSky;
 	int FrameIndex = 0;
+	bool CameraCut = false;
 	Vector2u HZBDimensions;
 	VisibilityMask VisibilityMask;
 	ViewTransform View;

@@ -768,6 +768,13 @@ void DemoApp::Update()
 							context.SetComputeRootSignature(m_pCommonRS);
 							context.SetPipelineState(m_pTemporalResolvePSO);
 
+							struct
+							{
+								float MinBlendFactor;
+							} params;
+							params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
+
+							context.BindRootCBV(0, params);
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 							context.BindResources(2, pTarget->GetUAV());
 							context.BindResources(3,
@@ -1150,6 +1157,7 @@ void DemoApp::Update()
 		m_pSwapchain->Present();
 		m_pDevice->TickFrame();
 		++m_Frame;
+		m_SceneData.CameraCut = false;
 	}
 }
 
@@ -1163,6 +1171,7 @@ void DemoApp::OnResizeViewport(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
+	m_SceneData.CameraCut = true;
 }
 
 void DemoApp::InitializePipelines()

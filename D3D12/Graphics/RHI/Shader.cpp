@@ -169,12 +169,12 @@ namespace ShaderCompiler
 		StringHash hash(defineKey.c_str());
 
 		std::string cachePath = Sprintf(
-			"%s%s_%s_%s%x.bin",
+			"%s%s_%s_%x%s.bin",
 			Paths::ShaderCacheDir().c_str(),
 			Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(),
 			compileJob.EntryPoint.c_str(),
-			compileJob.EnableDebugMode ? "_DEBUG" : "",
-			hash.m_Hash
+			hash.m_Hash,
+			compileJob.EnableDebugMode ? "_DEBUG" : ""
 		);
 		Paths::CreateDirectoryTree(cachePath);
 
@@ -286,14 +286,18 @@ namespace ShaderCompiler
 
 		result.IsDebug = compileJob.EnableDebugMode;
 
-		if (compileJob.EnableDebugMode)
-			arguments.AddArgument(DXC_ARG_SKIP_OPTIMIZATIONS);
-		else
-			arguments.AddArgument(DXC_ARG_OPTIMIZATION_LEVEL3);
-
 		arguments.AddArgument(DXC_ARG_DEBUG);
-		arguments.AddArgument("-Qstrip_debug");
-		arguments.AddArgument("-Fd", Sprintf("%s.pdb", Paths::GetFileNameWithoutExtension(cachePath)).c_str());
+		if (compileJob.EnableDebugMode)
+		{
+			arguments.AddArgument(DXC_ARG_SKIP_OPTIMIZATIONS);
+			arguments.AddArgument("-Qembed_debug");
+		}
+		else
+		{
+			arguments.AddArgument(DXC_ARG_OPTIMIZATION_LEVEL3);
+			arguments.AddArgument("-Qstrip_debug");
+			arguments.AddArgument("-Fd", Sprintf("%s.pdb", Paths::GetFileNameWithoutExtension(cachePath)).c_str());
+		}
 
 		arguments.AddArgument("-I", Paths::GetDirectoryPath(fullPath).c_str());
 		for (const std::string& includeDir : compileJob.IncludeDirs)
@@ -469,6 +473,7 @@ namespace ShaderCompiler
 		}
 
 		//Symbols
+		if (!compileJob.EnableDebugMode)
 		{
 			RefCountPtr<IDxcBlobUtf16> pDebugDataPath;
 			RefCountPtr<IDxcBlob> pSymbolsBlob;

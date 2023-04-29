@@ -33,6 +33,12 @@ Texture2D tSceneDepth : register(t3);
 
 RWTexture2D<float4> uOutColor : register(u0);
 
+struct Params
+{
+	float MinBlendFactor;
+};
+ConstantBuffer<Params> cParams;
+
 //Temporal Reprojection in Inside
 float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
 {
@@ -329,6 +335,8 @@ void CSMain(
 	currColor = Reinhard(currColor);
 	prevColor = Reinhard(prevColor);
 #endif
+
+	blendFactor = max(cParams.MinBlendFactor, blendFactor);
 
 	if(any(uvReproj < 0) || any(uvReproj > 1))
 		blendFactor = 1;

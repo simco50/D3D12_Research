@@ -220,24 +220,6 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 	RGTexture* pTargetVolume = graph.Create("Fog Target", volumeDesc);
 	graph.Export(pTargetVolume, &fogData.pFogHistory);
 
-	struct
-	{
-		Vector3i ClusterDimensions;
-		float Jitter;
-		Vector3 InvClusterDimensions;
-		float LightClusterSizeFactor;
-		Vector2 LightGridParams;
-		Vector2i LightClusterDimensions;
-	} constantBuffer;
-
-	constantBuffer.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
-	constantBuffer.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
-	constexpr Math::HaltonSequence<32, 2> halton;
-	constantBuffer.Jitter = halton[pView->FrameIndex & 31];
-	constantBuffer.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
-	constantBuffer.LightGridParams = lightCullData.LightGridParams;
-	constantBuffer.LightClusterDimensions = Vector2i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
-
 	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
 		.Read({ pSourceVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
 		.Write(pTargetVolume)
@@ -248,7 +230,27 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
-				context.BindRootCBV(0, constantBuffer);
+				struct
+				{
+					Vector3i ClusterDimensions;
+					float Jitter;
+					Vector3 InvClusterDimensions;
+					float LightClusterSizeFactor;
+					Vector2 LightGridParams;
+					Vector2i LightClusterDimensions;
+					float MinBlendFactor;
+				} params;
+
+				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
+				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
+				constexpr Math::HaltonSequence<32, 2> halton;
+				params.Jitter = halton[pView->FrameIndex & 31];
+				params.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
+				params.LightGridParams = lightCullData.LightGridParams;
+				params.LightClusterDimensions = Vector2i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
+				params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
+
+				context.BindRootCBV(0, params);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
@@ -277,7 +279,17 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
-				context.BindRootCBV(0, constantBuffer);
+				struct
+				{
+					Vector3i ClusterDimensions;
+					uint32 : 32;
+					Vector3 InvClusterDimensions;
+					uint32 : 32;
+				} params;
+				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
+				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
+
+				context.BindRootCBV(0, params);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, pFinalFog->GetUAV());
 				context.BindResources(3, {
