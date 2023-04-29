@@ -580,11 +580,13 @@ void DemoApp::Update()
 							depthTarget.y = Math::Max(1u, depthTarget.y / 16);
 				}
 
+				RGBuffer* pReadbackTarget = RGUtils::CreatePersistent(graph, "SDSM Readback", BufferDesc::CreateTyped(2, ResourceFormat::RG32_FLOAT, BufferFlag::Readback), &m_ReductionReadbackTargets[m_Frame % SwapChain::NUM_FRAMES], true);
 				graph.AddPass("Readback Copy", RGPassFlag::Copy | RGPassFlag::NeverCull)
 					.Read(pReductionTarget)
+					.Write(pReadbackTarget)
 					.Bind([=](CommandContext& context)
 						{
-							context.CopyTexture(pReductionTarget->Get(), m_ReductionReadbackTargets[m_Frame % SwapChain::NUM_FRAMES], CD3DX12_BOX(0, 1));
+							context.CopyTexture(pReductionTarget->Get(), pReadbackTarget->Get(), CD3DX12_BOX(0, 1));
 						});
 			}
 
@@ -1117,8 +1119,7 @@ void DemoApp::Update()
 			UI & Present
 		*/
 
-		Texture* pBackbuffer = m_pSwapchain->GetBackBuffer();
-		ImGuiRenderer::Render(graph, graph.TryImport(pBackbuffer));
+		ImGuiRenderer::Render(graph, graph.Import(m_pSwapchain->GetBackBuffer()));
 
 		graph.AddPass("Transition", RGPassFlag::NeverCull)
 			.Read(sceneTextures.pColorTarget)
@@ -1160,12 +1161,6 @@ void DemoApp::OnResizeOrMove(int width, int height)
 void DemoApp::OnResizeViewport(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
-
-	for (uint32 i = 0; i < SwapChain::NUM_FRAMES; ++i)
-	{
-		m_ReductionReadbackTargets[i] = m_pDevice->CreateBuffer(BufferDesc::CreateTyped(1, ResourceFormat::RG32_FLOAT, BufferFlag::Readback), "SDSM Reduction Readback Target");
-	}
-
 	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
 }
 
@@ -1586,9 +1581,12 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 	if (Tweakables::g_SDSM)
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % SwapChain::NUM_FRAMES];
-		Vector2* pData = (Vector2*)pSourceBuffer->GetMappedData();
-		minPoint = pData->x;
-		maxPoint = pData->y;
+		if (pSourceBuffer)
+		{
+			Vector2* pData = (Vector2*)pSourceBuffer->GetMappedData();
+			minPoint = pData->x;
+			maxPoint = pData->y;
+		}
 	}
 
 	float n = m_pCamera->GetNear();
