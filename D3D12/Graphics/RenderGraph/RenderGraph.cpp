@@ -233,21 +233,37 @@ void RGGraph::Compile()
 				noEntry();
 		}
 	}
+
+	// Export resources first so they can be available during pass execution.
+	for (ExportedTexture& exportResource : m_ExportTextures)
+	{
+		check(exportResource.pTexture->pPhysicalResource);
+		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
+		*exportResource.pTarget = pTexture;
+	}
+	for (ExportedBuffer& exportResource : m_ExportBuffers)
+	{
+		check(exportResource.pBuffer->pPhysicalResource);
+		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
+		*exportResource.pTarget = pBuffer;
+	}
 }
 
-void RGGraph::Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget)
+void RGGraph::Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget, TextureFlag additionalFlags)
 {
 	auto it = std::find_if(m_ExportTextures.begin(), m_ExportTextures.end(), [&](const ExportedTexture& tex) { return tex.pTarget == pTarget; });
 	checkf(it == m_ExportTextures.end(), "Texture '%s' is exported to a target that has already been exported to by another texture ('%s').", pTexture->GetName(), it->pTexture->GetName());
 	pTexture->IsExported = true;
+	pTexture->Desc.Usage |= additionalFlags;
 	m_ExportTextures.push_back({ pTexture, pTarget });
 }
 
-void RGGraph::Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget)
+void RGGraph::Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget, BufferFlag additionalFlags)
 {
 	auto it = std::find_if(m_ExportBuffers.begin(), m_ExportBuffers.end(), [&](const ExportedBuffer& buff) { return buff.pTarget == pTarget; });
 	checkf(it == m_ExportBuffers.end(), "Buffer '%s' is exported to a target that has already been exported to by another texture ('%s').", pBuffer->GetName(), it->pBuffer->GetName());
 	pBuffer->IsExported = true;
+	pBuffer->Desc.Usage |= additionalFlags;
 	m_ExportBuffers.push_back({ pBuffer, pTarget });
 }
 
@@ -267,20 +283,6 @@ void RGGraph::PopEvent()
 void RGGraph::Execute(CommandContext* pContext)
 {
 	GPU_PROFILE_SCOPE("Render", pContext);
-
-	// Export resources first so they can be available during pass execution.
-	for (ExportedTexture& exportResource : m_ExportTextures)
-	{
-		check(exportResource.pTexture->pPhysicalResource);
-		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
-		*exportResource.pTarget = pTexture;
-	}
-	for (ExportedBuffer& exportResource : m_ExportBuffers)
-	{
-		check(exportResource.pBuffer->pPhysicalResource);
-		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
-		*exportResource.pTarget = pBuffer;
-	}
 
 	{
 		for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)

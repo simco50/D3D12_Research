@@ -430,11 +430,12 @@ void DemoApp::Update()
 						context.BindResources(2, pSkyTexture->GetUAV());
 
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pSkyTexture->GetWidth(), 16, pSkyTexture->GetHeight(), 16, 6));
-
-						context.InsertResourceBarrier(pSkyTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 					});
+
+			graph.AddPass("Transition Sky", RGPassFlag::Raster)
+				.Read(pSky);
 		}
-		graph.Export(pSky, &pViewMut->pSky);
+		graph.Export(pSky, &pViewMut->pSky, TextureFlag::ShaderResource);
 
 		RasterResult rasterResult;
 		if (m_RenderPath != RenderPath::PathTracing)
@@ -642,13 +643,9 @@ void DemoApp::Update()
 
 			sceneTextures.pAmbientOcclusion = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::White2D));
 			if (Tweakables::g_RaytracedAO)
-			{
 				m_pRTAO->Execute(graph, pView, sceneTextures);
-			}
 			else
-			{
 				sceneTextures.pAmbientOcclusion = m_pSSAO->Execute(graph, pView, sceneTextures);
-			}
 
 			m_pClusteredForward->ComputeLightCulling(graph, pView, m_LightCull3DData);
 
@@ -796,7 +793,7 @@ void DemoApp::Update()
 			m_pPathTracing->Render(graph, pView, sceneTextures.pColorTarget);
 		}
 
-		graph.Export(sceneTextures.pColorTarget, &m_pColorHistory);
+		graph.Export(sceneTextures.pColorTarget, &m_pColorHistory, TextureFlag::ShaderResource);
 
 		/*
 			Post Processing
@@ -1121,21 +1118,13 @@ void DemoApp::Update()
 			m_pVisualizeTexture->Capture(graph, pVisualizeTexture);
 		}
 
-		graph.Export(sceneTextures.pColorTarget, &m_pColorOutput);
+		graph.Export(sceneTextures.pColorTarget, &m_pColorOutput, TextureFlag::ShaderResource);
 
 		/*
 			UI & Present
 		*/
 
 		ImGuiRenderer::Render(graph, graph.Import(m_pSwapchain->GetBackBuffer()));
-
-		graph.AddPass("Transition", RGPassFlag::NeverCull)
-			.Read(sceneTextures.pColorTarget)
-			.Bind([=](CommandContext& context)
-				{
-					context.InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
-					context.InsertResourceBarrier(sceneTextures.pColorTarget->Get(), D3D12_RESOURCE_STATE_COMMON);
-				});
 
 		graph.Compile();
 		if (Tweakables::g_DumpRenderGraph)
@@ -1147,9 +1136,10 @@ void DemoApp::Update()
 		graph.DrawDebug(Tweakables::g_EnableRenderGraphResourceTracker);
 
 		graph.Execute(pContext);
-
+		
 	}
 
+	pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
 	pContext->Execute();
 
 	{

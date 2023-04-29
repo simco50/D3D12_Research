@@ -145,9 +145,10 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 					pRenderData->Get()->GetSRV()
 					});
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, sizeof(D3D12_DRAW_ARGUMENTS) * 0);
-
-				context.InsertResourceBarrier(pRenderData->Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			});
+
+	graph.AddPass("Transition Draw Data", RGPassFlag::Raster)
+		.Write(pRenderData);
 }
 
 void ShaderDebugRenderer::GetGlobalIndices(GPUDebugRenderData* pData) const

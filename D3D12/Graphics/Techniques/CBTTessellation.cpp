@@ -122,13 +122,12 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 		data.pCBTBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), "CBT");
 		pCBTBuffer = graph.Import(data.pCBTBuffer);
 
-		graph.AddPass("CBT Upload", RGPassFlag::Compute)
+		graph.AddPass("CBT Upload", RGPassFlag::Copy)
 			.Write({ pCBTBuffer })
 			.Bind([=](CommandContext& context)
 				{
 					CBT cbt;
 					cbt.InitBare(CBTSettings::CBTDepth, 1);
-					context.InsertResourceBarrier(pCBTBuffer->Get(), D3D12_RESOURCE_STATE_COPY_DEST);
 					context.WriteBuffer(pCBTBuffer->Get(), cbt.GetData(), size);
 				});
 	}

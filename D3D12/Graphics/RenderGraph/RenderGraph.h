@@ -326,8 +326,8 @@ public:
 		return pFallback ? Import(pFallback) : nullptr;
 	}
 
-	void Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget);
-	void Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget);
+	void Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget, TextureFlag additionalFlags = TextureFlag::None);
+	void Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget, BufferFlag additionalFlags = BufferFlag::None);
 
 	RGTexture* FindTexture(const char* pName) const
 	{
