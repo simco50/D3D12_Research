@@ -319,23 +319,24 @@ namespace GraphicsCommon
 			DefaultTextures[(int)type] = pTexture;
 		};
 
-		uint32 BLACK = 0xFF000000;
-		RegisterDefaultTexture(DefaultTexture::Black2D, "Default Black", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &BLACK);
-		uint32 WHITE = 0xFFFFFFFF;
-		RegisterDefaultTexture(DefaultTexture::White2D, "Default White", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &WHITE);
-		uint32 MAGENTA = 0xFFFF00FF;
-		RegisterDefaultTexture(DefaultTexture::Magenta2D, "Default Magenta", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &MAGENTA);
-		uint32 GRAY = 0xFF808080;
-		RegisterDefaultTexture(DefaultTexture::Gray2D, "Default Gray", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &GRAY);
-		uint32 DEFAULT_NORMAL = 0xFFFF8080;
-		RegisterDefaultTexture(DefaultTexture::Normal2D, "Default Normal", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &DEFAULT_NORMAL);
-		uint32 DEFAULT_ROUGHNESS_METALNESS = 0xFFFF80FF;
-		RegisterDefaultTexture(DefaultTexture::RoughnessMetalness, "Default Roughness/Metalness", TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
+		uint32 BLACK =							Math::Pack_RGBA8_UNORM(Vector4(0.0f, 0.0f, 0.0f, 1.0f));
+		uint32 WHITE =							Math::Pack_RGBA8_UNORM(Vector4(1.0f, 1.0f, 1.0f, 1.0f));
+		uint32 MAGENTA =						Math::Pack_RGBA8_UNORM(Vector4(1.0f, 0.0f, 1.0f, 1.0f));
+		uint32 GRAY =							Math::Pack_RGBA8_UNORM(Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+		uint32 DEFAULT_NORMAL =					Math::Pack_RGBA8_UNORM(Vector4(0.5f, 0.5f, 1.0f, 1.0f));
+		uint32 DEFAULT_ROUGHNESS_METALNESS =	Math::Pack_RGBA8_UNORM(Vector4(0.5f, 0.0f, 1.0f, 1.0f));
+
+		RegisterDefaultTexture(DefaultTexture::Black2D,				"Default Black",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &BLACK);
+		RegisterDefaultTexture(DefaultTexture::White2D,				"Default White",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &WHITE);
+		RegisterDefaultTexture(DefaultTexture::Magenta2D,			"Default Magenta",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &MAGENTA);
+		RegisterDefaultTexture(DefaultTexture::Gray2D,				"Default Gray",					TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &GRAY);
+		RegisterDefaultTexture(DefaultTexture::Normal2D,			"Default Normal",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &DEFAULT_NORMAL);
+		RegisterDefaultTexture(DefaultTexture::RoughnessMetalness,	"Default Roughness/Metalness",	TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
 
 		uint32 BLACK_CUBE[6] = {};
-		RegisterDefaultTexture(DefaultTexture::BlackCube, "Default Black Cube", TextureDesc::CreateCube(1, 1, ResourceFormat::RGBA8_UNORM), BLACK_CUBE);
+		RegisterDefaultTexture(DefaultTexture::BlackCube,			"Default Black Cube",			TextureDesc::CreateCube(1, 1, ResourceFormat::RGBA8_UNORM), BLACK_CUBE);
 
-		RegisterDefaultTexture(DefaultTexture::Black3D, "Default Black 3D", TextureDesc::Create3D(1, 1, 1, ResourceFormat::RGBA8_UNORM), &BLACK);
+		RegisterDefaultTexture(DefaultTexture::Black3D,				"Default Black 3D",				TextureDesc::Create3D(1, 1, 1, ResourceFormat::RGBA8_UNORM), &BLACK);
 
 		DefaultTextures[(int)DefaultTexture::ColorNoise256] = CreateTextureFromFile(context, "Resources/Textures/Noise.png", false, "Noise");
 		DefaultTextures[(int)DefaultTexture::BlueNoise512] = CreateTextureFromFile(context, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");

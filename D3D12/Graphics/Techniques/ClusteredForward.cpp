@@ -216,9 +216,8 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 		ResourceFormat::RGBA16_FLOAT,
 		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
 
-	RGTexture* pSourceVolume = RGUtils::CreatePersistent(graph, "Fog History", volumeDesc, &fogData.pFogHistory, false);
+	RGTexture* pSourceVolume = graph.TryImport(fogData.pFogHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 	RGTexture* pTargetVolume = graph.Create("Fog Target", volumeDesc);
-	RGTexture* pFinalVolumeFog = graph.Create("Volumetric Fog", volumeDesc);
 	graph.Export(pTargetVolume, &fogData.pFogHistory);
 
 	struct
@@ -265,6 +264,8 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 						pTarget->GetDepth(), 4)
 				);
 			});
+
+	RGTexture* pFinalVolumeFog = graph.Create("Volumetric Fog", volumeDesc);
 
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
 		.Read({ pTargetVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
