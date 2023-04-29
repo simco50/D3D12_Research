@@ -14,6 +14,11 @@ struct ParticleData
 #define ALIVE_LIST_2_COUNTER 8
 #define EMIT_COUNT 12
 
+struct InitializeParameters
+{
+	uint MaxNumParticles;
+};
+
 struct IndirectArgsParameters
 {
 	int EmitCount;
@@ -38,6 +43,7 @@ enum IndirectArgOffsets
 	SizeArgs = DrawArgs + 4 * sizeof(uint),
 };
 
+ConstantBuffer<InitializeParameters> cInitializeParams : register(b0);
 ConstantBuffer<IndirectArgsParameters> cIndirectArgsParams : register(b0);
 ConstantBuffer<EmitParameters> cEmitParams : register(b0);
 ConstantBuffer<SimulateParameters> cSimulateParams : register(b0);
@@ -50,7 +56,21 @@ RWStructuredBuffer<ParticleData> uParticleData : register(u4);
 RWByteAddressBuffer uIndirectArguments : register(u5);
 
 ByteAddressBuffer tCounters : register(t0);
-Texture2D<float> tSceneDepth : register(t1);
+StructuredBuffer<uint> tDeadList : register(t1);
+StructuredBuffer<uint> tAliveList1 : register(t2);
+
+Texture2D<float> tSceneDepth : register(t3);
+
+[numthreads(32, 1, 1)]
+void InitializeDataCS(uint threadID : SV_DispatchThreadID)
+{
+	uint numParticles = cInitializeParams.MaxNumParticles;
+	if(threadID >= numParticles)
+		return;
+	if(threadID == 0)
+		uCounters.Store(0, numParticles);
+	uDeadList[threadID] = threadID;
+}
 
 [numthreads(1, 1, 1)]
 void UpdateSimulationParameters()
@@ -87,7 +107,7 @@ void Emit(uint threadID : SV_DispatchThreadID)
 	{
 		uint deadSlot;
 		uCounters.InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
-		uint particleIndex = uDeadList[deadSlot - 1];
+		uint particleIndex = tDeadList[deadSlot - 1];
 
 		uint seed = SeedThread(deadSlot * particleIndex);
 
@@ -110,7 +130,7 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 	uint aliveCount = uCounters.Load(ALIVE_LIST_1_COUNTER);
 	if(threadID < aliveCount)
 	{
-		uint particleIndex = uAliveList1[threadID];
+		uint particleIndex = tAliveList1[threadID];
 		ParticleData p = uParticleData[particleIndex];
 
 		if(p.LifeTime < cSimulateParams.ParticleLifeTime)

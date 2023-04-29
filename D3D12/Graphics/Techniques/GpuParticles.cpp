@@ -16,7 +16,7 @@ static int32 g_EmitCount = 30;
 static float g_LifeTime = 4.0f;
 static bool g_Simulate = true;
 
-static constexpr uint32 cMaxParticleCount = 2000000;
+static constexpr uint32 cMaxParticleCount = 1 << 16;
 
 enum IndirectArgOffsets
 {
@@ -37,27 +37,13 @@ struct ParticleData
 struct ParticleBlackboardData
 {
 	RGBuffer* pIndirectDrawArguments;
+	RGBuffer* pParticlesBuffer;
+	RGBuffer* pAliveList;
 };
 RG_BLACKBOARD_DATA(ParticleBlackboardData);
 
 GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 {
-	CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_DIRECT);
-
-	m_pCountersBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(sizeof(uint32) * 4), "Particles Counter");
-	BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32));
-	m_pAliveList1 = pDevice->CreateBuffer(particleBufferDesc, "Particles Alive List 1");
-	m_pAliveList2 = pDevice->CreateBuffer(particleBufferDesc, "Particles Alive List 2");
-	m_pDeadList = pDevice->CreateBuffer(particleBufferDesc, "Particles Dead List");
-	std::vector<uint32> deadList(cMaxParticleCount);
-	std::generate(deadList.begin(), deadList.end(), [n = 0]() mutable { return n++; });
-	pContext->WriteBuffer(m_pDeadList, deadList.data(), sizeof(uint32) * deadList.size());
-	uint32 aliveCount = cMaxParticleCount;
-	pContext->WriteBuffer(m_pCountersBuffer, &aliveCount, sizeof(uint32), 0);
-	m_pParticleBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)), "Particle Buffer");
-
-	pContext->Execute();
-
 	{
 		m_pCommonRS = new RootSignature(pDevice);
 		m_pCommonRS->AddRootConstants(0, 4);
@@ -71,6 +57,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 		m_pEmitPS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "Emit");
 		m_pSimulatePS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "Simulate");
 		m_pSimulateEndPS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "SimulateEnd");
+		m_pInitializeBuffersPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "InitializeDataCS");
 	}
 	{
 		PipelineStateInitializer psoDesc;
@@ -103,25 +90,58 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 	ImGui::End();
 
 	if (!g_Simulate || !g_Enabled)
-	{
 		return;
-	}
 
 	RG_GRAPH_SCOPE("Particle Simulation", graph);
 
-	RGBuffer* pIndirectArgs = graph.Create("Indirect Arguments", BufferDesc::CreateIndirectArguments<uint32>(IndirectArgOffsets::Size));
+	bool needsInitialize = !m_pParticleBuffer;
+
+	BufferDesc particleBufferDesc =		BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32));
+	RGBuffer* pIndirectArgs =			graph.Create("Indirect Arguments", BufferDesc::CreateIndirectArguments<uint32>(IndirectArgOffsets::Size));
+	RGBuffer* pNewAliveList =			graph.Create("New Alive List", particleBufferDesc);
+	RGBuffer* pParticlesBuffer =		RGUtils::CreatePersistent(graph, "Particles Buffer", BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)), &m_pParticleBuffer, true);
+	RGBuffer* pCurrentAliveList =		RGUtils::CreatePersistent(graph, "Current Alive List", particleBufferDesc, &m_pAliveList, false);
+	RGBuffer* pDeadList =				RGUtils::CreatePersistent(graph, "Dead List", particleBufferDesc, &m_pDeadList, true);
+	RGBuffer* pCountersBuffer =			RGUtils::CreatePersistent(graph, "Particles Counter", BufferDesc::CreateByteAddress(sizeof(uint32) * 4), &m_pCountersBuffer, true);
+	graph.Export(pNewAliveList, &m_pAliveList);
+
+	ParticleBlackboardData& data = graph.Blackboard.Add<ParticleBlackboardData>();
+	data.pIndirectDrawArguments = pIndirectArgs;
+	data.pParticlesBuffer = pParticlesBuffer;
+	data.pAliveList = pNewAliveList;
+
+	if (needsInitialize)
+	{
+		graph.AddPass("Initialize", RGPassFlag::Compute)
+			.Write({ pDeadList, pCountersBuffer })
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pInitializeBuffersPSO);
+
+					struct
+					{
+						uint32 MaxNumParticles;
+					} params;
+					params.MaxNumParticles = cMaxParticleCount;
+
+					context.BindRootCBV(0, params);
+					context.BindResources(2, {
+						pCountersBuffer->Get()->GetUAV(),
+						pDeadList->Get()->GetUAV(),
+						});
+
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(cMaxParticleCount, 32));
+					context.InsertUAVBarrier();
+				});
+	}
 
 	graph.AddPass("Prepare Arguments", RGPassFlag::Compute)
 		.Read(pDepth)
-		.Write({ pIndirectArgs })
+		.Write({ pCountersBuffer, pIndirectArgs })
 		.Bind([=](CommandContext& context)
 			{
 				m_ParticlesToSpawn += (float)g_EmitCount * Time::DeltaTime();
-
-				context.InsertResourceBarrier(m_pCountersBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(m_pAliveList1, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(m_pAliveList2, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-				context.InsertResourceBarrier(m_pParticleBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pPrepareArgumentsPS);
@@ -133,26 +153,22 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 				m_ParticlesToSpawn -= parameters.EmitCount;
 
 				context.BindRootCBV(0, parameters);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
-					m_pCountersBuffer->GetUAV(),
-					m_pDeadList->GetUAV(),
-					m_pAliveList1->GetUAV(),
-					m_pAliveList2->GetUAV(),
-					m_pParticleBuffer->GetUAV(),
+					pCountersBuffer->Get()->GetUAV(),
+					nullptr,
+					nullptr,
+					nullptr,
+					nullptr,
 					pIndirectArgs->Get()->GetUAV(),
-					});
-				context.BindResources(3, {
-					m_pCountersBuffer->GetSRV(),
-					pDepth->Get()->GetSRV(),
-					});
+					}, 0);
 
 				context.Dispatch(1);
 				context.InsertUAVBarrier();
 			});
 
 	graph.AddPass("Emit", RGPassFlag::Compute | RGPassFlag::NeverCull)
-		.Read({ pDepth, pIndirectArgs })
+		.Read({ pDepth, pIndirectArgs, pDeadList })
+		.Write({ pParticlesBuffer, pCountersBuffer, pCurrentAliveList })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
@@ -168,15 +184,15 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 				context.BindRootCBV(0, parameters);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
-					m_pCountersBuffer->GetUAV(),
-					m_pDeadList->GetUAV(),
-					m_pAliveList1->GetUAV(),
-					m_pAliveList2->GetUAV(),
-					m_pParticleBuffer->GetUAV(),
+					pCountersBuffer->Get()->GetUAV(),
+					nullptr,
+					pCurrentAliveList->Get()->GetUAV(),
+					nullptr,
+					pParticlesBuffer->Get()->GetUAV(),
 					});
 				context.BindResources(3, {
-					m_pCountersBuffer->GetSRV(),
-					pDepth->Get()->GetSRV(),
+					nullptr,
+					pDeadList->Get()->GetSRV(),
 					});
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, IndirectArgOffsets::Emit * sizeof(uint32));
@@ -184,7 +200,8 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 			});
 
 	graph.AddPass("Simulate", RGPassFlag::Compute | RGPassFlag::NeverCull)
-		.Read({ pDepth, pIndirectArgs })
+		.Read({ pDepth, pIndirectArgs, pCurrentAliveList })
+		.Write({ pCountersBuffer, pDeadList, pNewAliveList, pParticlesBuffer })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
@@ -201,53 +218,41 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 				context.BindRootCBV(0, parameters);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
-					m_pCountersBuffer->GetUAV(),
-					m_pDeadList->GetUAV(),
-					m_pAliveList1->GetUAV(),
-					m_pAliveList2->GetUAV(),
-					m_pParticleBuffer->GetUAV(),
+					pCountersBuffer->Get()->GetUAV(),
+					pDeadList->Get()->GetUAV(),
+					nullptr,
+					pNewAliveList->Get()->GetUAV(),
+					pParticlesBuffer->Get()->GetUAV(),
 					});
 				context.BindResources(3, {
-					m_pCountersBuffer->GetSRV(),
+					nullptr,
+					nullptr,
+					pCurrentAliveList->Get()->GetSRV(),
 					pDepth->Get()->GetSRV(),
 					});
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, IndirectArgOffsets::Simulate * sizeof(uint32));
-				context.InsertUAVBarrier();
 			});
 
 	graph.AddPass("Simulate End", RGPassFlag::Compute)
-		.Read(pDepth)
-		.Write(pIndirectArgs)
+		.Read({ pCountersBuffer })
+		.Write({ pIndirectArgs })
 		.Bind([=](CommandContext& context)
 			{
-				context.InsertResourceBarrier(m_pCountersBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pSimulateEndPS);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
-					m_pCountersBuffer->GetUAV(),
-					m_pDeadList->GetUAV(),
-					m_pAliveList1->GetUAV(),
-					m_pAliveList2->GetUAV(),
-					m_pParticleBuffer->GetUAV(),
 					pIndirectArgs->Get()->GetUAV(),
-					});
+					}, 5);
 				context.BindResources(3, {
-					m_pCountersBuffer->GetSRV(),
-					pDepth->Get()->GetSRV(),
+					pCountersBuffer->Get()->GetSRV(),
 					});
 
 				context.Dispatch(1);
 				context.InsertUAVBarrier();
 			});
-
-	std::swap(m_pAliveList1, m_pAliveList2);
-
-	ParticleBlackboardData& data = graph.Blackboard.Add<ParticleBlackboardData>();
-	data.pIndirectDrawArguments = pIndirectArgs;
 }
 
 void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
@@ -261,11 +266,9 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 	if (!pData)
 		return;
 
-	RGBuffer* pParticleBuffer = graph.Import(m_pParticleBuffer);
-	RGBuffer* pAliveList1 = graph.Import(m_pAliveList1);
 	graph.AddPass("Render Particles", RGPassFlag::Raster)
 		.Read(pData->pIndirectDrawArguments)
-		.Read({ pParticleBuffer, pAliveList1 })
+		.Read({ pData->pParticlesBuffer, pData->pAliveList })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 		.Bind([=](CommandContext& context)
@@ -276,8 +279,8 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 				context.BindResources(3, {
-					m_pParticleBuffer->GetSRV(),
-					m_pAliveList1->GetSRV()
+					pData->pParticlesBuffer->Get()->GetSRV(),
+					pData->pAliveList->Get()->GetSRV()
 					});
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pData->pIndirectDrawArguments->Get(), nullptr, IndirectArgOffsets::Draw * sizeof(uint32));
 			});
