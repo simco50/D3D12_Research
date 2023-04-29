@@ -17,14 +17,12 @@ This is a personal toy renderer meant as a playground for experimenting with ide
 
 ### Visibility Buffer - Deferred Texturing
 
-| 2 Phase Occlusion Culling | Visibility Buffer |
+| 2 Phase Occlusion Culling | Visibility Buffer Deferred Texturing |
 |---|---|
 | ![](Images/OcclusionCulling.jpg) | ![](Images/VisibilityBuffer.jpg) |
 
 
 GPU Driven rendering with mesh shaders using the 2 Phase Occlusion algorithm to a visibility (ID) buffer. 
-
-Combined with deferred texturing.
 
 ### Dynamic Diffuse Global Illumination (DDGI)
 
