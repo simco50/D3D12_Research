@@ -306,7 +306,7 @@ namespace GraphicsCommon
 	{
 		CommandContext& context = *pDevice->AllocateCommandContext();
 
-		auto RegisterDefaultTexture = [pDevice, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, uint32* pData)
+		auto RegisterDefaultTexture = [pDevice, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, const uint32* pData)
 		{
 			RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName);
 			D3D12_SUBRESOURCE_DATA data;
@@ -337,6 +337,13 @@ namespace GraphicsCommon
 		RegisterDefaultTexture(DefaultTexture::BlackCube,			"Default Black Cube",			TextureDesc::CreateCube(1, 1, ResourceFormat::RGBA8_UNORM), BLACK_CUBE);
 
 		RegisterDefaultTexture(DefaultTexture::Black3D,				"Default Black 3D",				TextureDesc::Create3D(1, 1, 1, ResourceFormat::RGBA8_UNORM), &BLACK);
+
+		constexpr uint32 checkerPixels[] =
+		{
+			0xFFFFFFFF, 0xFF000000,
+			0xFF000000, 0xFFFFFFFF
+		};
+		RegisterDefaultTexture(DefaultTexture::CheckerPattern, "Checker Pattern", TextureDesc::Create2D(2, 2, ResourceFormat::RGBA8_UNORM), checkerPixels);
 
 		DefaultTextures[(int)DefaultTexture::ColorNoise256] = CreateTextureFromFile(context, "Resources/Textures/Noise.png", false, "Noise");
 		DefaultTextures[(int)DefaultTexture::BlueNoise512] = CreateTextureFromFile(context, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");

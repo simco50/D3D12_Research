@@ -163,6 +163,8 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, RefCountPtr<Texture>* pPreviousHZB)
 	: Mode(mode), pDepth(pDepth), pPreviousHZB(pPreviousHZB)
 {
+	checkf(!EnableOcclusion() || pPreviousHZB, "Previous HZB handle must be valid when occlusion testing is enabled.");
+
 	/// Must be kept in sync with shader! See "VisibilityBuffer.hlsli"
 	struct MeshletCandidate
 	{
@@ -188,7 +190,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 	// In Phase 1, read from the previous frame's HZB
 	RGTexture* pSourceHZB = nullptr;
-	if (rasterContext.pPreviousHZB)
+	if (rasterContext.EnableOcclusion())
 	{
 		if (rasterPhase == RasterPhase::Phase1)
 			pSourceHZB = graph.TryImport(*rasterContext.pPreviousHZB, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));

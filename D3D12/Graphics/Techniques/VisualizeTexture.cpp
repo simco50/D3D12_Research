@@ -1,12 +1,12 @@
 #include "stdafx.h"
 #include "VisualizeTexture.h"
-#include "../RenderGraph/RenderGraph.h"
-#include "../RHI/Graphics.h"
-#include "../RHI/RHI.h"
-#include "../RHI/PipelineState.h"
-#include "../RHI/RootSignature.h"
-#include "../ImGuiRenderer.h"
-#include "../SceneView.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RHI/PipelineState.h"
+#include "Graphics/RHI/RootSignature.h"
+#include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/ImGuiRenderer.h"
+#include "Graphics/SceneView.h"
 #include "Content/Image.h"
 #include "imgui_internal.h"
 #include "IconsFontAwesome4.h"
@@ -17,15 +17,6 @@ VisualizeTexture::VisualizeTexture(GraphicsDevice* pDevice)
 	m_pVisualizeRS->AddRootCBV(0);
 	m_pVisualizeRS->Finalize("Common");
 	m_pVisualizePSO = pDevice->CreateComputePipeline(m_pVisualizeRS, "ImageVisualize.hlsl", "CSMain");
-
-	CommandContext& context = *pDevice->AllocateCommandContext();
-	constexpr uint32 checkerPixels[] =
-	{
-		0xFFFFFFFF, 0xFF000000,
-		0xFF000000, 0xFFFFFFFF
-	};
-	m_pCheckerPattern = GraphicsCommon::CreateTextureFromImage(context, Image(2, 2, 1, ResourceFormat::RGBA8_UNORM, 1, checkerPixels), false, "Checker Pattern");
-	context.Execute();
 }
 
 void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
@@ -380,7 +371,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				{
 					ImVec2 imageSize = ImVec2((float)mipSize.x, (float)mipSize.y) * Scale;
 					ImVec2 checkersSize = ImMax(ImGui::GetContentRegionAvail(), imageSize);
-					ImGui::Image(m_pCheckerPattern, checkersSize, ImVec2(0, 0), checkersSize / 50.0f, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
+					ImGui::Image(GraphicsCommon::GetDefaultTexture(DefaultTexture::CheckerPattern), checkersSize, ImVec2(0, 0), checkersSize / 50.0f, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
 					ImGui::SetCursorPos(ImVec2(0, 0));
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
 					ImGui::ImageButton("##ImageView", pVisualizeTexture, imageSize);

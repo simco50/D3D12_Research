@@ -37,10 +37,6 @@
         {
           "Id": "2152451a-5cea-4170-b68e-d53827a75806",
           "Command": "-pix"
-        },
-        {
-          "Id": "aa39a7c9-9379-4120-9d1b-58c62157b82d",
-          "Command": "-shadersymbols"
         }
       ]
     },

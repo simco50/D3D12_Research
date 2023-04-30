@@ -70,12 +70,10 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 	constexpr uint32 bufferSize = sizeof(Data);
 	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(bufferSize), "Shader Debug Render Data");
 
-	CommandContext* pContext = pDevice->AllocateCommandContext();
 	ProcessFont(m_Font, fontSettings);
 
 	constexpr uint32 ATLAS_RESOLUTION = 512;
-	BuildFontAtlas(*pContext, Vector2i(ATLAS_RESOLUTION, ATLAS_RESOLUTION));
-	pContext->Execute();
+	BuildFontAtlas(pDevice, Vector2i(ATLAS_RESOLUTION, ATLAS_RESOLUTION));
 }
 
 void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
@@ -362,7 +360,7 @@ bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& c
 	return true;
 }
 
-void ShaderDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i& resolution)
+void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice, const Vector2i& resolution)
 {
 	Font& font = m_Font;
 
@@ -403,21 +401,22 @@ void ShaderDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i
 			data.Width = glyph.Width;
 		}
 
-		m_pGlyphData = context.GetParent()->CreateBuffer(BufferDesc::CreateStructured((uint32)glyphData.size(), sizeof(GlyphData)), "Glyph Data");
-		context.InsertResourceBarrier(m_pGlyphData, D3D12_RESOURCE_STATE_COPY_DEST);
-		context.WriteBuffer(m_pGlyphData, glyphData.data(), glyphData.size() * sizeof(GlyphData));
-		context.InsertResourceBarrier(m_pGlyphData, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+		CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+		m_pGlyphData = pDevice->CreateBuffer(BufferDesc::CreateStructured((uint32)glyphData.size(), sizeof(GlyphData)), "Glyph Data");
+		pContext->WriteBuffer(m_pGlyphData, glyphData.data(), glyphData.size() * sizeof(GlyphData));
+		pContext->Execute();
 	}
 
 	{
-		m_pFontAtlas = context.GetParent()->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
-		context.InsertResourceBarrier(m_pFontAtlas, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		context.ClearUAVu(m_pFontAtlas->GetUAV(), Vector4u(0, 0, 0, 0xFFFFFFFF));
+		CommandContext* pContext = pDevice->AllocateCommandContext();
+		m_pFontAtlas = pDevice->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
+		pContext->InsertResourceBarrier(m_pFontAtlas, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		pContext->ClearUAVf(m_pFontAtlas->GetUAV(), Vector4::Zero);
 
-		context.SetComputeRootSignature(m_pCommonRS);
-		context.SetPipelineState(m_pRasterizeGlyphPSO);
+		pContext->SetComputeRootSignature(m_pCommonRS);
+		pContext->SetPipelineState(m_pRasterizeGlyphPSO);
 
-		context.BindResources(2, m_pFontAtlas->GetUAV());
+		pContext->BindResources(2, m_pFontAtlas->GetUAV());
 
 		for (FontGlyph& glyph : font.Glyphs)
 		{
@@ -437,8 +436,9 @@ void ShaderDebugRenderer::BuildFontAtlas(CommandContext& context, const Vector2i
 			check(glyph.Lines.size() <= ARRAYSIZE(parameters.Lines));
 			memcpy(parameters.Lines, glyph.Lines.data(), sizeof(Line) * glyph.Lines.size());
 
-			context.BindRootCBV(1, parameters);
-			context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.GlyphDimensions.x, 8, parameters.GlyphDimensions.y, 8));
+			pContext->BindRootCBV(1, parameters);
+			pContext->Dispatch(ComputeUtils::GetNumThreadGroups(parameters.GlyphDimensions.x, 8, parameters.GlyphDimensions.y, 8));
 		}
+		pContext->Execute();
 	}
 }

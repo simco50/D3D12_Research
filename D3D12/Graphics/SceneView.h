@@ -131,6 +131,7 @@ enum class DefaultTexture
 	Black3D,
 	ColorNoise256,
 	BlueNoise512,
+	CheckerPattern,
 	MAX,
 };
 

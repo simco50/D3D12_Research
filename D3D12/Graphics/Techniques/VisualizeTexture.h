@@ -25,5 +25,4 @@ private:
 
 	RefCountPtr<PipelineState> m_pVisualizePSO;
 	RefCountPtr<RootSignature> m_pVisualizeRS;
-	RefCountPtr<Texture> m_pCheckerPattern;
 };
