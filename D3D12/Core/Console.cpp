@@ -40,7 +40,6 @@ namespace Win32Console
 
 static HANDLE sConsoleHandle = nullptr;
 static std::mutex sLogMutex;
-static std::vector<Console::LogEntry> sMessageQueue;
 static LogType sVerbosity;
 static std::deque<Console::LogEntry> sHistory;
 std::array<char, 8192> Console::sConvertBuffer;
@@ -64,21 +63,42 @@ void Console::Log(const char* message, LogType type)
 	if ((int)type < (int)sVerbosity)
 		return;
 
-	LogEntry entry(message, type);
-	if (Thread::IsMainThread())
-	{
-		FlushLog(entry);
+	std::scoped_lock lock(sLogMutex);
 
-		std::scoped_lock<std::mutex> lock(sLogMutex);
-		for(const LogEntry& e : sMessageQueue)
-			FlushLog(e);
-		sMessageQueue.clear();
-	}
-	else
+	const char* pVerbosityMessage = "";
+	switch (type)
 	{
-		std::scoped_lock<std::mutex> lock(sLogMutex);
-		sMessageQueue.push_back(LogEntry(message, type));
+	case LogType::Info:
+		if (sConsoleHandle)
+			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+		pVerbosityMessage = "[INFO]";
+		break;
+	case LogType::Warning:
+		if (sConsoleHandle)
+			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
+		pVerbosityMessage = "[WARNING]";
+		break;
+	case LogType::Error:
+	case LogType::FatalError:
+		if (sConsoleHandle)
+			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_INTENSITY);
+		pVerbosityMessage = "[ERROR]";
+		break;
+	default:
+		break;
 	}
+
+	char messageBuffer[4096];
+	FormatString(messageBuffer, ARRAYSIZE(messageBuffer), "%s %s\n", pVerbosityMessage, message);
+	printf("%s %s\n", pVerbosityMessage, message);
+	OutputDebugStringA(messageBuffer);
+
+	sHistory.push_back({ message, type });
+	while (sHistory.size() > 50)
+		sHistory.pop_front();
+
+	if (sConsoleHandle)
+		SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
 
 	if (type == LogType::FatalError)
 		abort();
