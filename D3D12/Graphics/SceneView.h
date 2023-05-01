@@ -38,7 +38,15 @@ struct ViewTransform
 	int JitterIndex = 0;
 	Vector2 Jitter;
 	Vector2 JitterPrev;
-	BoundingFrustum Frustum;
+
+	bool IsPerspective = true;
+	BoundingFrustum PerspectiveFrustum;
+	OrientedBoundingBox OrthographicFrustum;
+
+	bool IsInFrustum(const BoundingBox& bb) const
+	{
+		return IsPerspective ? PerspectiveFrustum.Contains(bb) : OrthographicFrustum.Contains(bb);
+	}
 };
 
 struct Batch
@@ -63,12 +71,9 @@ using VisibilityMask = BitField<8192>;
 struct ShadowView
 {
 	std::string DebugName;
-	Matrix ViewProjection;
-	bool IsPerspective;
-	Texture* pDepthTexture = nullptr;
-	OrientedBoundingBox OrtographicFrustum;
-	BoundingFrustum PerspectiveFrustum;
+	ViewTransform View;
 	VisibilityMask Visibility;
+	Texture* pDepthTexture = nullptr;
 };
 
 struct SceneView
@@ -80,23 +85,28 @@ struct SceneView
 	RefCountPtr<Buffer> pMeshBuffer;
 	RefCountPtr<Buffer> pInstanceBuffer;
 	RefCountPtr<Buffer> pDDGIVolumesBuffer;
-	uint32 NumDDGIVolumes = 0;
 	RefCountPtr<Texture> pSky;
-	int FrameIndex = 0;
-	bool CameraCut = false;
-	Vector2u HZBDimensions;
-	VisibilityMask VisibilityMask;
-	ViewTransform View;
-	BoundingBox SceneAABB;
 	AccelerationStructure AccelerationStructure;
 	GPUDebugRenderData DebugRenderData;
+	Vector2u HZBDimensions;
+
+	VisibilityMask VisibilityMask;
+	ViewTransform MainView;
+	BoundingBox SceneAABB;
 
 	std::vector<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
-	uint32 NumLights;
 
-	Vector2u GetDimensions() const;
+	uint32 NumLights = 0;
+	uint32 NumDDGIVolumes = 0;
+	int FrameIndex = 0;
+	bool CameraCut = false;
+
+	Vector2u GetDimensions() const
+	{
+		return Vector2u((uint32)MainView.Viewport.GetWidth(), (uint32)MainView.Viewport.GetHeight());
+	}
 };
 
 struct SceneTextures
@@ -115,6 +125,7 @@ namespace Renderer
 {
 	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes);
 	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes);
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform, Texture* pTarget = nullptr);
 	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget = nullptr);
 	void UploadSceneData(CommandContext& context, SceneView* pView, const World* pWorld);
 }

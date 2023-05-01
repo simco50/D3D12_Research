@@ -3,6 +3,7 @@
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
 struct SceneView;
+struct ViewTransform;
 
 enum class RasterMode
 {
@@ -41,7 +42,7 @@ class GPUDrivenRenderer
 {
 public:
 	GPUDrivenRenderer(GraphicsDevice* pDevice);
-	void Render(RGGraph& graph, const SceneView* pView, const RasterContext& context, RasterResult& outResult);
+	void Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, const RasterContext& context, RasterResult& outResult);
 	void PrintStats(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext);
 
 private:
@@ -62,7 +63,7 @@ private:
 	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
-	void CullAndRasterize(RGGraph& graph, const SceneView* pView, RasterPhase rasterPhase, const RasterContext& context, RasterResult& outResult);
+	void CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, const RasterContext& context, RasterResult& outResult);
 
 	RefCountPtr<RootSignature> m_pCommonRS;
 	

@@ -26,18 +26,17 @@ namespace Renderer
 		DrawScene(context, pView, pView->VisibilityMask, blendModes);
 	}
 
-	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget)
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform, Texture* pTarget)
 	{
 		ShaderInterop::ViewUniforms parameters;
-		const ViewTransform& view = pView->View;
 
-		parameters.View = view.View;
-		parameters.ViewInverse = view.ViewInverse;
-		parameters.Projection = view.Projection;
-		parameters.ProjectionInverse = view.ProjectionInverse;
-		parameters.ViewProjection = view.ViewProjection;
-		parameters.ViewProjectionPrev = view.ViewProjectionPrev;
-		parameters.ViewProjectionInverse = view.ProjectionInverse * view.ViewInverse;
+		parameters.View = pViewTransform->View;
+		parameters.ViewInverse = pViewTransform->ViewInverse;
+		parameters.Projection = pViewTransform->Projection;
+		parameters.ProjectionInverse = pViewTransform->ProjectionInverse;
+		parameters.ViewProjection = pViewTransform->ViewProjection;
+		parameters.ViewProjectionPrev = pViewTransform->ViewProjectionPrev;
+		parameters.ViewProjectionInverse = pViewTransform->ProjectionInverse * pViewTransform->ViewInverse;
 
 		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * parameters.ViewProjectionPrev;
 		// Transform from uv to clip space: texcoord * 2 - 1
@@ -56,11 +55,11 @@ namespace Renderer
 		};
 		parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
 
-		parameters.ViewLocation = view.Position;
-		parameters.ViewLocationPrev = view.PositionPrev;
+		parameters.ViewLocation = pViewTransform->Position;
+		parameters.ViewLocationPrev = pViewTransform->PositionPrev;
 
 		DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
-		view.Frustum.GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
+		pViewTransform->PerspectiveFrustum.GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
 		parameters.FrustumPlanes[0] = Vector4(nearPlane);
 		parameters.FrustumPlanes[1] = Vector4(farPlane);
 		parameters.FrustumPlanes[2] = Vector4(left);
@@ -68,19 +67,20 @@ namespace Renderer
 		parameters.FrustumPlanes[4] = Vector4(top);
 		parameters.FrustumPlanes[5] = Vector4(bottom);
 
+		parameters.ViewportDimensions = Vector2(pViewTransform->Viewport.GetWidth(), pViewTransform->Viewport.GetHeight());
+		parameters.ViewportDimensionsInv = Vector2(1.0f / pViewTransform->Viewport.GetWidth(), 1.0f / pViewTransform->Viewport.GetHeight());
+		parameters.ViewJitter = pViewTransform->Jitter;
+		parameters.ViewJitterPrev = pViewTransform->JitterPrev;
+		parameters.NearZ = pViewTransform->NearPlane;
+		parameters.FarZ = pViewTransform->FarPlane;
+		parameters.FoV = pViewTransform->FoV;
+
 		if (pTarget)
 		{
 			parameters.TargetDimensions = Vector2((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
 			parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 		}
-		parameters.ViewportDimensions = Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
-		parameters.ViewportDimensionsInv = Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
 		parameters.HZBDimensions = pView->HZBDimensions;
-		parameters.ViewJitter = view.Jitter;
-		parameters.ViewJitterPrev = view.JitterPrev;
-		parameters.NearZ = view.NearPlane;
-		parameters.FarZ = view.FarPlane;
-		parameters.FoV = view.FoV;
 
 		parameters.FrameIndex = pView->FrameIndex;
 		parameters.NumInstances = (uint32)pView->Batches.size();
@@ -90,24 +90,29 @@ namespace Renderer
 		check(pView->ShadowViews.size() <= ShaderInterop::MAX_SHADOW_CASTERS);
 		for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
 		{
-			parameters.LightMatrices[i] = pView->ShadowViews[i].ViewProjection;
+			parameters.LightMatrices[i] = pView->ShadowViews[i].View.ViewProjection;
 		}
 		parameters.CascadeDepths = pView->ShadowCascadeDepths;
 		parameters.NumCascades = pView->NumShadowCascades;
 
-		parameters.TLASIndex =			pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.MeshesIndex =		pView->pMeshBuffer->GetSRVIndex();
-		parameters.MaterialsIndex =		pView->pMaterialBuffer->GetSRVIndex();
-		parameters.InstancesIndex =		pView->pInstanceBuffer->GetSRVIndex();
-		parameters.LightsIndex =		pView->pLightBuffer->GetSRVIndex();
-		parameters.SkyIndex =			pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.DDGIVolumesIndex =	pView->pDDGIVolumesBuffer->GetSRVIndex();
-		parameters.NumDDGIVolumes =		pView->NumDDGIVolumes;
+		parameters.TLASIndex = pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.MeshesIndex = pView->pMeshBuffer->GetSRVIndex();
+		parameters.MaterialsIndex = pView->pMaterialBuffer->GetSRVIndex();
+		parameters.InstancesIndex = pView->pInstanceBuffer->GetSRVIndex();
+		parameters.LightsIndex = pView->pLightBuffer->GetSRVIndex();
+		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
+		parameters.NumDDGIVolumes = pView->NumDDGIVolumes;
 
 		parameters.FontDataIndex = pView->DebugRenderData.FontDataSRV;
 		parameters.DebugRenderDataIndex = pView->DebugRenderData.RenderDataUAV;
 
 		return parameters;
+	}
+
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget)
+	{
+		return GetViewUniforms(pView, &pView->MainView, pTarget);
 	}
 
 	void UploadSceneData(CommandContext& context, SceneView* pView, const World* pWorld)
@@ -272,8 +277,8 @@ namespace Renderer
 
 		auto CompareSort = [pView, blendModes](const Batch* a, const Batch* b)
 		{
-			float aDist = Vector3::DistanceSquared(a->Bounds.Center, pView->View.Position);
-			float bDist = Vector3::DistanceSquared(b->Bounds.Center, pView->View.Position);
+			float aDist = Vector3::DistanceSquared(a->Bounds.Center, pView->MainView.Position);
+			float bDist = Vector3::DistanceSquared(b->Bounds.Center, pView->MainView.Position);
 			return EnumHasAnyFlags(blendModes, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
 		};
 		std::sort(meshes.begin(), meshes.end(), CompareSort);
@@ -432,9 +437,4 @@ namespace GraphicsCommon
 		}
 		return nullptr;
 	}
-}
-
-Vector2u SceneView::GetDimensions() const
-{
-	return Vector2u((uint32)View.Viewport.GetWidth(), (uint32)View.Viewport.GetHeight());
 }

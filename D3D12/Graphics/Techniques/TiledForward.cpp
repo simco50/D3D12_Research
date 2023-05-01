@@ -88,7 +88,7 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 				DynamicAllocation allocation = context.AllocateTransientMemory(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
-				Matrix viewMatrix = pView->View.View;
+				const Matrix& viewMatrix = pView->MainView.View;
 				for (const Light& light : pView->pWorld->Lights)
 				{
 					PrecomputedLightData& data = *pLightData++;

@@ -184,7 +184,7 @@ RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode,
 	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter",		BufferDesc::CreateTyped(2, ResourceFormat::R32_UINT));
 }
 
-void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView, RasterPhase rasterPhase, const RasterContext& rasterContext, RasterResult& outResult)
+void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, const RasterContext& rasterContext, RasterResult& outResult)
 {
 	RGBuffer* pInstanceCullArgs = nullptr;
 
@@ -241,7 +241,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(pCullInstancePSO);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
 				context.BindResources(2, {
 					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
 					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
@@ -294,7 +294,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(pCullMeshletPSO);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
 				context.BindResources(2, {
 					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
 					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
@@ -436,7 +436,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
 				if (outResult.pDebugData)
 					context.BindResources(2, outResult.pDebugData->Get()->GetUAV());
 				context.BindResources(3, {
@@ -476,7 +476,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
 
-void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext, RasterResult& outResult)
+void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, const RasterContext& rasterContext, RasterResult& outResult)
 {
 	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
 	Vector2u dimensions = pView->GetDimensions();
@@ -511,13 +511,13 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Ras
 
 	{
 		RG_GRAPH_SCOPE("Phase 1", graph);
-		CullAndRasterize(graph, pView, RasterPhase::Phase1, rasterContext, outResult);
+		CullAndRasterize(graph, pView, pViewTransform, RasterPhase::Phase1, rasterContext, outResult);
 	}
 
-	if(rasterContext.Mode != RasterMode::Shadows)
+	if (rasterContext.Mode != RasterMode::Shadows)
 	{
 		RG_GRAPH_SCOPE("Phase 2", graph);
-		CullAndRasterize(graph, pView, RasterPhase::Phase2, rasterContext, outResult);
+		CullAndRasterize(graph, pView, pViewTransform, RasterPhase::Phase2, rasterContext, outResult);
 	}
 
 	outResult.pVisibleMeshlets = rasterContext.pVisibleMeshlets;

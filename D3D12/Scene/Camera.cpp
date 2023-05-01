@@ -90,7 +90,7 @@ const Matrix& Camera::GetProjectionInverse() const
 const BoundingFrustum& Camera::GetFrustum() const
 {
 	UpdateMatrices();
-	return m_Transform.Frustum;
+	return m_Transform.PerspectiveFrustum;
 }
 
 void Camera::OnDirty()
@@ -124,7 +124,7 @@ void Camera::UpdateMatrices() const
 
 		m_Transform.Projection.Invert(m_Transform.ProjectionInverse);
 		m_Transform.ViewProjection = m_Transform.View * m_Transform.Projection;
-		m_Transform.Frustum = Math::CreateBoundingFrustum(m_Transform.Projection, m_Transform.View);
+		m_Transform.PerspectiveFrustum = Math::CreateBoundingFrustum(m_Transform.Projection, m_Transform.View);
 		m_Transform.Position = m_Position;
 
 		m_Dirty = false;

@@ -274,7 +274,7 @@ void DemoApp::Update()
 		}
 
 		CreateShadowViews(m_SceneData, m_World);
-		m_SceneData.View = m_pCamera->GetViewTransform();
+		m_SceneData.MainView = m_pCamera->GetViewTransform();
 		m_SceneData.FrameIndex = m_Frame;
 		m_SceneData.pWorld = &m_World;
 
@@ -317,7 +317,7 @@ void DemoApp::Update()
 						shadowView.Visibility.SetAll();
 						for (const Batch& b : m_SceneData.Batches)
 						{
-							shadowView.Visibility.AssignBit(b.InstanceID, shadowView.IsPerspective ? shadowView.PerspectiveFrustum.Contains(b.Bounds) : shadowView.OrtographicFrustum.Contains(b.Bounds));
+							shadowView.Visibility.AssignBit(b.InstanceID, shadowView.View.IsInFrustum(b.Bounds));
 						}
 					}, cullingContext, (uint32)m_SceneData.ShadowViews.size(), 1);
 			}
@@ -449,13 +449,10 @@ void DemoApp::Update()
 					if (Tweakables::g_ShadowsGPUCull)
 					{
 						RG_GRAPH_SCOPE(passName.c_str(), graph);
-						// hack - copy the main viewport and then just modify the viewproj
-						SceneView* pShadowHack = graph.Allocate<SceneView>(*pView);
-						pShadowHack->View.ViewProjection = shadowView.ViewProjection;
 
 						RasterContext context(graph, pShadowmap, RasterMode::Shadows, nullptr);
 						RasterResult result;
-						m_pGPUDrivenRenderer->Render(graph, pShadowHack, context, result);
+						m_pGPUDrivenRenderer->Render(graph, pView, &shadowView.View, context, result);
 					}
 					else
 					{
@@ -466,21 +463,18 @@ void DemoApp::Update()
 									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 									context.SetGraphicsRootSignature(m_pCommonRS);
 
-									// hack - copy the main viewport and then just modify the viewproj
-									SceneView view = *pView;
-									const ShadowView& shadowView = view.ShadowViews[i];
-									view.View.ViewProjection = shadowView.ViewProjection;
-									context.BindRootCBV(1, Renderer::GetViewUniforms(&view, pShadowmap->Get()));
+									const ShadowView& shadowView = pView->ShadowViews[i];
+									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &shadowView.View, pShadowmap->Get()));
 
 									{
 										GPU_PROFILE_SCOPE("Opaque", &context);
 										context.SetPipelineState(m_pShadowsOpaquePSO);
-										Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::Opaque);
+										Renderer::DrawScene(context, pView, shadowView.Visibility, Batch::Blending::Opaque);
 									}
 									{
 										GPU_PROFILE_SCOPE("Masked", &context);
 										context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-										Renderer::DrawScene(context, &view, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
+										Renderer::DrawScene(context, pView, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 									}
 								});
 					}
@@ -496,7 +490,7 @@ void DemoApp::Update()
 				{
 					RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
 					rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
-					m_pGPUDrivenRenderer->Render(graph,	pView, rasterContext, rasterResult);
+					m_pGPUDrivenRenderer->Render(graph,	pView, &pView->MainView, rasterContext, rasterResult);
 					if (Tweakables::CullDebugStats)
 						m_pGPUDrivenRenderer->PrintStats(graph, pView, rasterContext);
 
@@ -1687,13 +1681,14 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z, minExtents.z);
 
 				ShadowView shadowView;
-				shadowView.IsPerspective = false;
-				shadowView.ViewProjection = lightView * projectionMatrix;
-				shadowView.OrtographicFrustum.Center = center;
-				shadowView.OrtographicFrustum.Extents = maxExtents - minExtents;
-				shadowView.OrtographicFrustum.Extents.z *= 10;
-				shadowView.OrtographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
-				static_cast<float*>(&view.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
+				ViewTransform& viewTransform = shadowView.View;
+				viewTransform.IsPerspective = false;
+				viewTransform.ViewProjection = lightView * projectionMatrix;
+				viewTransform.OrthographicFrustum.Center = center;
+				viewTransform.OrthographicFrustum.Extents = maxExtents - minExtents;
+				viewTransform.OrthographicFrustum.Extents.z *= 10;
+				viewTransform.OrthographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
+				(&view.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
 				AddShadowView(light, shadowView, 2048, i);
 			}
 		}
@@ -1707,9 +1702,10 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 			const Matrix lightView = (Matrix::CreateFromQuaternion(light.Rotation) * Matrix::CreateTranslation(light.Position)).Invert();
 
 			ShadowView shadowView;
-			shadowView.IsPerspective = true;
-			shadowView.ViewProjection = lightView * projection;
-			shadowView.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, lightView);
+			ViewTransform& viewTransform = shadowView.View;
+			viewTransform.IsPerspective = true;
+			viewTransform.ViewProjection = lightView * projection;
+			viewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, lightView);
 			AddShadowView(light, shadowView, 512, 0);
 		}
 		else if (light.Type == LightType::Point)
@@ -1731,9 +1727,10 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 			for (int i = 0; i < 6; ++i)
 			{
 				ShadowView shadowView;
-				shadowView.IsPerspective = true;
-				shadowView.ViewProjection = viewMatrices[i] * projection;
-				shadowView.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, viewMatrices[i]);
+				ViewTransform& viewTransform = shadowView.View;
+				viewTransform.IsPerspective = true;
+				viewTransform.ViewProjection = viewMatrices[i] * projection;
+				viewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, viewMatrices[i]);
 				AddShadowView(light, shadowView, 512, i);
 			}
 		}

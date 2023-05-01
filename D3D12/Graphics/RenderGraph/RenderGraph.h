@@ -96,6 +96,17 @@ public:
 		check(m_pCurrentOffset - m_pData + size < m_Size);
 		void* pData = m_pCurrentOffset;
 		m_pCurrentOffset += size;
+
+		// For debugging allocations
+#if 0
+		E_LOG(Info, "Allocating %s (%s / %s - %.0f%%)",
+			Math::PrettyPrintDataSize(size).c_str(),
+			Math::PrettyPrintDataSize(GetSize()).c_str(),
+			Math::PrettyPrintDataSize(GetCapacity()).c_str(),
+			(float)GetSize() / GetCapacity() * 100.0f
+		);
+#endif
+
 		return pData;
 	}
 
@@ -199,6 +210,7 @@ private:
 	RGGraph& Graph;
 	RGGraphAllocator& Allocator;
 	const char* pName;
+
 	uint32 ID;
 	RGPassFlag Flags;
 	bool IsCulled = true;
@@ -252,16 +264,6 @@ public:
 	template<typename T, typename... Args>
 	NO_DISCARD T* Allocate(Args&&... args)
 	{
-		// For debugging allocations
-#if 0
-		E_LOG(Info, "Allocating %s (%s / %s - %.0f%%)",
-			Math::PrettyPrintDataSize(sizeof(T)).c_str(),
-			Math::PrettyPrintDataSize(m_Allocator.GetSize()).c_str(),
-			Math::PrettyPrintDataSize(m_Allocator.GetCapacity()).c_str(),
-			(float)m_Allocator.GetSize() / m_Allocator.GetCapacity() * 100.0f
-		);
-#endif
-
 		return m_Allocator.AllocateObject<T>(std::forward<Args&&>(args)...);
 	}
 

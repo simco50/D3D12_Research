@@ -116,7 +116,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				//if (m_RenderPath != RenderPath::PathTracing)
 				{
 					// Cull object that are small to the viewer - Deligiannis2019
-					Vector3 cameraVec = (batch.Bounds.Center - view.View.Position);
+					Vector3 cameraVec = (batch.Bounds.Center - view.MainView.Position);
 					float angle = tanf(batch.Radius / cameraVec.Length());
 					if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius)
 					{

@@ -119,8 +119,8 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 	cullData.ClusterCount.x = Math::DivideAndRoundUp(pView->GetDimensions().x, gLightClusterTexelSize);
 	cullData.ClusterCount.y = Math::DivideAndRoundUp(pView->GetDimensions().y, gLightClusterTexelSize);
 	cullData.ClusterCount.z = gLightClustersNumZ;
-	float nearZ = pView->View.NearPlane;
-	float farZ = pView->View.FarPlane;
+	float nearZ = pView->MainView.NearPlane;
+	float farZ = pView->MainView.FarPlane;
 	float n = Math::Min(nearZ, farZ);
 	float f = Math::Max(nearZ, farZ);
 	cullData.LightGridParams.x = (float)gLightClustersNumZ / log(f / n);
@@ -150,7 +150,7 @@ void ClusteredForward::ComputeLightCulling(RGGraph& graph, const SceneView* pVie
 				DynamicAllocation allocation = context.AllocateTransientMemory(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
-				Matrix viewMatrix = pView->View.View;
+				const Matrix& viewMatrix = pView->MainView.View;
 				for (const Light& light : pView->pWorld->Lights)
 				{
 					PrecomputedLightData& data = *pLightData++;
