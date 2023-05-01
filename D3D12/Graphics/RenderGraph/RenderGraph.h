@@ -36,7 +36,7 @@ public:
 	RGPassResources(const RGPassResources& other) = delete;
 	RGPassResources& operator=(const RGPassResources& other) = delete;
 
-	RenderPassInfo GetRenderPassInfo() const;
+	NO_DISCARD RenderPassInfo GetRenderPassInfo() const;
 
 private:
 	RGPass& m_Pass;
@@ -74,7 +74,7 @@ public:
 	}
 
 	template<typename T, typename ...Args>
-	T* AllocateObject(Args&&... args)
+	NO_DISCARD T* AllocateObject(Args&&... args)
 	{
 		using AllocatedType = std::conditional_t<std::is_trivial_v<T>, T, TAllocatedObject<T>>;
 		void* pData = Allocate(sizeof(AllocatedType));
@@ -91,7 +91,7 @@ public:
 		}
 	}
 
-	void* Allocate(uint64 size)
+	NO_DISCARD void* Allocate(uint64 size)
 	{
 		check(m_pCurrentOffset - m_pData + size < m_Size);
 		void* pData = m_pCurrentOffset;
@@ -185,7 +185,7 @@ public:
 	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction access, RGTexture* pResolveTarget = nullptr);
 	RGPass& DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool write, RenderTargetLoadAction stencilAccess = RenderTargetLoadAction::NoAccess);
 
-	const char* GetName() const { return pName; }
+	NO_DISCARD const char* GetName() const { return pName; }
 
 private:
 	struct ResourceAccess
@@ -219,8 +219,8 @@ public:
 		: GraphicsObject(pDevice)
 	{}
 
-	RefCountPtr<Texture> Allocate(const char* pName, const TextureDesc& desc);
-	RefCountPtr<Buffer> Allocate(const char* pName, const BufferDesc& desc);
+	NO_DISCARD RefCountPtr<Texture> Allocate(const char* pName, const TextureDesc& desc);
+	NO_DISCARD RefCountPtr<Buffer> Allocate(const char* pName, const BufferDesc& desc);
 	void Tick();
 
 private:
@@ -250,7 +250,7 @@ public:
 	void Execute(CommandContext* pContext);
 
 	template<typename T, typename... Args>
-	T* Allocate(Args&&... args)
+	NO_DISCARD T* Allocate(Args&&... args)
 	{
 		// For debugging allocations
 #if 0
@@ -279,7 +279,7 @@ public:
 		return *m_RenderPasses.back();
 	}
 
-	RGTexture* Create(const char* pName, const TextureDesc& desc)
+	NO_DISCARD RGTexture* Create(const char* pName, const TextureDesc& desc)
 	{
 		RGTexture* pResource = Allocate<RGTexture>(CopyString(pName), (int)m_Resources.size(), desc);
 		m_Resources.emplace_back(pResource);
@@ -293,7 +293,7 @@ public:
 		return pResource;
 	}
 
-	RGTexture* Import(Texture* pTexture)
+	NO_DISCARD RGTexture* Import(Texture* pTexture)
 	{
 		check(pTexture);
 		RGTexture* pResource = Allocate<RGTexture>(CopyString(pTexture->GetName()), (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
@@ -301,14 +301,14 @@ public:
 		return pResource;
 	}
 
-	RGTexture* TryImport(Texture* pTexture, Texture* pFallback = nullptr)
+	NO_DISCARD RGTexture* TryImport(Texture* pTexture, Texture* pFallback = nullptr)
 	{
 		if (pTexture)
 			return Import(pTexture);
 		return pFallback ? Import(pFallback) : nullptr;
 	}
 
-	RGBuffer* Import(Buffer* pBuffer)
+	NO_DISCARD RGBuffer* Import(Buffer* pBuffer)
 	{
 		check(pBuffer);
 		RGBuffer* pResource = Allocate<RGBuffer>(CopyString(pBuffer->GetName()), (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
@@ -316,7 +316,7 @@ public:
 		return pResource;
 	}
 
-	RGBuffer* TryImport(Buffer* pBuffer, Buffer* pFallback = nullptr)
+	NO_DISCARD RGBuffer* TryImport(Buffer* pBuffer, Buffer* pFallback = nullptr)
 	{
 		if (pBuffer)
 			return Import(pBuffer);
@@ -326,7 +326,7 @@ public:
 	void Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget, TextureFlag additionalFlags = TextureFlag::None);
 	void Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget, BufferFlag additionalFlags = BufferFlag::None);
 
-	RGTexture* FindTexture(const char* pName) const
+	NO_DISCARD RGTexture* FindTexture(const char* pName) const
 	{
 		for (RGResource* pResource : m_Resources)
 		{
