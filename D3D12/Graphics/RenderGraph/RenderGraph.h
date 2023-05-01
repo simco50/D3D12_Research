@@ -247,10 +247,7 @@ public:
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
-	void Compile();
 	void Execute(CommandContext* pContext);
-	void DumpGraph(const char* pPath) const;
-	void DrawDebug(bool& enabled) const;
 
 	template<typename T, typename... Args>
 	T* Allocate(Args&&... args)
@@ -341,6 +338,9 @@ public:
 		return nullptr;
 	}
 
+	void EnableResourceTrackerView() { m_EnableResourceTrackerView = true; }
+	void DumpGraph(const char* pPath) { m_pDumpGraphPath = CopyString(pPath); }
+
 	void PushEvent(const char* pName);
 	void PopEvent();
 
@@ -355,9 +355,17 @@ private:
 		return pNewStr;
 	}
 
+	void Compile();
+
 	void ExecutePass(RGPass* pPass, CommandContext& context);
 	void PrepareResources(RGPass* pPass, CommandContext& context);
 	void DestroyData();
+
+	void DumpDebugGraph(const char* pFilePath) const;
+	void DrawResourceTracker(bool& enabled) const;
+
+	bool m_EnableResourceTrackerView = false;
+	const char* m_pDumpGraphPath = nullptr;
 
 	std::vector<std::string> m_Events;
 

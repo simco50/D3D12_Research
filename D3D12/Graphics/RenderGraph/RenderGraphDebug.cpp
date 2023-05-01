@@ -55,7 +55,7 @@ std::string PassFlagToString(RGPassFlag flags)
 		});
 }
 
-void RGGraph::DrawDebug(bool& enabled) const
+void RGGraph::DrawResourceTracker(bool& enabled) const
 {
 	if (!enabled)
 		return;
@@ -200,7 +200,7 @@ void RGGraph::DrawDebug(bool& enabled) const
 	ImGui::End();
 }
 
-void RGGraph::DumpGraph(const char* pPath) const
+void RGGraph::DumpDebugGraph(const char* pPath) const
 {
 	std::stringstream stream;
 
@@ -216,7 +216,7 @@ void RGGraph::DumpGraph(const char* pPath) const
 				<body>
 					<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 					<script>
-						mermaid.initialize({ startOnLoad: true, flowchart: { useMaxWidth: false, htmlLabels: true }});
+						mermaid.initialize({ startOnLoad: true, maxTextSize: 90000, flowchart: { useMaxWidth: false, htmlLabels: true }});
 					</script>
 					<div class="mermaid">
 						%s

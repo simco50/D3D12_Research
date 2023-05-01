@@ -361,8 +361,6 @@ void DemoApp::Update()
 						targetOffset += imageRowPitch;
 					}
 
-					SYSTEMTIME time;
-					GetSystemTime(&time);
 					Paths::CreateDirectoryTree(Paths::ScreenshotDir());
 					img.Save(Sprintf("%sScreenshot_%s.jpg", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
 				}, taskContext);
@@ -1126,16 +1124,18 @@ void DemoApp::Update()
 
 		ImGuiRenderer::Render(graph, graph.Import(m_pSwapchain->GetBackBuffer()));
 
-		graph.Compile();
 		if (Tweakables::g_DumpRenderGraph)
 		{
-			graph.DumpGraph(Sprintf("%sRenderGraph.html", Paths::SavedDir().c_str()).c_str());
+			graph.DumpGraph(Sprintf("%sRenderGraph_%s.html", Paths::SavedDir(), Utils::GetTimeString()).c_str());
 			Tweakables::g_DumpRenderGraph = false;
 		}
+		if(Tweakables::g_EnableRenderGraphResourceTracker)
+			graph.EnableResourceTrackerView();
 
-		graph.DrawDebug(Tweakables::g_EnableRenderGraphResourceTracker);
-
-		graph.Execute(pContext);
+		{
+			GPU_PROFILE_SCOPE("Render", pContext);
+			graph.Execute(pContext);
+		}
 		
 	}
 

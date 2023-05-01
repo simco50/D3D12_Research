@@ -282,7 +282,12 @@ void RGGraph::PopEvent()
 
 void RGGraph::Execute(CommandContext* pContext)
 {
-	GPU_PROFILE_SCOPE("Render", pContext);
+	Compile();
+
+	if (m_EnableResourceTrackerView)
+		DrawResourceTracker(m_EnableResourceTrackerView);
+	if (m_pDumpGraphPath)
+		DumpDebugGraph(m_pDumpGraphPath);
 
 	{
 		for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
