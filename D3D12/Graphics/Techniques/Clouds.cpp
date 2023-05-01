@@ -32,7 +32,7 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 
 	CloudsPSO = pDevice->CreateComputePipeline(CloudsRS, "Clouds.hlsl", "CSMain");
 
-	pDevice->GetShaderManager()->OnShaderRecompiledEvent().AddLambda([this](Shader*) { m_pShapeNoise = nullptr; });
+	pDevice->GetShaderManager()->OnShaderEditedEvent().AddLambda([this](Shader*) { m_pShapeNoise = nullptr; });
 }
 
 RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView)

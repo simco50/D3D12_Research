@@ -80,9 +80,7 @@ namespace ShaderCompiler
 		{
 			outPath = Paths::Combine(includeDir, job.FilePath);
 			if (Paths::FileExists(outPath.c_str()))
-			{
 				return true;
-			}
 		}
 		outPath = "";
 		return false;
@@ -163,9 +161,7 @@ namespace ShaderCompiler
 
 		std::string defineKey;
 		for (const ShaderDefine& define : compileJob.Defines)
-		{
 			defineKey += define.Value;
-		}
 		StringHash hash(defineKey.c_str());
 
 		std::string cachePath = Sprintf(
@@ -206,38 +202,28 @@ namespace ShaderCompiler
 			{
 				m_Arguments.push_back(MULTIBYTE_TO_UNICODE(pArgument));
 				if (pValue)
-				{
 					m_Arguments.push_back(MULTIBYTE_TO_UNICODE(pValue));
-				}
 			}
 			void AddArgument(const wchar_t* pArgument, const wchar_t* pValue = nullptr)
 			{
 				m_Arguments.push_back(pArgument);
 				if (pValue)
-				{
 					m_Arguments.push_back(pValue);
-				}
 			}
 
 			void AddDefine(const char* pDefine, const char* pValue = nullptr)
 			{
 				if (strstr(pDefine, "=") != nullptr)
-				{
 					AddArgument("-D", pDefine);
-				}
 				else
-				{
 					AddArgument("-D", Sprintf("%s=%s", pDefine, pValue ? pValue : "1").c_str());
-				}
 			}
 
 			const wchar_t** GetArguments()
 			{
 				m_ArgumentArr.reserve(GetNumArguments());
 				for (const auto& arg : m_Arguments)
-				{
 					m_ArgumentArr.push_back(arg.c_str());
-				}
 				return m_ArgumentArr.data();
 			}
 
@@ -250,9 +236,7 @@ namespace ShaderCompiler
 			{
 				std::string str;
 				for (const std::wstring& arg : m_Arguments)
-				{
 					str += Sprintf(" %s", UNICODE_TO_MULTIBYTE(arg.c_str()));
-				}
 				return str;
 			}
 
@@ -301,18 +285,14 @@ namespace ShaderCompiler
 
 		arguments.AddArgument("-I", Paths::GetDirectoryPath(fullPath).c_str());
 		for (const std::string& includeDir : compileJob.IncludeDirs)
-		{
 			arguments.AddArgument("-I", includeDir.c_str());
-		}
 
 		arguments.AddDefine(Sprintf("_SM_MAJ=%d", compileJob.MajVersion).c_str());
 		arguments.AddDefine(Sprintf("_SM_MIN=%d", compileJob.MinVersion).c_str());
 		arguments.AddDefine("_DXC");
 
 		for (const ShaderDefine& define : compileJob.Defines)
-		{
 			arguments.AddDefine(define.Value.c_str());
-		}
 
 		DxcBuffer sourceBuffer;
 		sourceBuffer.Ptr = pSource->GetBufferPointer();
@@ -373,9 +353,7 @@ namespace ShaderCompiler
 				for (uint32 i = 0; i < ARRAYSIZE(pValidExtensions); ++i)
 				{
 					if (strcmp(pValidExtensions[i], extension.c_str()) == 0)
-					{
 						return true;
-					}
 				}
 				return false;
 			}
@@ -504,9 +482,7 @@ namespace ShaderCompiler
 
 		result.Includes.push_back(fullPath);
 		for (const std::string& includePath : includeHandler.IncludedFiles)
-		{
 			result.Includes.push_back(includePath);
-		}
 
 		check(SaveToCache(cachePath.c_str(), compileJob, result));
 		E_LOG(Warning, "Missing cached shader. Compile time: %.1fms ('%s.%s')", timer.Stop() * 1000, compileJob.FilePath.c_str(), compileJob.EntryPoint.c_str());
@@ -519,9 +495,7 @@ ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEn
 {
 	ShaderStringHash hash(pEntryPoint);
 	for (const ShaderDefine& define : defines)
-	{
 		hash.Combine(ShaderStringHash(define.Value));
-	}
 	return hash;
 }
 
@@ -530,7 +504,7 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 	auto it = m_IncludeDependencyMap.find(ShaderStringHash(filePath));
 	if (it != m_IncludeDependencyMap.end())
 	{
-		E_LOG(Info, "Modified \"%s\". Recompiling dependencies...", filePath.c_str());
+		E_LOG(Info, "Modified \"%s\". Dirtying dependent shaders...", filePath.c_str());
 		const std::unordered_set<std::string>& dependencies = it->second;
 		for (const std::string& dependency : dependencies)
 		{
@@ -540,13 +514,9 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 				ShadersInFileMap objectMap = objectMapIt->second;
 				for (auto shader : objectMap.Shaders)
 				{
-					Shader* pOldShader = shader.second;
-					Shader* pNewShader = GetShader(dependency.c_str(), pOldShader->Type, pOldShader->EntryPoint.c_str(), pOldShader->Defines, true);
-					if (pNewShader)
-					{
-						check(pOldShader == pNewShader);
-						m_OnShaderRecompiledEvent.Broadcast(pNewShader);
-					}
+					shader.second->IsDirty = true;
+					if (shader.second)
+						m_OnShaderEditedEvent.Broadcast(shader.second);
 				}
 			}
 		}
@@ -593,17 +563,13 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 	if (m_pFileWatcher)
 	{
 		if (m_pFileWatcher->StartWatching(includeDir.c_str(), true))
-		{
 			E_LOG(Info, "Shader Hot-Reload enabled for: \"%s\"", includeDir.c_str());
-		}
 		else
-		{
 			E_LOG(Warning, "Shader Hot-Reload for \"%s\" failed.", includeDir.c_str());
-		}
 	}
 }
 
-Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/, bool force /*= false*/)
+Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	// Libs have no entry point
 	if (!pEntryPoint)
@@ -619,12 +585,10 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 		auto& shaderMap = m_FilepathToObjectMap[pathHash].Shaders;
 		auto it = shaderMap.find(hash);
 		if (it != shaderMap.end())
-		{
 			pShader = it->second;
-		}
 	}
 
-	if (!force && pShader)
+	if (pShader && !pShader->IsDirty)
 		return pShader;
 
 	ShaderCompiler::CompileJob job;
@@ -655,12 +619,11 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 		pShader->EntryPoint = pEntryPoint;
 		pShader->Type = shaderType;
 		pShader->pByteCode = result.pBlob;
+		pShader->IsDirty = false;
 		memcpy(pShader->Hash, result.ShaderHash, sizeof(uint64) * 2);
 
 		for (const std::string& include : result.Includes)
-		{
 			m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
-		}
 		m_FilepathToObjectMap[pathHash].Shaders[hash] = pShader;
 	}
 	return pShader;

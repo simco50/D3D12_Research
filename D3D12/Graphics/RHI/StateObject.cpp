@@ -43,7 +43,7 @@ private:
 StateObject::StateObject(GraphicsDevice* pParent)
 	: GraphicsObject(pParent)
 {
-	m_ReloadHandle = pParent->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
+	m_ReloadHandle = pParent->GetShaderManager()->OnShaderEditedEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
 }
 
 void StateObject::Create(const StateObjectInitializer& initializer)

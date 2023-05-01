@@ -101,6 +101,7 @@ struct Shader
 	std::vector<ShaderDefine> Defines;
 	ShaderType Type;
 	std::string EntryPoint;
+	bool IsDirty = false;
 };
 
 class ShaderManager
@@ -112,10 +113,10 @@ public:
 	void ConditionallyReloadShaders();
 	void AddIncludeDir(const std::string& includeDir);
 
-	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines = {}, bool force = false);
+	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines = {});
 
-	DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader* /*pShader*/);
-	OnShaderRecompiled& OnShaderRecompiledEvent() { return m_OnShaderRecompiledEvent; }
+	DECLARE_MULTICAST_DELEGATE(OnShaderEdited, Shader* /*pShader*/);
+	OnShaderEdited& OnShaderEditedEvent() { return m_OnShaderEditedEvent; }
 
 private:
 	using ShaderStringHash = TStringHash<false>;
@@ -142,5 +143,5 @@ private:
 	uint8 m_ShaderModelMinor;
 
 	std::mutex m_CompileMutex;
-	OnShaderRecompiled m_OnShaderRecompiledEvent;
+	OnShaderEdited m_OnShaderEditedEvent;
 };
