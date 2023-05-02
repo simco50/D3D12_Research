@@ -151,7 +151,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 DemoApp::~DemoApp()
 {
 	m_pDevice->IdleGPU();
-	ImGuiRenderer::Shutdown(m_pDevice);
+	ImGuiRenderer::Shutdown();
 	GraphicsCommon::Destroy();
 	DebugRenderer::Get()->Shutdown();
 	Profiler::Get()->Shutdown();
@@ -367,7 +367,7 @@ void DemoApp::Update()
 			};
 			std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), CompareSort);
 
-			TaskContext cullingContext;
+			TaskContext taskContext;
 			// In Visibility Buffer mode, culling is done on the GPU.
 			if (m_RenderPath != RenderPath::Visibility)
 			{
@@ -379,7 +379,7 @@ void DemoApp::Update()
 						{
 							m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
 						}
-					}, cullingContext);
+					}, taskContext);
 			}
 			if (!Tweakables::g_ShadowsGPUCull)
 			{
@@ -391,23 +391,27 @@ void DemoApp::Update()
 						{
 							shadowView.Visibility.AssignBit(b.InstanceID, shadowView.View.IsInFrustum(b.Bounds));
 						}
-					}, cullingContext, (uint32)m_SceneData.ShadowViews.size(), 1);
+					}, taskContext, (uint32)m_SceneData.ShadowViews.size(), 1);
 			}
-			TaskQueue::Join(cullingContext);
-		}
 
-		bool boundsSet = false;
-		for (const Batch& b : m_SceneData.Batches)
-		{
-			if (boundsSet)
-			{
-				BoundingBox::CreateMerged(m_SceneData.SceneAABB, m_SceneData.SceneAABB, b.Bounds);
-			}
-			else
-			{
-				m_SceneData.SceneAABB = b.Bounds;
-				boundsSet = true;
-			}
+			TaskQueue::Execute([&](int)
+				{
+					bool boundsSet = false;
+					for (const Batch& b : m_SceneData.Batches)
+					{
+						if (boundsSet)
+						{
+							BoundingBox::CreateMerged(m_SceneData.SceneAABB, m_SceneData.SceneAABB, b.Bounds);
+						}
+						else
+						{
+							m_SceneData.SceneAABB = b.Bounds;
+							boundsSet = true;
+						}
+					}
+				}, taskContext);
+
+			TaskQueue::Join(taskContext);
 		}
 
 		RGGraph graph(*m_RenderGraphPool);
@@ -470,8 +474,8 @@ void DemoApp::Update()
 							.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
 							.Bind([=](CommandContext& context)
 								{
-									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 									context.SetGraphicsRootSignature(m_pCommonRS);
+									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 									const ShadowView& shadowView = pView->ShadowViews[i];
 									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &shadowView.View, pShadowmap->Get()));

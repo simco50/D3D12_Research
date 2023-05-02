@@ -244,8 +244,8 @@ private:
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
 
-	PipelineState* m_pCurrentPSO = nullptr;
-	StateObject* m_pCurrentSO = nullptr;
+	const PipelineState* m_pCurrentPSO = nullptr;
+	const StateObject* m_pCurrentSO = nullptr;
 	const RootSignature* m_pCurrentRS = nullptr;
 };
 

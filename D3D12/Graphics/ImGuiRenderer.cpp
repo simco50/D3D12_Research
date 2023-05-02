@@ -216,7 +216,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	ImGui_ImplWin32_Init(window);
 }
 
-void ImGuiRenderer::Shutdown(GraphicsDevice* pDevice)
+void ImGuiRenderer::Shutdown()
 {
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();

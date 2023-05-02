@@ -5,7 +5,7 @@
 #define CONCAT_IMPL( x, y ) x##y
 #define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
 
-#define checkf(expression, msg, ...) if((expression)){} else { Console::LogFormat(LogType::Warning, msg, ##__VA_ARGS__); __debugbreak(); }
+#define checkf(expression, msg, ...) if((expression)){} else { Console::LogFormat(LogType::Warning, msg, __VA_ARGS__); __debugbreak(); }
 #define check(expression) checkf(expression, "")
 #define noEntry() checkf(false, "Should not have reached this point!")
 #define validateOncef(expression, msg, ...) if(!(expression)) { \
