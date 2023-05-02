@@ -21,11 +21,6 @@ namespace Tweakables
 
 namespace Renderer
 {
-	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes)
-	{
-		DrawScene(context, pView, pView->VisibilityMask, blendModes);
-	}
-
 	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform, Texture* pTarget)
 	{
 		ShaderInterop::ViewUniforms parameters;
@@ -263,37 +258,28 @@ namespace Renderer
 		CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
 	}
 
-	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes)
+	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes)
 	{
-		std::vector<const Batch*> meshes;
-		meshes.reserve(pView->Batches.size());
-		for (const Batch& b : pView->Batches)
+		DrawScene(context, pView->Batches, pView->VisibilityMask, blendModes);
+	}
+
+	void DrawScene(CommandContext& context, const Span<Batch>& batches, const VisibilityMask& visibility, Batch::Blending blendModes)
+	{
+		check(batches.GetSize() <= visibility.Size());
+		for (const Batch& b : batches)
 		{
 			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 			{
-				meshes.push_back(&b);
-			}
-		}
-
-		auto CompareSort = [pView, blendModes](const Batch* a, const Batch* b)
-		{
-			float aDist = Vector3::DistanceSquared(a->Bounds.Center, pView->MainView.Position);
-			float bDist = Vector3::DistanceSquared(b->Bounds.Center, pView->MainView.Position);
-			return EnumHasAnyFlags(blendModes, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
-		};
-		std::sort(meshes.begin(), meshes.end(), CompareSort);
-
-		for (const Batch* b : meshes)
-		{
-			context.BindRootCBV(0, b->InstanceID);
-			if (context.GetCurrentPSO()->GetType() == PipelineStateType::Mesh)
-			{
-				context.DispatchMesh(ComputeUtils::GetNumThreadGroups(b->pMesh->NumMeshlets, 32));
-			}
-			else
-			{
-				context.SetIndexBuffer(b->pMesh->IndicesLocation);
-				context.DrawIndexedInstanced(b->pMesh->IndicesLocation.Elements, 0, 1, 0, 0);
+				context.BindRootCBV(0, b.InstanceID);
+				if (context.GetCurrentPSO()->GetType() == PipelineStateType::Mesh)
+				{
+					context.DispatchMesh(ComputeUtils::GetNumThreadGroups(b.pMesh->NumMeshlets, 32));
+				}
+				else
+				{
+					context.SetIndexBuffer(b.pMesh->IndicesLocation);
+					context.DrawIndexedInstanced(b.pMesh->IndicesLocation.Elements, 0, 1, 0, 0);
+				}
 			}
 		}
 	}

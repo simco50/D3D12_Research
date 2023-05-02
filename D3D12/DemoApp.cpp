@@ -277,53 +277,6 @@ void DemoApp::Update()
 		m_SceneData.MainView = m_pCamera->GetViewTransform();
 		m_SceneData.FrameIndex = m_Frame;
 		m_SceneData.pWorld = &m_World;
-
-		bool boundsSet = false;
-		for (const Batch& b : m_SceneData.Batches)
-		{
-			if (boundsSet)
-			{
-				BoundingBox::CreateMerged(m_SceneData.SceneAABB, m_SceneData.SceneAABB, b.Bounds);
-			}
-			else
-			{
-				m_SceneData.SceneAABB = b.Bounds;
-				boundsSet = true;
-			}
-		}
-
-		{
-			PROFILE_SCOPE("Frustum Culling");
-
-			TaskContext cullingContext;
-			// In Visibility Buffer mode, culling is done on the GPU.
-			if (m_RenderPath != RenderPath::Visibility)
-			{
-				TaskQueue::Execute([&](int)
-					{
-						m_SceneData.VisibilityMask.SetAll();
-						BoundingFrustum frustum = m_pCamera->GetFrustum();
-						for (const Batch& b : m_SceneData.Batches)
-						{
-							m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
-						}
-					}, cullingContext);
-			}
-			if (!Tweakables::g_ShadowsGPUCull)
-			{
-				TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
-					{
-						ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
-						shadowView.Visibility.SetAll();
-						for (const Batch& b : m_SceneData.Batches)
-						{
-							shadowView.Visibility.AssignBit(b.InstanceID, shadowView.View.IsInFrustum(b.Bounds));
-						}
-					}, cullingContext, (uint32)m_SceneData.ShadowViews.size(), 1);
-			}
-			TaskQueue::Join(cullingContext);
-		}
-
 	}
 	{
 		GPU_PROFILE_SCOPE("Render", pContext);
@@ -400,6 +353,63 @@ void DemoApp::Update()
 			}
 		}
 
+		{
+			PROFILE_SCOPE("Frustum Culling");
+
+			// Sort
+			auto CompareSort = [this](const Batch& a, const Batch& b)
+			{
+				float aDist = Vector3::DistanceSquared(a.Bounds.Center, m_SceneData.MainView.Position);
+				float bDist = Vector3::DistanceSquared(b.Bounds.Center, m_SceneData.MainView.Position);
+				if (a.BlendMode != b.BlendMode)
+					return (int)a.BlendMode < (int)b.BlendMode;
+				return EnumHasAnyFlags(a.BlendMode, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
+			};
+			std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), CompareSort);
+
+			TaskContext cullingContext;
+			// In Visibility Buffer mode, culling is done on the GPU.
+			if (m_RenderPath != RenderPath::Visibility)
+			{
+				TaskQueue::Execute([&](int)
+					{
+						m_SceneData.VisibilityMask.SetAll();
+						BoundingFrustum frustum = m_pCamera->GetFrustum();
+						for (const Batch& b : m_SceneData.Batches)
+						{
+							m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
+						}
+					}, cullingContext);
+			}
+			if (!Tweakables::g_ShadowsGPUCull)
+			{
+				TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
+					{
+						ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
+						shadowView.Visibility.SetAll();
+						for (const Batch& b : m_SceneData.Batches)
+						{
+							shadowView.Visibility.AssignBit(b.InstanceID, shadowView.View.IsInFrustum(b.Bounds));
+						}
+					}, cullingContext, (uint32)m_SceneData.ShadowViews.size(), 1);
+			}
+			TaskQueue::Join(cullingContext);
+		}
+
+		bool boundsSet = false;
+		for (const Batch& b : m_SceneData.Batches)
+		{
+			if (boundsSet)
+			{
+				BoundingBox::CreateMerged(m_SceneData.SceneAABB, m_SceneData.SceneAABB, b.Bounds);
+			}
+			else
+			{
+				m_SceneData.SceneAABB = b.Bounds;
+				boundsSet = true;
+			}
+		}
+
 		RGGraph graph(*m_RenderGraphPool);
 
 		const Vector2u viewDimensions = m_SceneData.GetDimensions();
@@ -469,12 +479,12 @@ void DemoApp::Update()
 									{
 										GPU_PROFILE_SCOPE("Opaque", &context);
 										context.SetPipelineState(m_pShadowsOpaquePSO);
-										Renderer::DrawScene(context, pView, shadowView.Visibility, Batch::Blending::Opaque);
+										Renderer::DrawScene(context, pView->Batches, shadowView.Visibility, Batch::Blending::Opaque);
 									}
 									{
 										GPU_PROFILE_SCOPE("Masked", &context);
 										context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-										Renderer::DrawScene(context, pView, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
+										Renderer::DrawScene(context, pView->Batches, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 									}
 								});
 					}
