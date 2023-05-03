@@ -88,7 +88,7 @@ struct TextureDesc
 		SampleCount(1), 
 		Format(ResourceFormat::Unknown), 
 		Usage(TextureFlag::None),
-		ClearBindingValue(ClearBinding()),
+		ClearBindingValue(ClearBinding(Color(0, 0, 0))),
 		Dimensions(TextureDimension::Texture2D)
 	{}
 
@@ -117,7 +117,7 @@ struct TextureDesc
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
 		desc.Usage = flags | TextureFlag::ShaderResource;
-		desc.ClearBindingValue = ClearBinding();
+		desc.ClearBindingValue = ClearBinding(Color(0, 0, 0));
 		desc.Dimensions = TextureDimension::TextureCube;
 		return desc;
 	}
@@ -134,7 +134,7 @@ struct TextureDesc
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
 		desc.Usage = flags | TextureFlag::ShaderResource;
-		desc.ClearBindingValue = ClearBinding();
+		desc.ClearBindingValue = ClearBinding(Color(0, 0, 0));
 		desc.Dimensions = TextureDimension::Texture2D;
 		return desc;
 	}
@@ -151,7 +151,7 @@ struct TextureDesc
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
 		desc.Usage = flags | TextureFlag::ShaderResource;
-		desc.ClearBindingValue = ClearBinding();
+		desc.ClearBindingValue = ClearBinding(Color(0, 0, 0));
 		desc.Dimensions = TextureDimension::Texture3D;
 		return desc;
 	}
