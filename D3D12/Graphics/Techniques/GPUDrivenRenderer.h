@@ -18,9 +18,8 @@ struct RasterContext
 	RGTexture* pDepth = nullptr;
 	RefCountPtr<Texture>* pPreviousHZB = nullptr;
 	bool EnableDebug = false;
+	bool EnableOcclusionCulling = false;
 	RasterMode Mode;
-
-	bool EnableOcclusion() const { return Mode != RasterMode::Shadows; }
 
 	RGBuffer* pCandidateMeshlets = nullptr;
 	RGBuffer* pCandidateMeshletsCounter = nullptr;

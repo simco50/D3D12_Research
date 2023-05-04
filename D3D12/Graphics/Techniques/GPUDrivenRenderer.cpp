@@ -6,6 +6,7 @@
 #include "Graphics/RHI/RootSignature.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Profiler.h"
+#include "Graphics/Mesh.h"
 #include "Graphics/SceneView.h"
 
 #define A_CPU 1
@@ -163,8 +164,6 @@ GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
 RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, RefCountPtr<Texture>* pPreviousHZB)
 	: Mode(mode), pDepth(pDepth), pPreviousHZB(pPreviousHZB)
 {
-	checkf(!EnableOcclusion() || pPreviousHZB, "Previous HZB handle must be valid when occlusion testing is enabled.");
-
 	/// Must be kept in sync with shader! See "VisibilityBuffer.hlsli"
 	struct MeshletCandidate
 	{
@@ -190,7 +189,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 	// In Phase 1, read from the previous frame's HZB
 	RGTexture* pSourceHZB = nullptr;
-	if (rasterContext.EnableOcclusion())
+	if (rasterContext.EnableOcclusionCulling)
 	{
 		if (rasterPhase == RasterPhase::Phase1)
 			pSourceHZB = graph.TryImport(*rasterContext.pPreviousHZB, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
@@ -205,12 +204,14 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	PipelineState* pCullInstancePSO = m_pCullInstancesPSO[psoPhaseIndex];
 	PipelineStateBinSet* pRasterPSOs = rasterContext.EnableDebug ? &m_pDrawMeshletsDebugModePSO : &m_pDrawMeshletsPSO;
 
-	if (rasterContext.Mode == RasterMode::Shadows)
+	if (!rasterContext.EnableOcclusionCulling)
 	{
 		pCullInstancePSO = m_pCullInstancesNoOcclusionPSO;
 		pCullMeshletPSO = m_pCullMeshletsNoOcclusionPSO;
-		pRasterPSOs = &m_pDrawMeshletsDepthOnlyPSO;
 	}
+
+	if (rasterContext.Mode == RasterMode::Shadows)
+		pRasterPSOs = &m_pDrawMeshletsDepthOnlyPSO;
 
 	// In Phase 2, build the indirect arguments based on the instance culling results of Phase 1.
 	// These are the list of instances which within the frustum, but were considered occluded by Phase 1.
@@ -254,7 +255,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
 					});
 
-				if (rasterContext.EnableOcclusion())
+				if (rasterContext.EnableOcclusionCulling)
 					context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
 
 				if (rasterPhase == RasterPhase::Phase1)
@@ -265,7 +266,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	// In Phase 2, use the indirect arguments built before.
 	if (rasterPhase == RasterPhase::Phase2)
 		cullInstancePass.Read(pInstanceCullArgs);
-	if (rasterContext.EnableOcclusion())
+	if (rasterContext.EnableOcclusionCulling)
 		cullInstancePass.Read(pSourceHZB);
 
 	// Build indirect arguments for the next pass, based on the visible list of meshlets.
@@ -303,12 +304,12 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					rasterContext.pVisibleMeshlets->Get()->GetUAV(),
 					rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
 					});
-				if (rasterContext.EnableOcclusion())
+				if (rasterContext.EnableOcclusionCulling)
 					context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pMeshletCullArgs->Get());
 			});
-	if (rasterContext.EnableOcclusion())
+	if (rasterContext.EnableOcclusionCulling)
 		meshletCullPass.Read(pSourceHZB);
 	/*
 		Visible meshlets are output in a single list and in an unordered fashion.
@@ -472,14 +473,25 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	// Build the HZB, this HZB must be persistent across frames for this system to work.
 	// In Phase 1, the HZB is built so it can be used in Phase 2 for accurrate occlusion culling.
 	// In Phase 2, the HZB is built to be used by Phase 1 in the next frame.
-	if (rasterContext.EnableOcclusion())
+	if (rasterContext.EnableOcclusionCulling)
 		BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
 
 void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, const RasterContext& rasterContext, RasterResult& outResult)
 {
+	checkf(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB")
+
 	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
 	Vector2u dimensions = pView->GetDimensions();
+
+#if _DEBUG
+	// Validate that we don't have more meshlets/instances than allowed.
+	uint32 numMeshlets = 0;
+	for (const Batch& b : pView->Batches)
+		numMeshlets += b.pMesh->NumMeshlets;
+	check(pView->Batches.size() <= Tweakables::MaxNumInstances);
+	check(numMeshlets <= Tweakables::MaxNumMeshlets);
+#endif
 
 	outResult.pHZB = nullptr;
 	outResult.pVisibilityBuffer = nullptr;
@@ -514,7 +526,8 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Vie
 		CullAndRasterize(graph, pView, pViewTransform, RasterPhase::Phase1, rasterContext, outResult);
 	}
 
-	if (rasterContext.Mode != RasterMode::Shadows)
+	// If occlusion culling is disabled, phase 1 will already have rendered everything and phase 2 in no longer required.
+	if (rasterContext.EnableOcclusionCulling)
 	{
 		RG_GRAPH_SCOPE("Phase 2", graph);
 		CullAndRasterize(graph, pView, pViewTransform, RasterPhase::Phase2, rasterContext, outResult);

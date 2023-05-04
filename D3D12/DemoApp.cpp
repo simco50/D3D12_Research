@@ -78,6 +78,7 @@ namespace Tweakables
 	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 1.0f * Math::DegreesToRadians);
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
 	ConsoleVariable g_RenderTerrain("r.Terrain", false);
+	ConsoleVariable g_OcclusionCulling("r.OcclusionCulling", true);
 
 	// Misc
 	ConsoleVariable CullDebugStats("r.CullingStats", false);
@@ -504,6 +505,7 @@ void DemoApp::Update()
 				{
 					RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
 					rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
+					rasterContext.EnableOcclusionCulling = Tweakables::g_OcclusionCulling;
 					m_pGPUDrivenRenderer->Render(graph,	pView, &pView->MainView, rasterContext, rasterResult);
 					if (Tweakables::CullDebugStats)
 						m_pGPUDrivenRenderer->PrintStats(graph, pView, rasterContext);
@@ -1443,6 +1445,7 @@ void DemoApp::UpdateImGui()
 
 			if (m_RenderPath == RenderPath::Visibility)
 			{
+				ImGui::Checkbox("Occlusion Culling", &Tweakables::g_OcclusionCulling.Get());
 				static constexpr const char* pDebugViewNames[] =
 				{
 					"Off",
