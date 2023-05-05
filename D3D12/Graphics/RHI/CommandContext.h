@@ -196,7 +196,7 @@ public:
 	template<typename T>
 	void BindRootCBV(uint32 rootIndex, const T& data)
 	{
-		static_assert(!std::is_pointer<T>::value, "Provided type is a pointer. This is probably unintentional.");
+		static_assert(!std::is_pointer_v<T>, "Provided type is a pointer. This is probably unintentional.");
 		BindRootCBV(rootIndex, &data, sizeof(T));
 	}
 
@@ -213,7 +213,7 @@ private:
 	void AddBarrier(const D3D12_RESOURCE_BARRIER& barrier);
 
 	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
-	D3D12_RESOURCE_STATES GetLocalResourceState(GraphicsResource* pResource, uint32 subResource) const
+	D3D12_RESOURCE_STATES GetLocalResourceState(const GraphicsResource* pResource, uint32 subResource) const
 	{
 		auto it = m_ResourceStates.find(pResource);
 		check(it != m_ResourceStates.end());
@@ -236,7 +236,7 @@ private:
 	std::array<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers> m_BatchedBarriers;
 	uint32 m_NumBatchedBarriers = 0;
 	std::vector<PendingBarrier> m_PendingBarriers;
-	std::unordered_map<GraphicsResource*, ResourceState> m_ResourceStates;
+	std::unordered_map<const GraphicsResource*, ResourceState> m_ResourceStates;
 
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	CommandListContext m_CurrentCommandContext = CommandListContext::Invalid;

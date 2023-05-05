@@ -48,15 +48,21 @@ StateObject::StateObject(GraphicsDevice* pParent)
 
 void StateObject::Create(const StateObjectInitializer& initializer)
 {
-	GetParent()->DeferReleaseObject(m_pStateObject.Detach());
-
 	m_Desc = initializer;
 	StateObjectStream stateObjectStream;
-	m_Desc.CreateStateObjectStream(stateObjectStream, GetParent());
-	VERIFY_HR(GetParent()->GetDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
-	D3D::SetObjectName(m_pStateObject, m_Desc.Name.c_str());
-	VERIFY_HR(m_pStateObject->QueryInterface(m_pStateObjectProperties.ReleaseAndGetAddressOf()));
-	//m_Desc.SetMaxPipelineStackSize(this); #todo: This is causing trouble with recursion!
+	if (m_Desc.CreateStateObjectStream(stateObjectStream, GetParent()))
+	{
+		GetParent()->DeferReleaseObject(m_pStateObject.Detach());
+		VERIFY_HR(GetParent()->GetDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
+		D3D::SetObjectName(m_pStateObject, m_Desc.Name.c_str());
+		VERIFY_HR(m_pStateObject->QueryInterface(m_pStateObjectProperties.ReleaseAndGetAddressOf()));
+		//m_Desc.SetMaxPipelineStackSize(this); #todo: This is causing trouble with recursion!
+	}
+	else
+	{
+		E_LOG(Warning, "Failed to compile StateObject '%s'", initializer.Name);
+	}
+	check(m_pStateObject);
 }
 
 void StateObject::ConditionallyReload()
@@ -115,7 +121,7 @@ void StateObjectInitializer::AddMissShader(const std::string& exportName, RootSi
 }
 
 
-void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObjectStream, GraphicsDevice* pDevice)
+bool StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObjectStream, GraphicsDevice* pDevice)
 {
 	uint32 numObjects = 0;
 	auto AddStateObject = [&stateObjectStream, &numObjects](void* pDesc, D3D12_STATE_SUBOBJECT_TYPE type)
@@ -133,6 +139,9 @@ void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 	{
 		D3D12_DXIL_LIBRARY_DESC* pDesc = stateObjectStream.ContentData.Allocate<D3D12_DXIL_LIBRARY_DESC>();
 		Shader* pLibrary = pDevice->GetLibrary(library.Path.c_str(), library.Defines);
+		if (!pLibrary)
+			return false;
+
 		m_Shaders.push_back(pLibrary);
 		pDesc->DXILLibrary = CD3DX12_SHADER_BYTECODE(pLibrary->pByteCode->GetBufferPointer(), pLibrary->pByteCode->GetBufferSize());
 		if (library.Exports.size())
@@ -225,6 +234,7 @@ void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 	stateObjectStream.Desc.Type = Type;
 	stateObjectStream.Desc.NumSubobjects = numObjects;
 	stateObjectStream.Desc.pSubobjects = (D3D12_STATE_SUBOBJECT*)stateObjectStream.StateObjectData.GetData();
+	return true;
 }
 
 void StateObjectInitializer::SetMaxPipelineStackSize(StateObject* pStateObject)

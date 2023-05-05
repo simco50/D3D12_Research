@@ -16,7 +16,7 @@ public:
 	void AddCollection(StateObject* pOtherObject);
 	void AddMissShader(const std::string& exportName, RootSignature* pRootSignature = nullptr);
 
-	void CreateStateObjectStream(class StateObjectStream& stateObjectStream, GraphicsDevice* pDevice);
+	bool CreateStateObjectStream(class StateObjectStream& stateObjectStream, GraphicsDevice* pDevice);
 	void SetMaxPipelineStackSize(StateObject* pStateObject);
 
 	std::string Name;

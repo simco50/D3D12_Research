@@ -116,7 +116,7 @@ public:
 	void SetMeshShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 
-	D3D12_PIPELINE_STATE_STREAM_DESC GetDesc(GraphicsDevice* pDevice);
+	bool GetDesc(GraphicsDevice* pDevice, D3D12_PIPELINE_STATE_STREAM_DESC& outDesc);
 
 private:
 	template<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ObjectType>

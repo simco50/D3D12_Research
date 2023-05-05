@@ -256,7 +256,7 @@ void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, c
 	m_ShaderDescs[(int)ShaderType::Amplification] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc(GraphicsDevice* pDevice)
+bool PipelineStateInitializer::GetDesc(GraphicsDevice* pDevice, D3D12_PIPELINE_STATE_STREAM_DESC& outDesc)
 {
 	auto GetByteCode = [this](ShaderType type) -> D3D12_SHADER_BYTECODE& {
 		switch (type)
@@ -282,25 +282,21 @@ D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc(GraphicsDevic
 		if (desc.Path.length() > 0)
 		{
 			pShader = pDevice->GetShaderManager()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
-			check(pShader);
-			if (pShader)
-			{
-				GetByteCode((ShaderType)i) = CD3DX12_SHADER_BYTECODE(pShader->pByteCode->GetBufferPointer(), pShader->pByteCode->GetBufferSize());
-				if (m_Name.empty())
-				{
-					m_Name = Sprintf("%s (Unnamed)", pShader->EntryPoint.c_str());
-				}
-			}
+			if (!pShader)
+				return false;
 
+			GetByteCode((ShaderType)i) = CD3DX12_SHADER_BYTECODE(pShader->pByteCode->GetBufferPointer(), pShader->pByteCode->GetBufferSize());
+			if (m_Name.empty())
+			{
+				m_Name = Sprintf("%s (Unnamed)", pShader->EntryPoint.c_str());
+			}
 			m_Shaders[i] = pShader;
 		}
 	}
 
-	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
-	streamDesc.pPipelineStateSubobjectStream = m_pSubobjectData.data();
-	streamDesc.SizeInBytes = m_Size;
-
-	return streamDesc;
+	outDesc.pPipelineStateSubobjectStream = m_pSubobjectData.data();
+	outDesc.SizeInBytes = m_Size;
+	return true;
 }
 
 PipelineState::PipelineState(GraphicsDevice* pParent)
@@ -319,7 +315,6 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 {
 	check(initializer.m_Type != PipelineStateType::MAX);
 
-	GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
 
 	m_Desc = initializer;
 
@@ -328,11 +323,19 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 		D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
 		ilDesc.pInputElementDescs = m_Desc.m_IlDesc.data();
 	}
-	RefCountPtr<ID3D12Device2> pDevice2;
-	VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
-	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc(GetParent());
-	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
-	D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
+
+	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
+	if (m_Desc.GetDesc(GetParent(), streamDesc))
+	{
+		GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
+		VERIFY_HR_EX(GetParent()->GetDevice()->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
+		D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
+	}
+	else
+	{
+		E_LOG(Warning, "Failed to compile PipelineState '%s'", m_Desc.m_Name);
+	}
+	check(m_pPipelineState);
 }
 
 void PipelineState::ConditionallyReload()
