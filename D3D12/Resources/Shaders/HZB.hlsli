@@ -102,18 +102,18 @@ uint ComputeHZBMip(int4 rectPixels, int texelCoverage)
 
 #define HZB_DEBUG_RENDER 0
 
-bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, bool debug = false)
+bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, float2 hzbDimensions, bool debug = false)
 {
 	static const uint hzbTexelCoverage = 4;
 
 	// Convert NDC to UV
 	float4 rect = saturate(float4(cullData.RectMin.xy, cullData.RectMax.xy) * float2(0.5f, -0.5f).xyxy + 0.5f).xwzy;
 	// Convert to texel indices. Contract bounds to only account for the area overlapping texel centres
-	int4 rectPixels = int4(rect * cView.HZBDimensions.xyxy + float4(0.5f, 0.5f, -0.5f, -0.5f));
+	int4 rectPixels = int4(rect * hzbDimensions.xyxy + float4(0.5f, 0.5f, -0.5f, -0.5f));
 	rectPixels = int4(rectPixels.xy, max(rectPixels.xy, rectPixels.zw));
 	int mip = ComputeHZBMip(rectPixels, hzbTexelCoverage);
 	rectPixels >>= mip;
-	float2 texelSize = 1.0f / cView.HZBDimensions * (1u << mip);
+	float2 texelSize = 1.0f / hzbDimensions * (1u << mip);
 
 	float maxDepth = cullData.RectMax.z;
 	float depth = 0;

@@ -145,7 +145,6 @@ struct ViewUniforms
 	float2 ViewportDimensionsInv;
 	float2 ViewJitter;
 	float2 ViewJitterPrev;
-	uint2 HZBDimensions;
 	float NearZ;
 	float FarZ;
 	float FoV;

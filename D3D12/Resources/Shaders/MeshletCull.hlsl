@@ -56,6 +56,13 @@ static const int MeshletCounterIndex = COUNTER_PHASE2_CANDIDATE_MESHLETS;	// Ind
 static const int VisibleMeshletCounter = COUNTER_PHASE2_VISIBLE_MESHLETS;	// Index of counter for visible meshlets in current phase.
 #endif
 
+struct CullParams
+{
+	uint2 HZBDimensions;
+};
+
+ConstantBuffer<CullParams> cCullParams								: register(b0);
+
 RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets 			: register(u0);	// List of meshlets to process
 RWBuffer<uint> uCounter_CandidateMeshlets 							: register(u1);	// Number of meshlets to process
 RWStructuredBuffer<uint> uPhaseTwoInstances 						: register(u2);	// List of instances which need to be tested in Phase 2
@@ -116,7 +123,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		if (prevCullData.IsVisible)
 		{
 			// Occlusion test instance against the HZB
-			wasOccluded = !HZBCull(prevCullData, tHZB);
+			wasOccluded = !HZBCull(prevCullData, tHZB, cCullParams.HZBDimensions);
 		}
 
 		// If the instance was occluded the previous frame, we can't be sure it's still occluded this frame.
@@ -129,7 +136,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		}
 #else
 		// Occlusion test instance against the updated HZB
-		isVisible = HZBCull(cullData, tHZB);
+		isVisible = HZBCull(cullData, tHZB, cCullParams.HZBDimensions);
 #endif
 	}
 #endif
@@ -210,7 +217,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 			if(prevCullData.IsVisible)
 			{
 				// Occlusion test meshlet against the HZB
-				wasOccluded = !HZBCull(prevCullData, tHZB);
+				wasOccluded = !HZBCull(prevCullData, tHZB, cCullParams.HZBDimensions);
 			}
 
 			// If the meshlet was occluded the previous frame, we can't be sure it's still occluded this frame.
@@ -229,7 +236,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 			}
 #else
 			// Occlusion test meshlet against the updated HZB
-			isVisible = HZBCull(cullData, tHZB);
+			isVisible = HZBCull(cullData, tHZB, cCullParams.HZBDimensions);
 #endif
 		}
 #endif

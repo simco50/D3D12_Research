@@ -458,7 +458,7 @@ void DemoApp::Update()
 				for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 				{
 					const ShadowView& shadowView = pView->ShadowViews[i];
-					const std::string passName = Sprintf("View %d (%s)", i, shadowView.DebugName.c_str()).c_str();
+					const std::string passName = Sprintf("View %d (%s)", i, shadowView.DebugName);
 					RGTexture* pShadowmap = graph.TryImport(pView->ShadowViews[i].pDepthTexture);
 
 					if (Tweakables::g_ShadowsGPUCull)
@@ -509,9 +509,6 @@ void DemoApp::Update()
 					m_pGPUDrivenRenderer->Render(graph,	pView, &pView->MainView, rasterContext, rasterResult);
 					if (Tweakables::CullDebugStats)
 						m_pGPUDrivenRenderer->PrintStats(graph, pView, rasterContext);
-
-					// #todo: This is actually wrong, as the HZB dimensions should have been communicated before culling.
-					m_SceneData.HZBDimensions = rasterResult.pHZB->GetDesc().Size2D();
 				}
 				else
 				{
@@ -1701,6 +1698,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				ViewTransform& viewTransform = shadowView.View;
 				viewTransform.IsPerspective = false;
 				viewTransform.ViewProjection = lightView * projectionMatrix;
+				viewTransform.ViewProjectionPrev = viewTransform.ViewProjection;
 				viewTransform.OrthographicFrustum.Center = center;
 				viewTransform.OrthographicFrustum.Extents = maxExtents - minExtents;
 				viewTransform.OrthographicFrustum.Extents.z *= 10;
@@ -1722,6 +1720,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 			ViewTransform& viewTransform = shadowView.View;
 			viewTransform.IsPerspective = true;
 			viewTransform.ViewProjection = lightView * projection;
+			viewTransform.ViewProjectionPrev = viewTransform.ViewProjection;
 			viewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, lightView);
 			AddShadowView(light, shadowView, 512, 0);
 		}
@@ -1747,6 +1746,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				ViewTransform& viewTransform = shadowView.View;
 				viewTransform.IsPerspective = true;
 				viewTransform.ViewProjection = viewMatrices[i] * projection;
+				viewTransform.ViewProjectionPrev = viewTransform.ViewProjection;
 				viewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, viewMatrices[i]);
 				AddShadowView(light, shadowView, 512, i);
 			}

@@ -75,8 +75,6 @@ namespace Renderer
 			parameters.TargetDimensions = Vector2((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
 			parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 		}
-		parameters.HZBDimensions = pView->HZBDimensions;
-
 		parameters.FrameIndex = pView->FrameIndex;
 		parameters.NumInstances = (uint32)pView->Batches.size();
 		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();

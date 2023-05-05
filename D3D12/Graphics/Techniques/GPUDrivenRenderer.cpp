@@ -242,6 +242,13 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(pCullInstancePSO);
 
+				struct
+				{
+					Vector2u HZBDimensions;
+				} params;
+				params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
+
+				context.BindRootCBV(0, params);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
 				context.BindResources(2, {
 					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
@@ -295,6 +302,13 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(pCullMeshletPSO);
 
+				struct
+				{
+					Vector2u HZBDimensions;
+				} params;
+				params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
+
+				context.BindRootCBV(0, params);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
 				context.BindResources(2, {
 					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
@@ -495,11 +509,13 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Vie
 
 	outResult.pHZB = nullptr;
 	outResult.pVisibilityBuffer = nullptr;
-	if (rasterContext.Mode == RasterMode::VisibilityBuffer)
+	if (rasterContext.Mode == RasterMode::VisibilityBuffer)		
+		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
+
+	if (rasterContext.EnableOcclusionCulling)
 	{
 		outResult.pHZB = InitHZB(graph, dimensions);
 		graph.Export(outResult.pHZB, rasterContext.pPreviousHZB);
-		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
 	}
 
 	// Debug mode outputs an extra debug buffer containing information for debug statistics/visualization
