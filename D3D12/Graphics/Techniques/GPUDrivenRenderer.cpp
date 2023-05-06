@@ -496,7 +496,6 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Vie
 	checkf(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB")
 
 	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
-	Vector2u dimensions = pView->GetDimensions();
 
 #if _DEBUG
 	// Validate that we don't have more meshlets/instances than allowed.
@@ -507,6 +506,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Vie
 	check(numMeshlets <= Tweakables::MaxNumMeshlets);
 #endif
 
+	Vector2u dimensions = rasterContext.pDepth->GetDesc().Size2D();
 	outResult.pHZB = nullptr;
 	outResult.pVisibilityBuffer = nullptr;
 	if (rasterContext.Mode == RasterMode::VisibilityBuffer)		

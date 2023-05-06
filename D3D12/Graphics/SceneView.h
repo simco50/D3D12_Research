@@ -70,7 +70,8 @@ using VisibilityMask = BitField<8192>;
 
 struct ShadowView
 {
-	std::string DebugName;
+	const Light* pLight = nullptr;
+	uint32 ViewIndex = 0;
 	ViewTransform View;
 	VisibilityMask Visibility;
 	Texture* pDepthTexture = nullptr;

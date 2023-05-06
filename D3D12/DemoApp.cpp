@@ -458,8 +458,19 @@ void DemoApp::Update()
 				for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 				{
 					const ShadowView& shadowView = pView->ShadowViews[i];
-					const std::string passName = Sprintf("View %d (%s)", i, shadowView.DebugName);
-					RGTexture* pShadowmap = graph.TryImport(pView->ShadowViews[i].pDepthTexture);
+
+					auto LightTypeToString = [](LightType type) -> const char* {
+						switch (type)
+						{
+						case LightType::Directional:	return "Directional";
+						case LightType::Point:			return "Point";
+						case LightType::Spot:			return "Spot";
+						default:						return "INVALID";
+						}
+					};
+					const std::string passName = Sprintf("View %d (%s - Cascade %d)", i, LightTypeToString(shadowView.pLight->Type), shadowView.ViewIndex);
+
+					RGTexture* pShadowmap = graph.Import(pView->ShadowViews[i].pDepthTexture);
 
 					if (Tweakables::g_ShadowsGPUCull)
 					{
@@ -1602,37 +1613,28 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::CreateDepth(resolution, resolution, GraphicsCommon::ShadowFormat, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), Sprintf("Shadow Map %d", (uint32)m_ShadowMaps.size()).c_str()));
 		RefCountPtr<Texture> pTarget = m_ShadowMaps[shadowIndex];
 
-		auto LightTypeToString = [](LightType type) -> const char* {
-			switch (type)
-			{
-			case LightType::Directional: return "Directional";
-			case LightType::Point: return "Point";
-			case LightType::Spot: return "Spot";
-			default: return "INVALID";
-			}
-		};
-
 		light.ShadowMaps.resize(Math::Max(shadowMapLightIndex + 1, (uint32)light.ShadowMaps.size()));
 		light.ShadowMaps[shadowMapLightIndex] = pTarget;
 		light.ShadowMapSize = resolution;
 		shadowView.pDepthTexture = pTarget;
-		shadowView.DebugName = Sprintf("%s - Cascade %d", LightTypeToString(light.Type), shadowMapLightIndex);
+		shadowView.pLight = &light;
+		shadowView.ViewIndex = shadowMapLightIndex;
 		view.ShadowViews.push_back(shadowView);
 		shadowIndex++;
 	};
 
-	const Matrix vpInverse = m_pCamera->GetProjectionInverse() * m_pCamera->GetViewInverse();
 	for (size_t lightIndex = 0; lightIndex < world.Lights.size(); ++lightIndex)
 	{
 		Light& light = world.Lights[lightIndex];
-		if (!light.CastShadows)
-		{
-			continue;
-		}
 		light.ShadowMaps.clear();
+
+		if (!light.CastShadows)
+			continue;
+
 		if (light.Type == LightType::Directional)
 		{
 			// Frustum corners in world space
+			const Matrix vpInverse = m_pCamera->GetViewProjection().Invert();
 			const Vector3 frustumCornersWS[] = {
 				Vector3::Transform(Vector3(-1, -1, 1), vpInverse),
 				Vector3::Transform(Vector3(-1, -1, 0), vpInverse),
@@ -1643,8 +1645,8 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				Vector3::Transform(Vector3(1, -1, 1), vpInverse),
 				Vector3::Transform(Vector3(1, -1, 0), vpInverse),
 			};
-			const Matrix lightView = Matrix::CreateFromQuaternion(light.Rotation).Invert();
 
+			const Matrix lightView = Matrix::CreateFromQuaternion(light.Rotation).Invert();
 			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
 				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
@@ -1664,9 +1666,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 
 				Vector3 center = Vector3::Zero;
 				for (const Vector3& corner : cornersVS)
-				{
 					center += corner;
-				}
 				center /= ARRAYSIZE(cornersVS);
 
 				//Create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
@@ -1731,16 +1731,16 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				continue;
 
 			Matrix viewMatrices[] = {
-				Math::CreateLookToMatrix(light.Position, Vector3::Right, Vector3::Up),
-				Math::CreateLookToMatrix(light.Position, Vector3::Left, Vector3::Up),
-				Math::CreateLookToMatrix(light.Position, Vector3::Up, Vector3::Forward),
-				Math::CreateLookToMatrix(light.Position, Vector3::Down, Vector3::Backward),
+				Math::CreateLookToMatrix(light.Position, Vector3::Right,	Vector3::Up),
+				Math::CreateLookToMatrix(light.Position, Vector3::Left,		Vector3::Up),
+				Math::CreateLookToMatrix(light.Position, Vector3::Up,		Vector3::Forward),
+				Math::CreateLookToMatrix(light.Position, Vector3::Down,		Vector3::Backward),
 				Math::CreateLookToMatrix(light.Position, Vector3::Backward, Vector3::Up),
-				Math::CreateLookToMatrix(light.Position, Vector3::Forward, Vector3::Up),
+				Math::CreateLookToMatrix(light.Position, Vector3::Forward,	Vector3::Up),
 			};
 			Matrix projection = Math::CreatePerspectiveMatrix(Math::PI_DIV_2, 1, light.Range, 0.01f);
 
-			for (int i = 0; i < 6; ++i)
+			for (int i = 0; i < ARRAYSIZE(viewMatrices); ++i)
 			{
 				ShadowView shadowView;
 				ViewTransform& viewTransform = shadowView.View;

@@ -191,7 +191,7 @@ void BuildInstanceCullIndirectArgs()
 
 /*
 	Per-meshlet culling
-	*/
+*/
 [numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
 void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 {
