@@ -69,6 +69,7 @@ private:
 	RefCountPtr<Texture> m_pHZB;
 	RefCountPtr<Texture> m_pColorOutput;
 	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
+	std::vector<RefCountPtr<Texture>> m_ShadowHZBs;
 
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;

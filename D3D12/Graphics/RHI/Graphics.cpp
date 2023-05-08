@@ -412,7 +412,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] =		new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
 	m_pDynamicAllocationManager =	new DynamicAllocationManager(this, BufferFlag::Upload);
-	m_pGlobalViewHeap =				new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 8192);
+	m_pGlobalViewHeap =				new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 16384);
 	m_pGlobalSamplerHeap =			new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
 
 	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] =	new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256);

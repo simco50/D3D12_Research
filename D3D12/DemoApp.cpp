@@ -56,6 +56,7 @@ namespace Tweakables
 	ConsoleVariable g_ShadowCascades("r.Shadows.CascadeCount", 4);
 	ConsoleVariable g_PSSMFactor("r.Shadow.PSSMFactor", 0.85f);
 	ConsoleVariable g_ShadowsGPUCull("r.Shadows.GPUCull", true);
+	ConsoleVariable g_ShadowsOcclusionCulling("r.Shadows.OcclusionCull", true);
 
 	// Bloom
 	ConsoleVariable g_Bloom("r.Bloom", true);
@@ -476,7 +477,8 @@ void DemoApp::Update()
 					{
 						RG_GRAPH_SCOPE(passName.c_str(), graph);
 
-						RasterContext context(graph, pShadowmap, RasterMode::Shadows, nullptr);
+						RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
+						context.EnableOcclusionCulling = Tweakables::g_ShadowsOcclusionCulling;
 						RasterResult result;
 						m_pGPUDrivenRenderer->Render(graph, pView, &shadowView.View, context, result);
 					}
@@ -1500,6 +1502,7 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
 			ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
 			ImGui::Checkbox("GPU Cull", &Tweakables::g_ShadowsGPUCull.Get());
+			ImGui::Checkbox("GPU Occlusion Cull", &Tweakables::g_ShadowsOcclusionCulling.Get());
 		}
 		if (ImGui::CollapsingHeader("Bloom"))
 		{
@@ -1753,4 +1756,6 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 			}
 		}
 	}
+
+	m_ShadowHZBs.resize(shadowIndex);
 }
