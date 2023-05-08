@@ -1619,6 +1619,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		shadowView.pDepthTexture = pTarget;
 		shadowView.pLight = &light;
 		shadowView.ViewIndex = shadowMapLightIndex;
+		shadowView.View.Viewport = FloatRect(0, 0, (float)resolution, (float)resolution);
 		view.ShadowViews.push_back(shadowView);
 		shadowIndex++;
 	};

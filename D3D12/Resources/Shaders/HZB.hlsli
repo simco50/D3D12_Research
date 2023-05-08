@@ -87,31 +87,32 @@ FrustumCullData FrustumCull(float3 aabbCenter, float3 aabbExtents, float4x4 loca
 	return data;
 }
 
-uint ComputeHZBMip(int4 rectPixels, int texelCoverage)
-{
-	int2 rectSize = rectPixels.zw - rectPixels.xy;
-	int mipOffset = (int)log2((float)texelCoverage) - 1;
-	int2 mipLevelXY = firstbithigh(rectSize);
-	int mip = max(max(mipLevelXY.x, mipLevelXY.y) - mipOffset, 0);
-	if(any((rectPixels.zw >> mip) - (rectPixels.xy >> mip) >= texelCoverage))
-	{
-		++mip;
-	}
-	return mip;
-}
-
-#define HZB_DEBUG_RENDER 1
+#define HZB_DEBUG_RENDER 0
 
 bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, float2 hzbDimensions, bool debug = false)
 {
-	// Convert NDC to UV
+	// Convert NDC to UV. Y is flipped in DX, so flip Y and swap Min and Max Y component.
 	float4 rect = saturate(float4(cullData.RectMin.xy, cullData.RectMax.xy) * float2(0.5f, -0.5f).xyxy + 0.5f).xwzy;
-	// Convert to texel indices. Contract bounds to only account for the area overlapping texel centres
-	int4 rectPixels = int4(rect * hzbDimensions.xyxy + float4(0.5f, 0.5f, -0.5f, -0.5f));
-	rectPixels = int4(rectPixels.xy, max(rectPixels.xy, rectPixels.zw));
-	int mip = ComputeHZBMip(rectPixels, 4);
+	int4 rectPixels = rect * hzbDimensions.xyxy;
+
+	// Clamp bounds
+	rectPixels.xy = max(rectPixels.xy, 0);
+	rectPixels.zw = min(rectPixels.zw, cView.ViewportDimensions.xy);
+
+	// Compute the mip level. * 0.5 as we have a 4x4 pixel sample kernel
+	float2 rectSize = (rectPixels.zw - rectPixels.xy) * 0.5f;
+	int mip = max(ceil(log2(max(rectSize.x, rectSize.y))), 0);
+
+	// Determine whether a higher res mip can be used
+	int levelLower = max(mip - 1, 0);
+	float4 lowerRect = rectPixels * exp2(-levelLower);
+	float2 lowerRectSize = ceil(lowerRect.zw) - floor(lowerRect.xy);
+	if(lowerRectSize.x <= 4 && lowerRectSize.y <= 4)
+		mip = levelLower;
+
+	// Transform the texel coordinates for the selected mip
 	rectPixels >>= mip;
-	float2 texelSize = 1.0f / hzbDimensions * (1u << mip);
+	float2 texelSize = rcp(hzbDimensions) * (1u << mip);
 
 	float4 xCoords = (min(rectPixels.x + float4(0, 1, 2, 3), rectPixels.z) + 0.5f) * texelSize.x;
 	float4 yCoords = (min(rectPixels.y + float4(0, 1, 2, 3), rectPixels.w) + 0.5f) * texelSize.y;
@@ -166,14 +167,18 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, float2 hzbDi
 			writer.SetColor(Colors::Green);
 			writer = writer + 'Y' + 'e' + 's';
 		}
-		float4 gridColor = float4(1, 1, 1, 0.2f);
-		for(float y = 0; y < 1; y += texelSize.y)
-		{
-			DrawScreenLine(float2(0, y), float2(1, y), gridColor);
 
-			for(float x = 0; x < 1; x += texelSize.x)
+		if(mip >= 3)
+		{
+			float4 gridColor = float4(1, 1, 1, 0.2f);
+			for(float y = 0; y < 1; y += texelSize.y)
 			{
-				DrawScreenLine(float2(x, 0), float2(x, 1), gridColor);
+				DrawScreenLine(float2(0, y), float2(1, y), gridColor);
+
+				for(float x = 0; x < 1; x += texelSize.x)
+				{
+					DrawScreenLine(float2(x, 0), float2(x, 1), gridColor);
+				}
 			}
 		}
 
