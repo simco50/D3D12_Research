@@ -97,7 +97,7 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, float2 hzbDi
 
 	// Clamp bounds
 	rectPixels.xy = max(rectPixels.xy, 0);
-	rectPixels.zw = min(rectPixels.zw, cView.ViewportDimensions.xy);
+	rectPixels.zw = min(rectPixels.zw, hzbDimensions.xy);
 
 	// Compute the mip level. * 0.5 as we have a 4x4 pixel sample kernel
 	float2 rectSize = (rectPixels.zw - rectPixels.xy) * 0.5f;

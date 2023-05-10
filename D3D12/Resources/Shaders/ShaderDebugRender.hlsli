@@ -324,7 +324,7 @@ struct TextWriter
 		Text(h);
 	}
 
-	void Int(int value)
+	void Int(int value, bool seperators = false)
 	{
 		if(value < 0)
 		{
@@ -339,6 +339,8 @@ struct TextWriter
 			uint digit = value / divider;
 			Text('0' + digit);
 			--length;
+			if(seperators && length > 0 && length % 3 == 0)
+				Text(',');
 
 			value = value - digit * divider;
 			divider /= 10;

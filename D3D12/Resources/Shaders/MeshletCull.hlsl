@@ -132,7 +132,8 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		{
 			uint elementOffset = 0;
 			InterlockedAdd_WaveOps(uCounter_PhaseTwoInstances, 0, 1, elementOffset);
-			uPhaseTwoInstances[elementOffset] = instance.ID;
+			if(elementOffset < MAX_NUM_INSTANCES)
+				uPhaseTwoInstances[elementOffset] = instance.ID;
 		}
 #else
 		// Occlusion test instance against the updated HZB
@@ -147,8 +148,8 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		// Limit meshlet count to how large our buffer is
 		uint globalMeshletIndex;
         InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_CANDIDATE_MESHLETS, mesh.MeshletCount, globalMeshletIndex);
-		uint clampedNumMeshlets = min(globalMeshletIndex + mesh.MeshletCount, MAX_NUM_MESHLETS);
-		uint numMeshletsToAdd = max(clampedNumMeshlets - globalMeshletIndex, 0);
+		int clampedNumMeshlets = min(globalMeshletIndex + mesh.MeshletCount, MAX_NUM_MESHLETS);
+		int numMeshletsToAdd = max(clampedNumMeshlets - (int)globalMeshletIndex, 0);
 
 		// Add all meshlets of current instance to the candidate meshlets
 		uint elementOffset;
@@ -183,7 +184,7 @@ void BuildMeshletCullIndirectArgs()
 [numthreads(1, 1, 1)]
 void BuildInstanceCullIndirectArgs()
 {
-    uint numInstances = tCounter_PhaseTwoInstances[0];
+    uint numInstances = min(tCounter_PhaseTwoInstances[0], MAX_NUM_INSTANCES);
     D3D12_DISPATCH_ARGUMENTS args;
     args.ThreadGroupCount = uint3(DivideAndRoundUp(numInstances, NUM_CULL_INSTANCES_THREADS), 1, 1);
     uDispatchArguments[0] = args;
@@ -284,18 +285,30 @@ void PrintStatsCS()
 	writer.NewLine();
 	writer = writer + 'T' + 'o' + 't' + 'a'  + 'l'  + ' ';
 	writer = writer + 'i' + 'n' + 's' + 't'  + 'a'  + 'n'  + 'c'  + 'e'  + 's' + ' ';
-	writer.Int(numInstances);
+	writer.Int(numInstances, true);
 	writer.NewLine();
 
 	writer = writer + 'T' + 'o' + 't' + 'a'  + 'l'  + ' ';
 	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
-	writer.Int(numMeshlets);
+	writer.Int(numMeshlets, true);
+
 	writer.NewLine();
 
 	writer = writer + 'T' + 'o' + 't' + 'a'  + 'l' + ' ';
 	writer = writer + 'p' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
 	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
-	writer.Int(processedMeshlets);
+
+	int numProcessedMeshletsCapped = min(MAX_NUM_MESHLETS, processedMeshlets);
+	writer.Int(numProcessedMeshletsCapped, true);
+	if(numProcessedMeshletsCapped < processedMeshlets)
+	{
+		writer.SetColor(float4(1, 0, 0, 1));
+		writer = writer + ' ' + '(' + '+';
+		writer.Int(processedMeshlets - numProcessedMeshletsCapped, true);
+		writer = writer + ')';
+		writer.SetColor(float4(1, 1, 1, 1));
+	}
+
 	writer.NewLine();
 
 	writer = writer + '-' + '-' + '-' + ' ' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '1' + ' ' + '-' + '-' + '-';
@@ -303,12 +316,12 @@ void PrintStatsCS()
 
 	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
 	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's' + ' ';
-	writer.Int(phase1CandidateMeshlets);
+	writer.Int(phase1CandidateMeshlets, true);
 	writer.NewLine();
 
 	writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ' ';
 	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
-	writer.Int(phase1VisibleMeshlets);
+	writer.Int(phase1VisibleMeshlets, true);
 	writer.NewLine();
 
 	writer = writer + '-' + '-' + '-' + ' ' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '2' + ' ' + '-' + '-' + '-';
@@ -316,16 +329,16 @@ void PrintStatsCS()
 
 	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
 	writer = writer + 'i' + 'n' + 's' + 't'  + 'a'  + 'n'  + 'c'  + 'e'  + 's' + ' ';
-	writer.Int(occludedInstances);
+	writer.Int(occludedInstances, true);
 	writer.NewLine();
 
 	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
 	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's' + ' ';
-	writer.Int(phase2CandidateMeshlets);
+	writer.Int(phase2CandidateMeshlets, true);
 	writer.NewLine();
 
 	writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ' ';
 	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
-	writer.Int(phase2VisibleMeshlets);
+	writer.Int(phase2VisibleMeshlets, true);
 	writer.NewLine();
 }
