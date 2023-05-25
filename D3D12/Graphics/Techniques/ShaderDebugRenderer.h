@@ -65,7 +65,7 @@ private:
 	};
 
 	bool ProcessFont(Font& outFont, const FontCreateSettings& config);
-	void BuildFontAtlas(GraphicsDevice* pDevice, const Vector2i& resolution);
+	void BuildFontAtlas(GraphicsDevice* pDevice);
 
 	Font m_Font;
 

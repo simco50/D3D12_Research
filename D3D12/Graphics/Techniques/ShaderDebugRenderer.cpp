@@ -71,9 +71,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(bufferSize), "Shader Debug Render Data");
 
 	ProcessFont(m_Font, fontSettings);
-
-	constexpr uint32 ATLAS_RESOLUTION = 512;
-	BuildFontAtlas(pDevice, Vector2i(ATLAS_RESOLUTION, ATLAS_RESOLUTION));
+	BuildFontAtlas(pDevice);
 }
 
 void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
@@ -155,39 +153,6 @@ void ShaderDebugRenderer::GetGlobalIndices(GPUDebugRenderData* pData) const
 	pData->FontDataSRV = m_pGlyphData->GetSRVIndex();
 }
 
-struct BinaryReader
-{
-	BinaryReader(const void* pBuffer, uint32 bufferSize)
-		: Size(bufferSize), pBuffer(pBuffer), pCurrent(pBuffer)
-	{}
-
-	template<typename T>
-	const T* Read(uint32* pOutRead = nullptr)
-	{
-		const T* pV = static_cast<const T*>(pCurrent);
-		pCurrent = (char*)pCurrent + sizeof(T);
-		if (pOutRead)
-		{
-			*pOutRead += sizeof(T);
-		}
-		return pV;
-	}
-
-	void Advance(uint32 numBytes)
-	{
-		pCurrent = (char*)pCurrent + numBytes;
-	}
-
-	bool AtTheEnd() const
-	{
-		return (char*)pCurrent >= (char*)pBuffer + Size;
-	}
-
-	uint32 Size;
-	const void* pBuffer;
-	const void* pCurrent;
-};
-
 bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& config)
 {
 	auto ConvertPt = [](const POINTFX& point, const Vector2& origin)
@@ -252,7 +217,7 @@ bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& c
 	assert(GetCharABCWidthsA(hdc, 0, numCharacters - 1, pABC) != 0);
 
 	const uint32 bufferSize = 1024 * 64;
-	void* pDataBuffer = config.pAllocateFn(bufferSize);
+	char* pDataBuffer = (char*)config.pAllocateFn(bufferSize);
 
 	const MAT2 m2 = { {0, 1}, {0, 0}, {0, 0}, {0, 1} };
 	for (uint32 letter = 0; letter < numCharacters; ++letter)
@@ -276,18 +241,23 @@ bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& c
 		glyph.Width = abc.abcA + abc.abcB + abc.abcC;
 		glyph.Inc = Vector2i(metrics.gmCellIncX, metrics.gmCellIncY);
 
-		BinaryReader reader(pDataBuffer, requiredSize);
-		while (!reader.AtTheEnd())
+		uint32 byteOffset = 0;
+		while(byteOffset < requiredSize)
 		{
-			uint32 bytesRead = 0;
-			const TTPOLYGONHEADER* pHeader = reader.Read<TTPOLYGONHEADER>(&bytesRead);
+			const TTPOLYGONHEADER* pHeader = reinterpret_cast<TTPOLYGONHEADER*>(pDataBuffer + byteOffset);
+			uint32 bytesRead = sizeof(TTPOLYGONHEADER);
+			byteOffset += sizeof(TTPOLYGONHEADER);
+
 			assert(pHeader->dwType == TT_POLYGON_TYPE);
 			Vector2 startPoint = ConvertPt(pHeader->pfxStart, offset);
 			Vector2 lastPoint = startPoint;
 
 			while (bytesRead < pHeader->cb)
 			{
-				const TTPOLYCURVE* pCurve = reader.Read<TTPOLYCURVE>(&bytesRead);
+				const TTPOLYCURVE* pCurve = reinterpret_cast<TTPOLYCURVE*>(pDataBuffer + byteOffset);
+				byteOffset += sizeof(TTPOLYCURVE);
+				bytesRead += sizeof(TTPOLYCURVE);
+
 				uint32 num = pCurve->cpfx;
 				switch (pCurve->wType)
 				{
@@ -327,7 +297,7 @@ bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& c
 				}
 
 				num -= 1; // huh?
-				reader.Advance(sizeof(POINTFX) * num);
+				byteOffset += sizeof(POINTFX) * num;
 				bytesRead += sizeof(POINTFX) * num;
 			}
 
@@ -360,7 +330,7 @@ bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& c
 	return true;
 }
 
-void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice, const Vector2i& resolution)
+void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice)
 {
 	Font& font = m_Font;
 
@@ -373,6 +343,9 @@ void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice, const Vector2i
 	};
 	std::vector<GlyphData> glyphData;
 
+	const uint32 maxAtlasHeight = 1 << 15;
+	Vector2u atlasDimensions = Vector2u(1024, 0);
+
 	{
 		std::vector<stbrp_rect> packRects;
 		for (FontGlyph& glyph : font.Glyphs)
@@ -383,22 +356,27 @@ void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice, const Vector2i
 			packRect.h = (uint16)font.Height;
 		}
 
-		std::vector<stbrp_node> nodes(resolution.x);
+		std::vector<stbrp_node> nodes(atlasDimensions.x);
 		stbrp_context packContext;
 
-		stbrp_init_target(&packContext, resolution.x, resolution.y, nodes.data(), (int32)nodes.size());
+		stbrp_init_target(&packContext, atlasDimensions.x, maxAtlasHeight, nodes.data(), (int32)nodes.size());
 		stbrp_pack_rects(&packContext, packRects.data(), (int32)packRects.size());
 
 		for (const stbrp_rect& packRect : packRects)
 		{
-			const FontGlyph& glyph = m_Font.Glyphs[packRect.id];
-			GlyphData& data = glyphData.emplace_back();
-			data.Dimensions.x = packRect.w;
-			data.Dimensions.y = packRect.h;
-			data.Location.x = packRect.x;
-			data.Location.y = packRect.y;
-			data.Offset = glyph.OriginOffset;
-			data.Width = glyph.Width;
+			if (packRect.was_packed)
+			{
+				const FontGlyph& glyph = m_Font.Glyphs[packRect.id];
+				GlyphData& data = glyphData.emplace_back();
+				data.Dimensions.x = packRect.w;
+				data.Dimensions.y = packRect.h;
+				data.Location.x = packRect.x;
+				data.Location.y = packRect.y;
+				data.Offset = glyph.OriginOffset;
+				data.Width = glyph.Width;
+
+				atlasDimensions.y = Math::Max(atlasDimensions.y, (uint32)(packRect.y + packRect.h));
+			}
 		}
 
 		CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
@@ -409,7 +387,7 @@ void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice, const Vector2i
 
 	{
 		CommandContext* pContext = pDevice->AllocateCommandContext();
-		m_pFontAtlas = pDevice->CreateTexture(TextureDesc::Create2D(resolution.x, resolution.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
+		m_pFontAtlas = pDevice->CreateTexture(TextureDesc::Create2D(atlasDimensions.x, atlasDimensions.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
 		pContext->InsertResourceBarrier(m_pFontAtlas, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		pContext->ClearUAVf(m_pFontAtlas->GetUAV(), Vector4::Zero);
 
