@@ -8,7 +8,7 @@
 #include "Graphics/SceneView.h"
 #include "stb_rect_pack.h"
 
-ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings)
+ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const ShaderDebugRenderSettings& settings)
 {
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
@@ -70,8 +70,9 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCrea
 	constexpr uint32 bufferSize = sizeof(Data);
 	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(bufferSize), "Shader Debug Render Data");
 
-	ProcessFont(m_Font, fontSettings);
-	BuildFontAtlas(pDevice);
+	std::vector<Glyph> glyphs;
+	ExtractGlyphs(settings, glyphs);
+	BuildFontAtlas(glyphs, pDevice);
 }
 
 void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
@@ -153,8 +154,10 @@ void ShaderDebugRenderer::GetGlobalIndices(GPUDebugRenderData* pData) const
 	pData->FontDataSRV = m_pGlyphData->GetSRVIndex();
 }
 
-bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& config)
+bool ShaderDebugRenderer::ExtractGlyphs(const ShaderDebugRenderSettings& config, std::vector<Glyph>& outGlyphs)
 {
+	outGlyphs.clear();
+
 	auto ConvertPt = [](const POINTFX& point, const Vector2& origin)
 	{
 		Vector2 p;
@@ -206,10 +209,6 @@ bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& c
 		return false;
 	OUTLINETEXTMETRICA* pMetric = (OUTLINETEXTMETRICA*)config.pAllocateFn(metricSize);
 	GetOutlineTextMetricsA(hdc, metricSize, pMetric);
-	outFont.Ascent = pMetric->otmAscent;
-	outFont.Descent = pMetric->otmDescent;
-	outFont.Height = config.Height;
-	outFont.pName = config.pName;
 
 	const uint32 numCharacters = 256;
 
@@ -230,7 +229,7 @@ bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& c
 
 		Vector2 offset = Vector2((float)-metrics.gmptGlyphOrigin.x, (float)metrics.gmBlackBoxY - metrics.gmptGlyphOrigin.y);
 
-		FontGlyph& glyph = outFont.Glyphs.emplace_back();
+		Glyph& glyph = outGlyphs.emplace_back();
 		glyph.Letter = letter;
 		glyph.OriginOffset = offset;
 		glyph.Height = config.Height;
@@ -330,10 +329,8 @@ bool ShaderDebugRenderer::ProcessFont(Font& outFont, const FontCreateSettings& c
 	return true;
 }
 
-void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice)
+void ShaderDebugRenderer::BuildFontAtlas(const std::vector<Glyph>& glyphs, GraphicsDevice* pDevice)
 {
-	Font& font = m_Font;
-
 	struct GlyphData
 	{
 		Vector2i Location;
@@ -348,12 +345,12 @@ void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice)
 
 	{
 		std::vector<stbrp_rect> packRects;
-		for (FontGlyph& glyph : font.Glyphs)
+		for (const Glyph& glyph : glyphs)
 		{
 			stbrp_rect& packRect = packRects.emplace_back();
 			packRect.id = glyph.Letter;
 			packRect.w = (uint16)glyph.AdvanceWidth;
-			packRect.h = (uint16)font.Height;
+			packRect.h = (uint16)glyph.Height;
 		}
 
 		std::vector<stbrp_node> nodes(atlasDimensions.x);
@@ -366,7 +363,7 @@ void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice)
 		{
 			if (packRect.was_packed)
 			{
-				const FontGlyph& glyph = m_Font.Glyphs[packRect.id];
+				const Glyph& glyph = glyphs[packRect.id];
 				GlyphData& data = glyphData.emplace_back();
 				data.Dimensions.x = packRect.w;
 				data.Dimensions.y = packRect.h;
@@ -396,7 +393,7 @@ void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice)
 
 		pContext->BindResources(2, m_pFontAtlas->GetUAV());
 
-		for (FontGlyph& glyph : font.Glyphs)
+		for (const Glyph& glyph : glyphs)
 		{
 			GlyphData& gpuData = glyphData[(uint32)glyph.Letter];
 

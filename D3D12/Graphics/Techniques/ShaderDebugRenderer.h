@@ -5,7 +5,7 @@
 
 struct SceneView;
 
-struct FontCreateSettings
+struct ShaderDebugRenderSettings
 {
 	const char* pName = "";
 	bool Bold = false;
@@ -28,7 +28,7 @@ struct GPUDebugRenderData
 class ShaderDebugRenderer
 {
 public:
-	ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings);
+	ShaderDebugRenderer(GraphicsDevice* pDevice, const ShaderDebugRenderSettings& settings);
 
 	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth);
 
@@ -40,7 +40,7 @@ private:
 		Vector2 A, B;
 	};
 
-	struct FontGlyph
+	struct Glyph
 	{
 		uint32 Letter;
 		std::vector<Line> Lines;
@@ -55,19 +55,8 @@ private:
 		Vector2i Inc;
 	};
 
-	struct Font
-	{
-		const char* pName;
-		std::vector<FontGlyph> Glyphs;
-		uint32 Ascent;
-		uint32 Descent;
-		uint32 Height;
-	};
-
-	bool ProcessFont(Font& outFont, const FontCreateSettings& config);
-	void BuildFontAtlas(GraphicsDevice* pDevice);
-
-	Font m_Font;
+	bool ExtractGlyphs(const ShaderDebugRenderSettings& settings, std::vector<Glyph>& outGlyphs);
+	void BuildFontAtlas(const std::vector<Glyph>& glyphs, GraphicsDevice* pDevice);
 
 	RefCountPtr<RootSignature> m_pCommonRS;
 

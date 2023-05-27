@@ -132,7 +132,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pCBTTessellation		= std::make_unique<CBTTessellation>(m_pDevice);
 	m_pVisualizeTexture		= std::make_unique<VisualizeTexture>(m_pDevice);
 
-	FontCreateSettings fontSettings;
+	ShaderDebugRenderSettings fontSettings;
 	fontSettings.pName = "Verdana";
 	fontSettings.Height = 22;
 	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice, fontSettings);
