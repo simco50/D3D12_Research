@@ -36,7 +36,7 @@ class DynamicResourceAllocator
 {
 public:
 	DynamicResourceAllocator(DynamicAllocationManager* pPageManager);
-	DynamicAllocation Allocate(uint64 size, int alignment = 256);
+	DynamicAllocation Allocate(uint64 size, int alignment);
 	void Free(const SyncPoint& syncPoint);
 
 private:

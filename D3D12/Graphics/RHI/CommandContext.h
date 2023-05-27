@@ -200,7 +200,7 @@ public:
 		BindRootCBV(rootIndex, &data, sizeof(T));
 	}
 
-	DynamicAllocation AllocateTransientMemory(uint64 size, uint32 alignment = 256u);
+	DynamicAllocation AllocateTransientMemory(uint64 size, uint32 alignment = 16u);
 
 	ID3D12GraphicsCommandList6* GetCommandList() const { return m_pCommandList; }
 
@@ -233,7 +233,7 @@ private:
 	RefCountPtr<ID3D12CommandAllocator> m_pAllocator;
 
 	static constexpr uint32 MaxNumBatchedBarriers = 64;
-	std::array<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers> m_BatchedBarriers;
+	std::array<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers> m_BatchedBarriers{};
 	uint32 m_NumBatchedBarriers = 0;
 	std::vector<PendingBarrier> m_PendingBarriers;
 	std::unordered_map<const GraphicsResource*, ResourceState> m_ResourceStates;

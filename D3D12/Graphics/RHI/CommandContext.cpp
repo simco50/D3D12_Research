@@ -18,7 +18,7 @@ CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12Comman
 	m_DynamicAllocator(pDynamicMemoryManager),
 	m_Type(type)
 {
-	VERIFY_HR(pCommandList.As(&m_pCommandList));
+	check(pCommandList.As(&m_pCommandList));
 }
 
 void CommandContext::Reset()
@@ -224,7 +224,7 @@ void CommandContext::CopyBuffer(const Buffer* pSource, const Buffer* pTarget, ui
 
 void CommandContext::WriteBuffer(const Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
 {
-	DynamicAllocation allocation = m_DynamicAllocator.Allocate(dataSize);
+	DynamicAllocation allocation = AllocateTransientMemory(dataSize, 1);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	CopyBuffer(allocation.pBackingResource, pResource, dataSize, allocation.Offset, offset);
 }
@@ -233,7 +233,7 @@ void CommandContext::WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOUR
 {
 	FlushResourceBarriers();
 	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceDatas.GetSize());
-	DynamicAllocation allocation = m_DynamicAllocator.Allocate(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+	DynamicAllocation allocation = AllocateTransientMemory(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceDatas.GetSize(), subResourceDatas.GetData());
 }
 
@@ -358,7 +358,7 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 	}
 	else
 	{
-		DynamicAllocation allocation = m_DynamicAllocator.Allocate(dataSize);
+		DynamicAllocation allocation = AllocateTransientMemory(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 		memcpy(allocation.pMappedMemory, pData, dataSize);
 
 		if (m_CurrentCommandContext == CommandListContext::Graphics)
@@ -387,7 +387,7 @@ void CommandContext::SetShadingRateImage(Texture* pTexture)
 	m_pCommandList->RSSetShadingRateImage(pTexture->GetResource());
 }
 
-DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, uint32 alignment /*= 256*/)
+DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, uint32 alignment /*= 16*/)
 {
 	return m_DynamicAllocator.Allocate(size, alignment);
 }
