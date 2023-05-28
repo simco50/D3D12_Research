@@ -45,7 +45,7 @@ void Fence::CpuWait(uint64 fenceValue)
 	m_pFence->SetEventOnCompletion(fenceValue, m_CompleteEvent);
 	DWORD result = WaitForSingleObject(m_CompleteEvent, INFINITE);
 
-#if USE_PIX
+#ifdef USE_PIX
 	// The event was successfully signaled, so notify PIX
 	if (result == WAIT_OBJECT_0)
 	{

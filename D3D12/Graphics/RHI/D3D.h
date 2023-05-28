@@ -1,6 +1,11 @@
 #pragma once
 
+#define ENABLE_PIX 1
+
+#if ENABLE_PIX
 #include "pix3.h"
+#endif
+
 #include "RHI.h"
 #include "Core/Paths.h"
 #include "Core/Utils.h"
@@ -79,6 +84,7 @@ namespace D3D
 
 	inline void EnqueuePIXCapture(uint32 numFrames = 1)
 	{
+#ifdef USE_PIX
 		HWND window = GetActiveWindow();
 		if (SUCCEEDED(PIXSetTargetWindow(window)))
 		{
@@ -91,6 +97,7 @@ namespace D3D
 				E_LOG(Info, "Captured %d frames to '%s'", numFrames, filePath.c_str());
 			}
 		}
+#endif
 	}
 
 	inline std::string GetErrorString(HRESULT errorCode, ID3D12Device* pDevice)

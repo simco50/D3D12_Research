@@ -15,8 +15,6 @@
 #include <mutex>
 #include <numeric>
 
-#define USE_PIX 1
-
 #include "Core/MinWindows.h"
 #include "d3d12.h"
 #include <dxgi1_6.h>

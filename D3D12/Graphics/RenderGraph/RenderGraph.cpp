@@ -269,7 +269,7 @@ void RGGraph::Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget, BufferFlag
 
 void RGGraph::PushEvent(const char* pName)
 {
-	m_Events.push_back(pName);
+	m_Events.push_back(CopyString(pName));
 }
 
 void RGGraph::PopEvent()
@@ -310,8 +310,8 @@ void RGGraph::Execute(CommandContext* pContext)
 
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
-	for (const std::string& event : pPass->m_EventsToStart)
-		GPU_PROFILE_BEGIN(event.c_str(), &context);
+	for (const char* pEvent : pPass->m_EventsToStart)
+		GPU_PROFILE_BEGIN(pEvent, &context);
 
 	{
 		GPU_PROFILE_SCOPE(pPass->GetName(), &context);

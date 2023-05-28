@@ -215,7 +215,7 @@ private:
 	RGPassFlag Flags;
 	bool IsCulled = true;
 	uint32 m_NumEventsToEnd = 0;
-	std::vector<std::string> m_EventsToStart;
+	std::vector<const char*> m_EventsToStart;
 
 	std::vector<ResourceAccess> Accesses;
 	std::vector<RGPass*> PassDependencies;
@@ -271,10 +271,8 @@ public:
 	{
 		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, CopyString(pName), flags, (int)m_RenderPasses.size());
 
-		for(const std::string& eventName : m_Events)
-		{
+		for(const char* eventName : m_Events)
 			pPass->m_EventsToStart.push_back(eventName);
-		}
 		m_Events.clear();
 
 		m_RenderPasses.push_back(pPass);
@@ -369,7 +367,7 @@ private:
 	bool m_EnableResourceTrackerView = false;
 	const char* m_pDumpGraphPath = nullptr;
 
-	std::vector<std::string> m_Events;
+	std::vector<const char*> m_Events;
 
 	RGGraphAllocator m_Allocator;
 	SyncPoint m_LastSyncPoint;

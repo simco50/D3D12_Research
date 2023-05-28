@@ -4,7 +4,6 @@
 #include "RHI/CommandContext.h"
 #include "RHI/CommandQueue.h"
 #include "RHI/Buffer.h"
-#include "pix3.h"
 
 void ProfileNode::StartTimer(CommandContext* pInContext)
 {
@@ -26,7 +25,9 @@ void ProfileNode::StartTimer(CommandContext* pInContext)
 	}
 	else
 	{
+#ifdef USE_PIX
 		::PIXBeginEvent(~0ull, pName);
+#endif
 	}
 }
 
@@ -45,7 +46,9 @@ void ProfileNode::EndTimer()
 	}
 	else
 	{
+#ifdef USE_PIX
 		::PIXEndEvent();
+#endif
 	}
 }
 
