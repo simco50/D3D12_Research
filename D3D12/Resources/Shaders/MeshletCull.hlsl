@@ -283,20 +283,20 @@ void PrintStatsCS()
 
 	writer = writer + '-' + '-' + '-' + ' ' + 'S' + 'c' + 'e' + 'n' + 'e' + ' ' + '-' + '-' + '-';
 	writer.NewLine();
-	writer = writer + 'T' + 'o' + 't' + 'a'  + 'l'  + ' ';
-	writer = writer + 'i' + 'n' + 's' + 't'  + 'a'  + 'n'  + 'c'  + 'e'  + 's' + ' ';
+	writer = writer + 'T' + 'o' + 't' + 'a' + 'l' + ' ';
+	writer = writer + 'i' + 'n' + 's' + 't' + 'a' + 'n' + 'c' + 'e' + 's' + ':' + ' ';
 	writer.Int(numInstances, true);
 	writer.NewLine();
 
-	writer = writer + 'T' + 'o' + 't' + 'a'  + 'l'  + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
+	writer = writer + 'T' + 'o' + 't' + 'a' + 'l' + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
 	writer.Int(numMeshlets, true);
 
 	writer.NewLine();
 
-	writer = writer + 'T' + 'o' + 't' + 'a'  + 'l' + ' ';
-	writer = writer + 'p' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
+	writer = writer + 'T' + 'o' + 't' + 'a' + 'l' + ' ';
+	writer = writer + 'p' + 'r' + 'o' + 'c' + 'e' + 's' + 's' + 'e' + 'd' + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
 
 	int numProcessedMeshletsCapped = min(MAX_NUM_MESHLETS, processedMeshlets);
 	writer.Int(numProcessedMeshletsCapped, true);
@@ -310,35 +310,37 @@ void PrintStatsCS()
 	}
 
 	writer.NewLine();
+	writer.NewLine();
 
 	writer = writer + '-' + '-' + '-' + ' ' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '1' + ' ' + '-' + '-' + '-';
 	writer.NewLine();
 
-	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's' + ' ';
+	writer = writer + 'P' + 'r' + 'o' + 'c' + 'e' + 's' + 's' + 'e' + 'd' + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
 	writer.Int(phase1CandidateMeshlets, true);
 	writer.NewLine();
 
 	writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
 	writer.Int(phase1VisibleMeshlets, true);
+	writer.NewLine();
 	writer.NewLine();
 
 	writer = writer + '-' + '-' + '-' + ' ' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '2' + ' ' + '-' + '-' + '-';
 	writer.NewLine();
 
-	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
-	writer = writer + 'i' + 'n' + 's' + 't'  + 'a'  + 'n'  + 'c'  + 'e'  + 's' + ' ';
+	writer = writer + 'P' + 'r' + 'o' + 'c' + 'e' + 's' + 's' + 'e' + 'd' + ' ';
+	writer = writer + 'i' + 'n' + 's' + 't' + 'a' + 'n' + 'c' + 'e' + 's' + ':' + ' ';
 	writer.Int(occludedInstances, true);
 	writer.NewLine();
 
-	writer = writer + 'P' + 'r' + 'o' + 'c'  + 'e'  + 's'  + 's'  + 'e' + 'd' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's' + ' ';
+	writer = writer + 'P' + 'r' + 'o' + 'c' + 'e' + 's' + 's' + 'e' + 'd' + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
 	writer.Int(phase2CandidateMeshlets, true);
 	writer.NewLine();
 
 	writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h'  + 'l'  + 'e'  + 't'  + 's'  + ' ';
+	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
 	writer.Int(phase2VisibleMeshlets, true);
 	writer.NewLine();
 }

@@ -5,34 +5,21 @@
 
 struct SceneView;
 
-struct ShaderDebugRenderSettings
-{
-	const char* pName = "";
-	bool Bold = false;
-	bool Italic = false;
-	bool StrikeThrough = false;
-	bool Underline = false;
-	uint32 BezierRefinement = 5;
-	uint32 Height = 100;
-
-	void* (*pAllocateFn)(size_t size) = [](size_t size) -> void* { return new char[size]; };
-	void (*pFreeFn)(void* pMemory) = [](void* pMemory) -> void { delete[] pMemory; };
-};
-
 struct GPUDebugRenderData
 {
 	uint32 RenderDataUAV;
 	uint32 FontDataSRV;
+	uint32 FontSize;
 };
 
 class ShaderDebugRenderer
 {
 public:
-	ShaderDebugRenderer(GraphicsDevice* pDevice, const ShaderDebugRenderSettings& settings);
+	ShaderDebugRenderer(GraphicsDevice* pDevice);
 
 	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth);
 
-	void GetGlobalIndices(GPUDebugRenderData* pData) const;
+	void GetGPUData(GPUDebugRenderData* pData) const;
 
 private:
 	struct Line
@@ -55,18 +42,17 @@ private:
 		Vector2i Inc;
 	};
 
-	bool ExtractGlyphs(const ShaderDebugRenderSettings& settings, std::vector<Glyph>& outGlyphs);
-	void BuildFontAtlas(const std::vector<Glyph>& glyphs, GraphicsDevice* pDevice);
+	void BuildFontAtlas(GraphicsDevice* pDevice, CommandContext& context);
 
 	RefCountPtr<RootSignature> m_pCommonRS;
 
-	RefCountPtr<PipelineState> m_pRasterizeGlyphPSO;
 	RefCountPtr<PipelineState> m_pBuildIndirectDrawArgsPSO;
 	RefCountPtr<PipelineState> m_pRenderTextPSO;
 	RefCountPtr<PipelineState> m_pRenderLinesPSO;
 
 	RefCountPtr<Buffer> m_pRenderDataBuffer;
 
+	uint32 m_FontSize;
 	RefCountPtr<Texture> m_pFontAtlas;
 	RefCountPtr<Buffer> m_pGlyphData;
 };

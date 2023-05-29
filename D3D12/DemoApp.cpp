@@ -118,6 +118,9 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
 
+	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice);
+	m_pShaderDebugRenderer->GetGPUData(&m_SceneData.DebugRenderData);
+
 	ImGuiRenderer::Initialize(m_pDevice, window);
 	m_pGPUDrivenRenderer	= std::make_unique<GPUDrivenRenderer>(m_pDevice);
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
@@ -131,12 +134,6 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pPathTracing			= std::make_unique<PathTracing>(m_pDevice);
 	m_pCBTTessellation		= std::make_unique<CBTTessellation>(m_pDevice);
 	m_pVisualizeTexture		= std::make_unique<VisualizeTexture>(m_pDevice);
-
-	ShaderDebugRenderSettings fontSettings;
-	fontSettings.pName = "Verdana";
-	fontSettings.Height = 22;
-	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice, fontSettings);
-	m_pShaderDebugRenderer->GetGlobalIndices(&m_SceneData.DebugRenderData);
 
 	InitializePipelines();
 	Profiler::Get()->Initialize(m_pDevice);

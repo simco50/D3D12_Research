@@ -165,4 +165,5 @@ struct ViewUniforms
 
 	uint DebugRenderDataIndex;
 	uint FontDataIndex;
+	uint FontSize;
 };

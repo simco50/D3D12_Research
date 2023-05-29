@@ -34,7 +34,7 @@ struct RenderData
 };
 
 ConstantBuffer<RenderData> cData : register(b0);
-Texture2D<float> tFontAtlas : register(t0);
+Texture2D<float4> tFontAtlas : register(t0);
 StructuredBuffer<Glyph> tGlyphData : register(t1);
 ByteAddressBuffer tRenderData : register(t2);
 Texture2D<float> tDepth : register(t3);
@@ -60,7 +60,7 @@ void RenderGlyphVS(
 	pos *= cData.TargetDimensionsInv;
 
 	position = float4(pos * float2(2, -2) + float2(-1, 1), 0, 1);
-	uv = (uv * glyph.Dimensions + glyph.Location) * cData.AtlasDimensionsInv;
+	uv = lerp(glyph.MinUV, glyph.MaxUV, uv);
 	color = instance.Color;
 }
 
@@ -70,9 +70,7 @@ float4 RenderGlyphPS(
 	float4 color : COLOR
 	) : SV_Target
 {
-	float alpha = tFontAtlas.SampleLevel(sLinearClamp, uv, 0);
-	float4 c = alpha * color;
-	return float4(c.rgb, alpha);
+	return tFontAtlas.SampleLevel(sLinearClamp, uv, 0) * color;
 }
 
 void RenderLineVS(

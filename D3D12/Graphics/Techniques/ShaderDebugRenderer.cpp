@@ -6,9 +6,9 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Content/Image.h"
 #include "Graphics/SceneView.h"
-#include "stb_rect_pack.h"
 
-ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const ShaderDebugRenderSettings& settings)
+ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
+	: m_FontSize(24)
 {
 	m_pCommonRS = new RootSignature(pDevice);
 	m_pCommonRS->AddRootConstants(0, 8);
@@ -16,8 +16,6 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const ShaderDe
 	m_pCommonRS->AddDescriptorTable(0, 4, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 	m_pCommonRS->AddDescriptorTable(0, 4, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pCommonRS->Finalize("Common");
-
-	m_pRasterizeGlyphPSO = pDevice->CreateComputePipeline(m_pCommonRS, "RasterizeFont.hlsl", "RasterizeGlyphCS");
 
 	const char* pDebugRenderPath = "ShaderDebugRender.hlsl";
 	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, pDebugRenderPath, "BuildIndirectDrawArgsCS");
@@ -70,9 +68,9 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice, const ShaderDe
 	constexpr uint32 bufferSize = sizeof(Data);
 	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(bufferSize), "Shader Debug Render Data");
 
-	std::vector<Glyph> glyphs;
-	ExtractGlyphs(settings, glyphs);
-	BuildFontAtlas(glyphs, pDevice);
+	CommandContext* pContext = pDevice->AllocateCommandContext();
+	BuildFontAtlas(pDevice, *pContext);
+	pContext->Execute();
 }
 
 void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
@@ -148,272 +146,63 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 		.Write(pRenderData);
 }
 
-void ShaderDebugRenderer::GetGlobalIndices(GPUDebugRenderData* pData) const
+void ShaderDebugRenderer::GetGPUData(GPUDebugRenderData* pData) const
 {
 	pData->RenderDataUAV = m_pRenderDataBuffer->GetUAVIndex();
 	pData->FontDataSRV = m_pGlyphData->GetSRVIndex();
+	pData->FontSize = m_FontSize;
 }
 
-bool ShaderDebugRenderer::ExtractGlyphs(const ShaderDebugRenderSettings& config, std::vector<Glyph>& outGlyphs)
-{
-	outGlyphs.clear();
-
-	auto ConvertPt = [](const POINTFX& point, const Vector2& origin)
-	{
-		Vector2 p;
-		p.x = origin.x + (float)point.x.value + (float)point.x.fract * 1.0f / 65536.0f;
-		p.y = origin.y + (float)point.y.value + (float)point.y.fract * 1.0f / 65536.0f;
-		return p;
-	};
-
-	auto SolveBezierCubic = [](const Vector2& a, const Vector2& b, const Vector2& c, const Vector2& d, float t)
-	{
-		return
-			powf(1 - t, 3) * a +
-			t * b * 3 * powf(1 - t, 2) +
-			c * 3 * (1 - t) * powf(t, 2) +
-			d * powf(t, 3);
-	};
-
-	HFONT font = CreateFontA(
-		config.Height,
-		0,
-		0,
-		0,
-		config.Bold ? FW_BOLD : FW_DONTCARE,
-		config.Italic ? TRUE : FALSE,
-		config.Underline ? TRUE : FALSE,
-		config.StrikeThrough ? TRUE : FALSE,
-		DEFAULT_CHARSET,
-		OUT_OUTLINE_PRECIS,
-		CLIP_DEFAULT_PRECIS,
-		CLEARTYPE_QUALITY,
-		VARIABLE_PITCH,
-		config.pName);
-
-	if (!font)
-		return false;
-
-	HDC hdc = GetDC(nullptr);
-	if (!hdc)
-		return false;
-
-	hdc = CreateCompatibleDC(hdc);
-	if (!hdc)
-		return false;
-
-	SelectObject(hdc, font);
-
-	uint32 metricSize = GetOutlineTextMetricsA(hdc, sizeof(OUTLINETEXTMETRICA), nullptr);
-	if (metricSize == 0)
-		return false;
-	OUTLINETEXTMETRICA* pMetric = (OUTLINETEXTMETRICA*)config.pAllocateFn(metricSize);
-	GetOutlineTextMetricsA(hdc, metricSize, pMetric);
-
-	const uint32 numCharacters = 256;
-
-	ABC* pABC = (ABC*)config.pAllocateFn(numCharacters * sizeof(ABC));
-	assert(GetCharABCWidthsA(hdc, 0, numCharacters - 1, pABC) != 0);
-
-	const uint32 bufferSize = 1024 * 64;
-	char* pDataBuffer = (char*)config.pAllocateFn(bufferSize);
-
-	const MAT2 m2 = { {0, 1}, {0, 0}, {0, 0}, {0, 1} };
-	for (uint32 letter = 0; letter < numCharacters; ++letter)
-	{
-		const ABC& abc = pABC[letter];
-
-		GLYPHMETRICS metrics;
-		DWORD requiredSize = GetGlyphOutlineA(hdc, letter, GGO_UNHINTED | GGO_BEZIER | GGO_NATIVE, &metrics, bufferSize, pDataBuffer, &m2);
-		assert(requiredSize <= bufferSize);
-
-		Vector2 offset = Vector2((float)-metrics.gmptGlyphOrigin.x, (float)metrics.gmBlackBoxY - metrics.gmptGlyphOrigin.y);
-
-		Glyph& glyph = outGlyphs.emplace_back();
-		glyph.Letter = letter;
-		glyph.OriginOffset = offset;
-		glyph.Height = config.Height;
-		glyph.Blackbox = Vector2i(metrics.gmBlackBoxX, metrics.gmBlackBoxY);
-		glyph.LeftBearing = abc.abcA;
-		glyph.AdvanceWidth = abc.abcB;
-		glyph.RightBearing = abc.abcC;
-		glyph.Width = abc.abcA + abc.abcB + abc.abcC;
-		glyph.Inc = Vector2i(metrics.gmCellIncX, metrics.gmCellIncY);
-
-		uint32 byteOffset = 0;
-		while(byteOffset < requiredSize)
-		{
-			const TTPOLYGONHEADER* pHeader = reinterpret_cast<TTPOLYGONHEADER*>(pDataBuffer + byteOffset);
-			uint32 bytesRead = sizeof(TTPOLYGONHEADER);
-			byteOffset += sizeof(TTPOLYGONHEADER);
-
-			assert(pHeader->dwType == TT_POLYGON_TYPE);
-			Vector2 startPoint = ConvertPt(pHeader->pfxStart, offset);
-			Vector2 lastPoint = startPoint;
-
-			while (bytesRead < pHeader->cb)
-			{
-				const TTPOLYCURVE* pCurve = reinterpret_cast<TTPOLYCURVE*>(pDataBuffer + byteOffset);
-				byteOffset += sizeof(TTPOLYCURVE);
-				bytesRead += sizeof(TTPOLYCURVE);
-
-				uint32 num = pCurve->cpfx;
-				switch (pCurve->wType)
-				{
-				case TT_PRIM_CSPLINE:
-					for (uint32 j = 0; j < num; j += 3)
-					{
-						const Vector2 points[4] = {
-							lastPoint,
-							ConvertPt(pCurve->apfx[j + 0], offset),
-							ConvertPt(pCurve->apfx[j + 1], offset),
-							ConvertPt(pCurve->apfx[j + 2], offset),
-						};
-
-						Vector2 prevPt = Vector2::Zero;
-						for (uint32 step = 0; step <= config.BezierRefinement; ++step)
-						{
-							Vector2 pt = SolveBezierCubic(points[0], points[1], points[2], points[3], (float)step / config.BezierRefinement);
-							if (step != 0)
-								glyph.Lines.push_back({ prevPt, pt });
-							prevPt = pt;
-						}
-						lastPoint = points[3];
-					}
-					break;
-				case TT_PRIM_LINE:
-					for (uint32 j = 0; j < num; ++j)
-					{
-						Vector2 point = ConvertPt(pCurve->apfx[j], offset);
-						glyph.Lines.push_back({ lastPoint, point });
-						lastPoint = point;
-					}
-					break;
-				case TT_PRIM_QSPLINE:
-				default:
-					assert(false);
-					break;
-				}
-
-				num -= 1; // huh?
-				byteOffset += sizeof(POINTFX) * num;
-				bytesRead += sizeof(POINTFX) * num;
-			}
-
-			if (startPoint != lastPoint)
-			{
-				glyph.Lines.push_back({ lastPoint, startPoint });
-			}
-		}
-
-		// Make sure the first point of the line is the lowest
-		for (Line& line : glyph.Lines)
-		{
-			if (line.A.y > line.B.y)
-			{
-				std::swap(line.A, line.B);
-			}
-		}
-
-		// Sort lines based on lowest Y point
-		std::sort(glyph.Lines.begin(), glyph.Lines.end(), [](const Line& a, const Line& b) { return a.A.y < b.A.y; });
-	}
-
-	config.pFreeFn(pMetric);
-	config.pFreeFn(pDataBuffer);
-	config.pFreeFn(pABC);
-
-	DeleteDC(hdc);
-	DeleteObject(font);
-
-	return true;
-}
-
-void ShaderDebugRenderer::BuildFontAtlas(const std::vector<Glyph>& glyphs, GraphicsDevice* pDevice)
+void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice, CommandContext& context)
 {
 	struct GlyphData
 	{
-		Vector2i Location;
-		Vector2i Offset;
-		Vector2i Dimensions;
-		uint32 Width;
+		Vector2 MinUV;
+		Vector2 MaxUV;
+		Vector2 Dimensions;
+		Vector2 Offset;
+		float AdvanceX;
 	};
+
 	std::vector<GlyphData> glyphData;
 
-	const uint32 maxAtlasHeight = 1 << 15;
-	Vector2u atlasDimensions = Vector2u(1024, 0);
+	ImFontAtlas fontAtlas;
+	
+	ImFontConfig fontConfig;
+	fontConfig.OversampleH = 2;
+	fontConfig.OversampleV = 2;
+	ImFont* pFont = fontAtlas.AddFontFromFileTTF("Resources/Fonts/JetBrainsMono-Regular.ttf", (float)m_FontSize, &fontConfig);
 
 	{
-		std::vector<stbrp_rect> packRects;
-		for (const Glyph& glyph : glyphs)
-		{
-			stbrp_rect& packRect = packRects.emplace_back();
-			packRect.id = glyph.Letter;
-			packRect.w = (uint16)glyph.AdvanceWidth;
-			packRect.h = (uint16)glyph.Height;
-		}
-
-		std::vector<stbrp_node> nodes(atlasDimensions.x);
-		stbrp_context packContext;
-
-		stbrp_init_target(&packContext, atlasDimensions.x, maxAtlasHeight, nodes.data(), (int32)nodes.size());
-		stbrp_pack_rects(&packContext, packRects.data(), (int32)packRects.size());
-
-		for (const stbrp_rect& packRect : packRects)
-		{
-			if (packRect.was_packed)
-			{
-				const Glyph& glyph = glyphs[packRect.id];
-				GlyphData& data = glyphData.emplace_back();
-				data.Dimensions.x = packRect.w;
-				data.Dimensions.y = packRect.h;
-				data.Location.x = packRect.x;
-				data.Location.y = packRect.y;
-				data.Offset = glyph.OriginOffset;
-				data.Width = glyph.Width;
-
-				atlasDimensions.y = Math::Max(atlasDimensions.y, (uint32)(packRect.y + packRect.h));
-			}
-		}
-
-		CommandContext* pContext = pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
-		m_pGlyphData = pDevice->CreateBuffer(BufferDesc::CreateStructured((uint32)glyphData.size(), sizeof(GlyphData)), "Glyph Data");
-		pContext->WriteBuffer(m_pGlyphData, glyphData.data(), glyphData.size() * sizeof(GlyphData));
-		pContext->Execute();
+		unsigned char* pPixels;
+		int width, height;
+		fontAtlas.GetTexDataAsRGBA32(&pPixels, &width, &height);
+		m_pFontAtlas = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM, TextureFlag::ShaderResource), "Font Atlas");
+		D3D12_SUBRESOURCE_DATA data;
+		data.pData = pPixels;
+		data.RowPitch = RHI::GetRowPitch(ResourceFormat::RGBA8_UNORM, width);
+		data.SlicePitch = RHI::GetSlicePitch(ResourceFormat::RGBA8_UNORM, width, height);
+		context.WriteTexture(m_pFontAtlas, data, 0);
 	}
 
 	{
-		CommandContext* pContext = pDevice->AllocateCommandContext();
-		m_pFontAtlas = pDevice->CreateTexture(TextureDesc::Create2D(atlasDimensions.x, atlasDimensions.y, ResourceFormat::R8_UNORM, TextureFlag::UnorderedAccess), "Font Atlas");
-		pContext->InsertResourceBarrier(m_pFontAtlas, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		pContext->ClearUAVf(m_pFontAtlas->GetUAV(), Vector4::Zero);
+		glyphData.resize((int)fontAtlas.GetGlyphRangesDefault()[1]);
 
-		pContext->SetComputeRootSignature(m_pCommonRS);
-		pContext->SetPipelineState(m_pRasterizeGlyphPSO);
-
-		pContext->BindResources(2, m_pFontAtlas->GetUAV());
-
-		for (const Glyph& glyph : glyphs)
+		for(int i = 0; i < (int)glyphData.size(); ++i)
 		{
-			GlyphData& gpuData = glyphData[(uint32)glyph.Letter];
-
-			struct
+			const ImFontGlyph* pGlyph = pFont->FindGlyph((ImWchar)i);
+			if (pGlyph)
 			{
-				Vector2i Location;
-				Vector2i GlyphDimensions;
-				Line Lines[512];
-				uint32 NumLines;
-			} parameters;
-
-			parameters.Location = gpuData.Location;
-			parameters.GlyphDimensions = gpuData.Dimensions;
-			parameters.NumLines = (uint32)glyph.Lines.size();
-			check(glyph.Lines.size() <= ARRAYSIZE(parameters.Lines));
-			memcpy(parameters.Lines, glyph.Lines.data(), sizeof(Line) * glyph.Lines.size());
-
-			pContext->BindRootCBV(1, parameters);
-			pContext->Dispatch(ComputeUtils::GetNumThreadGroups(parameters.GlyphDimensions.x, 8, parameters.GlyphDimensions.y, 8));
+				GlyphData& data = glyphData[i];
+				data.MinUV = Vector2(pGlyph->U0, pGlyph->V0);
+				data.MaxUV = Vector2(pGlyph->U1, pGlyph->V1);
+				data.Dimensions = Vector2(pGlyph->X1 - pGlyph->X0, pGlyph->Y1 - pGlyph->Y0);
+				data.Offset = Vector2(pGlyph->X0, pGlyph->Y0);
+				data.AdvanceX = pGlyph->AdvanceX;
+			}
 		}
-		pContext->Execute();
+
+		m_pGlyphData = pDevice->CreateBuffer(BufferDesc::CreateStructured((uint32)glyphData.size(), sizeof(GlyphData)), "Glyph Data");
+		context.WriteBuffer(m_pGlyphData, glyphData.data(), glyphData.size() * sizeof(GlyphData));
 	}
 }

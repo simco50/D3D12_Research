@@ -83,10 +83,11 @@ static const uint LINE_INSTANCES_OFFSET = TEXT_INSTANCES_OFFSET + MAX_NUM_TEXT *
 
 struct Glyph
 {
-	uint2 Location;
-	int2 Offset;
-	uint2 Dimensions;
-	uint Width;
+	float2 MinUV;
+	float2 MaxUV;
+	float2 Dimensions;
+	float2 Offset;
+	float AdvanceX;
 };
 
 namespace Private
@@ -258,11 +259,8 @@ struct TextWriter
 	{
 		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
 		Glyph glyph = glyphBuffer[character];
-
-		float2 position = Cursor + int2(-glyph.Offset.x, glyph.Offset.y);
-		Cursor.x += glyph.Width;
-
-		Private::AddCharacter(character, position, Color, offset);
+		Private::AddCharacter(character, Cursor + glyph.Offset, Color, offset);
+		Cursor.x += glyph.AdvanceX;
 	}
 
 	void Text(uint character)
@@ -276,9 +274,7 @@ struct TextWriter
 
 	void NewLine()
 	{
-		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
-		Glyph glyph = glyphBuffer[0];
-		Cursor.y += glyph.Dimensions.y;
+		Cursor.y += cView.FontSize;
 		Cursor.x = StartLocation.x;
 	}
 

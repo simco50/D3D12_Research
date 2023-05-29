@@ -99,6 +99,7 @@ namespace Renderer
 
 		parameters.FontDataIndex = pView->DebugRenderData.FontDataSRV;
 		parameters.DebugRenderDataIndex = pView->DebugRenderData.RenderDataUAV;
+		parameters.FontSize = pView->DebugRenderData.FontSize;
 
 		return parameters;
 	}
