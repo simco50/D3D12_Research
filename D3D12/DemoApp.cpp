@@ -1281,6 +1281,21 @@ void DemoApp::UpdateImGui()
 	ImGuiViewport* pViewport = ImGui::GetMainViewport();
 	ImGuiID dockspace = ImGui::DockSpaceOverViewport(pViewport);
 
+	if (!ImGui::FindWindowSettings(ImHashStr("ViewportSettings")))
+	{
+		ImGui::CreateNewWindowSettings("ViewportSettings");
+		ImGuiID viewportID, parametersID;
+		ImGui::DockBuilderRemoveNode(dockspace);
+		ImGui::DockBuilderAddNode(dockspace, ImGuiDockNodeFlags_CentralNode);
+		ImGui::DockBuilderSetNodeSize(dockspace, pViewport->Size);
+		ImGui::DockBuilderSplitNode(dockspace, ImGuiDir_Right, 0.2f, &parametersID, &viewportID);
+		ImGui::DockBuilderDockWindow("Parameters", parametersID);
+		ImGui::DockBuilderGetNode(viewportID)->LocalFlags |= ImGuiDockNodeFlags_HiddenTabBar;
+		ImGui::DockBuilderGetNode(viewportID)->UpdateMergedFlags();
+		ImGui::DockBuilderDockWindow(ICON_FA_DESKTOP " Viewport", viewportID);
+		ImGui::DockBuilderFinish(dockspace);
+	}
+
 	if (ImGui::BeginMainMenuBar())
 	{
 		if (ImGui::BeginMenu(ICON_FA_FILE " File"))
@@ -1360,7 +1375,6 @@ void DemoApp::UpdateImGui()
 	}
 
 
-	ImGui::SetNextWindowDockID(dockspace, ImGuiCond_FirstUseEver);
 	ImGui::Begin(ICON_FA_DESKTOP " Viewport", 0, ImGuiWindowFlags_NoScrollbar);
 	ImVec2 viewportPos = ImGui::GetWindowPos();
 	ImVec2 viewportSize = ImGui::GetWindowSize();
