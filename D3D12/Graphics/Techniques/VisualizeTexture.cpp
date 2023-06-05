@@ -270,7 +270,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 					ImGui::ItemAdd(minRangeHandleBB, minRangeHandleID);
 					const bool hovered = ImGui::ItemHoverable(minRangeHandleBB, minRangeHandleID);
 					const bool clicked = hovered && ImGui::IsMouseClicked(0, minRangeHandleID);
-					if (clicked || g.NavActivateId == minRangeHandleID || g.NavActivateInputId == minRangeHandleID)
+					if (clicked || g.NavActivateId == minRangeHandleID)
 					{
 						if (clicked)
 							ImGui::SetKeyOwner(ImGuiKey_MouseLeft, minRangeHandleID);
@@ -290,7 +290,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 					ImGui::ItemAdd(maxRangeHandleBB, maxRangeHandleID);
 					const bool hovered = ImGui::ItemHoverable(maxRangeHandleBB, maxRangeHandleID);
 					const bool clicked = hovered && ImGui::IsMouseClicked(0, maxRangeHandleID);
-					if (clicked || g.NavActivateId == maxRangeHandleID || g.NavActivateInputId == maxRangeHandleID)
+					if (clicked || g.NavActivateId == maxRangeHandleID)
 					{
 						if (clicked)
 							ImGui::SetKeyOwner(ImGuiKey_MouseLeft, maxRangeHandleID);

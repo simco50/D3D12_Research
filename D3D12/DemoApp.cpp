@@ -1281,7 +1281,7 @@ void DemoApp::UpdateImGui()
 	ImGuiViewport* pViewport = ImGui::GetMainViewport();
 	ImGuiID dockspace = ImGui::DockSpaceOverViewport(pViewport);
 
-	if (!ImGui::FindWindowSettings(ImHashStr("ViewportSettings")))
+	if (!ImGui::FindWindowSettingsByID(ImHashStr("ViewportSettings")))
 	{
 		ImGui::CreateNewWindowSettings("ViewportSettings");
 		ImGuiID viewportID, parametersID;
