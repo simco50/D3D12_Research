@@ -78,6 +78,14 @@ std::string Sprintf(const char* pFormat, Args&&... args)
 
 namespace CString
 {
+	constexpr inline uint32 StrLen(const char* pStr)
+	{
+		uint32 len = 0;
+		while (*pStr++)
+			++len;
+		return len;
+	}
+
 	void TrimSpaces(char* pStr);
 
 	bool StrCmp(const char* pStrA, const char* pStrB, bool caseSensitive);

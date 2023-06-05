@@ -21,23 +21,23 @@ static_assert(sizeof(uint32) == 4, "uint32 size incorrect.");
 static_assert(sizeof(uint64) == 8, "uint64 size incorrect.");
 
 #define DECLARE_BITMASK_TYPE(Enum) \
-	inline Enum& operator|=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs | (__underlying_type(Enum))Rhs); } \
-	inline Enum& operator&=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs & (__underlying_type(Enum))Rhs); } \
-	inline Enum& operator^=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs ^ (__underlying_type(Enum))Rhs); } \
+	inline constexpr Enum& operator|=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs | (__underlying_type(Enum))Rhs); } \
+	inline constexpr Enum& operator&=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs & (__underlying_type(Enum))Rhs); } \
+	inline constexpr Enum& operator^=(Enum& Lhs, Enum Rhs) { return Lhs = (Enum)((__underlying_type(Enum))Lhs ^ (__underlying_type(Enum))Rhs); } \
 	inline constexpr Enum  operator| (Enum  Lhs, Enum Rhs) { return (Enum)((__underlying_type(Enum))Lhs | (__underlying_type(Enum))Rhs); } \
 	inline constexpr Enum  operator& (Enum  Lhs, Enum Rhs) { return (Enum)((__underlying_type(Enum))Lhs & (__underlying_type(Enum))Rhs); } \
 	inline constexpr Enum  operator^ (Enum  Lhs, Enum Rhs) { return (Enum)((__underlying_type(Enum))Lhs ^ (__underlying_type(Enum))Rhs); } \
 	inline constexpr bool  operator! (Enum  E) { return !(__underlying_type(Enum))E; } \
 	inline constexpr Enum  operator~ (Enum  E) { return (Enum)~(__underlying_type(Enum))E; }
 
-template<typename Enum>
-inline bool EnumHasAllFlags(Enum Flags, Enum Contains)
+template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+constexpr inline bool EnumHasAllFlags(Enum Flags, Enum Contains)
 {
 	return (((__underlying_type(Enum))Flags) & (__underlying_type(Enum))Contains) == ((__underlying_type(Enum))Contains);
 }
 
-template<typename Enum>
-inline bool EnumHasAnyFlags(Enum Flags, Enum Contains)
+template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+constexpr inline bool EnumHasAnyFlags(Enum Flags, Enum Contains)
 {
 	return (((__underlying_type(Enum))Flags) & (__underlying_type(Enum))Contains) != 0;
 }
@@ -57,10 +57,11 @@ struct FnProc
 		return pFunction;
 	}
 
-	operator T& ()
+	template<typename... Args>
+	auto operator()(Args&&... args)
 	{
 		assert(pFunction && "Function is not yet loaded");
-		return pFunction;
+		return pFunction(std::forward<Args&&>(args)...);
 	}
 
 	const char* pName;

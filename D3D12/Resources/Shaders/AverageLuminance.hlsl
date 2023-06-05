@@ -70,16 +70,19 @@ void CSMain(uint groupIndex : SV_GroupIndex)
 #define DEBUG 0
 #if DEBUG
 		TextWriter writer = CreateTextWriter(20);
-		writer = writer + 'A' + 'd' + 'a' + 'p' + 't' + 'e' + 'd' + ' ';
-		writer = writer + 'L' + 'u' + 'm' + ':' + ' ' + adaptedLuminance;
+		String adaptedLumText = TEXT("Adapted Luminance: ");
+		writer.Text(adaptedLumText);
+		writer.Float(adaptedLuminance);
 		writer.NewLine();
 
-		writer = writer + 'A' + 'v' + 'e' + 'r' + 'a' + 'g' + 'e' + ' ';
-		writer = writer + 'L' + 'u' + 'm' + ':' + ' ' + weightedAverageLuminance;
+		String averageLumText = TEXT("Average Luminance: ");
+		writer.Text(averageLumText);
+		writer.Float(weightedAverageLuminance);
 		writer.NewLine();
 
-		writer = writer + 'A' + 'u' + 't' + 'o' + ' ';
-		writer = writer + 'E' + 'x' + 'p' + 'o' + 's' + 'u' + 'r' + 'e' + ':' + ' ' + exposure;
+		String autoExposureText = TEXT("Auto Exposure: ");
+		writer.Text(autoExposureText);
+		writer.Float(exposure);
 		writer.NewLine();
 #endif
 	}

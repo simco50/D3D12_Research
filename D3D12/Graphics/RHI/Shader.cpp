@@ -8,6 +8,7 @@
 #include "D3D.h"
 #include "Core/Serializer.h"
 #include "Graphics/Profiler.h"
+#include <fstream>
 
 namespace ShaderCompiler
 {
@@ -60,7 +61,7 @@ namespace ShaderCompiler
 		}
 	}
 
-	void LoadDXC()
+	static void LoadDXC()
 	{
 		FN_PROC(DxcCreateInstance);
 
@@ -74,7 +75,7 @@ namespace ShaderCompiler
 		E_LOG(Info, "Loaded %s", pCompilerPath);
 	}
 
-	bool ResolveFilePath(const CompileJob& job, std::string& outPath)
+	static bool ResolveFilePath(const CompileJob& job, std::string& outPath)
 	{
 		for (const std::string& includeDir : job.IncludeDirs)
 		{
@@ -86,7 +87,7 @@ namespace ShaderCompiler
 		return false;
 	}
 
-	bool TryLoadFromCache(const char* pCachePath, const CompileJob& compileJob, CompileResult& result)
+	static bool TryLoadFromCache(const char* pCachePath, const CompileJob& compileJob, CompileResult& result)
 	{
 		std::lock_guard lock(m_CacheMutex);
 
@@ -95,7 +96,7 @@ namespace ShaderCompiler
 			return false;
 
 		std::string shaderFullPath;
-		if(!ResolveFilePath(compileJob, shaderFullPath))
+		if (!ResolveFilePath(compileJob, shaderFullPath))
 			return false;
 
 		// Check if the shader source is not newer than the cached file
@@ -110,7 +111,7 @@ namespace ShaderCompiler
 
 		if (!TestFileTime(shaderFullPath.c_str()))
 			return false;
-		
+
 		Serializer s;
 		s.Open(pCachePath, Serializer::Mode::Read);
 		uint32 version = 0;
@@ -137,7 +138,7 @@ namespace ShaderCompiler
 		return true;
 	}
 
-	bool SaveToCache(const char* pCachePath, const CompileJob& compileJob, CompileResult& result)
+	static bool SaveToCache(const char* pCachePath, const CompileJob& compileJob, CompileResult& result)
 	{
 		std::lock_guard lock(m_CacheMutex);
 
@@ -155,7 +156,70 @@ namespace ShaderCompiler
 		return true;
 	}
 
-	CompileResult Compile(const CompileJob& compileJob)
+	static std::string CustomPreprocess(const std::string& input)
+	{
+		std::string output;
+		output.reserve(input.size());
+
+		size_t index = 0;
+		constexpr const char* pSearchText = "TEXT(\"";
+		constexpr uint32 searchLength = CString::StrLen(pSearchText);
+
+		while (index < input.length())
+		{
+			size_t foundIndex = input.find(pSearchText, index);
+			if (foundIndex != std::string::npos)
+			{
+				output += input.substr(index, foundIndex - index);
+
+				// Find the closing parenthesis of the TEXT macro
+				size_t closingQuoteIndex = input.find(')', foundIndex + searchLength);
+				if (closingQuoteIndex != std::string::npos)
+				{
+					output += "{'";
+					size_t targetStart = foundIndex + searchLength;
+					size_t targetEnd = closingQuoteIndex - foundIndex - searchLength - 1;
+					for (int i = 0; i < targetEnd; ++i)
+					{
+						output += input[targetStart + i];
+						output += "','";
+					}
+					output.pop_back();
+					output.pop_back();
+					output += "}";
+
+					index = closingQuoteIndex + 1;
+				}
+				else
+				{
+					output += input.substr(foundIndex, searchLength);
+					index = foundIndex + searchLength;
+				}
+			}
+			else
+			{
+				output += input.substr(index);
+				break;
+			}
+		}
+		return output;
+	}
+
+	static HRESULT TryLoadFile(const char* pFileName, RefCountPtr<IDxcBlobEncoding>* pOutFile)
+	{
+		std::ifstream str(pFileName, std::ios::ate);
+		if (str.is_open())
+		{
+			std::vector<char> charBuffer((size_t)str.tellg());
+			str.seekg(0);
+			str.read(charBuffer.data(), charBuffer.size());
+			std::string buffer = CustomPreprocess(charBuffer.data());
+			return pUtils->CreateBlob(buffer.data(), (int)buffer.size(), 0, pOutFile->GetAddressOf());
+		}
+		return E_FAIL;
+	}
+
+	static CompileResult Compile(const CompileJob& compileJob)
 	{
 		CompileResult result;
 
@@ -189,7 +253,7 @@ namespace ShaderCompiler
 			return result;
 		}
 
-		if (!SUCCEEDED(pUtils->LoadFile(MULTIBYTE_TO_UNICODE(fullPath.c_str()), 0, pSource.GetAddressOf())))
+		if (!SUCCEEDED(TryLoadFile(fullPath.c_str(), &pSource)))
 		{
 			result.ErrorMessage = Sprintf("Failed to load file '%s'", fullPath.c_str());
 			return result;
@@ -316,7 +380,7 @@ namespace ShaderCompiler
 
 				auto existingInclude = std::find_if(IncludedFiles.begin(), IncludedFiles.end(), [&path](const std::string& include) {
 					return CString::StrCmp(include.c_str(), path.c_str(), false);
-				});
+					});
 
 				if (existingInclude != IncludedFiles.end())
 				{
@@ -332,7 +396,7 @@ namespace ShaderCompiler
 					return E_FAIL;
 				}
 
-				HRESULT hr = pUtils->LoadFile(pFilename, nullptr, pEncoding.GetAddressOf());
+				HRESULT hr = TryLoadFile(UNICODE_TO_MULTIBYTE(pFilename), &pEncoding);
 				if (SUCCEEDED(hr))
 				{
 					IncludedFiles.push_back(path);
@@ -368,7 +432,7 @@ namespace ShaderCompiler
 				IncludedFiles.clear();
 			}
 
-			ULONG STDMETHODCALLTYPE AddRef(void) override {	return 0; }
+			ULONG STDMETHODCALLTYPE AddRef(void) override { return 0; }
 			ULONG STDMETHODCALLTYPE Release(void) override { return 0; }
 
 			std::vector<std::string> IncludedFiles;
@@ -384,7 +448,7 @@ namespace ShaderCompiler
 			if (SUCCEEDED(pCompiler3->Compile(&sourceBuffer, preprocessArgs.GetArguments(), (uint32)preprocessArgs.GetNumArguments(), &preprocessIncludeHandler, IID_PPV_ARGS(pPreprocessOutput.GetAddressOf()))))
 			{
 				RefCountPtr<IDxcBlobUtf8> pHLSL;
-				if(SUCCEEDED(pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr)))
+				if (SUCCEEDED(pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr)))
 				{
 					std::string filePathBase = Paths::GetFileNameWithoutExtension(cachePath);
 					{
@@ -612,7 +676,7 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	{
 		std::lock_guard lock(m_CompileMutex);
 
-		if(!pShader)
+		if (!pShader)
 			pShader = m_Shaders.emplace_back(new Shader());
 
 		pShader->Defines = defines.Copy();

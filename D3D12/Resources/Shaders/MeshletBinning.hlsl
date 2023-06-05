@@ -8,13 +8,13 @@
 	Meshlet culling outputs visible meshlets in a single unordered list.
 	In order to support multiple rasterization PSOs, the list must be sorted by PSO.
 	These shaders classifies meshlets by PSO bin and outputs an indirection table sorted
-	by PSO, combined with a header specifying at which index each bin starts and 
+	by PSO, combined with a header specifying at which index each bin starts and
 	how many elements it contains.
 
 	This is done in the following passes:
 		1. For each meshlet, find its associated bin and increment the counter of that bin
 		2. Do a prefix sum on all the bin counters and compute the start index of each bin
-		3. For each meshlet, find its associated bin and write its index into 
+		3. For each meshlet, find its associated bin and write its index into
 			the indirection list at the offset computed in the previous step.
 */
 
@@ -116,9 +116,11 @@ void AllocateBinRangesCS(uint threadID : SV_DispatchThreadID)
 
 #if 0
 	TextWriter writer = CreateTextWriter(float2(10, threadID * 25 + 10 + cBinningParams.IsSecondPhase * 100));
-	writer = writer + 'B' + 'i' + 'n' + ' ';
+	String binText = TEXT("Bin ");
+	writer.Text(binText);
 	writer.Int(bin);
-	writer = writer + ':' + ' ';
+	String colonText = TEXT(": ");
+	writer.Text(colonText);
 	writer.Int(numMeshlets);
 #endif
 }

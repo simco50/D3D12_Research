@@ -281,66 +281,67 @@ void PrintStatsCS()
 
 	TextWriter writer = CreateTextWriter(float2(20, 20));
 
-	writer = writer + '-' + '-' + '-' + ' ' + 'S' + 'c' + 'e' + 'n' + 'e' + ' ' + '-' + '-' + '-';
+	String sceneText = TEXT("--- Scene ---");
+	writer.Text(sceneText);
 	writer.NewLine();
-	writer = writer + 'T' + 'o' + 't' + 'a' + 'l' + ' ';
-	writer = writer + 'i' + 'n' + 's' + 't' + 'a' + 'n' + 'c' + 'e' + 's' + ':' + ' ';
+	String instancesText = TEXT("Total instances: ");
+	writer.Text(instancesText);
 	writer.Int(numInstances, true);
 	writer.NewLine();
 
-	writer = writer + 'T' + 'o' + 't' + 'a' + 'l' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
+	String meshletsText = TEXT("Total meshlets: ");
+	writer.Text(meshletsText);
 	writer.Int(numMeshlets, true);
 
 	writer.NewLine();
 
-	writer = writer + 'T' + 'o' + 't' + 'a' + 'l' + ' ';
-	writer = writer + 'p' + 'r' + 'o' + 'c' + 'e' + 's' + 's' + 'e' + 'd' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
+	String totalProcessedMeshletsText = TEXT("Total processed meshlets: ");
+	writer.Text(totalProcessedMeshletsText);
 
 	int numProcessedMeshletsCapped = min(MAX_NUM_MESHLETS, processedMeshlets);
 	writer.Int(numProcessedMeshletsCapped, true);
 	if(numProcessedMeshletsCapped < processedMeshlets)
 	{
 		writer.SetColor(float4(1, 0, 0, 1));
-		writer = writer + ' ' + '(' + '+';
+		String openBraceText = TEXT(" (+");
+		writer.Text(openBraceText);
 		writer.Int(processedMeshlets - numProcessedMeshletsCapped, true);
-		writer = writer + ')';
+		writer.Text(')');
 		writer.SetColor(float4(1, 1, 1, 1));
 	}
 
 	writer.NewLine();
 	writer.NewLine();
 
-	writer = writer + '-' + '-' + '-' + ' ' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '1' + ' ' + '-' + '-' + '-';
+	String phase1Text = TEXT("--- Phase 1 ---");
+	writer.Text(phase1Text);
 	writer.NewLine();
 
-	writer = writer + 'P' + 'r' + 'o' + 'c' + 'e' + 's' + 's' + 'e' + 'd' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
+	String processedMeshletsText = TEXT("Processed meshlets: ");
+	String visibleMeshletsText = TEXT("Visible meshlets: ");
+
+	writer.Text(processedMeshletsText);
 	writer.Int(phase1CandidateMeshlets, true);
 	writer.NewLine();
 
-	writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
+	writer.Text(visibleMeshletsText);
 	writer.Int(phase1VisibleMeshlets, true);
 	writer.NewLine();
 	writer.NewLine();
 
-	writer = writer + '-' + '-' + '-' + ' ' + 'P' + 'h' + 'a' + 's' + 'e' + ' ' + '2' + ' ' + '-' + '-' + '-';
+	String phase2Text = TEXT("--- Phase 2 ---");
+	writer.Text(phase2Text);
 	writer.NewLine();
 
-	writer = writer + 'P' + 'r' + 'o' + 'c' + 'e' + 's' + 's' + 'e' + 'd' + ' ';
-	writer = writer + 'i' + 'n' + 's' + 't' + 'a' + 'n' + 'c' + 'e' + 's' + ':' + ' ';
+	writer.Text(processedMeshletsText);
 	writer.Int(occludedInstances, true);
 	writer.NewLine();
 
-	writer = writer + 'P' + 'r' + 'o' + 'c' + 'e' + 's' + 's' + 'e' + 'd' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
+	writer.Text(processedMeshletsText);
 	writer.Int(phase2CandidateMeshlets, true);
 	writer.NewLine();
 
-	writer = writer + 'V' + 'i' + 's' + 'i' + 'b' + 'l' + 'e' + ' ';
-	writer = writer + 'm' + 'e' + 's' + 'h' + 'l' + 'e' + 't' + 's' + ':' + ' ';
+	writer.Text(visibleMeshletsText);
 	writer.Int(phase2VisibleMeshlets, true);
 	writer.NewLine();
 }

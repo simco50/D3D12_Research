@@ -1,6 +1,11 @@
 #include "Common.hlsli"
 #include "Packing.hlsli"
 
+using String = int[];
+// This macro gets replaced by custom preprocessor if available
+// `TEXT("123")` becomes `{ '1', '2', '3' }`
+#define TEXT(txt) { ' ' }
+
 struct CharacterInstance
 {
 	float4 Color;
@@ -263,6 +268,12 @@ struct TextWriter
 		Cursor.x += glyph.AdvanceX;
 	}
 
+	void NewLine()
+	{
+		Cursor.y += cView.FontSize;
+		Cursor.x = StartLocation.x;
+	}
+
 	void Text(uint character)
 	{
 		uint offset;
@@ -272,52 +283,16 @@ struct TextWriter
 		}
 	}
 
-	void NewLine()
+	template<int N>
+	void Text(int str[N])
 	{
-		Cursor.y += cView.FontSize;
-		Cursor.x = StartLocation.x;
-	}
-
-	void Text(uint a, uint b)
-	{
-		Text(a);
-		Text(b);
-	}
-
-	void Text(uint a, uint b, uint c)
-	{
-		Text(a, b);
-		Text(c);
-	}
-
-	void Text(uint a, uint b, uint c, uint d)
-	{
-		Text(a, b, c);
-		Text(d);
-	}
-
-	void Text(uint a, uint b, uint c, uint d, uint e)
-	{
-		Text(a, b, c, d);
-		Text(e);
-	}
-
-	void Text(uint a, uint b, uint c, uint d, uint e, uint f)
-	{
-		Text(a, b, c, d, e);
-		Text(f);
-	}
-
-	void Text(uint a, uint b, uint c, uint d, uint e, uint f, uint g)
-	{
-		Text(a, b, c, d, e, f);
-		Text(g);
-	}
-
-	void Text(uint a, uint b, uint c, uint d, uint e, uint f, uint g, uint h)
-	{
-		Text(a, b, c, d, e, f, g);
-		Text(h);
+		uint offset;
+		if(Private::ReserveCharacters(N, offset))
+		{
+			[loop]
+			for(int i = 0; i < N; ++i)
+				Text_(str[i], i + offset);
+		}
 	}
 
 	void Int(int value, bool seperators = false)
@@ -346,21 +321,24 @@ struct TextWriter
 	void Int(int2 value)
 	{
 		Int(value.x);
-		Text(',', ' ');
+		Text(',');
+		Text(' ');
 		Int(value.y);
 	}
 
 	void Int(int3 value)
 	{
 		Int(value.xy);
-		Text(',', ' ');
+		Text(',');
+		Text(' ');
 		Int(value.z);
 	}
 
 	void Int(int4 value)
 	{
 		Int(value.xyz);
-		Text(',', ' ');
+		Text(',');
+		Text(' ');
 		Int(value.w);
 	}
 
@@ -368,11 +346,13 @@ struct TextWriter
 	{
 		if(isnan(value))
 		{
-			Text('N', 'a', 'N');
+			String nan = TEXT("NaN");
+			Text(nan);
 		}
 		else if(!isfinite(value))
 		{
-			Text('I', 'N', 'F');
+			String inf = TEXT("INF");
+			Text(inf);
 		}
 		else
 		{
@@ -387,43 +367,25 @@ struct TextWriter
 	void Float(float2 value)
 	{
 		Float(value.x);
-		Text(',', ' ');
+		Text(',');
+		Text(' ');
 		Float(value.y);
 	}
 
 	void Float(float3 value)
 	{
 		Float(value.xy);
-		Text(',', ' ');
+		Text(',');
+		Text(' ');
 		Float(value.z);
 	}
 
 	void Float(float4 value)
 	{
 		Float(value.xyz);
-		Text(',', ' ');
+		Text(',');
+		Text(' ');
 		Float(value.w);
-	}
-
-	TextWriter This()
-	{
-		TextWriter writer;
-		writer.StartLocation = StartLocation;
-		writer.Cursor = Cursor;
-		writer.Color = Color;
-		return writer;
-	}
-
-	TextWriter operator+(uint character)
-	{
-		Text(character);
-		return This();
-	}
-
-	TextWriter operator+(float value)
-	{
-		Float(value);
-		return This();
 	}
 };
 
