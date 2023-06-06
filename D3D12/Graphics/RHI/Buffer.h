@@ -47,13 +47,13 @@ struct BufferDesc
 		return CreateBuffer(size, BufferFlag::Readback | BufferFlag::NoBindless);
 	}
 
-	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag usage = BufferFlag::ShaderResource)
+	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag usage = BufferFlag::None)
 	{
 		check(bytes % 4 == 0);
 		BufferDesc desc;
 		desc.Size = bytes;
 		desc.ElementSize = 4;
-		desc.Usage = usage | BufferFlag::ByteAddress | BufferFlag::UnorderedAccess;
+		desc.Usage = usage | BufferFlag::ShaderResource | BufferFlag::ByteAddress;
 		return desc;
 	}
 
@@ -77,16 +77,16 @@ struct BufferDesc
 		return desc;
 	}
 
-	static BufferDesc CreateStructured(uint32 elementCount, uint32 elementSize, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
+	static BufferDesc CreateStructured(uint32 elementCount, uint32 elementSize, BufferFlag usage = BufferFlag::None)
 	{
 		BufferDesc desc;
 		desc.ElementSize = elementSize;
 		desc.Size = (uint64)elementCount * desc.ElementSize;
-		desc.Usage = usage;
+		desc.Usage = usage | BufferFlag::ShaderResource;
 		return desc;
 	}
 
-	static BufferDesc CreateTyped(uint32 elementCount, ResourceFormat format, BufferFlag usage = BufferFlag::ShaderResource | BufferFlag::UnorderedAccess)
+	static BufferDesc CreateTyped(uint32 elementCount, ResourceFormat format, BufferFlag usage = BufferFlag::None)
 	{
 		const FormatInfo& info = RHI::GetFormatInfo(format);
 		check(!info.IsBC);
@@ -94,7 +94,7 @@ struct BufferDesc
 		desc.ElementSize = info.BytesPerBlock;
 		desc.Size = (uint64)elementCount * desc.ElementSize;
 		desc.Format = format;
-		desc.Usage = usage;
+		desc.Usage = usage | BufferFlag::ShaderResource;
 		return desc;
 	}
 
@@ -104,7 +104,7 @@ struct BufferDesc
 		BufferDesc desc;
 		desc.ElementSize = sizeof(IndirectParameters);
 		desc.Size = (uint64)elements * desc.ElementSize;
-		desc.Usage = usage | BufferFlag::UnorderedAccess | BufferFlag::IndirectArguments;
+		desc.Usage = usage | BufferFlag::ShaderResource | BufferFlag::IndirectArguments;
 		return desc;
 	}
 

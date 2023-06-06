@@ -66,7 +66,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 	};
 
 	constexpr uint32 bufferSize = sizeof(Data);
-	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(bufferSize), "Shader Debug Render Data");
+	m_pRenderDataBuffer = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(bufferSize, BufferFlag::UnorderedAccess), "Shader Debug Render Data");
 
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 	BuildFontAtlas(pDevice, *pContext);

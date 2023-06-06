@@ -406,7 +406,7 @@ void CBTTessellation::CreateResources(GraphicsDevice* pDevice)
 	pContext->Execute();
 
 	m_CBTData.pDebugVisualizeTexture = pDevice->CreateTexture(TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM), "CBT Visualize Texture");
-	m_CBTData.pCBTIndirectArgs = pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(10), "CBT Indirect Args");
+	m_CBTData.pCBTIndirectArgs = pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(10, BufferFlag::UnorderedAccess), "CBT Indirect Args");
 }
 
 void CBTTessellation::CBTDemo()
