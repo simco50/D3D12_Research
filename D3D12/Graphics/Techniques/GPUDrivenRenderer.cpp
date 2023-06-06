@@ -510,7 +510,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Vie
 	outResult.pHZB = nullptr;
 	outResult.pVisibilityBuffer = nullptr;
 	if (rasterContext.Mode == RasterMode::VisibilityBuffer)		
-		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::CreateRenderTarget(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
+		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
 
 	if (rasterContext.EnableOcclusionCulling)
 	{
@@ -577,7 +577,7 @@ RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2u& viewDimens
 	hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(viewDimensions.x) >> 1u, 1u);
 	hzbDimensions.y = Math::Max(Math::NextPowerOfTwo(viewDimensions.y) >> 1u, 1u);
 	uint32 numMips = (uint32)Math::Floor(log2f((float)Math::Max(hzbDimensions.x, hzbDimensions.y)));
-	TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R16_FLOAT, TextureFlag::UnorderedAccess, 1, numMips);
+	TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R16_FLOAT, numMips);
 	return graph.Create("HZB", desc);
 }
 

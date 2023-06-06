@@ -418,7 +418,7 @@ void DemoApp::Update()
 		const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
 		SceneTextures sceneTextures;
-		sceneTextures.pDepth =				graph.Create("Depth Stencil",	TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+		sceneTextures.pDepth =				graph.Create("Depth Stencil",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
 		sceneTextures.pRoughness =			graph.Create("Roughness",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
 		sceneTextures.pColorTarget =		graph.Create("Color Target",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
 		sceneTextures.pNormals =			graph.Create("Normals",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
@@ -611,32 +611,6 @@ void DemoApp::Update()
 			if (Tweakables::g_EnableDDGI)
 			{
 				m_pDDGI->Execute(graph, pView, pWorldMut);
-			}
-
-			//[WITH MSAA] DEPTH RESOLVE
-			// - If MSAA is enabled, run a compute shader to resolve the depth buffer
-			if (sceneTextures.pDepth->GetDesc().SampleCount > 1)
-			{
-				sceneTextures.pResolvedDepth = graph.Create("Resolved Depth", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
-
-				graph.AddPass("Depth Resolve", RGPassFlag::Compute)
-					.Read(sceneTextures.pDepth)
-					.Write(sceneTextures.pResolvedDepth)
-					.Bind([=](CommandContext& context)
-						{
-							Texture* pResolveTarget = sceneTextures.pResolvedDepth->Get();
-							context.SetComputeRootSignature(m_pCommonRS);
-							context.SetPipelineState(m_pResolveDepthPSO);
-
-							context.BindResources(2, pResolveTarget->GetUAV());
-							context.BindResources(3, sceneTextures.pDepth->Get()->GetSRV());
-
-							context.Dispatch(ComputeUtils::GetNumThreadGroups(pResolveTarget->GetWidth(), 16, pResolveTarget->GetHeight(), 16));
-						});
-			}
-			else
-			{
-				sceneTextures.pResolvedDepth = sceneTextures.pDepth;
 			}
 
 			graph.AddPass("Camera Motion", RGPassFlag::Compute)
@@ -917,7 +891,7 @@ void DemoApp::Update()
 
 			if (Tweakables::g_DrawHistogram.Get())
 			{
-				RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), &m_pDebugHistogramTexture, true);
+				RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM), &m_pDebugHistogramTexture, true);
 				graph.AddPass("Draw Histogram", RGPassFlag::Compute)
 					.Read({ pLuminanceHistogram, pAverageLuminance })
 					.Write(pHistogramDebugTexture)
@@ -967,7 +941,7 @@ void DemoApp::Update()
 			Vector2u bloomDimensions = Vector2u(viewDimensions.x >> 1, viewDimensions.y >> 1);
 			const uint32 mipBias = 3;
 			uint32 numMips = ComputeNumMips(bloomDimensions.x, bloomDimensions.y) - mipBias;
-			RGTexture* pDownscaleTarget = graph.Create("Downscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::None, 1, numMips));
+			RGTexture* pDownscaleTarget = graph.Create("Downscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, numMips));
 
 			RGTexture* pSourceTexture = sceneTextures.pColorTarget;
 			for (uint32 i = 0; i < numMips; ++i)
@@ -998,7 +972,7 @@ void DemoApp::Update()
 			}
 
 			numMips = Math::Max(2u, numMips);
-			RGTexture* pUpscaleTarget = graph.Create("Upscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, TextureFlag::None, 1, numMips - 1));
+			RGTexture* pUpscaleTarget = graph.Create("Upscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, numMips - 1));
 			RGTexture* pPreviousSource = pDownscaleTarget;
 
 			for (int32 i = numMips - 2; i >= 0; --i)
@@ -1624,7 +1598,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		if (shadowMapLightIndex == 0)
 			light.MatrixIndex = shadowIndex;
 		if (shadowIndex >= (int32)m_ShadowMaps.size())
-			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::CreateDepth(resolution, resolution, GraphicsCommon::ShadowFormat, TextureFlag::DepthStencil | TextureFlag::ShaderResource, 1, ClearBinding(0.0f, 0)), Sprintf("Shadow Map %d", (uint32)m_ShadowMaps.size()).c_str()));
+			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::Create2D(resolution, resolution, GraphicsCommon::ShadowFormat, 1, TextureFlag::DepthStencil | TextureFlag::ShaderResource, ClearBinding(0.0f, 0)), Sprintf("Shadow Map %d", (uint32)m_ShadowMaps.size()).c_str()));
 		RefCountPtr<Texture> pTarget = m_ShadowMaps[shadowIndex];
 
 		light.ShadowMaps.resize(Math::Max(shadowMapLightIndex + 1, (uint32)light.ShadowMaps.size()));

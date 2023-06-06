@@ -116,7 +116,6 @@ struct SceneTextures
 	RGTexture* pRoughness = nullptr;
 	RGTexture* pColorTarget = nullptr;
 	RGTexture* pDepth = nullptr;
-	RGTexture* pResolvedDepth = nullptr;
 	RGTexture* pNormals = nullptr;
 	RGTexture* pVelocity = nullptr;
 	RGTexture* pAmbientOcclusion = nullptr;

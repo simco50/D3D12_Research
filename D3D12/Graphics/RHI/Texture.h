@@ -80,32 +80,22 @@ struct ClearBinding
 
 struct TextureDesc
 {
-	TextureDesc()
-		: Width(1), 
-		Height(1), 
-		DepthOrArraySize(1),
-		Mips(1), 
-		SampleCount(1), 
-		Format(ResourceFormat::Unknown), 
-		Usage(TextureFlag::None),
-		ClearBindingValue(ClearBinding(Color(0, 0, 0))),
-		Type(TextureType::Texture2D)
-	{}
+	TextureDesc() = default;
 
-	uint32 Width;
-	uint32 Height;
-	uint32 DepthOrArraySize;
-	uint32 Mips;
-	uint32 SampleCount;
-	ResourceFormat Format;
-	TextureFlag Usage;
-	ClearBinding ClearBindingValue;
-	TextureType Type;
+	uint32 Width						= 1;
+	uint32 Height						= 1;
+	uint32 DepthOrArraySize				= 1;
+	uint32 Mips							= 1;
+	TextureType Type					= TextureType::Texture2D;
+	uint32 SampleCount					= 1;
+	ResourceFormat Format				= ResourceFormat::Unknown;
+	TextureFlag Usage					= TextureFlag::None;
+	ClearBinding ClearBindingValue		= ClearBinding(Colors::Black);
 
 	Vector3u Size() const { return Vector3u(Width, Height, DepthOrArraySize); }
 	Vector2u Size2D() const { return Vector2u(Width, Height); }
 
-	static TextureDesc CreateCube(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc CreateCube(uint32 width, uint32 height, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
 		check(width);
 		check(height);
@@ -116,13 +106,13 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags | TextureFlag::ShaderResource;
-		desc.ClearBindingValue = ClearBinding(Color(0, 0, 0));
+		desc.Usage = flags;
+		desc.ClearBindingValue = clearBinding;
 		desc.Type = TextureType::TextureCube;
 		return desc;
 	}
 
-	static TextureDesc Create2D(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc Create2D(uint32 width, uint32 height, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
 		check(width);
 		check(height);
@@ -133,13 +123,13 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags | TextureFlag::ShaderResource;
-		desc.ClearBindingValue = ClearBinding(Color(0, 0, 0));
+		desc.Usage = flags;
+		desc.ClearBindingValue = clearBinding;
 		desc.Type = TextureType::Texture2D;
 		return desc;
 	}
 
-	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
 		check(width);
 		check(height);
@@ -150,43 +140,9 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags | TextureFlag::ShaderResource;
-		desc.ClearBindingValue = ClearBinding(Color(0, 0, 0));
+		desc.Usage = flags;
+		desc.ClearBindingValue = clearBinding;
 		desc.Type = TextureType::Texture3D;
-		return desc;
-	}
-
-	static TextureDesc CreateDepth(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
-	{
-		check(width);
-		check(height);
-		TextureDesc desc;
-		desc.Width = width;
-		desc.Height = height;
-		desc.DepthOrArraySize = 1;
-		desc.Mips = 1;
-		desc.SampleCount = sampleCount;
-		desc.Format = format;
-		desc.Usage = flags | TextureFlag::DepthStencil;
-		desc.ClearBindingValue = clearBinding;
-		desc.Type = TextureType::Texture2D;
-		return desc;
-	}
-
-	static TextureDesc CreateRenderTarget(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
-	{
-		check(width);
-		check(height);
-		TextureDesc desc;
-		desc.Width = width;
-		desc.Height = height;
-		desc.DepthOrArraySize = 1;
-		desc.Mips = 1;
-		desc.SampleCount = sampleCount;
-		desc.Format = format;
-		desc.Usage = flags | TextureFlag::RenderTarget;
-		desc.ClearBindingValue = clearBinding;
-		desc.Type = TextureType::Texture2D;
 		return desc;
 	}
 

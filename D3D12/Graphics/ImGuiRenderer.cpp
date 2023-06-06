@@ -155,7 +155,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	unsigned char* pPixels;
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &height, &width);
-	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM), "ImGui Font");
+	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), "ImGui Font");
 	CommandContext* pContext = pDevice->AllocateCommandContext();
 	D3D12_SUBRESOURCE_DATA data;
 	data.pData = pPixels;
@@ -282,6 +282,8 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 							Texture* pTexture = (Texture*)pCmd->GetTexID();
 							if (!pTexture)
 								pTexture = gFontTexture;
+
+							check(pTexture->GetSRV());
 
 							context.BindResources(1, pTexture->GetSRV());
 							context.SetScissorRect(FloatRect(clip_min.x, clip_min.y, clip_max.x, clip_max.y));

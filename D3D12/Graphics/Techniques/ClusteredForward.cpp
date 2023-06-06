@@ -213,8 +213,7 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 		Math::DivideAndRoundUp((uint32)pView->GetDimensions().x, gVolumetricFroxelTexelSize),
 		Math::DivideAndRoundUp((uint32)pView->GetDimensions().y, gVolumetricFroxelTexelSize),
 		gVolumetricNumZSlices,
-		ResourceFormat::RGBA16_FLOAT,
-		TextureFlag::ShaderResource | TextureFlag::UnorderedAccess);
+		ResourceFormat::RGBA16_FLOAT);
 
 	RGTexture* pSourceVolume = graph.TryImport(fogData.pFogHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 	RGTexture* pTargetVolume = graph.Create("Fog Target", volumeDesc);
