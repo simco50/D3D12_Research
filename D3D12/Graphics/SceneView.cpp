@@ -387,7 +387,7 @@ namespace GraphicsCommon
 		{
 			desc.Usage |= TextureFlag::sRGB;
 		}
-		desc.Dimensions = image.IsCubemap() ? TextureDimension::TextureCube : TextureDimension::Texture2D;
+		desc.Type = image.IsCubemap() ? TextureType::TextureCube : TextureType::Texture2D;
 		if (RHI::GetFormatInfo(desc.Format).IsBC)
 		{
 			desc.Width = Math::Max(desc.Width, 4u);

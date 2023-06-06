@@ -50,7 +50,7 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 					Vector2 ValueRange;
 					uint32 TextureSource;
 					uint32 TextureTarget;
-					TextureDimension TextureType;
+					TextureType TextureType;
 					uint32 ChannelMask;
 					float MipLevel;
 					float Slice;
@@ -63,7 +63,7 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 				constants.TextureTarget = pTarget->Get()->GetUAV()->GetHeapIndex();
 				constants.InvDimensions.x = 1.0f / desc.Width;
 				constants.InvDimensions.y = 1.0f / desc.Height;
-				constants.TextureType = pTexture->GetDesc().Dimensions;
+				constants.TextureType = pTexture->GetDesc().Type;
 				constants.ValueRange = Vector2(RangeMin, RangeMax);
 				constants.ChannelMask =
 					(VisibleChannels[0] ? 1 : 0) << 0 |
@@ -73,7 +73,7 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 				constants.ChannelMask &= ((1u << formatInfo.NumComponents) - 1u);
 				constants.MipLevel = (float)MipLevel;
 				constants.Slice = Slice / desc.DepthOrArraySize;
-				if (pTexture->GetDesc().Dimensions == TextureDimension::TextureCube)
+				if (pTexture->GetDesc().Type == TextureType::TextureCube)
 					constants.Slice = (float)CubeFaceIndex;
 
 				cmdContext.BindRootCBV(0, constants);
@@ -177,10 +177,10 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 			{
 				Group group;
 
-				ImGui::BeginDisabled(desc.Dimensions != TextureDimension::TextureCube && desc.Dimensions != TextureDimension::TextureCubeArray && desc.Dimensions != TextureDimension::Texture3D);
+				ImGui::BeginDisabled(desc.Type != TextureType::TextureCube && desc.Type != TextureType::TextureCubeArray && desc.Type != TextureType::Texture3D);
 				ImGui::SameLine();
 				ImGui::AlignTextToFramePadding();
-				if (desc.Dimensions == TextureDimension::Texture3D)
+				if (desc.Type == TextureType::Texture3D)
 				{
 					ImGui::Text("Slice");
 					ImGui::SameLine();

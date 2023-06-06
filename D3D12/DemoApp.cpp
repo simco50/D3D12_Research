@@ -418,11 +418,11 @@ void DemoApp::Update()
 		const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
 		SceneTextures sceneTextures;
-		sceneTextures.pDepth =				graph.Create("Depth Stencil", TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
-		sceneTextures.pRoughness =			graph.Create("Roughness", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
-		sceneTextures.pColorTarget =		graph.Create("Color Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
-		sceneTextures.pNormals =			graph.Create("Normals", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-		sceneTextures.pVelocity =			graph.Create("Velocity", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+		sceneTextures.pDepth =				graph.Create("Depth Stencil",	TextureDesc::CreateDepth(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, TextureFlag::None, 1, ClearBinding(0.0f, 0)));
+		sceneTextures.pRoughness =			graph.Create("Roughness",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
+		sceneTextures.pColorTarget =		graph.Create("Color Target",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
+		sceneTextures.pNormals =			graph.Create("Normals",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+		sceneTextures.pVelocity =			graph.Create("Velocity",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 		sceneTextures.pPreviousColor =		graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
 		RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));

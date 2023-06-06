@@ -12,7 +12,7 @@ enum class TextureFlag
 };
 DECLARE_BITMASK_TYPE(TextureFlag)
 
-enum class TextureDimension
+enum class TextureType
 {
 	Texture1D,
 	Texture1DArray,
@@ -89,7 +89,7 @@ struct TextureDesc
 		Format(ResourceFormat::Unknown), 
 		Usage(TextureFlag::None),
 		ClearBindingValue(ClearBinding(Color(0, 0, 0))),
-		Dimensions(TextureDimension::Texture2D)
+		Type(TextureType::Texture2D)
 	{}
 
 	uint32 Width;
@@ -100,7 +100,7 @@ struct TextureDesc
 	ResourceFormat Format;
 	TextureFlag Usage;
 	ClearBinding ClearBindingValue;
-	TextureDimension Dimensions;
+	TextureType Type;
 
 	Vector3u Size() const { return Vector3u(Width, Height, DepthOrArraySize); }
 	Vector2u Size2D() const { return Vector2u(Width, Height); }
@@ -118,7 +118,7 @@ struct TextureDesc
 		desc.Format = format;
 		desc.Usage = flags | TextureFlag::ShaderResource;
 		desc.ClearBindingValue = ClearBinding(Color(0, 0, 0));
-		desc.Dimensions = TextureDimension::TextureCube;
+		desc.Type = TextureType::TextureCube;
 		return desc;
 	}
 
@@ -135,7 +135,7 @@ struct TextureDesc
 		desc.Format = format;
 		desc.Usage = flags | TextureFlag::ShaderResource;
 		desc.ClearBindingValue = ClearBinding(Color(0, 0, 0));
-		desc.Dimensions = TextureDimension::Texture2D;
+		desc.Type = TextureType::Texture2D;
 		return desc;
 	}
 
@@ -152,7 +152,7 @@ struct TextureDesc
 		desc.Format = format;
 		desc.Usage = flags | TextureFlag::ShaderResource;
 		desc.ClearBindingValue = ClearBinding(Color(0, 0, 0));
-		desc.Dimensions = TextureDimension::Texture3D;
+		desc.Type = TextureType::Texture3D;
 		return desc;
 	}
 
@@ -169,7 +169,7 @@ struct TextureDesc
 		desc.Format = format;
 		desc.Usage = flags | TextureFlag::DepthStencil;
 		desc.ClearBindingValue = clearBinding;
-		desc.Dimensions = TextureDimension::Texture2D;
+		desc.Type = TextureType::Texture2D;
 		return desc;
 	}
 
@@ -186,7 +186,7 @@ struct TextureDesc
 		desc.Format = format;
 		desc.Usage = flags | TextureFlag::RenderTarget;
 		desc.ClearBindingValue = clearBinding;
-		desc.Dimensions = TextureDimension::Texture2D;
+		desc.Type = TextureType::Texture2D;
 		return desc;
 	}
 
@@ -200,7 +200,7 @@ struct TextureDesc
 			&& Format == other.Format
 			&& Usage == other.Usage
 			&& ClearBindingValue == other.ClearBindingValue
-			&& Dimensions == other.Dimensions;
+			&& Type == other.Type;
 	}
 
 	bool IsCompatible(const TextureDesc& other) const
@@ -212,7 +212,7 @@ struct TextureDesc
 			&& SampleCount == other.SampleCount
 			&& Format == other.Format
 			&& ClearBindingValue == other.ClearBindingValue
-			&& Dimensions == other.Dimensions
+			&& Type == other.Type
 			&& EnumHasAllFlags(Usage, other.Usage);
 	}
 

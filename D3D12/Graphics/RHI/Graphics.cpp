@@ -520,21 +520,21 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 		DXGI_FORMAT format = D3D::ConvertFormat(textureDesc.Format);
 
 		D3D12_RESOURCE_DESC desc{};
-		switch (textureDesc.Dimensions)
+		switch (textureDesc.Type)
 		{
-		case TextureDimension::Texture1D:
-		case TextureDimension::Texture1DArray:
+		case TextureType::Texture1D:
+		case TextureType::Texture1DArray:
 			desc = CD3DX12_RESOURCE_DESC::Tex1D(format, width, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
-		case TextureDimension::Texture2D:
-		case TextureDimension::Texture2DArray:
+		case TextureType::Texture2D:
+		case TextureType::Texture2DArray:
 			desc = CD3DX12_RESOURCE_DESC::Tex2D(format, width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
-		case TextureDimension::TextureCube:
-		case TextureDimension::TextureCubeArray:
+		case TextureType::TextureCube:
+		case TextureType::TextureCubeArray:
 			desc = CD3DX12_RESOURCE_DESC::Tex2D(format, width, height, (uint16)textureDesc.DepthOrArraySize * 6, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
-		case TextureDimension::Texture3D:
+		case TextureType::Texture3D:
 			desc = CD3DX12_RESOURCE_DESC::Tex3D(format, width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		default:
@@ -611,33 +611,33 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 		rtvDesc.Format = D3D::ConvertFormat(desc.Format);
-		switch (desc.Dimensions)
+		switch (desc.Type)
 		{
-		case TextureDimension::Texture1D:
+		case TextureType::Texture1D:
 			rtvDesc.Texture1D.MipSlice = 0;
 			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
 			break;
-		case TextureDimension::Texture1DArray:
+		case TextureType::Texture1DArray:
 			rtvDesc.Texture1DArray.ArraySize = desc.DepthOrArraySize;
 			rtvDesc.Texture1DArray.FirstArraySlice = 0;
 			rtvDesc.Texture1DArray.MipSlice = 0;
 			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
 			break;
-		case TextureDimension::Texture2D:
+		case TextureType::Texture2D:
 			rtvDesc.Texture2D.MipSlice = 0;
 			rtvDesc.Texture2D.PlaneSlice = 0;
 			rtvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS : D3D12_RTV_DIMENSION_TEXTURE2D;
 			break;
-		case TextureDimension::TextureCube:
-		case TextureDimension::TextureCubeArray:
-		case TextureDimension::Texture2DArray:
+		case TextureType::TextureCube:
+		case TextureType::TextureCubeArray:
+		case TextureType::Texture2DArray:
 			rtvDesc.Texture2DArray.MipSlice = 0;
 			rtvDesc.Texture2DArray.PlaneSlice = 0;
 			rtvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
 			rtvDesc.Texture2DArray.FirstArraySlice = 0;
 			rtvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY : D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
 			break;
-		case TextureDimension::Texture3D:
+		case TextureType::Texture3D:
 			rtvDesc.Texture3D.FirstWSlice = 0;
 			rtvDesc.Texture3D.MipSlice = 0;
 			rtvDesc.Texture3D.WSize = desc.DepthOrArraySize;
@@ -655,31 +655,31 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 		dsvDesc.Format = D3D::ConvertFormat(RHI::DSVFormat(desc.Format));
-		switch (desc.Dimensions)
+		switch (desc.Type)
 		{
-		case TextureDimension::Texture1D:
+		case TextureType::Texture1D:
 			dsvDesc.Texture1D.MipSlice = 0;
 			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
 			break;
-		case TextureDimension::Texture1DArray:
+		case TextureType::Texture1DArray:
 			dsvDesc.Texture1DArray.ArraySize = desc.DepthOrArraySize;
 			dsvDesc.Texture1DArray.FirstArraySlice = 0;
 			dsvDesc.Texture1DArray.MipSlice = 0;
 			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
 			break;
-		case TextureDimension::Texture2D:
+		case TextureType::Texture2D:
 			dsvDesc.Texture2D.MipSlice = 0;
 			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
 			break;
-		case TextureDimension::Texture3D:
-		case TextureDimension::Texture2DArray:
+		case TextureType::Texture3D:
+		case TextureType::Texture2DArray:
 			dsvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
 			dsvDesc.Texture2DArray.FirstArraySlice = 0;
 			dsvDesc.Texture2DArray.MipSlice = 0;
 			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
 			break;
-		case TextureDimension::TextureCube:
-		case TextureDimension::TextureCubeArray:
+		case TextureType::TextureCube:
+		case TextureType::TextureCubeArray:
 			dsvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize * 6;
 			dsvDesc.Texture2DArray.FirstArraySlice = 0;
 			dsvDesc.Texture2DArray.MipSlice = 0;
@@ -928,15 +928,15 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 
 	srvDesc.Format = AdjustFormatSRGB(D3D::ConvertFormat(RHI::SRVFormatFromDepth(textureDesc.Format)), EnumHasAllFlags(textureDesc.Usage, TextureFlag::sRGB));
 
-	switch (textureDesc.Dimensions)
+	switch (textureDesc.Type)
 	{
-	case TextureDimension::Texture1D:
+	case TextureType::Texture1D:
 		srvDesc.Texture1D.MipLevels = desc.NumMipLevels;
 		srvDesc.Texture1D.MostDetailedMip = desc.MipLevel;
 		srvDesc.Texture1D.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
 		break;
-	case TextureDimension::Texture1DArray:
+	case TextureType::Texture1DArray:
 		srvDesc.Texture1DArray.ArraySize = textureDesc.DepthOrArraySize;
 		srvDesc.Texture1DArray.FirstArraySlice = 0;
 		srvDesc.Texture1DArray.MipLevels = desc.NumMipLevels;
@@ -944,14 +944,14 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 		srvDesc.Texture1DArray.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
 		break;
-	case TextureDimension::Texture2D:
+	case TextureType::Texture2D:
 		srvDesc.Texture2D.MipLevels = desc.NumMipLevels;
 		srvDesc.Texture2D.MostDetailedMip = desc.MipLevel;
 		srvDesc.Texture2D.PlaneSlice = 0;
 		srvDesc.Texture2D.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = textureDesc.SampleCount > 1 ? D3D12_SRV_DIMENSION_TEXTURE2DMS : D3D12_SRV_DIMENSION_TEXTURE2D;
 		break;
-	case TextureDimension::Texture2DArray:
+	case TextureType::Texture2DArray:
 		srvDesc.Texture2DArray.MipLevels = desc.NumMipLevels;
 		srvDesc.Texture2DArray.MostDetailedMip = desc.MipLevel;
 		srvDesc.Texture2DArray.PlaneSlice = 0;
@@ -960,19 +960,19 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 		srvDesc.Texture2DArray.FirstArraySlice = 0;
 		srvDesc.ViewDimension = textureDesc.SampleCount > 1 ? D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY : D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
 		break;
-	case TextureDimension::Texture3D:
+	case TextureType::Texture3D:
 		srvDesc.Texture3D.MipLevels = desc.NumMipLevels;
 		srvDesc.Texture3D.MostDetailedMip = desc.MipLevel;
 		srvDesc.Texture3D.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
 		break;
-	case TextureDimension::TextureCube:
+	case TextureType::TextureCube:
 		srvDesc.TextureCube.MipLevels = desc.NumMipLevels;
 		srvDesc.TextureCube.MostDetailedMip = desc.MipLevel;
 		srvDesc.TextureCube.ResourceMinLODClamp = 0;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
 		break;
-	case TextureDimension::TextureCubeArray:
+	case TextureType::TextureCubeArray:
 		srvDesc.TextureCubeArray.MipLevels = desc.NumMipLevels;
 		srvDesc.TextureCubeArray.MostDetailedMip = desc.MipLevel;
 		srvDesc.TextureCubeArray.ResourceMinLODClamp = 0;
@@ -996,31 +996,31 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 	const TextureDesc& textureDesc = pTexture->GetDesc();
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	switch (textureDesc.Dimensions)
+	switch (textureDesc.Type)
 	{
-	case TextureDimension::Texture1D:
+	case TextureType::Texture1D:
 		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE1D;
 		break;
-	case TextureDimension::Texture1DArray:
+	case TextureType::Texture1DArray:
 		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE1DARRAY;
 		break;
-	case TextureDimension::Texture2D:
+	case TextureType::Texture2D:
 		uavDesc.Texture2D.PlaneSlice = 0;
 		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 		break;
-	case TextureDimension::Texture2DArray:
+	case TextureType::Texture2DArray:
 		uavDesc.Texture2DArray.ArraySize = textureDesc.DepthOrArraySize;
 		uavDesc.Texture2DArray.FirstArraySlice = 0;
 		uavDesc.Texture2DArray.PlaneSlice = 0;
 		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
 		break;
-	case TextureDimension::Texture3D:
+	case TextureType::Texture3D:
 		uavDesc.Texture3D.FirstWSlice = 0;
 		uavDesc.Texture3D.WSize = 0xFFFFFFFF;
 		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
 		break;
-	case TextureDimension::TextureCube:
-	case TextureDimension::TextureCubeArray:
+	case TextureType::TextureCube:
+	case TextureType::TextureCubeArray:
 		uavDesc.Texture2DArray.ArraySize = textureDesc.DepthOrArraySize * 6;
 		uavDesc.Texture2DArray.FirstArraySlice = 0;
 		uavDesc.Texture2DArray.PlaneSlice = 0;
