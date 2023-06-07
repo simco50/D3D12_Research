@@ -106,12 +106,14 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	E_LOG(Info, "Graphics::InitD3D()");
 
 	GraphicsDeviceOptions options;
-	options.UseDebugDevice =	CommandLine::GetBool("d3ddebug");
-	options.UseDRED =			CommandLine::GetBool("dred");
-	options.LoadPIX =			CommandLine::GetBool("pix");
-	options.UseGPUValidation =	CommandLine::GetBool("gpuvalidation");
-	options.UseWarp =			CommandLine::GetBool("warp");
+	options.UseDebugDevice =		CommandLine::GetBool("d3ddebug");
+	options.UseDRED =				CommandLine::GetBool("dred");
+	options.LoadPIX =				CommandLine::GetBool("pix");
+	options.UseGPUValidation =		CommandLine::GetBool("gpuvalidation");
+	options.UseWarp =				CommandLine::GetBool("warp");
+	options.UseStablePowerState =	CommandLine::GetBool("stablepowerstate");
 	m_pDevice = new GraphicsDevice(options);
+
 	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, window);
 
 	GraphicsCommon::Create(m_pDevice);

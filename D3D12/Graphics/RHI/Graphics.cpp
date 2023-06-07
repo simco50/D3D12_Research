@@ -12,7 +12,6 @@
 #include "ResourceViews.h"
 #include "Buffer.h"
 #include "StateObject.h"
-#include "Core/CommandLine.h"
 #include "pix3.h"
 #include "dxgidebug.h"
 
@@ -399,7 +398,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		}
 	}
 
-	if (CommandLine::GetBool("stablepowerstate"))
+	if (options.UseStablePowerState)
 	{
 		VERIFY_HR(D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr));
 		VERIFY_HR(m_pDevice->SetStablePowerState(TRUE));

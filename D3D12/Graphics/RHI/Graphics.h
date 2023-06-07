@@ -91,6 +91,7 @@ struct GraphicsDeviceOptions
 	bool UseGPUValidation = false;
 	bool LoadPIX = false;
 	bool UseWarp = false;
+	bool UseStablePowerState = false;
 };
 
 class GraphicsCapabilities
