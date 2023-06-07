@@ -58,12 +58,6 @@ public:
 		return m_pValue[idx];
 	}
 
-	T& operator[](uint32 idx)
-	{
-		check(idx < m_Count);
-		return m_pValue[idx];
-	}
-
 	const T* begin() const { return m_pValue; }
 	const T* end() const { return m_pValue + m_Count; }
 

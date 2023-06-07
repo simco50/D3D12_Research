@@ -128,7 +128,7 @@ DynamicGPUDescriptorAllocator::~DynamicGPUDescriptorAllocator()
 	ReleaseUsedHeaps(syncPoint);
 }
 
-void DynamicGPUDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, const Span<D3D12_CPU_DESCRIPTOR_HANDLE>& handles)
+void DynamicGPUDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, Span<const ResourceView*> handles)
 {
 	m_StaleRootParameters.SetBit(rootIndex);
 
@@ -139,7 +139,10 @@ void DynamicGPUDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offs
 	table.Descriptors.resize(Math::Max((uint32)table.Descriptors.size(), offset + handles.GetSize()));
 	table.StartIndex = Math::Min(offset, table.StartIndex);
 	for (int i = 0; i < (int)handles.GetSize(); ++i)
-		table.Descriptors[offset + i] = handles[i];
+	{
+		check(handles[i]);
+		table.Descriptors[offset + i] = handles[i]->GetDescriptor();
+	}
 }
 
 void DynamicGPUDescriptorAllocator::BindStagedDescriptors(CommandContext& context, CommandListContext descriptorTableType)

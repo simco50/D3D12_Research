@@ -370,11 +370,7 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 
 void CommandContext::BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset)
 {
-	constexpr uint32 MaxNumResourcesPerBind = 32;
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptors[MaxNumResourcesPerBind];
-	for (uint32 i = 0; i < pViews.GetSize(); ++i)
-		descriptors[i] = pViews[i] ? pViews[i]->GetDescriptor() : DescriptorHandle::InvalidCPUHandle;
-	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, Span<D3D12_CPU_DESCRIPTOR_HANDLE>(descriptors, pViews.GetSize()));
+	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, pViews);
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
