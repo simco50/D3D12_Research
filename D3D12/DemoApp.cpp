@@ -120,6 +120,9 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
 
+	Profiler::Get()->Initialize(m_pDevice);
+	DebugRenderer::Get()->Initialize(m_pDevice);
+
 	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice);
 	m_pShaderDebugRenderer->GetGPUData(&m_SceneData.DebugRenderData);
 
@@ -138,8 +141,6 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pVisualizeTexture		= std::make_unique<VisualizeTexture>(m_pDevice);
 
 	InitializePipelines();
-	Profiler::Get()->Initialize(m_pDevice);
-	DebugRenderer::Get()->Initialize(m_pDevice);
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	SetupScene(*pContext);
@@ -216,7 +217,6 @@ void DemoApp::Update()
 			m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
 
 		m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
-		ImGuiRenderer::NewFrame();
 
 		UpdateImGui();
 
@@ -420,12 +420,12 @@ void DemoApp::Update()
 		const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
 		SceneTextures sceneTextures;
-		sceneTextures.pDepth =				graph.Create("Depth Stencil",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
-		sceneTextures.pRoughness =			graph.Create("Roughness",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
-		sceneTextures.pColorTarget =		graph.Create("Color Target",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
-		sceneTextures.pNormals =			graph.Create("Normals",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-		sceneTextures.pVelocity =			graph.Create("Velocity",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-		sceneTextures.pPreviousColor =		graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
+		sceneTextures.pDepth =			graph.Create("Depth Stencil",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
+		sceneTextures.pRoughness =		graph.Create("Roughness",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
+		sceneTextures.pColorTarget =	graph.Create("Color Target",	TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
+		sceneTextures.pNormals =		graph.Create("Normals",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+		sceneTextures.pVelocity =		graph.Create("Velocity",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+		sceneTextures.pPreviousColor =	graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
 		RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
 		if (Tweakables::g_Sky)
@@ -448,6 +448,8 @@ void DemoApp::Update()
 			graph.AddPass("Transition Sky", RGPassFlag::Raster)
 				.Read(pSky);
 		}
+
+		// Export makes sure the target texture is filled in during pass execution.
 		graph.Export(pSky, &pViewMut->pSky, TextureFlag::ShaderResource);
 
 		RasterResult rasterResult;
@@ -490,18 +492,18 @@ void DemoApp::Update()
 									context.SetGraphicsRootSignature(m_pCommonRS);
 									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-									const ShadowView& shadowView = pView->ShadowViews[i];
-									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &shadowView.View, pShadowmap->Get()));
+									const ShadowView& view = pView->ShadowViews[i];
+									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &view.View, pShadowmap->Get()));
 
 									{
 										GPU_PROFILE_SCOPE("Opaque", &context);
 										context.SetPipelineState(m_pShadowsOpaquePSO);
-										Renderer::DrawScene(context, pView->Batches, shadowView.Visibility, Batch::Blending::Opaque);
+										Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::Opaque);
 									}
 									{
 										GPU_PROFILE_SCOPE("Masked", &context);
 										context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-										Renderer::DrawScene(context, pView->Batches, shadowView.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
+										Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 									}
 								});
 					}
@@ -1248,6 +1250,8 @@ void DemoApp::InitializePipelines()
 void DemoApp::UpdateImGui()
 {
 	PROFILE_SCOPE("ImGui Update");
+	ImGuiRenderer::NewFrame();
+
 	m_FrameHistory.AddTime(Time::DeltaTime());
 
 	static ImGuiConsole console;

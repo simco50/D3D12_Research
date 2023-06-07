@@ -177,7 +177,7 @@ void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice, CommandContext
 		unsigned char* pPixels;
 		int width, height;
 		fontAtlas.GetTexDataAsRGBA32(&pPixels, &width, &height);
-		m_pFontAtlas = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM), "Font Atlas");
+		m_pFontAtlas = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), "Font Atlas");
 		D3D12_SUBRESOURCE_DATA data;
 		data.pData = pPixels;
 		data.RowPitch = RHI::GetRowPitch(ResourceFormat::RGBA8_UNORM, width);

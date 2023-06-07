@@ -316,24 +316,25 @@ namespace GraphicsCommon
 		uint32 DEFAULT_NORMAL =					Math::Pack_RGBA8_UNORM(Vector4(0.5f, 0.5f, 1.0f, 1.0f));
 		uint32 DEFAULT_ROUGHNESS_METALNESS =	Math::Pack_RGBA8_UNORM(Vector4(0.5f, 0.0f, 1.0f, 1.0f));
 
-		RegisterDefaultTexture(DefaultTexture::Black2D,				"Default Black",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &BLACK);
-		RegisterDefaultTexture(DefaultTexture::White2D,				"Default White",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &WHITE);
-		RegisterDefaultTexture(DefaultTexture::Magenta2D,			"Default Magenta",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &MAGENTA);
-		RegisterDefaultTexture(DefaultTexture::Gray2D,				"Default Gray",					TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &GRAY);
-		RegisterDefaultTexture(DefaultTexture::Normal2D,			"Default Normal",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &DEFAULT_NORMAL);
-		RegisterDefaultTexture(DefaultTexture::RoughnessMetalness,	"Default Roughness/Metalness",	TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM), &DEFAULT_ROUGHNESS_METALNESS);
+		const TextureFlag textureFlags = TextureFlag::ShaderResource;
+		RegisterDefaultTexture(DefaultTexture::Black2D,				"Default Black",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM, 1, textureFlags), &BLACK);
+		RegisterDefaultTexture(DefaultTexture::White2D,				"Default White",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM, 1, textureFlags), &WHITE);
+		RegisterDefaultTexture(DefaultTexture::Magenta2D,			"Default Magenta",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM, 1, textureFlags), &MAGENTA);
+		RegisterDefaultTexture(DefaultTexture::Gray2D,				"Default Gray",					TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM, 1, textureFlags), &GRAY);
+		RegisterDefaultTexture(DefaultTexture::Normal2D,			"Default Normal",				TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM, 1, textureFlags), &DEFAULT_NORMAL);
+		RegisterDefaultTexture(DefaultTexture::RoughnessMetalness,	"Default Roughness/Metalness",	TextureDesc::Create2D(1, 1, ResourceFormat::RGBA8_UNORM, 1, textureFlags), &DEFAULT_ROUGHNESS_METALNESS);
 
 		uint32 BLACK_CUBE[6] = {};
-		RegisterDefaultTexture(DefaultTexture::BlackCube,			"Default Black Cube",			TextureDesc::CreateCube(1, 1, ResourceFormat::RGBA8_UNORM), BLACK_CUBE);
+		RegisterDefaultTexture(DefaultTexture::BlackCube,			"Default Black Cube",			TextureDesc::CreateCube(1, 1, ResourceFormat::RGBA8_UNORM, 1, textureFlags), BLACK_CUBE);
 
-		RegisterDefaultTexture(DefaultTexture::Black3D,				"Default Black 3D",				TextureDesc::Create3D(1, 1, 1, ResourceFormat::RGBA8_UNORM), &BLACK);
+		RegisterDefaultTexture(DefaultTexture::Black3D,				"Default Black 3D",				TextureDesc::Create3D(1, 1, 1, ResourceFormat::RGBA8_UNORM, 1, textureFlags), &BLACK);
 
 		constexpr uint32 checkerPixels[] =
 		{
 			0xFFFFFFFF, 0xFF000000,
 			0xFF000000, 0xFFFFFFFF
 		};
-		RegisterDefaultTexture(DefaultTexture::CheckerPattern, "Checker Pattern", TextureDesc::Create2D(2, 2, ResourceFormat::RGBA8_UNORM), checkerPixels);
+		RegisterDefaultTexture(DefaultTexture::CheckerPattern, "Checker Pattern", TextureDesc::Create2D(2, 2, ResourceFormat::RGBA8_UNORM, 1, textureFlags), checkerPixels);
 
 		DefaultTextures[(int)DefaultTexture::ColorNoise256] = CreateTextureFromFile(context, "Resources/Textures/Noise.png", false, "Noise");
 		DefaultTextures[(int)DefaultTexture::BlueNoise512] = CreateTextureFromFile(context, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");
