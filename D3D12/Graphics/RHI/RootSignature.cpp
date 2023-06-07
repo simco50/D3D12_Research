@@ -12,34 +12,34 @@ RootSignature::RootSignature(GraphicsDevice* pParent)
 {
 }
 
-void RootSignature::AddRootConstants(uint32 shaderRegister, uint32 constantCount, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::AddRootConstants(uint32 shaderRegister, uint32 constantCount, uint32 space, D3D12_SHADER_VISIBILITY visibility)
 {
 	RootParameter& parameter = m_RootParameters[m_NumParameters++];
-	parameter.Data.InitAsConstants(constantCount, shaderRegister, 0u, visibility);
+	parameter.Data.InitAsConstants(constantCount, shaderRegister, space, visibility);
 }
 
-void RootSignature::AddRootCBV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::AddRootCBV(uint32 shaderRegister, uint32 space, D3D12_SHADER_VISIBILITY visibility)
 {
 	RootParameter& parameter = m_RootParameters[m_NumParameters++];
-	parameter.Data.InitAsConstantBufferView(shaderRegister, 0u, sDefaultRootDescriptorFlags, visibility);
+	parameter.Data.InitAsConstantBufferView(shaderRegister, space, sDefaultRootDescriptorFlags, visibility);
 }
 
-void RootSignature::AddRootSRV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::AddRootSRV(uint32 shaderRegister, uint32 space, D3D12_SHADER_VISIBILITY visibility)
 {
 	RootParameter& parameter = m_RootParameters[m_NumParameters++];
-	parameter.Data.InitAsShaderResourceView(shaderRegister, 0u, sDefaultRootDescriptorFlags, visibility);
+	parameter.Data.InitAsShaderResourceView(shaderRegister, space, sDefaultRootDescriptorFlags, visibility);
 }
 
-void RootSignature::AddRootUAV(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::AddRootUAV(uint32 shaderRegister, uint32 space, D3D12_SHADER_VISIBILITY visibility)
 {
 	RootParameter& parameter = m_RootParameters[m_NumParameters++];
-	parameter.Data.InitAsUnorderedAccessView(shaderRegister, 0u, sDefaultRootDescriptorFlags, visibility);
+	parameter.Data.InitAsUnorderedAccessView(shaderRegister, space, sDefaultRootDescriptorFlags, visibility);
 }
 
-void RootSignature::AddDescriptorTable(uint32 shaderRegister, uint32 numDescriptors, D3D12_DESCRIPTOR_RANGE_TYPE type, D3D12_SHADER_VISIBILITY visibility)
+void RootSignature::AddDescriptorTable(uint32 shaderRegister, uint32 numDescriptors, D3D12_DESCRIPTOR_RANGE_TYPE type, uint32 space, D3D12_SHADER_VISIBILITY visibility)
 {
 	RootParameter& parameter = m_RootParameters[m_NumParameters++];
-	parameter.Range.Init(type, numDescriptors, shaderRegister, 0, sDefaultTableRangeFlags, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
+	parameter.Range.Init(type, numDescriptors, shaderRegister, space, sDefaultTableRangeFlags, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND);
 	parameter.Data.InitAsDescriptorTable(1, &parameter.Range, visibility);
 }
 
