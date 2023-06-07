@@ -122,52 +122,38 @@ namespace RHI
 	uint64 GetTextureByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth = 1, uint32 numMips = 1);
 }
 
-template<bool ThreadSafe>
 struct FreeList
 {
 public:
-	FreeList(uint32 chunkSize, bool canResize = true)
-		: m_NumAllocations(0), m_ChunkSize(chunkSize), m_CanResize(canResize)
+	FreeList(uint32 size)
+		: m_NumAllocations(0)
 	{
-		m_FreeList.resize(chunkSize);
+		m_FreeList.resize(size);
 		std::iota(m_FreeList.begin(), m_FreeList.end(), 0);
+	}
+
+	~FreeList()
+	{
+		checkf(m_NumAllocations == 0, "Free list not fully released");
 	}
 
 	uint32 Allocate()
 	{
-		std::scoped_lock lock(m_Mutex);
-		if (m_NumAllocations + 1 > m_FreeList.size())
-		{
-			check(m_CanResize);
-			uint32 size = (uint32)m_FreeList.size();
-			m_FreeList.resize(size + m_ChunkSize);
-			std::iota(m_FreeList.begin() + size, m_FreeList.end(), size);
-		}
-		return m_FreeList[m_NumAllocations++];
+		uint32 slot = m_NumAllocations.fetch_add(1);
+		check(slot < m_FreeList.size());
+		return m_FreeList[slot];
 	}
 
 	void Free(uint32 index)
 	{
-		std::scoped_lock lock(m_Mutex);
-		check(m_NumAllocations > 0);
-		--m_NumAllocations;
-		m_FreeList[m_NumAllocations] = index;
+		uint32 freed_index = m_NumAllocations.fetch_sub(1);
+		check(freed_index > 0);
+		m_FreeList[freed_index - 1] = index;
 	}
 
-	uint32 GetNumAllocations() const { return m_NumAllocations; }
 	bool CanAllocate() const { return m_NumAllocations < m_FreeList.size(); }
 
 private:
-	struct DummyMutex
-	{
-		void lock() {}
-		void unlock() {}
-	};
-	using TMutex = std::conditional_t<ThreadSafe, std::mutex, DummyMutex>;
-
 	std::vector<uint32> m_FreeList;
-	uint32 m_NumAllocations;
-	uint32 m_ChunkSize;
-	TMutex m_Mutex;
-	bool m_CanResize;
+	std::atomic<uint32> m_NumAllocations;
 };

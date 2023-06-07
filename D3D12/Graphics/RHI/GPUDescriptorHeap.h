@@ -52,7 +52,7 @@ private:
 	std::queue<DescriptorHeapPage*> m_ReleasedDynamicPages;
 	std::vector<DescriptorHeapPage*> m_FreeDynamicPages;
 
-	FreeList<false> m_PersistentHandles;
+	FreeList m_PersistentHandles;
 	uint32 m_NumPersistentDescriptors;
 	std::mutex m_AllocationLock;
 	std::queue<std::pair<uint32, uint64>> m_PersistentDeletionQueue;
