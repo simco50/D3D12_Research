@@ -16,9 +16,9 @@ public:
 	RootSignature(GraphicsDevice* pParent);
 
 	template<typename T>
-	void AddRootConstants(uint32 shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL)
+	void AddRootConstants(uint32 shaderRegister, uint32 space = 0, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL)
 	{
-		AddRootConstants(shaderRegister, sizeof(T) / sizeof(uint32), visibility);
+		AddRootConstants(shaderRegister, sizeof(T) / sizeof(uint32), space, visibility);
 	}
 	void AddRootConstants(uint32 shaderRegister, uint32 constantCount, uint32 space = 0, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
 	void AddRootCBV(uint32 shaderRegister, uint32 space = 0, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
