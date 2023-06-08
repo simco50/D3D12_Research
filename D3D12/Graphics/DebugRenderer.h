@@ -20,6 +20,7 @@ class DebugRenderer
 private:
 	struct DebugLine
 	{
+		DebugLine() = default;
 		DebugLine(const Vector3& start, const Vector3& end, const uint32& color)
 			: Start(start), ColorA(color), End(end), ColorB(color)
 		{}
@@ -31,6 +32,7 @@ private:
 
 	struct DebugTriangle
 	{
+		DebugTriangle() = default;
 		DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32& color)
 			: A(a), ColorA(color), B(b), ColorB(color), C(c), ColorC(color)
 		{}
@@ -65,8 +67,13 @@ public:
 	void AddLight(const Light& light, const IntColor& color = Colors::Yellow);
 
 private:
-	std::vector<DebugLine> m_Lines;
-	std::vector<DebugTriangle> m_Triangles;
+	constexpr static uint32 MaxLines = 8192;
+	DebugLine m_Lines[MaxLines];
+	uint32 m_NumLines = 0;
+
+	constexpr static uint32 MaxTriangles = 2048;
+	DebugTriangle m_Triangles[MaxTriangles];
+	uint32 m_NumTriangles = 0;
 
 	RefCountPtr<PipelineState> m_pTrianglesPSO;
 	RefCountPtr<PipelineState> m_pLinesPSO;

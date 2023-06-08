@@ -40,18 +40,12 @@ DebugRenderer* DebugRenderer::Get()
 
 void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
-	//Rootsignature
 	m_pRS = new RootSignature(pDevice);
+	m_pRS->AddRootSRV(0);
 	m_pRS->AddRootCBV(100);
-	m_pRS->Finalize("Diffuse", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	m_pRS->Finalize("Primitive Debug Render");
 
-	//Opaque
 	PipelineStateInitializer psoDesc;
-	psoDesc.SetInputLayout(
-		{
-			{ "POSITION", ResourceFormat::RGB32_FLOAT },
-			{ "COLOR", ResourceFormat::R32_UINT },
-		});
 	psoDesc.SetRootSignature(m_pRS);
 	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
 	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
@@ -76,15 +70,12 @@ void DebugRenderer::Shutdown()
 
 void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
 {
-	int linePrimitives = (int)m_Lines.size() * 2;
-	int trianglePrimitives = (int)m_Triangles.size() * 3;
-	int totalPrimitives = linePrimitives + trianglePrimitives;
-	if (totalPrimitives == 0)
-	{
+	if (m_NumLines == 0 && m_NumTriangles == 0)
 		return;
-	}
 
 	constexpr uint32 VertexStride = sizeof(DebugLine) / 2;
+	uint32 numLines = m_NumLines;
+	uint32 numTriangles = m_NumTriangles;
 
 	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
 		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
@@ -93,30 +84,38 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pT
 			{
 				context.SetGraphicsRootSignature(m_pRS);
 
-				context.BindRootCBV(0, Renderer::GetViewUniforms(pView, pTarget->Get()));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget->Get()));
 
-				if (linePrimitives != 0)
+				if (numLines != 0)
 				{
-					context.BindDynamicVertexBuffer(0, linePrimitives, VertexStride, m_Lines.data());
+					DynamicAllocation allocation = context.AllocateTransientMemory(numLines * VertexStride);
+					memcpy(allocation.pMappedMemory, m_Lines, numLines * VertexStride);
+					context.BindRootSRV(0, allocation.GpuHandle);
 					context.SetPipelineState(m_pLinesPSO);
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-					context.Draw(0, linePrimitives);
+					context.Draw(0, numLines);
 				}
-				if (trianglePrimitives != 0)
+				if (numTriangles != 0)
 				{
-					context.BindDynamicVertexBuffer(0, trianglePrimitives, VertexStride, m_Triangles.data());
+					DynamicAllocation allocation = context.AllocateTransientMemory(numTriangles * VertexStride);
+					memcpy(allocation.pMappedMemory, m_Triangles, numTriangles * VertexStride);
+					context.BindRootSRV(0, allocation.GpuHandle);
 					context.SetPipelineState(m_pTrianglesPSO);
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.Draw(0, trianglePrimitives);
+					context.Draw(0, numTriangles);
 				}
 			});
-	m_Lines.clear();
-	m_Triangles.clear();
+
+	m_NumLines = 0;
+	m_NumTriangles = 0;
 }
 
 void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const IntColor& color)
 {
-	m_Lines.push_back(DebugLine(start, end, color));
+	if (m_NumLines < MaxLines)
+		m_Lines[m_NumLines++] = DebugLine(start, end, color);
+	else
+		noEntry();
 }
 
 void DebugRenderer::AddRay(const Vector3& start, const Vector3& direction, const IntColor& color)
@@ -128,7 +127,10 @@ void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector
 {
 	if (solid)
 	{
-		m_Triangles.push_back(DebugTriangle(a, b, c, color));
+		if (m_NumTriangles < MaxTriangles)
+			m_Triangles[m_NumTriangles++] = DebugTriangle(a, b, c, color);
+		else
+			noEntry();
 	}
 	else
 	{
