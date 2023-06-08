@@ -729,8 +729,6 @@ void DemoApp::Update()
 				m_pClouds->Render(graph, sceneTextures, pView);
 			}
 
-			DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
-
 			TextureDesc colorDesc = sceneTextures.pColorTarget->GetDesc();
 			if (colorDesc.SampleCount > 1)
 			{
@@ -1060,6 +1058,8 @@ void DemoApp::Update()
 		/*
 			Debug Views
 		*/
+
+		DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 
 		if (Tweakables::g_VisualizeLightDensity)
 		{
