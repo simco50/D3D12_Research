@@ -361,7 +361,7 @@ namespace ShaderCompiler
 		DxcBuffer sourceBuffer;
 		sourceBuffer.Ptr = pSource->GetBufferPointer();
 		sourceBuffer.Size = pSource->GetBufferSize();
-		sourceBuffer.Encoding = 0;
+		sourceBuffer.Encoding = DXC_CP_ACP;
 
 		class CustomIncludeHandler : public IDxcIncludeHandler
 		{
@@ -372,12 +372,6 @@ namespace ShaderCompiler
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
 				check(Paths::ResolveRelativePaths(path));
 
-				if (!Paths::FileExists(path.c_str()))
-				{
-					*ppIncludeSource = nullptr;
-					return E_FAIL;
-				}
-
 				auto existingInclude = std::find_if(IncludedFiles.begin(), IncludedFiles.end(), [&path](const std::string& include) {
 					return CString::StrCmp(include.c_str(), path.c_str(), false);
 					});
@@ -385,15 +379,9 @@ namespace ShaderCompiler
 				if (existingInclude != IncludedFiles.end())
 				{
 					static const char nullStr[] = " ";
-					pUtils->CreateBlob(nullStr, ARRAYSIZE(nullStr), CP_UTF8, pEncoding.GetAddressOf());
+					pUtils->CreateBlobFromPinned(nullStr, ARRAYSIZE(nullStr), DXC_CP_ACP, pEncoding.GetAddressOf());
 					*ppIncludeSource = pEncoding.Detach();
 					return S_OK;
-				}
-
-				if (!IsValidIncludePath(path.c_str()))
-				{
-					E_LOG(Warning, "Include path '%s' does not have a valid extension", path.c_str());
-					return E_FAIL;
 				}
 
 				HRESULT hr = TryLoadFile(UNICODE_TO_MULTIBYTE(pFilename), &pEncoding);
@@ -402,36 +390,10 @@ namespace ShaderCompiler
 					IncludedFiles.push_back(path);
 					*ppIncludeSource = pEncoding.Detach();
 				}
-				else
-				{
-					*ppIncludeSource = nullptr;
-				}
 				return hr;
 			}
 
-			bool IsValidIncludePath(const char* pFilePath) const
-			{
-				std::string extension = Paths::GetFileExtenstion(pFilePath);
-				CString::ToLower(extension.c_str(), extension.data());
-				constexpr const char* pValidExtensions[] = { "hlsli", "h" };
-				for (uint32 i = 0; i < ARRAYSIZE(pValidExtensions); ++i)
-				{
-					if (strcmp(pValidExtensions[i], extension.c_str()) == 0)
-						return true;
-				}
-				return false;
-			}
-
-			HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, _COM_Outptr_ void __RPC_FAR* __RPC_FAR* ppvObject) override
-			{
-				return pDefaultIncludeHandler->QueryInterface(riid, ppvObject);
-			}
-
-			void Reset()
-			{
-				IncludedFiles.clear();
-			}
-
+			HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, _COM_Outptr_ void __RPC_FAR* __RPC_FAR* ppvObject) override {	return E_NOINTERFACE; }
 			ULONG STDMETHODCALLTYPE AddRef(void) override { return 0; }
 			ULONG STDMETHODCALLTYPE Release(void) override { return 0; }
 
