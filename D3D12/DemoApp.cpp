@@ -1081,7 +1081,7 @@ void DemoApp::Update()
 		if (m_RenderPath == RenderPath::Visibility && m_VisibilityDebugRenderMode > 0)
 		{
 			graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
-				.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets })
+				.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, rasterResult.pDebugData })
 				.Write({ sceneTextures.pColorTarget })
 				.Bind([=](CommandContext& context)
 					{
