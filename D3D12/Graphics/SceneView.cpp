@@ -190,6 +190,12 @@ namespace Renderer
 				materialData.RoughnessFactor = material.RoughnessFactor;
 				materialData.EmissiveFactor = material.EmissiveFactor;
 				materialData.AlphaCutoff = material.AlphaCutoff;
+				switch (material.AlphaMode)
+				{
+				case MaterialAlphaMode::Blend:	materialData.RasterBin = 0xFFFFFFFF;	break;
+				case MaterialAlphaMode::Opaque: materialData.RasterBin = 0;				break;
+				case MaterialAlphaMode::Masked: materialData.RasterBin = 1;				break;
+				}
 			}
 		}
 		sceneBatches.swap(pView->Batches);

@@ -20,7 +20,7 @@ struct MaterialData
 	float MetalnessFactor;
 	float RoughnessFactor;
 	float AlphaCutoff;
-	PAD;
+	uint RasterBin;
 };
 
 struct MeshData

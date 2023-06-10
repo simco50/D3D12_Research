@@ -67,7 +67,7 @@ uint GetBin(uint meshletIndex)
 	MeshletCandidate candidate = tVisibleMeshlets[meshletIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
-	return material.AlphaCutoff < 1.0f;
+	return material.RasterBin;
 }
 
 [numthreads(64, 1, 1)]

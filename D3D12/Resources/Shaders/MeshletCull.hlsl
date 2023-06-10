@@ -107,6 +107,13 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 #endif
 
 	InstanceData instance = GetInstance(instanceIndex);
+
+#if OCCLUSION_FIRST_PASS
+	MaterialData material = GetMaterial(instance.MaterialIndex);
+	if(material.RasterBin == 0xFFFFFFFF)
+		return;
+#endif
+
     MeshData mesh = GetMesh(instance.MeshIndex);
 
 	// Frustum test instance against the current view
