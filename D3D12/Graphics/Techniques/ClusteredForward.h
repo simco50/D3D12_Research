@@ -20,11 +20,6 @@ struct LightCull3DData
 	bool DirtyDebugData = true;
 };
 
-struct VolumetricFogData
-{
-	RefCountPtr<Texture> pFogHistory;
-};
-
 class ClusteredForward
 {
 public:
@@ -32,8 +27,6 @@ public:
 	~ClusteredForward();
 
 	void ComputeLightCulling(RGGraph& graph, const SceneView* pView, LightCull3DData& resources);
-
-	RGTexture* RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const LightCull3DData& cullData, VolumetricFogData& fogData);
 
 	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture, bool translucentOnly = false);
 
@@ -58,8 +51,4 @@ private:
 	//Visualize Light Count
 	RefCountPtr<RootSignature> m_pCommonRS;
 	RefCountPtr<PipelineState> m_pVisualizeLightsPSO;
-
-	//Volumetric Fog
-	RefCountPtr<PipelineState> m_pInjectVolumeLightPSO;
-	RefCountPtr<PipelineState> m_pAccumulateVolumeLightPSO;
 };

@@ -7,6 +7,7 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/Techniques/ClusteredForward.h"
 #include "Graphics/Techniques/TiledForward.h"
+#include "Graphics/Techniques/VolumetricFog.h"
 
 class Mesh;
 class Camera;
@@ -26,6 +27,7 @@ class ShaderDebugRenderer;
 class GPUDrivenRenderer;
 class DDGI;
 class VisualizeTexture;
+class VolumetricFog;
 struct SubMesh;
 struct Material;
 
@@ -71,6 +73,7 @@ private:
 	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
 	std::vector<RefCountPtr<Texture>> m_ShadowHZBs;
 
+	std::unique_ptr<VolumetricFog> m_pVolumetricFog;
 	std::unique_ptr<ClusteredForward> m_pClusteredForward;
 	std::unique_ptr<TiledForward> m_pTiledForward;
 	std::unique_ptr<RTAO> m_pRTAO;

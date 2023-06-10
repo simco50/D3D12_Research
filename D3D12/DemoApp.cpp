@@ -19,6 +19,7 @@
 #include "Graphics/Techniques/RTAO.h"
 #include "Graphics/Techniques/TiledForward.h"
 #include "Graphics/Techniques/ClusteredForward.h"
+#include "Graphics/Techniques/VolumetricFog.h"
 #include "Graphics/Techniques/RTReflections.h"
 #include "Graphics/Techniques/PathTracing.h"
 #include "Graphics/Techniques/SSAO.h"
@@ -130,6 +131,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pGPUDrivenRenderer	= std::make_unique<GPUDrivenRenderer>(m_pDevice);
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
 	m_pClouds				= std::make_unique<Clouds>(m_pDevice);
+	m_pVolumetricFog		= std::make_unique<VolumetricFog>(m_pDevice);
 	m_pClusteredForward		= std::make_unique<ClusteredForward>(m_pDevice);
 	m_pTiledForward			= std::make_unique<TiledForward>(m_pDevice);
 	m_pRTReflections		= std::make_unique<RTReflections>(m_pDevice);
@@ -645,7 +647,7 @@ void DemoApp::Update()
 			RGTexture* pFog = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 			if (Tweakables::g_VolumetricFog)
 			{
-				pFog = m_pClusteredForward->RenderVolumetricFog(graph, pView, m_LightCull3DData, m_FogData);
+				pFog = m_pVolumetricFog->RenderFog(graph, pView, m_LightCull3DData, m_FogData);
 			}
 
 			if (m_RenderPath == RenderPath::Tiled)
