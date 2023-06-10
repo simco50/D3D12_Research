@@ -21,6 +21,8 @@ RWTexture2D<float4> uOutput : register(u0);
 RWTexture2D<float4> uAccumulation : register(u1);
 ConstantBuffer<PassParameters> cPass : register(b0);
 
+Texture2D<float4> tAccumulation : register(t0);
+
 LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, BrdfData brdfData)
 {
 	LightResult result = (LightResult)0;
@@ -359,3 +361,13 @@ void RayGen()
 	uAccumulation[DispatchRaysIndex().xy] = float4(radiance, 1);
 	uOutput[DispatchRaysIndex().xy] = float4(radiance, 1.0f) / cPass.AccumulatedFrames;
 }
+
+#ifdef BLIT_SHADER
+
+[numthreads(8, 8, 1)]
+void BlitAccumulationCS(uint3 threadId : SV_DispatchThreadID)
+{
+	uOutput[threadId.xy] = tAccumulation[threadId.xy] / cPass.AccumulatedFrames;
+}
+
+#endif

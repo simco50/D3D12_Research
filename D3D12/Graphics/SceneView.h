@@ -28,6 +28,7 @@ struct ViewTransform
 	Matrix ViewProjectionPrev;
 	Matrix ViewInverse;
 	Matrix ProjectionInverse;
+	Matrix UnjtteredViewProjection;
 	Vector3 Position;
 	Vector3 PositionPrev;
 

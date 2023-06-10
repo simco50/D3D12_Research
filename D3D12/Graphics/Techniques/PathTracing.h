@@ -15,9 +15,10 @@ public:
 private:
 	RefCountPtr<RootSignature> m_pRS;
 	RefCountPtr<StateObject> m_pSO;
+	RefCountPtr<PipelineState> m_pBlitPSO;
 
 	RefCountPtr<Texture> m_pAccumulationTexture;
 	DelegateHandle m_OnShaderCompiledHandle;
 	int m_NumAccumulatedFrames = 1;
-	int m_LastRenderedFrame = 0;
+	Matrix m_LastViewProjection;
 };

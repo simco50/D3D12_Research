@@ -106,6 +106,7 @@ void Camera::UpdateMatrices() const
 		m_Transform.ViewInverse.Invert(m_Transform.View);
 		float aspect = m_Transform.Viewport.GetWidth() / m_Transform.Viewport.GetHeight();
 		m_Transform.Projection = Math::CreatePerspectiveMatrix(m_Transform.FoV, aspect, m_Transform.NearPlane, m_Transform.FarPlane);
+		m_Transform.UnjtteredViewProjection = m_Transform.View * m_Transform.Projection;
 
 		if (m_Jitter)
 		{
