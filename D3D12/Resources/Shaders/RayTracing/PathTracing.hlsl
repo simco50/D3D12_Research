@@ -32,6 +32,8 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	RayDesc rayDesc = CreateLightOcclusionRay(light, worldPos);
 	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
 	attenuation *= TraceOcclusionRay(rayDesc, tlas);
+	if(attenuation <= 0)
+		return result;
 
 	result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
 	result.Diffuse *= light.GetColor() * light.Intensity;

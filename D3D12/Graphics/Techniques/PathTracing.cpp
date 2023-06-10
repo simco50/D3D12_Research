@@ -49,24 +49,30 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 	RGTexture* pAccumulationTexture = RGUtils::CreatePersistent(graph, "Accumulation Target", pTarget->GetDesc(), &m_pAccumulationTexture, true);
 
 	static int32 numBounces = 3;
+	static int32 numSamples = 200;
 
+	bool doReset = false;
 	if (ImGui::Begin("Parameters"))
 	{
 		if (ImGui::CollapsingHeader("Path Tracing"))
 		{
 			if (ImGui::SliderInt("Bounces", &numBounces, 1, 15))
 			{
-				Reset();
+				doReset = true;
+			}
+			if (ImGui::SliderInt("Samples", &numSamples, 1, 1500, "%d", ImGuiSliderFlags_Logarithmic))
+			{
+				if (numSamples < m_NumAccumulatedFrames)
+					doReset = true;
 			}
 			if (ImGui::Button("Reset"))
 			{
-				Reset();
+				doReset = true;
 			}
 		}
 	}
 	ImGui::End();
 
-	bool doReset = false;
 	doReset |= pView->MainView.ViewProjectionPrev != pView->MainView.ViewProjection;
 	doReset |= pView->FrameIndex != m_LastRenderedFrame + 1;
 
@@ -74,6 +80,9 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 		Reset();
 
 	m_LastRenderedFrame = pView->FrameIndex;
+
+	if (m_NumAccumulatedFrames >= numSamples)
+		return;
 	m_NumAccumulatedFrames++;
 
 	graph.AddPass("Path Tracing", RGPassFlag::Compute)
