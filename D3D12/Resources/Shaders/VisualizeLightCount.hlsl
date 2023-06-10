@@ -2,8 +2,6 @@
 #include "ColorMaps.hlsli"
 #include "ShaderDebugRender.hlsli"
 
-#define BLOCK_SIZE 16
-
 struct PassParameters
 {
 	int2 ClusterDimensions;
@@ -19,7 +17,7 @@ RWTexture2D<float4> uOutput : register(u0);
 #if TILED_FORWARD
 Texture2D<uint2> tLightGrid : register(t2);
 #elif CLUSTERED_FORWARD
-StructuredBuffer<uint> tLightGrid : register(t2);
+Buffer<uint> tLightGrid : register(t2);
 #endif
 
 static const int MaxNumLights = 10;
@@ -62,7 +60,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 		return;
 
 #if TILED_FORWARD
-	uint2 tileIndex = uint2(floor(threadId.xy / BLOCK_SIZE));
+	uint2 tileIndex = uint2(floor(threadId.xy / TILED_LIGHTING_TILE_SIZE));
 	uint lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
 	float depth = tSceneDepth.Load(uint3(threadId.xy, 0));
@@ -70,7 +68,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	uint slice = floor(log(viewDepth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
 	uint3 clusterIndex3D = uint3(floor(threadId.xy / cPass.ClusterSize), slice);
 	uint clusterIndex1D = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
-	uint lightCount = tLightGrid[clusterIndex1D * 2 + 1];
+	uint lightCount = tLightGrid[clusterIndex1D];
 #endif
 	uOutput[threadId.xy] = float4(GetColor(threadId.xy, lightCount), 1);
 

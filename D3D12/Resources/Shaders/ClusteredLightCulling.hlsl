@@ -1,6 +1,5 @@
 #include "Common.hlsli"
 
-#define MAX_LIGHTS_PER_TILE 32
 #define THREAD_COUNT 4
 
 struct PassData
@@ -21,8 +20,8 @@ ConstantBuffer<PassData> cPass : register(b0);
 
 StructuredBuffer<PrecomputedLightData> tLightData : register(t0);
 
-RWStructuredBuffer<uint> uLightIndexList : register(u0);
-RWStructuredBuffer<uint> uOutLightGrid : register(u1);
+RWBuffer<uint> uLightIndexList : register(u0);
+RWBuffer<uint> uLightGrid : register(u1);
 
 bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, float2 coneAngleSinCos, Sphere sphere)
 {
@@ -85,7 +84,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 	uint numLights = 0;
 
 	[loop]
-	for (uint i = 0; i < cView.LightCount && numLights < MAX_LIGHTS_PER_TILE; ++i)
+	for (uint i = 0; i < cView.LightCount && numLights < MAX_LIGHTS_PER_CLUSTER; ++i)
 	{
 		Light light = GetLight(i);
 		if(light.IsPoint)
@@ -96,7 +95,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 			sphere.Position = lightData.ViewSpacePosition;
 			if (SphereInAABB(sphere, clusterAABB))
 			{
-				uLightIndexList[clusterIndex * MAX_LIGHTS_PER_TILE + numLights] = i;
+				uLightIndexList[clusterIndex * MAX_LIGHTS_PER_CLUSTER + numLights] = i;
 				++numLights;
 			}
 		}
@@ -115,17 +114,16 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 				float2(lightData.SpotSinAngle, lightData.SpotCosAngle),
 				sphere))
 			{
-				uLightIndexList[clusterIndex * MAX_LIGHTS_PER_TILE + numLights] = i;
+				uLightIndexList[clusterIndex * MAX_LIGHTS_PER_CLUSTER + numLights] = i;
 				++numLights;
 			}
 		}
 		else
 		{
-			uLightIndexList[clusterIndex * MAX_LIGHTS_PER_TILE + numLights] = i;
+			uLightIndexList[clusterIndex * MAX_LIGHTS_PER_CLUSTER + numLights] = i;
 			++numLights;
 		}
 	}
 
-	uOutLightGrid[clusterIndex * 2] = clusterIndex * MAX_LIGHTS_PER_TILE;
-	uOutLightGrid[clusterIndex * 2 + 1] = numLights;
+	uLightGrid[clusterIndex] = numLights;
 }

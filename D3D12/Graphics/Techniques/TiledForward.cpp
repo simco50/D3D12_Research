@@ -64,12 +64,12 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 {
 	int frustumCountX = Math::DivideAndRoundUp(pView->GetDimensions().x, FORWARD_PLUS_BLOCK_SIZE);
 	int frustumCountY = Math::DivideAndRoundUp(pView->GetDimensions().y, FORWARD_PLUS_BLOCK_SIZE);
-	resources.pLightGridOpaque = graph.Create("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
-	resources.pLightGridTransparant = graph.Create("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG32_UINT));
+	resources.pLightGridOpaque = graph.Create("Light Grid - Opaque", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG16_UINT));
+	resources.pLightGridTransparant = graph.Create("Light Grid - Transparant", TextureDesc::Create2D(frustumCountX, frustumCountY, ResourceFormat::RG16_UINT));
 
-	resources.pLightIndexCounter = graph.Create("Light Index Counter", BufferDesc::CreateStructured(2, sizeof(uint32)));
-	resources.pLightIndexListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
-	resources.pLightIndexListTransparant = graph.Create("Light List - Transparant", BufferDesc::CreateStructured(MAX_LIGHT_DENSITY, sizeof(uint32)));
+	resources.pLightIndexCounter = graph.Create("Light Index Counter", BufferDesc::CreateTyped(2, ResourceFormat::RG32_UINT));
+	resources.pLightIndexListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateTyped(MAX_LIGHT_DENSITY, ResourceFormat::R16_UINT));
+	resources.pLightIndexListTransparant = graph.Create("Light List - Transparant", BufferDesc::CreateTyped(MAX_LIGHT_DENSITY, ResourceFormat::R16_UINT));
 
 	struct PrecomputedLightData
 	{
@@ -109,8 +109,7 @@ void TiledForward::ComputeLightCulling(RGGraph& graph, const SceneView* pView, S
 			{
 				Texture* pDepth = sceneTextures.pDepth->Get();
 
-				//#todo: adhoc UAV creation
-				context.ClearUAVu(m_pDevice->CreateUAV(resources.pLightIndexCounter->Get(), BufferUAVDesc::CreateRaw()));
+				context.ClearUAVu(resources.pLightIndexCounter->Get()->GetUAV());
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pComputeLightCullPSO);

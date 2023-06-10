@@ -71,8 +71,8 @@ void GetLightCount(float2 pixel, float linearDepth, out uint lightCount, out uin
 {
 	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
 	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
-	startOffset = tLightGrid[tileIndex * 2];
-	lightCount = tLightGrid[tileIndex * 2 + 1];
+	startOffset = MAX_LIGHTS_PER_CLUSTER * tileIndex;
+	lightCount = tLightGrid[tileIndex];
 }
 
 Light GetLight(uint lightIndex, uint lightOffset)

@@ -5,8 +5,6 @@
 #include "HZB.hlsli"
 #include "Noise.hlsli"
 
-#define BLOCK_SIZE 16
-
 struct PerViewData
 {
 	uint4 ClusterDimensions;
@@ -38,7 +36,7 @@ Texture2D tPreviousSceneColor :	register(t2);
 Texture3D<float4> tLightScattering : register(t3);
 
 #if CLUSTERED_FORWARD
-StructuredBuffer<uint> tLightGrid : register(t4);
+Buffer<uint> tLightGrid : register(t4);
 uint GetSliceFromDepth(float depth)
 {
 	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
@@ -46,19 +44,19 @@ uint GetSliceFromDepth(float depth)
 #elif TILED_FORWARD
 Texture2D<uint2> tLightGrid : register(t4);
 #endif
-StructuredBuffer<uint> tLightIndexList : register(t5);
+Buffer<uint> tLightIndexList : register(t5);
 
 void GetLightCount(float2 pixel, float linearDepth, out uint lightCount, out uint startOffset)
 {
 #if TILED_FORWARD
-	uint2 tileIndex = uint2(floor(pixel / BLOCK_SIZE));
+	uint2 tileIndex = uint2(floor(pixel / TILED_LIGHTING_TILE_SIZE));
 	startOffset = tLightGrid[tileIndex].x;
 	lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
 	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
 	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
-	startOffset = tLightGrid[tileIndex * 2];
-	lightCount = tLightGrid[tileIndex * 2 + 1];
+	startOffset = tileIndex * MAX_LIGHTS_PER_CLUSTER;
+	lightCount = tLightGrid[tileIndex];
 #else
 	startOffset = 0;
 	lightCount = cView.LightCount;

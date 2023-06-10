@@ -24,8 +24,8 @@ struct AccumulateParams
 ConstantBuffer<InjectParams> cInjectParams : register(b0);
 ConstantBuffer<InjectParams> cAccumulateParams : register(b0);
 
-StructuredBuffer<uint> tLightGrid : register(t0);
-StructuredBuffer<uint> tLightIndexList : register(t1);
+Buffer<uint> tLightGrid : register(t0);
+Buffer<uint> tLightIndexList : register(t1);
 Texture3D<float4> tLightScattering : register(t2);
 RWTexture3D<float4> uOutLightScattering : register(u0);
 
@@ -128,8 +128,8 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	{
 		// Iterate over all the lights and light the froxel
 		uint tileIndex = GetLightCluster(threadId.xy, z);
-		uint lightOffset = tLightGrid[tileIndex * 2];
-		uint lightCount = tLightGrid[tileIndex * 2 + 1];
+		uint lightOffset = tileIndex * MAX_LIGHTS_PER_CLUSTER;
+		uint lightCount = tLightGrid[tileIndex];
 
 		for(i = 0; i < lightCount; ++i)
 		{

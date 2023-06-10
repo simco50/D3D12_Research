@@ -2,7 +2,6 @@
 #include "Constants.hlsli"
 
 #define MAX_LIGHTS_PER_TILE 256
-#define BLOCK_SIZE 16
 #define SPLITZ_CULLING 1
 
 struct Plane
@@ -35,11 +34,11 @@ struct PrecomputedLightData
 Texture2D tDepthTexture : register(t0);
 StructuredBuffer<PrecomputedLightData> tLightData : register(t1);
 
-globallycoherent RWStructuredBuffer<uint> uLightIndexCounter : register(u0);
-RWStructuredBuffer<uint> uOpaqueLightIndexList : register(u1);
+globallycoherent RWBuffer<uint> uLightIndexCounter : register(u0);
+RWBuffer<uint> uOpaqueLightIndexList : register(u1);
 RWTexture2D<uint2> uOpaqueOutLightGrid : register(u2);
 
-RWStructuredBuffer<uint> uTransparantLightIndexList : register(u3);
+RWBuffer<uint> uTransparantLightIndexList : register(u3);
 RWTexture2D<uint2> uTransparantOutLightGrid : register(u4);
 
 groupshared uint MinDepth;
@@ -146,7 +145,7 @@ uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
 	return mask;
 }
 
-[numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
+[numthreads(TILED_LIGHTING_TILE_SIZE, TILED_LIGHTING_TILE_SIZE, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
 	int2 uv = threadID.xy;
@@ -183,14 +182,14 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	if(groupIndex == 0)
 	{
 		float3 viewSpace[8];
-		viewSpace[0] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[4] = ScreenToView(float4(groupId.xy * BLOCK_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * BLOCK_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[0] = ScreenToView(float4(groupId.xy * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[4] = ScreenToView(float4(groupId.xy * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
 
 		GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
 		GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
@@ -229,7 +228,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 
 	//Perform the light culling
 	[loop]
-	for(uint i = groupIndex; i < cView.LightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+	for(uint i = groupIndex; i < cView.LightCount; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
 	{
 		Light light = GetLight(i);
 
@@ -297,11 +296,11 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	GroupMemoryBarrierWithGroupSync();
 
 	//Distribute populating the light index light amonst threads in the thread group
-	for (uint i = groupIndex; i < OpaqueLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+	for (uint i = groupIndex; i < OpaqueLightCount; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
 	{
 		uOpaqueLightIndexList[OpaqueLightIndexStartOffset + i] = OpaqueLightList[i];
 	}
-	for (uint i = groupIndex; i < TransparantLightCount; i += BLOCK_SIZE * BLOCK_SIZE)
+	for (uint i = groupIndex; i < TransparantLightCount; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
 	{
 		uTransparantLightIndexList[TransparantLightIndexStartOffset + i] = TransparantLightList[i];
 	}
