@@ -250,7 +250,7 @@ void DemoApp::Update()
 			for (const Batch& b : m_SceneData.Batches)
 			{
 				DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(0.2f, 0.2f, 0.9f, 1.0f));
-				DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 6, 6, Color(0.2f, 0.6f, 0.2f, 1.0f));
+				DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 5, 5, Color(0.2f, 0.6f, 0.2f, 1.0f));
 			}
 		}
 
@@ -1060,50 +1060,52 @@ void DemoApp::Update()
 			Debug Views
 		*/
 
+		if (m_RenderPath != RenderPath::PathTracing)
+		{
+			if (Tweakables::g_VisualizeLightDensity)
+			{
+				if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Visibility)
+				{
+					m_pClusteredForward->VisualizeLightDensity(graph, pView, sceneTextures, m_LightCull3DData);
+				}
+				else if (m_RenderPath == RenderPath::Tiled)
+				{
+					m_pTiledForward->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, m_LightCull2DData);
+				}
+			}
+
+			if (Tweakables::g_VisualizeDDGI)
+			{
+				m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures);
+			}
+
+			if (m_RenderPath == RenderPath::Visibility && m_VisibilityDebugRenderMode > 0)
+			{
+				graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
+					.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, rasterResult.pDebugData })
+					.Write({ sceneTextures.pColorTarget })
+					.Bind([=](CommandContext& context)
+						{
+							Texture* pColorTarget = sceneTextures.pColorTarget->Get();
+
+							context.SetComputeRootSignature(m_pCommonRS);
+							context.SetPipelineState(m_pVisibilityDebugRenderPSO);
+
+							uint32 mode = m_VisibilityDebugRenderMode;
+							context.BindRootCBV(0, mode);
+							context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
+							context.BindResources(2, pColorTarget->GetUAV());
+							context.BindResources(3, {
+								rasterResult.pVisibilityBuffer->Get()->GetSRV(),
+								rasterResult.pVisibleMeshlets->Get()->GetSRV(),
+								rasterResult.pDebugData->Get()->GetSRV(),
+								});
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
+						});
+			}
+		}
+
 		DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
-
-		if (Tweakables::g_VisualizeLightDensity)
-		{
-			if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Visibility)
-			{
-				m_pClusteredForward->VisualizeLightDensity(graph, pView, sceneTextures, m_LightCull3DData);
-			}
-			else if (m_RenderPath == RenderPath::Tiled)
-			{
-				m_pTiledForward->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, m_LightCull2DData);
-			}
-		}
-
-		if (Tweakables::g_VisualizeDDGI)
-		{
-			m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures);
-		}
-
-		if (m_RenderPath == RenderPath::Visibility && m_VisibilityDebugRenderMode > 0)
-		{
-			graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
-				.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, rasterResult.pDebugData })
-				.Write({ sceneTextures.pColorTarget })
-				.Bind([=](CommandContext& context)
-					{
-						Texture* pColorTarget = sceneTextures.pColorTarget->Get();
-
-						context.SetComputeRootSignature(m_pCommonRS);
-						context.SetPipelineState(m_pVisibilityDebugRenderPSO);
-
-						uint32 mode = m_VisibilityDebugRenderMode;
-						context.BindRootCBV(0, mode);
-						context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
-						context.BindResources(2, pColorTarget->GetUAV());
-						context.BindResources(3, {
-							rasterResult.pVisibilityBuffer->Get()->GetSRV(),
-							rasterResult.pVisibleMeshlets->Get()->GetSRV(),
-							rasterResult.pDebugData->Get()->GetSRV(),
-							});
-						context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
-					});
-		}
-
 		m_pShaderDebugRenderer->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 
 		if (!Tweakables::VisualizeTextureName.empty())

@@ -67,7 +67,7 @@ public:
 	void AddLight(const Light& light, const IntColor& color = Colors::Yellow);
 
 private:
-	constexpr static uint32 MaxLines = 8192;
+	constexpr static uint32 MaxLines = 1024 * 16;
 	DebugLine m_Lines[MaxLines];
 	uint32 m_NumLines = 0;
 

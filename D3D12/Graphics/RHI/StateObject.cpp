@@ -133,8 +133,7 @@ bool StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 		return pState;
 	};
 
-	m_Shaders.clear();
-
+	std::vector<Shader*> shaders;
 	for (const LibraryExports& library : m_Libraries)
 	{
 		D3D12_DXIL_LIBRARY_DESC* pDesc = stateObjectStream.ContentData.Allocate<D3D12_DXIL_LIBRARY_DESC>();
@@ -142,7 +141,7 @@ bool StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 		if (!pLibrary)
 			return false;
 
-		m_Shaders.push_back(pLibrary);
+		shaders.push_back(pLibrary);
 		pDesc->DXILLibrary = CD3DX12_SHADER_BYTECODE(pLibrary->pByteCode->GetBufferPointer(), pLibrary->pByteCode->GetBufferSize());
 		if (library.Exports.size())
 		{
@@ -234,6 +233,8 @@ bool StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 	stateObjectStream.Desc.Type = Type;
 	stateObjectStream.Desc.NumSubobjects = numObjects;
 	stateObjectStream.Desc.pSubobjects = (D3D12_STATE_SUBOBJECT*)stateObjectStream.StateObjectData.GetData();
+
+	m_Shaders.swap(shaders);
 	return true;
 }
 

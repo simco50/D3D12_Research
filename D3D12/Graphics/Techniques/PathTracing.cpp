@@ -66,11 +66,14 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 	}
 	ImGui::End();
 
-	if (pView->MainView.ViewProjectionPrev != pView->MainView.ViewProjection)
-	{
-		Reset();
-	}
+	bool doReset = false;
+	doReset |= pView->MainView.ViewProjectionPrev != pView->MainView.ViewProjection;
+	doReset |= pView->FrameIndex != m_LastRenderedFrame + 1;
 
+	if (doReset)
+		Reset();
+
+	m_LastRenderedFrame = pView->FrameIndex;
 	m_NumAccumulatedFrames++;
 
 	graph.AddPass("Path Tracing", RGPassFlag::Compute)

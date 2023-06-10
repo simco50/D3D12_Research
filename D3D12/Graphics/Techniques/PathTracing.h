@@ -19,4 +19,5 @@ private:
 	RefCountPtr<Texture> m_pAccumulationTexture;
 	DelegateHandle m_OnShaderCompiledHandle;
 	int m_NumAccumulatedFrames = 1;
+	int m_LastRenderedFrame = 0;
 };
