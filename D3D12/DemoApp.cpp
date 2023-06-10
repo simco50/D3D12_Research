@@ -701,6 +701,7 @@ void DemoApp::Update()
 								});
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 						});
+				m_pClusteredForward->RenderBasePass(graph, pView, sceneTextures, m_LightCull3DData, pFog, true);
 			}
 
 			m_pParticles->Render(graph, pView, sceneTextures);

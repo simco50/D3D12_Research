@@ -1,6 +1,7 @@
 #pragma once
 #include "Graphics/RHI/RHI.h"
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
+#include "Graphics/SceneView.h"
 
 struct SceneView;
 struct SceneTextures;
@@ -34,7 +35,7 @@ public:
 
 	RGTexture* RenderVolumetricFog(RGGraph& graph, const SceneView* pView, const LightCull3DData& cullData, VolumetricFogData& fogData);
 
-	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture);
+	void RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture, bool translucentOnly = false);
 
 	void VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData);
 

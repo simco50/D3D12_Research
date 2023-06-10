@@ -305,17 +305,18 @@ RGTexture* ClusteredForward::RenderVolumetricFog(RGGraph& graph, const SceneView
 	return pFinalVolumeFog;
 }
 
-void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture)
+void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture, bool translucentOnly)
 {
 	static constexpr bool useMeshShader = false;
+	RenderTargetLoadAction rtLoadOp = translucentOnly ? RenderTargetLoadAction::Load : RenderTargetLoadAction::DontCare;
 
 	graph.AddPass("Base Pass", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
-		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
-		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
-		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
-		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
+		.DepthStencil(sceneTextures.pDepth, rtLoadOp, false)
+		.RenderTarget(sceneTextures.pColorTarget, rtLoadOp)
+		.RenderTarget(sceneTextures.pNormals, rtLoadOp)
+		.RenderTarget(sceneTextures.pRoughness, rtLoadOp)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -344,15 +345,18 @@ void ClusteredForward::RenderBasePass(RGGraph& graph, const SceneView* pView, Sc
 					lightCullData.pLightIndexGrid->Get()->GetSRV(),
 					});
 
+				if (!translucentOnly)
 				{
-					GPU_PROFILE_SCOPE("Opaque", &context);
-					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffusePSO : m_pDiffusePSO);
-					Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
-				}
-				{
-					GPU_PROFILE_SCOPE("Opaque - Masked", &context);
-					context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseMaskedPSO : m_pDiffuseMaskedPSO);
-					Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
+					{
+						GPU_PROFILE_SCOPE("Opaque", &context);
+						context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffusePSO : m_pDiffusePSO);
+						Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
+					}
+					{
+						GPU_PROFILE_SCOPE("Opaque - Masked", &context);
+						context.SetPipelineState(useMeshShader ? m_pMeshShaderDiffuseMaskedPSO : m_pDiffuseMaskedPSO);
+						Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
+					}
 				}
 				{
 					GPU_PROFILE_SCOPE("Transparant", &context);
