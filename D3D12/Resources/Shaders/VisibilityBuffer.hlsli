@@ -75,6 +75,7 @@ BaryDerivs ComputeBarycentrics(float2 pixelCS, float4 vertexCS0, float4 vertexCS
 struct VisBufferVertexAttribute
 {
 	float3 Position;
+	float LinearDepth;
 	float2 UV;
 	float3 Normal;
 	float4 Tangent;
@@ -130,6 +131,7 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
     outVertex.Position = BaryInterpolate(positions[0], positions[1], positions[2], bary.Barycentrics);
 	outVertex.DX = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.DDX_Barycentrics);
 	outVertex.DY = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.DDY_Barycentrics);
+	outVertex.LinearDepth = BaryInterpolate(clipPos0.w, clipPos1.w, clipPos2.w, bary.Barycentrics);
 	outVertex.Barycentrics = bary.Barycentrics;
 	return outVertex;
 }

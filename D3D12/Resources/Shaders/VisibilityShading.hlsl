@@ -108,7 +108,6 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0);
-	float linearDepth = LinearizeDepth(tDepth.SampleLevel(sPointClamp, screenUV, 0));
 	float dither = InterleavedGradientNoise(texel.xy);
 
 	uint candidateIndex, primitiveID;
@@ -120,6 +119,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	// Vertex Shader
 	VisBufferVertexAttribute vertex = GetVertexAttributes(screenUV, instance, candidate.MeshletIndex, primitiveID);
+	float linearDepth = vertex.LinearDepth;
 
 	// Surface Shader
 	MaterialData material = GetMaterial(instance.MaterialIndex);
