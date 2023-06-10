@@ -11,7 +11,7 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/Light.h"
-#include "Graphics/Techniques/ClusteredForward.h"
+#include "Graphics/Techniques/ForwardRenderer.h"
 #include "Core/ConsoleVariables.h"
 
 static constexpr int gLightClusterTexelSize = 64;

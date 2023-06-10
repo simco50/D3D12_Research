@@ -5,8 +5,7 @@
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
 #include "Graphics/Profiler.h"
-#include "Graphics/Techniques/ClusteredForward.h"
-#include "Graphics/Techniques/TiledForward.h"
+#include "Graphics/Techniques/ForwardRenderer.h"
 #include "Graphics/Techniques/VolumetricFog.h"
 
 class Mesh;
@@ -74,8 +73,7 @@ private:
 	std::vector<RefCountPtr<Texture>> m_ShadowHZBs;
 
 	std::unique_ptr<VolumetricFog> m_pVolumetricFog;
-	std::unique_ptr<ClusteredForward> m_pClusteredForward;
-	std::unique_ptr<TiledForward> m_pTiledForward;
+	std::unique_ptr<ForwardRenderer> m_pForwardRenderer;
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;

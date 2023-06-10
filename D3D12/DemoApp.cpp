@@ -17,8 +17,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Graphics/Techniques/RTAO.h"
-#include "Graphics/Techniques/TiledForward.h"
-#include "Graphics/Techniques/ClusteredForward.h"
+#include "Graphics/Techniques/ForwardRenderer.h"
 #include "Graphics/Techniques/VolumetricFog.h"
 #include "Graphics/Techniques/RTReflections.h"
 #include "Graphics/Techniques/PathTracing.h"
@@ -132,8 +131,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
 	m_pClouds				= std::make_unique<Clouds>(m_pDevice);
 	m_pVolumetricFog		= std::make_unique<VolumetricFog>(m_pDevice);
-	m_pClusteredForward		= std::make_unique<ClusteredForward>(m_pDevice);
-	m_pTiledForward			= std::make_unique<TiledForward>(m_pDevice);
+	m_pForwardRenderer		= std::make_unique<ForwardRenderer>(m_pDevice);
 	m_pRTReflections		= std::make_unique<RTReflections>(m_pDevice);
 	m_pRTAO					= std::make_unique<RTAO>(m_pDevice);
 	m_pSSAO					= std::make_unique<SSAO>(m_pDevice);
@@ -642,7 +640,7 @@ void DemoApp::Update()
 			else
 				sceneTextures.pAmbientOcclusion = m_pSSAO->Execute(graph, pView, sceneTextures);
 
-			m_pClusteredForward->ComputeLightCulling(graph, pView, m_LightCull3DData);
+			m_pForwardRenderer->ComputeClusteredLightCulling(graph, pView, m_LightCull3DData);
 
 			RGTexture* pFog = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 			if (Tweakables::g_VolumetricFog)
@@ -652,12 +650,12 @@ void DemoApp::Update()
 
 			if (m_RenderPath == RenderPath::Tiled)
 			{
-				m_pTiledForward->ComputeLightCulling(graph, pView, sceneTextures, m_LightCull2DData);
-				m_pTiledForward->RenderBasePass(graph, pView, sceneTextures, m_LightCull2DData, pFog);
+				m_pForwardRenderer->ComputeTiledLightCulling(graph, pView, sceneTextures, m_LightCull2DData);
+				m_pForwardRenderer->RenderForwardTiled(graph, pView, sceneTextures, m_LightCull2DData, pFog);
 			}
 			else if (m_RenderPath == RenderPath::Clustered)
 			{
-				m_pClusteredForward->RenderBasePass(graph, pView, sceneTextures, m_LightCull3DData, pFog);
+				m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, m_LightCull3DData, pFog);
 			}
 			else if (m_RenderPath == RenderPath::Visibility)
 			{
@@ -703,7 +701,8 @@ void DemoApp::Update()
 								});
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 						});
-				m_pClusteredForward->RenderBasePass(graph, pView, sceneTextures, m_LightCull3DData, pFog, true);
+
+				m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, m_LightCull3DData, pFog, true);
 			}
 
 			m_pParticles->Render(graph, pView, sceneTextures);
@@ -1074,11 +1073,11 @@ void DemoApp::Update()
 			{
 				if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Visibility)
 				{
-					m_pClusteredForward->VisualizeLightDensity(graph, pView, sceneTextures, m_LightCull3DData);
+					m_pForwardRenderer->VisualizeLightDensity(graph, pView, sceneTextures, m_LightCull3DData);
 				}
 				else if (m_RenderPath == RenderPath::Tiled)
 				{
-					m_pTiledForward->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, m_LightCull2DData);
+					m_pForwardRenderer->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, m_LightCull2DData);
 				}
 			}
 
