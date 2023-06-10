@@ -779,6 +779,12 @@ void DemoApp::Update()
 
 				sceneTextures.pColorTarget = pTaaTarget;
 			}
+
+			// Probes contain irradiance data, and need to go through tonemapper.
+			if (Tweakables::g_VisualizeDDGI)
+			{
+				m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures);
+			}
 		}
 		else
 		{
@@ -1072,11 +1078,6 @@ void DemoApp::Update()
 				{
 					m_pTiledForward->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, m_LightCull2DData);
 				}
-			}
-
-			if (Tweakables::g_VisualizeDDGI)
-			{
-				m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures);
 			}
 
 			if (m_RenderPath == RenderPath::Visibility && m_VisibilityDebugRenderMode > 0)
