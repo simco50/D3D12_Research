@@ -11,7 +11,7 @@
 #include "Graphics/Profiler.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/Light.h"
-#include "Graphics/Techniques/ForwardRenderer.h"
+#include "Graphics/Techniques/LightCulling.h"
 #include "Core/ConsoleVariables.h"
 
 static constexpr int gLightClusterTexelSize = 64;
@@ -31,7 +31,6 @@ VolumetricFog::VolumetricFog(GraphicsDevice* pDevice)
 	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pCommonRS->Finalize("Light Density Visualization");
 
-	// Volumetric fog
 	m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
 	m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VolumetricFog.hlsl", "AccumulateFogCS");
 }

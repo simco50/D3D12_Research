@@ -131,6 +131,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
 	m_pClouds				= std::make_unique<Clouds>(m_pDevice);
 	m_pVolumetricFog		= std::make_unique<VolumetricFog>(m_pDevice);
+	m_pLightCulling			= std::make_unique<LightCulling>(m_pDevice);
 	m_pForwardRenderer		= std::make_unique<ForwardRenderer>(m_pDevice);
 	m_pRTReflections		= std::make_unique<RTReflections>(m_pDevice);
 	m_pRTAO					= std::make_unique<RTAO>(m_pDevice);
@@ -640,7 +641,7 @@ void DemoApp::Update()
 			else
 				sceneTextures.pAmbientOcclusion = m_pSSAO->Execute(graph, pView, sceneTextures);
 
-			m_pForwardRenderer->ComputeClusteredLightCulling(graph, pView, m_LightCull3DData);
+			m_pLightCulling->ComputeClusteredLightCulling(graph, pView, m_LightCull3DData);
 
 			RGTexture* pFog = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 			if (Tweakables::g_VolumetricFog)
@@ -650,7 +651,7 @@ void DemoApp::Update()
 
 			if (m_RenderPath == RenderPath::Tiled)
 			{
-				m_pForwardRenderer->ComputeTiledLightCulling(graph, pView, sceneTextures, m_LightCull2DData);
+				m_pLightCulling->ComputeTiledLightCulling(graph, pView, sceneTextures, m_LightCull2DData);
 				m_pForwardRenderer->RenderForwardTiled(graph, pView, sceneTextures, m_LightCull2DData, pFog);
 			}
 			else if (m_RenderPath == RenderPath::Clustered)
@@ -1073,11 +1074,11 @@ void DemoApp::Update()
 			{
 				if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Visibility)
 				{
-					m_pForwardRenderer->VisualizeLightDensity(graph, pView, sceneTextures, m_LightCull3DData);
+					m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures, m_LightCull3DData);
 				}
 				else if (m_RenderPath == RenderPath::Tiled)
 				{
-					m_pForwardRenderer->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, m_LightCull2DData);
+					m_pLightCulling->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, m_LightCull2DData);
 				}
 			}
 

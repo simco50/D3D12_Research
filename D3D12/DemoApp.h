@@ -5,7 +5,7 @@
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
 #include "Graphics/Profiler.h"
-#include "Graphics/Techniques/ForwardRenderer.h"
+#include "Graphics/Techniques/LightCulling.h"
 #include "Graphics/Techniques/VolumetricFog.h"
 
 class Mesh;
@@ -27,6 +27,7 @@ class GPUDrivenRenderer;
 class DDGI;
 class VisualizeTexture;
 class VolumetricFog;
+class ForwardRenderer;
 struct SubMesh;
 struct Material;
 
@@ -74,6 +75,7 @@ private:
 
 	std::unique_ptr<VolumetricFog> m_pVolumetricFog;
 	std::unique_ptr<ForwardRenderer> m_pForwardRenderer;
+	std::unique_ptr<LightCulling> m_pLightCulling;
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
