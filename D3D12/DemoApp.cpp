@@ -25,7 +25,7 @@
 #include "Graphics/Techniques/CBTTessellation.h"
 #include "Graphics/Techniques/Clouds.h"
 #include "Graphics/Techniques/ShaderDebugRenderer.h"
-#include "Graphics/Techniques/GPUDrivenRenderer.h"
+#include "Graphics/Techniques/MeshletRasterizer.h"
 #include "Graphics/Techniques/VisualizeTexture.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
@@ -127,7 +127,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pShaderDebugRenderer->GetGPUData(&m_SceneData.DebugRenderData);
 
 	ImGuiRenderer::Initialize(m_pDevice, window);
-	m_pGPUDrivenRenderer	= std::make_unique<GPUDrivenRenderer>(m_pDevice);
+	m_pMeshletRasterizer	= std::make_unique<MeshletRasterizer>(m_pDevice);
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
 	m_pClouds				= std::make_unique<Clouds>(m_pDevice);
 	m_pVolumetricFog		= std::make_unique<VolumetricFog>(m_pDevice);
@@ -482,7 +482,7 @@ void DemoApp::Update()
 						RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
 						context.EnableOcclusionCulling = Tweakables::g_ShadowsOcclusionCulling;
 						RasterResult result;
-						m_pGPUDrivenRenderer->Render(graph, pView, &shadowView.View, context, result);
+						m_pMeshletRasterizer->Render(graph, pView, &shadowView.View, context, result);
 					}
 					else
 					{
@@ -521,9 +521,9 @@ void DemoApp::Update()
 					RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
 					rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
 					rasterContext.EnableOcclusionCulling = Tweakables::g_OcclusionCulling;
-					m_pGPUDrivenRenderer->Render(graph,	pView, &pView->MainView, rasterContext, rasterResult);
+					m_pMeshletRasterizer->Render(graph,	pView, &pView->MainView, rasterContext, rasterResult);
 					if (Tweakables::CullDebugStats)
-						m_pGPUDrivenRenderer->PrintStats(graph, pView, rasterContext);
+						m_pMeshletRasterizer->PrintStats(graph, pView, rasterContext);
 				}
 				else
 				{

@@ -48,21 +48,22 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pForwardRS);
 		psoDesc.SetBlendMode(BlendMode::Replace, false);
-		psoDesc.SetVertexShader("Diffuse.hlsl", "VSMain", { "CLUSTERED_FORWARD" });
-		psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
+		psoDesc.SetVertexShader("ForwardShading.hlsl", "VSMain", { "CLUSTERED_FORWARD" });
+		psoDesc.SetPixelShader("ForwardShading.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
+
 		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
-		psoDesc.SetName("Diffuse (Opaque)");
+		psoDesc.SetName("Forward - Opaque");
 		m_pClusteredForwardPSO = pDevice->CreatePipeline(psoDesc);
 
 		//Opaque Masked
-		psoDesc.SetName("Diffuse Masked (Opaque)");
+		psoDesc.SetName("Forward - Opaque Masked");
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pClusteredForwardMaskedPSO = pDevice->CreatePipeline(psoDesc);
 
 		//Transparant
-		psoDesc.SetName("Diffuse (Transparant)");
+		psoDesc.SetName("Forward - Transparent");
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		m_pClusteredForwardAlphaBlendPSO = pDevice->CreatePipeline(psoDesc);
@@ -73,23 +74,24 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 		//Opaque
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pForwardRS);
-		psoDesc.SetVertexShader("Diffuse.hlsl", "VSMain", { "TILED_FORWARD" });
-		psoDesc.SetPixelShader("Diffuse.hlsl", "PSMain", { "TILED_FORWARD" });
+		psoDesc.SetVertexShader("ForwardShading.hlsl", "VSMain", { "TILED_FORWARD" });
+		psoDesc.SetPixelShader("ForwardShading.hlsl", "PSMain", { "TILED_FORWARD" });
 		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
-		psoDesc.SetName("Forward Pass - Opaque");
+
+		psoDesc.SetName("Forward - Opaque");
 		m_pTiledForwardPSO = m_pDevice->CreatePipeline(psoDesc);
 
 		//Alpha Mask
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-		psoDesc.SetName("Forward Pass - Opaque Masked");
+		psoDesc.SetName("Forward - Opaque Masked");
 		m_pTiledForwardMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
 
 		//Transparant
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-		psoDesc.SetName("Forward Pass - Transparent");
+		psoDesc.SetName("Forward - Transparent");
 		m_pTiledForwardAlphaBlendPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
@@ -106,7 +108,7 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
-		.DepthStencil(sceneTextures.pDepth, rtLoadOp, false)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.RenderTarget(sceneTextures.pColorTarget, rtLoadOp)
 		.RenderTarget(sceneTextures.pNormals, rtLoadOp)
 		.RenderTarget(sceneTextures.pRoughness, rtLoadOp)
@@ -173,7 +175,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pForwardRS);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 
 				{
 					context.BindResources(3, {

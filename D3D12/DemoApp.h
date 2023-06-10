@@ -23,7 +23,7 @@ class RGResourcePool;
 class Clouds;
 class PipelineState;
 class ShaderDebugRenderer;
-class GPUDrivenRenderer;
+class MeshletRasterizer;
 class DDGI;
 class VisualizeTexture;
 class VolumetricFog;
@@ -84,7 +84,7 @@ private:
 	std::unique_ptr<GpuParticles> m_pParticles;
 	std::unique_ptr<Clouds> m_pClouds;
 	std::unique_ptr<ShaderDebugRenderer> m_pShaderDebugRenderer;
-	std::unique_ptr<GPUDrivenRenderer> m_pGPUDrivenRenderer;
+	std::unique_ptr<MeshletRasterizer> m_pMeshletRasterizer;
 	std::unique_ptr<DDGI> m_pDDGI;
 	std::unique_ptr<VisualizeTexture> m_pVisualizeTexture;
 

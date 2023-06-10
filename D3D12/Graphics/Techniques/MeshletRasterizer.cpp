@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "GPUDrivenRenderer.h"
+#include "MeshletRasterizer.h"
 #include "Core/ConsoleVariables.h"
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/RHI/PipelineState.h"
@@ -55,7 +55,7 @@ namespace Tweakables
 	constexpr uint32 MaxNumInstances = 1 << 14u;
 }
 
-GPUDrivenRenderer::GPUDrivenRenderer(GraphicsDevice* pDevice)
+MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 {
 	if (!pDevice->GetCapabilities().SupportsMeshShading())
 		return;
@@ -183,7 +183,7 @@ RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode,
 	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter",		BufferDesc::CreateTyped(2, ResourceFormat::R32_UINT));
 }
 
-void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, const RasterContext& rasterContext, RasterResult& outResult)
+void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, const RasterContext& rasterContext, RasterResult& outResult)
 {
 	RGBuffer* pInstanceCullArgs = nullptr;
 
@@ -491,7 +491,7 @@ void GPUDrivenRenderer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
 
-void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, const RasterContext& rasterContext, RasterResult& outResult)
+void MeshletRasterizer::Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, const RasterContext& rasterContext, RasterResult& outResult)
 {
 	checkf(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB")
 
@@ -552,7 +552,7 @@ void GPUDrivenRenderer::Render(RGGraph& graph, const SceneView* pView, const Vie
 	outResult.pVisibleMeshlets = rasterContext.pVisibleMeshlets;
 }
 
-void GPUDrivenRenderer::PrintStats(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext)
+void MeshletRasterizer::PrintStats(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext)
 {
 	graph.AddPass("Print Stats", RGPassFlag::Compute)
 		.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshletsCounter })
@@ -571,7 +571,7 @@ void GPUDrivenRenderer::PrintStats(RGGraph& graph, const SceneView* pView, const
 			});
 }
 
-RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const
+RGTexture* MeshletRasterizer::InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const
 {
 	Vector2u hzbDimensions;
 	hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(viewDimensions.x) >> 1u, 1u);
@@ -581,7 +581,7 @@ RGTexture* GPUDrivenRenderer::InitHZB(RGGraph& graph, const Vector2u& viewDimens
 	return graph.Create("HZB", desc);
 }
 
-void GPUDrivenRenderer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB)
+void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB)
 {
 	RG_GRAPH_SCOPE("HZB", graph);
 

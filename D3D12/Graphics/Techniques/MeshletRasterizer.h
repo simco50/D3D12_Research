@@ -37,10 +37,10 @@ struct RasterResult
 	RGTexture* pDebugData = nullptr;
 };
 
-class GPUDrivenRenderer
+class MeshletRasterizer
 {
 public:
-	GPUDrivenRenderer(GraphicsDevice* pDevice);
+	MeshletRasterizer(GraphicsDevice* pDevice);
 	void Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, const RasterContext& context, RasterResult& outResult);
 	void PrintStats(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext);
 
