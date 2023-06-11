@@ -79,12 +79,6 @@ namespace Renderer
 		parameters.NumInstances = (uint32)pView->Batches.size();
 		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
 		parameters.LightCount = pView->NumLights;
-
-		check(pView->ShadowViews.size() <= ShaderInterop::MAX_SHADOW_CASTERS);
-		for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
-		{
-			parameters.LightMatrices[i] = pView->ShadowViews[i].View.ViewProjection;
-		}
 		parameters.CascadeDepths = pView->ShadowCascadeDepths;
 		parameters.NumCascades = pView->NumShadowCascades;
 
@@ -93,6 +87,7 @@ namespace Renderer
 		parameters.MaterialsIndex = pView->pMaterialBuffer->GetSRVIndex();
 		parameters.InstancesIndex = pView->pInstanceBuffer->GetSRVIndex();
 		parameters.LightsIndex = pView->pLightBuffer->GetSRVIndex();
+		parameters.LightMatricesIndex = pView->pLightMatricesBuffer->GetSRVIndex();
 		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
 		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
 		parameters.NumDDGIVolumes = pView->NumDDGIVolumes;
@@ -200,6 +195,10 @@ namespace Renderer
 		}
 		sceneBatches.swap(pView->Batches);
 
+		std::vector<Matrix> lightMatrices(pView->ShadowViews.size());
+		for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
+			lightMatrices[i] = pView->ShadowViews[i].View.ViewProjection;
+
 		std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
 		if (Tweakables::g_EnableDDGI)
 		{
@@ -261,6 +260,7 @@ namespace Renderer
 		CopyBufferData((uint32)meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Instances", meshInstances.data(), pView->pInstanceBuffer);
 		CopyBufferData((uint32)materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
 		CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
+		CopyBufferData((uint32)lightMatrices.size(), sizeof(Matrix), "Light Matrices", lightMatrices.data(), pView->pLightMatricesBuffer);
 	}
 
 	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes)

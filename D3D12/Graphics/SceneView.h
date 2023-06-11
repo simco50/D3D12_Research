@@ -87,6 +87,7 @@ struct SceneView
 	RefCountPtr<Buffer> pMeshBuffer;
 	RefCountPtr<Buffer> pInstanceBuffer;
 	RefCountPtr<Buffer> pDDGIVolumesBuffer;
+	RefCountPtr<Buffer> pLightMatricesBuffer;
 	RefCountPtr<Texture> pSky;
 	AccelerationStructure AccelerationStructure;
 	GPUDebugRenderData DebugRenderData;

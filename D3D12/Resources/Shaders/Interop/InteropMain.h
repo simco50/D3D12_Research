@@ -4,7 +4,6 @@
 #define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
 #define PAD uint MACRO_CONCAT(padding, __COUNTER__)
 
-static const int MAX_SHADOW_CASTERS = 32;
 static const int MESHLET_MAX_TRIANGLES = 124;
 static const int MESHLET_MAX_VERTICES = 64;
 
@@ -119,7 +118,6 @@ struct DDGIVolume
 
 struct ViewUniforms
 {
-	float4x4 LightMatrices[MAX_SHADOW_CASTERS];
 	float4 CascadeDepths;
 	uint NumCascades;
 	PAD;
@@ -159,6 +157,7 @@ struct ViewUniforms
 	uint MeshesIndex;
 	uint MaterialsIndex;
 	uint LightsIndex;
+	uint LightMatricesIndex;
 	uint SkyIndex;
 	uint DDGIVolumesIndex;
 	uint TLASIndex;

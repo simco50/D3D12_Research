@@ -57,13 +57,19 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN)
 	return mul(normal, TBN);
 }
 
+float4x4 GetLightMatrix(uint index)
+{
+	StructuredBuffer<float4x4> matrices = ResourceDescriptorHeap[cView.LightMatricesIndex];
+	return matrices[index];
+}
+
 float LightTextureMask(Light light, float3 worldPosition)
 {
 	float mask = 1.0f;
 	if(light.MaskTexture != INVALID_HANDLE)
 	{
 		uint matrixIndex = light.MatrixIndex;
-		float4 lightPos = mul(float4(worldPosition, 1), cView.LightMatrices[matrixIndex]);
+		float4 lightPos = mul(float4(worldPosition, 1), GetLightMatrix(matrixIndex));
 		lightPos.xyz /= lightPos.w;
 		lightPos.xy = (lightPos.xy + 1) / 2;
 		mask = SampleLevel2D(light.MaskTexture, sLinearClamp, lightPos.xy, 0).r;
@@ -102,7 +108,7 @@ uint GetShadowMapIndex(Light light, float3 worldPosition, float viewDepth, float
 
 float Shadow3x3PCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invShadowSize)
 {
-	float4x4 lightViewProjection = cView.LightMatrices[lightMatrix];
+	float4x4 lightViewProjection = GetLightMatrix(lightMatrix);
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
@@ -131,7 +137,7 @@ float Shadow3x3PCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invSh
 
 float ShadowNoPCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invShadowSize)
 {
-	float4x4 lightViewProjection = cView.LightMatrices[lightMatrix];
+	float4x4 lightViewProjection = GetLightMatrix(lightMatrix);
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
@@ -310,7 +316,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 #if VISUALIZE_CASCADES
 		if(light.IsDirectional)
 		{
-			float4x4 lightViewProjection = cView.LightMatrices[light.MatrixIndex];
+			float4x4 lightViewProjection = GetLightMatrix(light)MatrixIndex];
 			float4 lightPos = mul(float4(worldPosition, 1), lightViewProjection);
 			lightPos.xyz /= lightPos.w;
 			lightPos.x = lightPos.x / 2.0f + 0.5f;
