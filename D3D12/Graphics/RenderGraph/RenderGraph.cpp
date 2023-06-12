@@ -343,7 +343,8 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 		RGResource* pResource = access.pResource;
 		checkf(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
 		checkf(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
-		context.InsertResourceBarrier(pResource->pPhysicalResource, access.Access);
+		if(pResource->GetPhysical()->UseStateTracking())
+			context.InsertResourceBarrier(pResource->pPhysicalResource, access.Access);
 	}
 
 	context.FlushResourceBarriers();

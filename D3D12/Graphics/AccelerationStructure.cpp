@@ -167,7 +167,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			uint32 numInstances = Math::AlignUp(Math::Max(1u, (uint32)blasInstances.size()), 128u);
 			if (!m_pBLASInstancesSourceBuffer || m_pBLASInstancesSourceBuffer->GetNumElements() < numInstances)
 			{
-				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC)), "TLAS.BLASInstanceSourceDescs");
+				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::UnorderedAccess), "TLAS.BLASInstanceSourceDescs");
 				m_pBLASInstancesTargetBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::UnorderedAccess), "TLAS.BLASInstanceTargetDescs");
 			}
 			

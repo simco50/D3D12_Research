@@ -151,7 +151,7 @@ namespace D3D
 	inline void SetObjectName(ID3D12Object* pObject, const char* pName)
 	{
 		if (pObject)
-			VERIFY_HR_EX(pObject->SetPrivateData(WKPDID_D3DDebugObjectName, (uint32)strlen(pName), pName), nullptr);
+			VERIFY_HR_EX(pObject->SetPrivateData(WKPDID_D3DDebugObjectName, (uint32)strlen(pName) + 1, pName), nullptr);
 	}
 
 	inline std::string GetObjectName(ID3D12Object* pObject)

@@ -119,6 +119,8 @@ public:
 	int32 GetSRVIndex() const;
 	int32 GetUAVIndex() const;
 
+	bool UseStateTracking() const { return m_NeedsStateTracking; }
+
 	inline ID3D12Resource* GetResource() const { return m_pResource; }
 	inline D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
 
@@ -131,6 +133,7 @@ protected:
 	ID3D12Resource* m_pResource = nullptr;
 	void* m_pMappedData = nullptr;
 	ResourceState m_ResourceState;
+	bool m_NeedsStateTracking = false;
 	RefCountPtr<ShaderResourceView> m_pSrv;
 	RefCountPtr<UnorderedAccessView> m_pUav;
 };

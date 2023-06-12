@@ -631,6 +631,7 @@ void RenderPS(
 	float3 radiance = 0;
 	radiance += totalResult.Diffuse;
 	radiance += totalResult.Specular;
+	radiance *= color;
 
 #if RENDER_WIREFRAME
 	float3 deltas = fwidth(bary);

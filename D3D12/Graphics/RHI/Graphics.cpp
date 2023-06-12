@@ -603,10 +603,12 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 	{
 		TextureUAVDesc uavDesc(0);
 		pTexture->m_pUav = CreateUAV(pTexture, uavDesc);
+		pTexture->m_NeedsStateTracking = true;
 	}
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::RenderTarget))
 	{
 		pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		pTexture->m_NeedsStateTracking = true;
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
 		rtvDesc.Format = D3D::ConvertFormat(desc.Format);
@@ -651,6 +653,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 	{
 		pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		pTexture->m_ReadOnlyDsv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		pTexture->m_NeedsStateTracking = true;
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 		dsvDesc.Format = D3D::ConvertFormat(RHI::DSVFormat(desc.Format));
@@ -711,6 +714,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	pTexture->SetImmediateDelete(true);
 	pTexture->SetName("Backbuffer");
 	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
+	pTexture->m_NeedsStateTracking = true;
 
 	pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	GetParent()->GetDevice()->CreateRenderTargetView(pSwapchainResource, nullptr, pTexture->m_Rtv);
@@ -772,6 +776,7 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::Upload | BufferFlag::Readback))
 	{
 		VERIFY_HR(pResource->Map(0, nullptr, &pBuffer->m_pMappedData));
+		pBuffer->m_NeedsStateTracking = true;
 	}
 
 	bool isRaw = EnumHasAnyFlags(desc.Usage, BufferFlag::ByteAddress);
@@ -785,6 +790,7 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::UnorderedAccess))
 	{
 		pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, isRaw, withCounter));
+		pBuffer->m_NeedsStateTracking = true;
 	}
 
 	return pBuffer;

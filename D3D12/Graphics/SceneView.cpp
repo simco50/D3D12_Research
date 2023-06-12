@@ -309,8 +309,6 @@ namespace GraphicsCommon
 			data.pData = pData;
 			data.RowPitch = RHI::GetRowPitch(desc.Format, desc.Width);
 			data.SlicePitch = RHI::GetSlicePitch(desc.Format, desc.Width, desc.Height);
-			context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
-			context.FlushResourceBarriers();
 			context.WriteTexture(pTexture, data, 0);
 			DefaultTextures[(int)type] = pTexture;
 		};
@@ -415,7 +413,6 @@ namespace GraphicsCommon
 			pImg = pImg->GetNextImage();
 		}
 		RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName ? pName : "");
-		context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_COPY_DEST);
 		context.WriteTexture(pTexture, subResourceData, 0);
 		return pTexture;
 	}
