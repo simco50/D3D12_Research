@@ -902,7 +902,7 @@ void DemoApp::Update()
 
 			if (Tweakables::g_DrawHistogram.Get())
 			{
-				RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM), &m_pDebugHistogramTexture, true);
+				RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_pDebugHistogramTexture, true);
 				graph.AddPass("Draw Histogram", RGPassFlag::Compute)
 					.Read({ pLuminanceHistogram, pAverageLuminance })
 					.Write(pHistogramDebugTexture)
@@ -1324,7 +1324,7 @@ void DemoApp::UpdateImGui()
 			}
 			if (ImGui::MenuItem("Luminance Histogram", 0, &Tweakables::g_DrawHistogram.Get()))
 			{
-				Tweakables::g_VisualizeShadowCascades.Set(!Tweakables::g_DrawHistogram.GetBool());
+				Tweakables::g_DrawHistogram.Set(!Tweakables::g_DrawHistogram.GetBool());
 			}
 
 			ImGui::EndMenu();

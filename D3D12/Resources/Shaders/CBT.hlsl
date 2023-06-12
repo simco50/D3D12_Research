@@ -610,28 +610,20 @@ void RenderPS(
 #endif
 
 	float3 worldPos = vertex.PositionWS;
+	float linearDepth = mul(float4(worldPos, 1), cView.View).z;
+
 	float3 V = normalize(cView.ViewLocation - worldPos);
 
 	float3 specularColor = 0.5;
 	float roughness = 0.9f;
-	float3 diffuseColor = 0.7f;
+	float3 diffuseColor = 0.3f;
 
 	LightResult totalResult = (LightResult)0;
 	for(uint i = 0; i < cView.LightCount; ++i)
 	{
 		Light light = GetLight(i);
-
-		float3 L = normalize(light.Position - worldPos);
-		if(light.IsDirectional)
-		{
-			L = -light.Direction;
-		}
-		LightResult result = DefaultLitBxDF(specularColor, roughness, diffuseColor, normal, V, L, 1);
-
-		float3 color = light.GetColor();
-		result.Diffuse *= color * light.Intensity;
-		result.Specular *= color * light.Intensity;
-
+		light.CastShadows = false;
+		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, normal, V, worldPos, linearDepth, 0);
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
@@ -651,7 +643,7 @@ void RenderPS(
 
 	output.Color = float4(radiance, 1);
 	output.Normal = EncodeNormalOctahedron(normal);
-	output.Roughness = 0.0f;
+	output.Roughness = roughness;
 }
 
 /* DEBUG VISUALIZATION TECHNIQUE */

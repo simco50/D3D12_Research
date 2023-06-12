@@ -295,12 +295,15 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 
 	if (CBTSettings::DebugVisualize)
 	{
-		ImGui::Begin("CBT");
-		ImVec2 size = ImGui::GetAutoSize(ImVec2((float)data.pDebugVisualizeTexture->GetWidth(), (float)data.pDebugVisualizeTexture->GetHeight()));
-		ImGui::Image(data.pDebugVisualizeTexture, size);
-		ImGui::End();
+		if (data.pDebugVisualizeTexture)
+		{
+			ImGui::Begin("CBT");
+			ImVec2 size = ImGui::GetAutoSize(ImVec2((float)data.pDebugVisualizeTexture->GetWidth(), (float)data.pDebugVisualizeTexture->GetHeight()));
+			ImGui::Image(data.pDebugVisualizeTexture, size);
+			ImGui::End();
+		}
 
-		RGTexture* pVisualizeTarget = graph.Import(data.pDebugVisualizeTexture);
+		RGTexture* pVisualizeTarget = graph.Create("CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM));
 		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
 			.Read({ pCBTBuffer, pIndirectArgs })
 			.RenderTarget(pVisualizeTarget, RenderTargetLoadAction::Load)
@@ -316,6 +319,7 @@ void CBTTessellation::Execute(RGGraph& graph, CBTData& data, const SceneView* pV
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
 			});
+		graph.Export(pVisualizeTarget, &m_CBTData.pDebugVisualizeTexture, TextureFlag::ShaderResource);
 	}
 }
 
@@ -405,7 +409,6 @@ void CBTTessellation::CreateResources(GraphicsDevice* pDevice)
 	m_CBTData.pHeightmap = GraphicsCommon::CreateTextureFromFile(*pContext, "Resources/Terrain.dds", false, "Terrain Heightmap");
 	pContext->Execute();
 
-	m_CBTData.pDebugVisualizeTexture = pDevice->CreateTexture(TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM), "CBT Visualize Texture");
 	m_CBTData.pCBTIndirectArgs = pDevice->CreateBuffer(BufferDesc::CreateIndirectArguments<uint32>(10, BufferFlag::UnorderedAccess), "CBT Indirect Args");
 }
 
