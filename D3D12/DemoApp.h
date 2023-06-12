@@ -5,7 +5,6 @@
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
 #include "Graphics/Profiler.h"
-#include "Graphics/Techniques/LightCulling.h"
 #include "Graphics/Techniques/VolumetricFog.h"
 
 class Mesh;
@@ -28,6 +27,7 @@ class DDGI;
 class VisualizeTexture;
 class VolumetricFog;
 class ForwardRenderer;
+class LightCulling;
 struct SubMesh;
 struct Material;
 
@@ -88,8 +88,6 @@ private:
 	std::unique_ptr<DDGI> m_pDDGI;
 	std::unique_ptr<VisualizeTexture> m_pVisualizeTexture;
 
-	LightCull2DData m_LightCull2DData;
-	LightCull3DData m_LightCull3DData;
 	VolumetricFogData m_FogData;
 
 	WindowHandle m_Window = nullptr;

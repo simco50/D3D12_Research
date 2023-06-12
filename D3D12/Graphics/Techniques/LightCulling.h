@@ -15,7 +15,6 @@ struct LightCull3DData
 
 	Vector2 LightGridParams;
 
-	RefCountPtr<Buffer> pDebugLightGrid;
 	Matrix DebugClustersViewMatrix;
 	bool DirtyDebugData = true;
 };

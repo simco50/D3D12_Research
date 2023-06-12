@@ -27,6 +27,7 @@
 #include "Graphics/Techniques/ShaderDebugRenderer.h"
 #include "Graphics/Techniques/MeshletRasterizer.h"
 #include "Graphics/Techniques/VisualizeTexture.h"
+#include "Graphics/Techniques/LightCulling.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
@@ -428,6 +429,9 @@ void DemoApp::Update()
 		sceneTextures.pVelocity =		graph.Create("Velocity",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 		sceneTextures.pPreviousColor =	graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
+		LightCull2DData lightCull2DData;
+		LightCull3DData lightCull3DData;
+
 		RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
 		if (Tweakables::g_Sky)
 		{
@@ -641,29 +645,29 @@ void DemoApp::Update()
 			else
 				sceneTextures.pAmbientOcclusion = m_pSSAO->Execute(graph, pView, sceneTextures);
 
-			m_pLightCulling->ComputeClusteredLightCulling(graph, pView, m_LightCull3DData);
+			m_pLightCulling->ComputeClusteredLightCulling(graph, pView, lightCull3DData);
 
 			RGTexture* pFog = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 			if (Tweakables::g_VolumetricFog)
 			{
-				pFog = m_pVolumetricFog->RenderFog(graph, pView, m_LightCull3DData, m_FogData);
+				pFog = m_pVolumetricFog->RenderFog(graph, pView, lightCull3DData, m_FogData);
 			}
 
 			if (m_RenderPath == RenderPath::Tiled)
 			{
-				m_pLightCulling->ComputeTiledLightCulling(graph, pView, sceneTextures, m_LightCull2DData);
-				m_pForwardRenderer->RenderForwardTiled(graph, pView, sceneTextures, m_LightCull2DData, pFog);
+				m_pLightCulling->ComputeTiledLightCulling(graph, pView, sceneTextures, lightCull2DData);
+				m_pForwardRenderer->RenderForwardTiled(graph, pView, sceneTextures, lightCull2DData, pFog);
 			}
 			else if (m_RenderPath == RenderPath::Clustered)
 			{
-				m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, m_LightCull3DData, pFog);
+				m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog);
 			}
 			else if (m_RenderPath == RenderPath::Visibility)
 			{
 				graph.AddPass("Visibility Shading", RGPassFlag::Compute)
 					.Read({ pFog, rasterResult.pVisibleMeshlets})
 					.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
-					.Read({ m_LightCull3DData.pLightGrid, m_LightCull3DData.pLightIndexGrid })
+					.Read({ lightCull3DData.pLightGrid, lightCull3DData.pLightIndexGrid })
 					.Write({ sceneTextures.pNormals, sceneTextures.pColorTarget, sceneTextures.pRoughness })
 					.Bind([=](CommandContext& context)
 						{
@@ -678,9 +682,9 @@ void DemoApp::Update()
 								Vector2u ClusterSize;
 								Vector2 LightGridParams;
 							} parameters;
-							parameters.ClusterDimensions = Vector4u(m_LightCull3DData.ClusterCount.x, m_LightCull3DData.ClusterCount.y, m_LightCull3DData.ClusterCount.z, 0);
-							parameters.ClusterSize = m_LightCull3DData.ClusterSize;
-							parameters.LightGridParams = m_LightCull3DData.LightGridParams;
+							parameters.ClusterDimensions = Vector4u(lightCull3DData.ClusterCount.x, lightCull3DData.ClusterCount.y, lightCull3DData.ClusterCount.z, 0);
+							parameters.ClusterSize = lightCull3DData.ClusterSize;
+							parameters.LightGridParams = lightCull3DData.LightGridParams;
 
 							context.BindRootCBV(0, parameters);
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
@@ -696,14 +700,14 @@ void DemoApp::Update()
 								sceneTextures.pPreviousColor->Get()->GetSRV(),
 								pFog->Get()->GetSRV(),
 								rasterResult.pVisibleMeshlets->Get()->GetSRV(),
-								m_LightCull3DData.pLightGrid->Get()->GetSRV(),
-								m_LightCull3DData.pLightIndexGrid->Get()->GetSRV(),
+								lightCull3DData.pLightGrid->Get()->GetSRV(),
+								lightCull3DData.pLightIndexGrid->Get()->GetSRV(),
 
 								});
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 						});
 
-				m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, m_LightCull3DData, pFog, true);
+				m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, true);
 			}
 
 			m_pParticles->Render(graph, pView, sceneTextures);
@@ -1073,13 +1077,9 @@ void DemoApp::Update()
 			if (Tweakables::g_VisualizeLightDensity)
 			{
 				if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Visibility)
-				{
-					m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures, m_LightCull3DData);
-				}
+					m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures, lightCull3DData);
 				else if (m_RenderPath == RenderPath::Tiled)
-				{
-					m_pLightCulling->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, m_LightCull2DData);
-				}
+					m_pLightCulling->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, lightCull2DData);
 			}
 
 			if (m_RenderPath == RenderPath::Visibility && m_VisibilityDebugRenderMode > 0)
