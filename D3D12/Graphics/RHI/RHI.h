@@ -113,8 +113,6 @@ struct FormatInfo
 namespace RHI
 {
 	const FormatInfo& GetFormatInfo(ResourceFormat format);
-	ResourceFormat SRVFormatFromDepth(ResourceFormat format);
-	ResourceFormat DSVFormat(ResourceFormat format);
 
 	uint64 GetRowPitch(ResourceFormat format, uint32 width, uint32 mipIndex = 0);
 	uint64 GetSlicePitch(ResourceFormat format, uint32 width, uint32 height, uint32 mipIndex = 0);

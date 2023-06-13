@@ -140,26 +140,4 @@ namespace RHI
 		}
 		return size;
 	}
-
-	ResourceFormat SRVFormatFromDepth(ResourceFormat format)
-	{
-		switch (format)
-		{
-		case ResourceFormat::D32S8:			return ResourceFormat::R32_FLOAT;
-		case ResourceFormat::D32_FLOAT:		return ResourceFormat::R32_FLOAT;
-		case ResourceFormat::D24S8:			return ResourceFormat::D24S8;
-		case ResourceFormat::D16_UNORM:		return ResourceFormat::R16_UNORM;
-		}
-		return format;
-	}
-
-	ResourceFormat DSVFormat(ResourceFormat format)
-	{
-		switch (format)
-		{
-		case ResourceFormat::R32_FLOAT:		return ResourceFormat::D32_FLOAT;
-		case ResourceFormat::R16_UNORM:		return ResourceFormat::D16_UNORM;
-		}
-		return format;
-	}
 }

@@ -750,6 +750,11 @@ void CommandContext::SetScissorRect(const FloatRect& rect)
 	m_pCommandList->RSSetScissorRects(1, &r);
 }
 
+void CommandContext::SetStencilRef(uint32 stencilRef)
+{
+	m_pCommandList->OMSetStencilRef(stencilRef);
+}
+
 void CommandContext::AddBarrier(const D3D12_RESOURCE_BARRIER& barrier)
 {
 	m_BatchedBarriers[m_NumBatchedBarriers++] = barrier;

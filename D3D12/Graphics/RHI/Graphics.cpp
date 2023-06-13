@@ -656,7 +656,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 		pTexture->m_NeedsStateTracking = true;
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-		dsvDesc.Format = D3D::ConvertFormat(RHI::DSVFormat(desc.Format));
+		dsvDesc.Format = D3D::ConvertFormat(desc.Format);
 		switch (desc.Type)
 		{
 		case TextureType::Texture1D:
@@ -931,7 +931,20 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 		return format;
 	};
 
-	srvDesc.Format = AdjustFormatSRGB(D3D::ConvertFormat(RHI::SRVFormatFromDepth(textureDesc.Format)), EnumHasAllFlags(textureDesc.Usage, TextureFlag::sRGB));
+	
+	auto SRVFormatFromDepth = [](ResourceFormat format)
+	{
+		switch (format)
+		{
+		case ResourceFormat::D32S8:			return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+		case ResourceFormat::D32_FLOAT:		return DXGI_FORMAT_R32_FLOAT;
+		case ResourceFormat::D24S8:			return DXGI_FORMAT_R24G8_TYPELESS;
+		case ResourceFormat::D16_UNORM:		return DXGI_FORMAT_R16_UNORM;
+		default: return D3D::ConvertFormat(format);
+		}
+	};
+
+	srvDesc.Format = AdjustFormatSRGB(SRVFormatFromDepth(textureDesc.Format), EnumHasAllFlags(textureDesc.Usage, TextureFlag::sRGB));
 
 	switch (textureDesc.Type)
 	{
