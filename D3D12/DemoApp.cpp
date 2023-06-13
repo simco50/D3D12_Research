@@ -166,7 +166,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetNearPlane(80.0f);
 	m_pCamera->SetFarPlane(0.1f);
-	m_pCamera->SetPosition(Vector3(-1.3f, 2.4f, -1.5f));
+	m_pCamera->SetPosition(Vector3(-1.3f, 12.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
 	LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context, m_World);
@@ -551,6 +551,9 @@ void DemoApp::Update()
 								}
 							});
 				}
+
+				if (Tweakables::g_RenderTerrain.GetBool())
+					m_pCBTTessellation->Execute(graph, pView, sceneTextures);
 			}
 
 			if (Tweakables::g_SDSM)
@@ -664,17 +667,22 @@ void DemoApp::Update()
 			}
 			else if (m_RenderPath == RenderPath::Visibility)
 			{
-				graph.AddPass("Visibility Shading", RGPassFlag::Compute)
+				graph.AddPass("Visibility Shading", RGPassFlag::Raster)
 					.Read({ pFog, rasterResult.pVisibleMeshlets})
 					.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 					.Read({ lightCull3DData.pLightGrid, lightCull3DData.pLightIndexGrid })
-					.Write({ sceneTextures.pNormals, sceneTextures.pColorTarget, sceneTextures.pRoughness })
+					.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::NoAccess, false, RenderTargetLoadAction::Load)
+					.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
+					.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
+					.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
 					.Bind([=](CommandContext& context)
 						{
 							Texture* pColorTarget = sceneTextures.pColorTarget->Get();
 
-							context.SetComputeRootSignature(m_pCommonRS);
+							context.SetGraphicsRootSignature(m_pCommonRS);
 							context.SetPipelineState(m_pVisibilityShadingPSO);
+							context.SetStencilRef(0x1);
+							context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 							struct
 							{
@@ -688,11 +696,6 @@ void DemoApp::Update()
 
 							context.BindRootCBV(0, parameters);
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
-							context.BindResources(2, {
-								pColorTarget->GetUAV(),
-								sceneTextures.pNormals->Get()->GetUAV(),
-								sceneTextures.pRoughness->Get()->GetUAV(),
-								});
 							context.BindResources(3, {
 								rasterResult.pVisibilityBuffer->Get()->GetSRV(),
 								sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
@@ -704,7 +707,7 @@ void DemoApp::Update()
 								lightCull3DData.pLightIndexGrid->Get()->GetSRV(),
 
 								});
-							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
+							context.Draw(0, 3);
 						});
 
 				m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, true);
@@ -713,9 +716,7 @@ void DemoApp::Update()
 			m_pParticles->Render(graph, pView, sceneTextures);
 
 			if (Tweakables::g_RenderTerrain.GetBool())
-			{
-				m_pCBTTessellation->Execute(graph, pView, sceneTextures);
-			}
+				m_pCBTTessellation->Shade(graph, pView, sceneTextures);
 
 			graph.AddPass("Render Sky", RGPassFlag::Raster)
 				.Read(pSky)
@@ -1247,7 +1248,25 @@ void DemoApp::InitializePipelines()
 	m_pBloomUpsamplePSO					= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
 
 	//Visibility Shading
-	m_pVisibilityShadingPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "CSMain");
+	{
+		constexpr ResourceFormat formats[] = {
+			ResourceFormat::RGBA16_FLOAT,
+			ResourceFormat::RG16_FLOAT,
+			ResourceFormat::R8_UNORM,
+		};
+
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
+		psoDesc.SetPixelShader("VisibilityShading.hlsl", "ShadePS");
+		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_ZERO, D3D12_STENCIL_OP_KEEP, 0x2, 0x0);
+		psoDesc.SetDepthWrite(false);
+		psoDesc.SetDepthEnabled(false);
+		psoDesc.SetName("Visibility Shading");
+		m_pVisibilityShadingPSO = m_pDevice->CreatePipeline(psoDesc);
+	}
 	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
 }
 

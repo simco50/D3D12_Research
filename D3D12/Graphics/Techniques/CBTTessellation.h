@@ -9,6 +9,8 @@ struct SceneTextures;
 struct CBTData
 {
 	uint32 SplitMode = 0;
+	RGBuffer* pCBT = nullptr;
+
 	RefCountPtr<Texture> pHeightmap;
 	RefCountPtr<Buffer> pCBTBuffer;
 	RefCountPtr<Buffer> pCBTIndirectArgs;
@@ -20,12 +22,8 @@ class CBTTessellation
 public:
 	CBTTessellation(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
-	{
-		Execute(graph, m_CBTData, pView, sceneTextures);
-	}
-
-	void Execute(RGGraph& graph, CBTData& data, const SceneView* pView, SceneTextures& sceneTextures);
+	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
+	void Shade(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 	static void CBTDemo();
 
 private:
@@ -43,5 +41,6 @@ private:
 	RefCountPtr<PipelineState> m_pCBTUpdatePSO;
 	RefCountPtr<PipelineState> m_pCBTDebugVisualizePSO;
 	RefCountPtr<PipelineState> m_pCBTRenderPSO;
+	RefCountPtr<PipelineState> m_pCBTShadePSO;
 	RefCountPtr<PipelineState> m_pCBTRenderMeshShaderPSO;
 };

@@ -71,7 +71,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	defines.Set("MAX_NUM_MESHLETS", Tweakables::MaxNumMeshlets);
 	defines.Set("MAX_NUM_INSTANCES", Tweakables::MaxNumInstances);
 	
-	m_pBuildCullArgsPSO =			pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
+	m_pBuildCullArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
 
 	// Raster PSOs for visibility buffer
 	{
@@ -81,6 +81,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)SurfaceTypeStencil::Mask);
 		psoDesc.SetName("Meshlet Rasterize (Visibility Buffer)");
 
 		// Permutation without alpha masking
@@ -446,10 +447,11 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	RGPass& drawPass = graph.AddPass("Rasterize", RGPassFlag::Raster)
 		.Read({ rasterContext.pVisibleMeshlets, pMeshletOffsetAndCounts, pBinnedMeshlets })
 		.Write(outResult.pDebugData)
-		.DepthStencil(rasterContext.pDepth, depthLoadAction, true)
+		.DepthStencil(rasterContext.pDepth, depthLoadAction, true, depthLoadAction)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
+				context.SetStencilRef((uint32)SurfaceTypeStencil::VisibilityBuffer);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
 				if (outResult.pDebugData)
