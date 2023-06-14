@@ -371,3 +371,10 @@ namespace LEB
 		return mul(transformMatrix, attributes);
 	}
 }
+
+CBT InitializeCBT(RWByteAddressBuffer buffer, uint numElements)
+{
+	CBT cbt;
+	cbt.Init(buffer, numElements);
+	return cbt;
+}

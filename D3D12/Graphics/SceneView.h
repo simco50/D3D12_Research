@@ -13,14 +13,16 @@ class Image;
 struct SubMesh;
 struct Light;
 
-enum class SurfaceTypeStencil
+enum class StencilBit : uint8
 {
 	None				= 0,
+
 	VisibilityBuffer	= 1 << 0,
 	Terrain				= 1 << 1,
-	Mask				= VisibilityBuffer | Terrain,
+
+	SurfaceTypeMask		= VisibilityBuffer | Terrain,
 };
-DECLARE_BITMASK_TYPE(SurfaceTypeStencil);
+DECLARE_BITMASK_TYPE(StencilBit);
 
 struct World
 {

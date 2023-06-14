@@ -79,7 +79,7 @@ namespace Tweakables
 	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflections", false);
 	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 1.0f * Math::DegreesToRadians);
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
-	ConsoleVariable g_RenderTerrain("r.Terrain", false);
+	ConsoleVariable g_RenderTerrain("r.Terrain", true);
 	ConsoleVariable g_OcclusionCulling("r.OcclusionCulling", true);
 
 	// Misc
@@ -1261,7 +1261,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetPixelShader("VisibilityShading.hlsl", "ShadePS");
 		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
-		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_ZERO, D3D12_STENCIL_OP_KEEP, 0x2, 0x0);
+		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetName("Visibility Shading");

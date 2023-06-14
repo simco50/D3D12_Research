@@ -81,7 +81,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, GraphicsCommon::DepthStencilFormat, 1);
-		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)SurfaceTypeStencil::Mask);
+		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
 		psoDesc.SetName("Meshlet Rasterize (Visibility Buffer)");
 
 		// Permutation without alpha masking
@@ -451,7 +451,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
-				context.SetStencilRef((uint32)SurfaceTypeStencil::VisibilityBuffer);
+				context.SetStencilRef((uint32)StencilBit::VisibilityBuffer);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
 				if (outResult.pDebugData)

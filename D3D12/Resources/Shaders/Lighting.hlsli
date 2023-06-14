@@ -329,7 +329,7 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 				float modulate = cos((float)cView.FrameIndex / 30) * 0.5f + 0.5f;
 				strength = saturate(strength + modulate * 0.2f);
 			}
-			static float3 COLORS[] = {
+			static const float3 COLORS[] = {
 				float3(1,0,0),
 				float3(0,1,0),
 				float3(0,0,1),
