@@ -126,7 +126,10 @@ namespace ShaderCompiler
 		for (std::string& include : result.Includes)
 		{
 			if (!TestFileTime(include.c_str()))
+			{
+				result.Includes.clear();
 				return false;
+			}
 		}
 
 		uint32 size = 0;
