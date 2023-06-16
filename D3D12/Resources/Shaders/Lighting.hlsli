@@ -316,27 +316,29 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 #if VISUALIZE_CASCADES
 		if(light.IsDirectional)
 		{
-			float4x4 lightViewProjection = GetLightMatrix(light)MatrixIndex];
+			float4x4 lightViewProjection = GetLightMatrix(light.MatrixIndex + shadowIndex);
 			float4 lightPos = mul(float4(worldPosition, 1), lightViewProjection);
 			lightPos.xyz /= lightPos.w;
 			lightPos.x = lightPos.x / 2.0f + 0.5f;
 			lightPos.y = lightPos.y / -2.0f + 0.5f;
 			float2 uv = lightPos.xy;
-			float strength = 0.1f;
+
+			static const float3 COLORS[] = {
+					float3(1,0,0),
+					float3(0,1,0),
+					float3(0,0,1),
+					float3(0,1,1),
+				};
+			float3 color = COLORS[shadowIndex];
 
 			if(any(uv < 0) || any(uv) > 1)
 			{
 				float modulate = cos((float)cView.FrameIndex / 30) * 0.5f + 0.5f;
-				strength = saturate(strength + modulate * 0.2f);
+				color = float3(1, 0, 1);
+				color *= 3.0f * saturate(0.2f + modulate * 0.2f);
 			}
-			static float3 COLORS[] = {
-				float3(1,0,0),
-				float3(0,1,0),
-				float3(0,0,1),
-				float3(1,0,1),
-			};
-
-			result.Diffuse += strength * COLORS[shadowIndex];
+			result.Specular = 0;
+			result.Diffuse = 0.1f * color;
 			return result;
 		}
 #endif

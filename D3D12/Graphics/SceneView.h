@@ -13,6 +13,17 @@ class Image;
 struct SubMesh;
 struct Light;
 
+enum class StencilBit : uint8
+{
+	None				= 0,
+
+	VisibilityBuffer	= 1 << 0,
+	Terrain				= 1 << 1,
+
+	SurfaceTypeMask		= VisibilityBuffer | Terrain,
+};
+DECLARE_BITMASK_TYPE(StencilBit);
+
 struct World
 {
 	std::vector<Light> Lights;
@@ -156,7 +167,7 @@ namespace GraphicsCommon
 	Texture* GetDefaultTexture(DefaultTexture type);
 
 	constexpr static ResourceFormat ShadowFormat = ResourceFormat::D16_UNORM;
-	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D32_FLOAT;
+	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D32S8;
 
 	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDrawIndexedSignature;
