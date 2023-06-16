@@ -58,4 +58,8 @@
 		</Expand>
 	</Type>
 
+	<Type Name="PipelineStateInitializer::StreamSubObject&lt;*&gt;">
+		<DisplayString>{InnerObject}</DisplayString>
+	</Type>
+
 </AutoVisualizer>
