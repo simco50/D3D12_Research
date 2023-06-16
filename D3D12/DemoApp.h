@@ -147,7 +147,8 @@ private:
 	RefCountPtr<PipelineState> m_pBloomUpsamplePSO;
 
 	// Visibility buffer
-	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
+	RefCountPtr<PipelineState> m_pVisibilityShadingGraphicsPSO;
+	RefCountPtr<PipelineState> m_pVisibilityShadingComputePSO;
 	RefCountPtr<PipelineState> m_pVisibilityDebugRenderPSO;
 	uint32 m_VisibilityDebugRenderMode = 0;
 };

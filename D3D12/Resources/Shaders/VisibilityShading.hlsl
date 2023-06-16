@@ -22,10 +22,6 @@ StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t5);
 StructuredBuffer<uint> tLightGrid : register(t6);
 StructuredBuffer<uint> tLightIndexList : register(t7);
 
-RWTexture2D<float4> uColorTarget : register(u0);
-RWTexture2D<float2> uNormalsTarget : register(u1);
-RWTexture2D<float> uRoughnessTarget : register(u2);
-
 MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttribute attributes)
 {
 	MaterialProperties properties;
@@ -107,17 +103,15 @@ struct PSOut
 	float Roughness : SV_Target2;
 };
 
-void ShadePS(
-	float4 position : SV_Position,
-	float2 uv : TEXCOORD,
-	out PSOut output)
+void VisibilityShadingCommon(uint2 texel, out PSOut output)
 {
-	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, uv, 0);
-	float dither = InterleavedGradientNoise(position.xy);
-
 	uint candidateIndex, primitiveID;
-	if(!UnpackVisBuffer(tVisibilityTexture[(int2)position.xy], candidateIndex, primitiveID))
+	if(!UnpackVisBuffer(tVisibilityTexture[texel], candidateIndex, primitiveID))
 		return;
+
+	float2 uv = (0.5f + texel) * cView.ViewportDimensionsInv;
+	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, uv, 0);
+	float dither = InterleavedGradientNoise(texel);
 
 	MeshletCandidate candidate = tVisibleMeshlets[candidateIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
@@ -135,7 +129,7 @@ void ShadePS(
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(vertex.Position, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
 
-	LightResult result = DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, vertex.Position, position.xy, linearDepth, dither);
+	LightResult result = DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, vertex.Position, texel, linearDepth, dither);
 
 	float3 outRadiance = 0;
 	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(vertex.Position, surface.Normal, -V);
@@ -152,4 +146,29 @@ void ShadePS(
 	output.Color = float4(outRadiance, surface.Opacity);
 	output.Normal = EncodeNormalOctahedron(surface.Normal);
 	output.Roughness = reflectivity;
+}
+
+void ShadePS(
+	float4 position : SV_Position,
+	float2 uv : TEXCOORD,
+	out PSOut output)
+{
+	VisibilityShadingCommon((uint2)position.xy, output);
+}
+
+RWTexture2D<float4> uColorTarget : register(u0);
+RWTexture2D<float2> uNormalsTarget : register(u1);
+RWTexture2D<float> uRoughnessTarget : register(u2);
+
+[numthreads(8, 8, 1)]
+void ShadeCS(uint3 threadId : SV_DispatchThreadID)
+{
+	uint2 texel = threadId.xy;
+
+	PSOut output;
+	VisibilityShadingCommon(texel, output);
+
+	uColorTarget[texel] = output.Color;
+	uNormalsTarget[texel] = output.Normal;
+	uRoughnessTarget[texel] = output.Roughness;
 }
