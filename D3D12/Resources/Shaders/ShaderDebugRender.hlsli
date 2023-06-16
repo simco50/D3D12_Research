@@ -1,3 +1,4 @@
+#pragma once
 #include "Common.hlsli"
 #include "Packing.hlsli"
 
