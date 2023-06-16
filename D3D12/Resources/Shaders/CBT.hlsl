@@ -4,6 +4,7 @@
 #include "Lighting.hlsli"
 #include "D3D12.hlsli"
 #include "Noise.hlsli"
+#include "RayTracing/DDGICommon.hlsli"
 
 #define MESH_SHADER_THREAD_GROUP_SIZE 32
 #define COMPUTE_THREAD_GROUP_SIZE 256
@@ -66,7 +67,9 @@ void GetTerrain(float2 worldPosition, out float height, out float3 normal)
 {
 	// Some random noise with a flat round in the middle
 	float dist = saturate((length(worldPosition) - 14) / 16);
-	float3 terrain = cCommonParams.HeightScale * FBM_WithDerivatives(worldPosition + 100, 0.01f, 1.0f, 16);
+	float3 terrain = FBM_WithDerivatives(worldPosition + 100, 0.01f, 1.0f, 16);
+	terrain.x = terrain.x * 0.5f + 0.5f;
+	terrain *= cCommonParams.HeightScale;
 	height = lerp(0, terrain.x, dist) - 1;
 	normal = lerp(float3(0, 1, 0), normalize(float3(-terrain.y, 1.0f, -terrain.z)), dist);
 }
@@ -514,7 +517,8 @@ void ShadePS(
 	out PSOut output)
 {
 	float depth = tDepth.SampleLevel(sPointClamp, uv, 0);
-	float3 worldPos = WorldFromDepth(uv, depth, cView.ViewProjectionInverse);
+	float3 viewPos = ViewFromDepth(uv, depth, cView.ProjectionInverse);
+	float3 worldPos = mul(float4(viewPos, 1), cView.ViewInverse).xyz;
 
 	float height;
 	float3 N;
@@ -526,21 +530,23 @@ void ShadePS(
 	float roughness = 0.7f;
 	float3 diffuseColor = 0.1f;
 
+	float dither = InterleavedGradientNoise(position.xy);
+
 	LightResult totalResult = (LightResult)0;
 	for(uint i = 0; i < cView.LightCount; ++i)
 	{
 		Light light = GetLight(i);
-		light.CastShadows = false;
-		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, N, V, worldPos, depth, 0);
+		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, N, V, worldPos, viewPos.z, dither);
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
 
-	float3 radiance = 0;
-	radiance += totalResult.Diffuse;
-	radiance += totalResult.Specular;
+	float3 outRadiance = 0;
+	outRadiance += totalResult.Diffuse;
+	outRadiance += totalResult.Specular;
+	outRadiance += Diffuse_Lambert(diffuseColor) * SampleDDGIIrradiance(worldPos, N, -V);
 
-	output.Color = float4(radiance, 1);
+	output.Color = float4(outRadiance, 1);
 	output.Normal = EncodeNormalOctahedron(N);
 	output.Roughness = roughness;
 }
