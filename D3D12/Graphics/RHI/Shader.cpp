@@ -338,17 +338,10 @@ namespace ShaderCompiler
 		result.IsDebug = compileJob.EnableDebugMode;
 
 		arguments.AddArgument(DXC_ARG_DEBUG);
+		arguments.AddArgument("-Qembed_debug");
+
 		if (compileJob.EnableDebugMode)
-		{
 			arguments.AddArgument(DXC_ARG_SKIP_OPTIMIZATIONS);
-			arguments.AddArgument("-Qembed_debug");
-		}
-		else
-		{
-			arguments.AddArgument(DXC_ARG_OPTIMIZATION_LEVEL3);
-			arguments.AddArgument("-Qstrip_debug");
-			arguments.AddArgument("-Fd", Sprintf("%s.pdb", Paths::GetFileNameWithoutExtension(cachePath)).c_str());
-		}
 
 		arguments.AddArgument("-I", Paths::GetDirectoryPath(fullPath).c_str());
 		for (const std::string& includeDir : compileJob.IncludeDirs)
@@ -480,7 +473,7 @@ namespace ShaderCompiler
 		}
 
 		//Symbols
-		if (!compileJob.EnableDebugMode)
+#if 0
 		{
 			RefCountPtr<IDxcBlobUtf16> pDebugDataPath;
 			RefCountPtr<IDxcBlob> pSymbolsBlob;
@@ -495,6 +488,7 @@ namespace ShaderCompiler
 				fclose(pFile);
 			}
 		}
+#endif
 
 		//Reflection
 		{
