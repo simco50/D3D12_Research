@@ -67,7 +67,7 @@ void GetTerrain(float2 worldPosition, out float height, out float3 normal)
 {
 	// Some random noise with a flat round in the middle
 	float dist = saturate((length(worldPosition) - 14) / 16);
-	float3 terrain = FBM_WithDerivatives(worldPosition + 100, 0.01f, 1.0f, 16);
+	float3 terrain = FBM_WithDerivatives(worldPosition + 100, 0.02f, 1.0f, 16);
 	terrain.x = terrain.x * 0.5f + 0.5f;
 	terrain *= cCommonParams.HeightScale;
 	height = lerp(0, terrain.x, dist) - 1;
@@ -526,9 +526,16 @@ void ShadePS(
 
 	float3 V = normalize(cView.ViewLocation - worldPos);
 
-	float3 specularColor = 0.0f;
-	float roughness = 0.7f;
-	float3 diffuseColor = 0.1f;
+
+	MaterialProperties surface;
+	surface.BaseColor = 0.03f;
+	surface.Normal = N;
+	surface.Metalness = 0;
+	surface.Emissive = 0;
+	surface.Roughness = 0.8f;
+	surface.Specular = 0.5f;
+	surface.Opacity = 1.0f;
+	BrdfData brdfData = GetBrdfData(surface);
 
 	float dither = InterleavedGradientNoise(position.xy);
 
@@ -536,7 +543,7 @@ void ShadePS(
 	for(uint i = 0; i < cView.LightCount; ++i)
 	{
 		Light light = GetLight(i);
-		LightResult result = DoLight(light, specularColor, diffuseColor, roughness, N, V, worldPos, viewPos.z, dither);
+		LightResult result = DoLight(light, brdfData.Specular, brdfData.Diffuse, brdfData.Roughness, surface.Normal, V, worldPos, viewPos.z, dither);
 		totalResult.Diffuse += result.Diffuse;
 		totalResult.Specular += result.Specular;
 	}
@@ -544,11 +551,11 @@ void ShadePS(
 	float3 outRadiance = 0;
 	outRadiance += totalResult.Diffuse;
 	outRadiance += totalResult.Specular;
-	outRadiance += Diffuse_Lambert(diffuseColor) * SampleDDGIIrradiance(worldPos, N, -V);
+	outRadiance += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(worldPos, N, -V);
 
 	output.Color = float4(outRadiance, 1);
-	output.Normal = EncodeNormalOctahedron(N);
-	output.Roughness = roughness;
+	output.Normal = EncodeNormalOctahedron(surface.Normal);
+	output.Roughness = brdfData.Roughness;
 }
 
 /* DEBUG VISUALIZATION TECHNIQUE */
