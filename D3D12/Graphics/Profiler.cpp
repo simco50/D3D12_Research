@@ -189,14 +189,14 @@ void Profiler::DrawImGui()
 		ImGui::TableSetupColumn("GPU", ImGuiTableColumnFlags_None, 4);
 		ImGui::TableHeadersRow();
 
-		DrawImGui(m_pRootBlock.get());
+		DrawImGui(m_pRootBlock.get(), 0);
 
 		ImGui::EndTable();
 	}
 	ImGui::Separator();
 }
 
-void Profiler::DrawImGui(const ProfileNode* pNode)
+void Profiler::DrawImGui(const ProfileNode* pNode, int depth)
 {
 	if (m_FrameIndex - pNode->LastHitFrame < 60)
 	{
@@ -210,7 +210,7 @@ void Profiler::DrawImGui(const ProfileNode* pNode)
 		bool expand = false;
 		if (pNode->Children.size() > 0)
 		{
-			expand = ImGui::TreeNodeEx(pNode->pName, pNode->Children.size() > 2 ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None);
+			expand = ImGui::TreeNodeEx(pNode->pName, depth < 3 ? ImGuiTreeNodeFlags_DefaultOpen : ImGuiTreeNodeFlags_None);
 		}
 		else
 		{
@@ -270,7 +270,7 @@ void Profiler::DrawImGui(const ProfileNode* pNode)
 		{
 			for (auto& pChild : pNode->Children)
 			{
-				DrawImGui(pChild.get());
+				DrawImGui(pChild.get(), depth + 1);
 			}
 			ImGui::TreePop();
 		}

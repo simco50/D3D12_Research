@@ -133,7 +133,7 @@ public:
 
 private:
 	Profiler() = default;
-	void DrawImGui(const ProfileNode* pNode);
+	void DrawImGui(const ProfileNode* pNode, int depth);
 
 	uint32 m_FrameIndex = 0;
 	uint64 m_CpuTimestampFrequency = 0;

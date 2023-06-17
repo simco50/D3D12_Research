@@ -20,7 +20,7 @@ class CBTTessellation
 public:
 	CBTTessellation(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures);
+	void RasterMain(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures);
 	void Shade(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures);
 	static void CBTDemo();
 

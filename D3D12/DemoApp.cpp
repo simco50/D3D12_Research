@@ -481,9 +481,9 @@ void DemoApp::Update()
 
 					RGTexture* pShadowmap = graph.Import(pView->ShadowViews[i].pDepthTexture);
 
+					RG_GRAPH_SCOPE(passName.c_str(), graph);
 					if (Tweakables::g_ShadowsGPUCull)
 					{
-						RG_GRAPH_SCOPE(passName.c_str(), graph);
 
 						RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
 						context.EnableOcclusionCulling = Tweakables::g_ShadowsOcclusionCulling;
@@ -492,7 +492,7 @@ void DemoApp::Update()
 					}
 					else
 					{
-						graph.AddPass(passName.c_str(), RGPassFlag::Raster)
+						graph.AddPass("Raster", RGPassFlag::Raster)
 							.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
 							.Bind([=](CommandContext& context)
 								{
@@ -555,7 +555,7 @@ void DemoApp::Update()
 				}
 
 				if (Tweakables::g_RenderTerrain.GetBool())
-					m_pCBTTessellation->Execute(graph, pView, sceneTextures);
+					m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
 			}
 
 			if (Tweakables::g_SDSM)

@@ -142,7 +142,7 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 	}
 }
 
-void CBTTessellation::Execute(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures)
+void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures)
 {
 	if (ImGui::Begin("Parameters"))
 	{
