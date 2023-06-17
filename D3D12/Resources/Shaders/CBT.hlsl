@@ -3,11 +3,16 @@
 #include "CBT.hlsli"
 #include "Lighting.hlsli"
 #include "D3D12.hlsli"
+#include "HZB.hlsli"
 #include "Noise.hlsli"
 #include "RayTracing/DDGICommon.hlsli"
 
 #define MESH_SHADER_THREAD_GROUP_SIZE 32
 #define COMPUTE_THREAD_GROUP_SIZE 256
+
+#ifndef UPDATE_SUBDIVISION
+#define UPDATE_SUBDIVISION 1
+#endif
 
 #ifndef DEBUG_ALWAYS_SUBDIVIDE
 #define DEBUG_ALWAYS_SUBDIVIDE 0
@@ -234,31 +239,13 @@ bool HeightmapFlatness(float3x3 tri)
 	return abs(height) >= cUpdateParams.HeightmapVarianceBias;
 }
 
-bool BoxPlaneIntersect(AABB aabb, float4 plane)
-{
-	float4 dist = dot(float4(aabb.Center.xyz, 1), plane);
-	float radius = dot(aabb.Extents.xyz, abs(plane.xyz));
-	return dot(dist <= radius, 1);
-}
-
-bool BoxFrustumIntersect(AABB aabb, float4 planes[6])
-{
-	for (int i = 0; i < 6; ++i)
-	{
-		if(!BoxPlaneIntersect(aabb, planes[i]))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
 bool TriangleFrustumIntersect(float3x3 tri)
 {
 	float3 bmin = Min(tri[0], tri[1], tri[2]);
 	float3 bmax = Max(tri[0], tri[1], tri[2]);
 	AABB aabb = AABBFromMinMax(bmin, bmax);
-	return BoxFrustumIntersect(aabb, cView.FrustumPlanes);
+	FrustumCullData cullData = FrustumCull(aabb.Center.xyz, aabb.Extents.xyz, IDENTITY_MATRIX_4, cView.ViewProjection);
+	return cullData.IsVisible;
 }
 
 float2 TriangleLOD(float3x3 tri)
@@ -398,6 +385,7 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 		float3x3 tri = GetVertices(heapIndex);
 		float2 lod = GetLOD(tri);
 
+#if UPDATE_SUBDIVISION
 		if(cUpdateParams.SplitMode == 1u)
 		{
 			if(lod.x >= 1.0f)
@@ -418,6 +406,7 @@ void UpdateAS(uint threadID : SV_DispatchThreadID)
 				}
 			}
 		}
+#endif
 
 		isVisible = lod.y > 0.0f;
 	}

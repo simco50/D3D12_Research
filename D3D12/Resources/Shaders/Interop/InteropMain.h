@@ -136,7 +136,6 @@ struct ViewUniforms
 	PAD;
 	float3 ViewLocationPrev;
 	PAD;
-	float4 FrustumPlanes[6];
 	float2 TargetDimensions;
 	float2 TargetDimensionsInv;
 	float2 ViewportDimensions;

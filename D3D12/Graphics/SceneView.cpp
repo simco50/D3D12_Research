@@ -53,15 +53,6 @@ namespace Renderer
 		parameters.ViewLocation = pViewTransform->Position;
 		parameters.ViewLocationPrev = pViewTransform->PositionPrev;
 
-		DirectX::XMVECTOR nearPlane, farPlane, left, right, top, bottom;
-		pViewTransform->PerspectiveFrustum.GetPlanes(&nearPlane, &farPlane, &right, &left, &top, &bottom);
-		parameters.FrustumPlanes[0] = Vector4(nearPlane);
-		parameters.FrustumPlanes[1] = Vector4(farPlane);
-		parameters.FrustumPlanes[2] = Vector4(left);
-		parameters.FrustumPlanes[3] = Vector4(right);
-		parameters.FrustumPlanes[4] = Vector4(top);
-		parameters.FrustumPlanes[5] = Vector4(bottom);
-
 		parameters.ViewportDimensions = Vector2(pViewTransform->Viewport.GetWidth(), pViewTransform->Viewport.GetHeight());
 		parameters.ViewportDimensionsInv = Vector2(1.0f / pViewTransform->Viewport.GetWidth(), 1.0f / pViewTransform->Viewport.GetHeight());
 		parameters.ViewJitter = pViewTransform->Jitter;
