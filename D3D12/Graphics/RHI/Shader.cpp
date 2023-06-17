@@ -19,6 +19,14 @@ namespace ShaderCompiler
 	static RefCountPtr<IDxcCompiler3> pCompiler3;
 	static RefCountPtr<IDxcValidator> pValidator;
 	static RefCountPtr<IDxcIncludeHandler> pDefaultIncludeHandler;
+	static std::mutex IncludeCacheMutex;
+
+	struct CachedFile
+	{
+		RefCountPtr<IDxcBlobEncoding> pBlob;
+		uint64 Timestamp;
+	};
+	static std::unordered_map<StringHash, CachedFile> IncludeCache;
 	std::mutex m_CacheMutex;
 
 	struct CompileJob
@@ -210,6 +218,27 @@ namespace ShaderCompiler
 
 	static HRESULT TryLoadFile(const char* pFileName, RefCountPtr<IDxcBlobEncoding>* pOutFile)
 	{
+		HRESULT hr = E_FAIL;
+		if (!Paths::FileExists(pFileName))
+			return hr;
+
+		uint64 temp, fileTime;
+		Paths::GetFileTime(pFileName, temp, temp, fileTime);
+
+		{
+			std::lock_guard cacheLock(IncludeCacheMutex);
+			auto it = IncludeCache.find(pFileName);
+			if (it != IncludeCache.end())
+			{
+				CachedFile& file = it->second;
+				if (fileTime <= file.Timestamp)
+				{
+					*pOutFile = file.pBlob;
+					return S_OK;
+				}
+			}
+		}
+
 		std::ifstream str(pFileName, std::ios::ate);
 		if (str.is_open())
 		{
@@ -217,9 +246,17 @@ namespace ShaderCompiler
 			str.seekg(0);
 			str.read(charBuffer.data(), charBuffer.size());
 			std::string buffer = CustomPreprocess(charBuffer.data());
-			return pUtils->CreateBlob(buffer.data(), (int)buffer.size(), 0, pOutFile->GetAddressOf());
+			CachedFile file;
+			file.Timestamp = fileTime;
+			hr = pUtils->CreateBlob(buffer.data(), (int)buffer.size(), 0, file.pBlob.GetAddressOf());
+			if (SUCCEEDED(hr))
+			{
+				std::lock_guard cacheLock(IncludeCacheMutex);
+				*pOutFile = file.pBlob;
+				IncludeCache[pFileName] = file;
+			}
 		}
-		return E_FAIL;
+		return hr;
 	}
 
 	static CompileResult Compile(const CompileJob& compileJob)
@@ -434,10 +471,13 @@ namespace ShaderCompiler
 		if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr)))
 		{
 			if (pErrors && pErrors->GetStringLength())
-			{
 				result.ErrorMessage = (char*)pErrors->GetStringPointer();
-				return result;
-			}
+		}
+
+		HRESULT hrStatus;
+		if (FAILED(pCompileResult->GetStatus(&hrStatus)) || FAILED(hrStatus))
+		{
+			return result;
 		}
 
 		//Shader object
