@@ -209,7 +209,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		}
 
 		// Load unique textures;
-		std::map<const cgltf_image*, Texture*> textureMap;
+		std::unordered_map<const cgltf_image*, Texture*> textureMap;
 
 		auto MaterialIndex = [&](const cgltf_material* pMat) -> int
 		{
@@ -323,7 +323,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 				material.Name = gltfMaterial.name;
 		}
 
-		std::map<const cgltf_mesh*, std::vector<int>> meshToPrimitives;
+		std::unordered_map<const cgltf_mesh*, std::vector<int>> meshToPrimitives;
 		int primitiveIndex = 0;
 
 		for (size_t meshIdx = 0; meshIdx < pGltfData->meshes_count; ++meshIdx)

@@ -27,7 +27,7 @@ namespace ShaderCompiler
 		uint64 Timestamp;
 	};
 	static std::unordered_map<StringHash, CachedFile> IncludeCache;
-	std::mutex m_CacheMutex;
+	std::mutex ShaderCacheMutex;
 
 	struct CompileJob
 	{
@@ -97,7 +97,7 @@ namespace ShaderCompiler
 
 	static bool TryLoadFromCache(const char* pCachePath, const CompileJob& compileJob, CompileResult& result)
 	{
-		std::lock_guard lock(m_CacheMutex);
+		std::lock_guard lock(ShaderCacheMutex);
 
 		// See if the cache file exists
 		if (!Paths::FileExists(pCachePath))
@@ -151,7 +151,7 @@ namespace ShaderCompiler
 
 	static bool SaveToCache(const char* pCachePath, const CompileJob& compileJob, CompileResult& result)
 	{
-		std::lock_guard lock(m_CacheMutex);
+		std::lock_guard lock(ShaderCacheMutex);
 
 		Paths::CreateDirectoryTree(pCachePath);
 

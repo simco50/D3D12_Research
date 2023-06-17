@@ -120,7 +120,7 @@ GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 			{
 				E_LOG(Warning, "[DRED] Last tracked GPU operations:");
 
-				std::map<int32, const wchar_t*> contextStrings;
+				std::unordered_map<int32, const wchar_t*> contextStrings;
 
 				const D3D12_AUTO_BREADCRUMB_NODE1* pNode = pDredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
 				while (pNode && pNode->pLastBreadcrumbValue)
