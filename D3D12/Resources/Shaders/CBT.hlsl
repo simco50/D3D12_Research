@@ -47,7 +47,7 @@ struct IndirectArgsParams
 {
 	uint NumCBTElements;
 };
-ConstantBuffer<CommonParams> cIndirectArgsParams : register(b0);
+ConstantBuffer<IndirectArgsParams> cIndirectArgsParams : register(b0);
 
 // Based on https://www.shadertoy.com/view/MdsSRs
 float3 FBM_WithDerivatives(float2 x, float scale, float H, uint numOctaves)
