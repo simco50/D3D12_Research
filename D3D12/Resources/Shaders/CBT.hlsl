@@ -106,6 +106,17 @@ void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 	// Draw args
 	{
 		D3D12_DRAW_ARGUMENTS args;
+		args.VertexCountPerInstance = 3 << GEOMETRY_SUBD_LEVEL;
+		args.InstanceCount = cbt.NumNodes();
+		args.StartVertexLocation = 0;
+		args.StartInstanceLocation = 0;
+		uDispatchArgs.Store(offset, args);
+		offset += sizeof(D3D12_DRAW_ARGUMENTS);
+	}
+
+	// Debug draw args
+	{
+		D3D12_DRAW_ARGUMENTS args;
 		args.VertexCountPerInstance = 3;
 		args.InstanceCount = cbt.NumNodes();
 		args.StartVertexLocation = 0;
@@ -354,15 +365,15 @@ struct VertexOut
 
 // Must be a multiple of 2 to avoid cracks
 // MS max number of triangles is 256. To solve this, execute more mesh shader groups from AS
-#ifndef MESH_SHADER_SUBD_LEVEL
-#define MESH_SHADER_SUBD_LEVEL 6
+#ifndef GEOMETRY_SUBD_LEVEL
+#define GEOMETRY_SUBD_LEVEL 6
 #endif
 
 #ifndef AMPLIFICATION_SHADER_SUBD_LEVEL
 #define AMPLIFICATION_SHADER_SUBD_LEVEL 0
 #endif
 
-#define NUM_MESH_SHADER_TRIANGLES (1u << MESH_SHADER_SUBD_LEVEL)
+#define NUM_MESH_SHADER_TRIANGLES (1u << GEOMETRY_SUBD_LEVEL)
 
 struct ASPayload
 {
@@ -433,7 +444,7 @@ void RenderMS(
 	SetMeshOutputCounts(NUM_MESH_SHADER_TRIANGLES * 3, NUM_MESH_SHADER_TRIANGLES * 1);
 	uint outputIndex = groupThreadID;
 	uint heapIndex = payload.IDs[groupID / (1u << AMPLIFICATION_SHADER_SUBD_LEVEL)];
-	uint subdHeapIndex = (((heapIndex << MESH_SHADER_SUBD_LEVEL) | outputIndex) << AMPLIFICATION_SHADER_SUBD_LEVEL) | groupID % (1u << AMPLIFICATION_SHADER_SUBD_LEVEL);
+	uint subdHeapIndex = (((heapIndex << GEOMETRY_SUBD_LEVEL) | outputIndex) << AMPLIFICATION_SHADER_SUBD_LEVEL) | groupID % (1u << AMPLIFICATION_SHADER_SUBD_LEVEL);
 	float3x3 tri = GetVertices(subdHeapIndex);
 
 	for(uint i = 0; i < 3; ++i)
@@ -448,50 +459,15 @@ void RenderMS(
 }
 
 /* VERTEX SHADING TECHNIQUE */
-
-#define GEOMETRY_SHADER_SUB_D (1u << GEOMETRY_SHADER_SUBD_LEVEL)
-
-#if GEOMETRY_SHADER_SUBD_LEVEL > 0
-uint RenderVS(uint instanceID : SV_InstanceID) : INSTANCE_ID
-{
-	return instanceID;
-}
-[maxvertexcount(GEOMETRY_SHADER_SUB_D * 3)]
-void RenderGS(point uint instanceID[1] : INSTANCE_ID, inout TriangleStream<VertexOut> triStream)
-{
-	CBT cbt = InitializeCBT(uCBT, cCommonParams.NumCBTElements);
-	uint heapIndex = cbt.LeafToHeapIndex(instanceID[0]);
-
-	for(uint d = 0; d < GEOMETRY_SHADER_SUB_D; ++d)
-	{
-		float3x3 tri = GetVertices(heapIndex * GEOMETRY_SHADER_SUB_D + d);
-
-		float2 lod = GetLOD(tri);
-		if(lod.y > 0)
-		{
-			uint i = 0;
-			for(i = 0; i < 3; ++i)
-			{
-				VertexOut v;
-				v.Position = mul(float4(tri[i], 1), cView.ViewProjection);
-				triStream.Append(v);
-			}
-			triStream.RestartStrip();
-		}
-	}
-}
-#else
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
 {
 	CBT cbt = InitializeCBT(uCBT, cCommonParams.NumCBTElements);
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
-	float3 tri = GetVertices(heapIndex)[vertexID];
+	float3 tri = GetVertices((heapIndex << GEOMETRY_SUBD_LEVEL) + (vertexID / 3))[vertexID % 3];
 
 	vertex.Position = mul(float4(tri, 1), cView.ViewProjection);
 }
-#endif
-
 
 struct PSOut
 {

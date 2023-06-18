@@ -13,10 +13,6 @@
 #include "CBT.h"
 #include "imgui_internal.h"
 
-constexpr uint32 IndirectDispatchArgsOffset = 0;
-constexpr uint32 IndirectDispatchMeshArgsOffset = IndirectDispatchArgsOffset + sizeof(D3D12_DISPATCH_ARGUMENTS);
-constexpr uint32 IndirectDrawArgsOffset = IndirectDispatchMeshArgsOffset + sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
-
 namespace CBTSettings
 {
 	static int CBTDepth = 25;
@@ -34,8 +30,7 @@ namespace CBTSettings
 	static bool DisplacementLOD = true;
 	static bool DistanceLOD = true;
 	static bool AlwaysSubdivide = false;
-	static int MeshShaderSubD = 2;
-	static int GeometryShaderSubD = 2;
+	static int SubD = 2;
 }
 
 CBTTessellation::CBTTessellation(GraphicsDevice* pDevice)
@@ -56,9 +51,8 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 	defines.Set("DISPLACEMENT_LOD", CBTSettings::DisplacementLOD);
 	defines.Set("DISTANCE_LOD", CBTSettings::DistanceLOD);
 	defines.Set("DEBUG_ALWAYS_SUBDIVIDE", CBTSettings::AlwaysSubdivide);
-	defines.Set("MESH_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::MeshShaderSubD * 2, 6));
-	defines.Set("GEOMETRY_SHADER_SUBD_LEVEL", Math::Min(CBTSettings::GeometryShaderSubD * 2, 4));
-	defines.Set("AMPLIFICATION_SHADER_SUBD_LEVEL", Math::Max(CBTSettings::MeshShaderSubD * 2 - 6, 0));
+	defines.Set("GEOMETRY_SUBD_LEVEL", Math::Min(CBTSettings::SubD * 2, 6));
+	defines.Set("AMPLIFICATION_SHADER_SUBD_LEVEL", Math::Max(CBTSettings::SubD * 2 - 6, 0));
 
 	m_pCBTRS = new RootSignature(pDevice);
 	m_pCBTRS->AddRootConstants(0, 6);
@@ -85,15 +79,6 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS);
 		psoDesc.SetVertexShader("CBT.hlsl", "RenderVS", *defines);
-		if (CBTSettings::GeometryShaderSubD > 0)
-		{
-			psoDesc.SetGeometryShader("CBT.hlsl", "RenderGS", *defines);
-			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
-		}
-		else
-		{
-			psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
-		}
 		psoDesc.SetRenderTargetFormats({}, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Raster CBT");
@@ -105,7 +90,7 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCBTRS);
 		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
-		psoDesc.SetPixelShader("CBT.hlsl", "ShadePS");
+		psoDesc.SetPixelShader("CBT.hlsl", "ShadePS", *defines);
 		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::Terrain, 0x0);
@@ -142,6 +127,14 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 	}
 }
 
+struct IndirectDrawArgs
+{
+	D3D12_DISPATCH_ARGUMENTS UpdateDispatchArgs;
+	D3D12_DISPATCH_MESH_ARGUMENTS DispatchMeshArgs;
+	D3D12_DRAW_ARGUMENTS DrawArgs;
+	D3D12_DRAW_ARGUMENTS DebugDrawArgs;
+};
+
 void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures)
 {
 	if (ImGui::Begin("Parameters"))
@@ -154,9 +147,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 			if (ImGui::SliderInt("CBT Depth", &CBTSettings::CBTDepth, 10, 28))
 				m_CBTData.pCBTBuffer = nullptr;
 
-			int& subd = CBTSettings::MeshShader ? CBTSettings::MeshShaderSubD : CBTSettings::GeometryShaderSubD;
-			int maxSubD = CBTSettings::MeshShader ? 3 : 2;
-			invalidatePSOs |= ImGui::SliderInt("Triangle SubD", &subd, 0, maxSubD);
+			invalidatePSOs |= ImGui::SliderInt("Triangle SubD", &CBTSettings::SubD, 0, 3);
 			ImGui::SliderFloat("Screen Size Bias", &CBTSettings::ScreenSizeBias, 0, 15);
 			ImGui::SliderFloat("Heightmap Variance Bias", &CBTSettings::HeightmapVarianceBias, 0, 1.0f);
 			ImGui::Checkbox("Debug Visualize", &CBTSettings::DebugVisualize);
@@ -209,7 +200,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 	commonArgs.PlaneScale = CBTSettings::PlaneScale;
 	commonArgs.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
 
-	RGBuffer* pIndirectArgs = RGUtils::CreatePersistent(graph, "CBT.IndirectArgs", BufferDesc::CreateIndirectArguments<uint32>(10, BufferFlag::UnorderedAccess), &m_CBTData.pCBTIndirectArgs, true);
+	RGBuffer* pIndirectArgs = RGUtils::CreatePersistent(graph, "CBT.IndirectArgs", BufferDesc::CreateIndirectArguments<IndirectDrawArgs>(1, BufferFlag::UnorderedAccess), &m_CBTData.pCBTIndirectArgs, true);
 
 	if (!CBTSettings::MeshShader)
 	{
@@ -238,7 +229,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 					});
 
 				context.SetPipelineState(m_pCBTUpdatePSO);
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDispatchArgsOffset);
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, UpdateDispatchArgs));
 				context.InsertUAVBarrier(pCBTBuffer->Get());
 			});
 	}
@@ -333,6 +324,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				context.SetGraphicsRootSignature(m_pCBTRS);
 				context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
 				context.SetStencilRef((uint32)StencilBit::Terrain);
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 				struct
 				{
@@ -352,15 +344,9 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 					});
 
 				if (CBTSettings::MeshShader)
-				{
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDispatchMeshArgsOffset);
-				}
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, DispatchMeshArgs));
 				else
-				{
-					context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
-				}
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, DrawArgs));
 			});
 
 	if (CBTSettings::DebugVisualize)
@@ -396,7 +382,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 					pCBTBuffer->Get()->GetUAV(),
 					});
 
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, DebugDrawArgs));
 			});
 	}
 
