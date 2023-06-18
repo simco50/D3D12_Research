@@ -76,7 +76,6 @@ public:
 	//Shaders
 	void SetVertexShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	void SetPixelShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	void SetGeometryShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	void SetComputeShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	void SetMeshShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
@@ -107,7 +106,6 @@ private:
 		StreamSubObject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS, D3D12_SHADER_BYTECODE> VS;
 		StreamSubObject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, D3D12_SHADER_BYTECODE> PS;
 		StreamSubObject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS, D3D12_SHADER_BYTECODE> CS;
-		StreamSubObject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS, D3D12_SHADER_BYTECODE> GS;
 		StreamSubObject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS, D3D12_SHADER_BYTECODE> AS;
 		StreamSubObject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, D3D12_SHADER_BYTECODE> MS;
 		StreamSubObject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS, D3D12_RT_FORMAT_ARRAY> RTFormats;

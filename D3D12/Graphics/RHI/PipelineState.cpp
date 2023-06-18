@@ -232,12 +232,6 @@ void PipelineStateInitializer::SetPixelShader(const char* pShaderPath, const cha
 	m_ShaderDescs[(int)ShaderType::Pixel] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetGeometryShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
-{
-	m_Type = PipelineStateType::Graphics;
-	m_ShaderDescs[(int)ShaderType::Geometry] = { pShaderPath, entryPoint, defines.Copy() };
-}
-
 void PipelineStateInitializer::SetComputeShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
 	m_Type = PipelineStateType::Compute;
@@ -263,7 +257,6 @@ bool PipelineStateInitializer::GetDesc(GraphicsDevice* pDevice, D3D12_PIPELINE_S
 		{
 		case ShaderType::Vertex:		return m_Stream.VS;
 		case ShaderType::Pixel:			return m_Stream.PS;
-		case ShaderType::Geometry:		return m_Stream.GS;
 		case ShaderType::Mesh:			return m_Stream.MS;
 		case ShaderType::Amplification:	return m_Stream.AS;
 		case ShaderType::Compute:		return m_Stream.CS;

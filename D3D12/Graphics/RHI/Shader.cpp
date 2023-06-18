@@ -61,7 +61,6 @@ namespace ShaderCompiler
 		{
 		case ShaderType::Vertex:		return "vs";
 		case ShaderType::Pixel:			return "ps";
-		case ShaderType::Geometry:		return "gs";
 		case ShaderType::Compute:		return "cs";
 		case ShaderType::Mesh:			return "ms";
 		case ShaderType::Amplification: return "as";

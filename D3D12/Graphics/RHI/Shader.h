@@ -8,7 +8,6 @@ enum class ShaderType
 {
 	Vertex,
 	Pixel,
-	Geometry,
 	Mesh,
 	Amplification,
 	Compute,
