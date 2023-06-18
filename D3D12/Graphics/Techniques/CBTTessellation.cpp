@@ -243,70 +243,9 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 			});
 	}
 
-	graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
-		.Read({ pCBTBuffer })
-		.Write({ pIndirectArgs })
-		.Bind([=](CommandContext& context)
-			{
-				struct
-				{
-					uint32 NumCBTElements;
-				} params;
-				params.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
-
-				context.SetComputeRootSignature(m_pCBTRS);
-				context.BindRootCBV(0, params);
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
-				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
-					pIndirectArgs->Get()->GetUAV(),
-					});
-
-				context.SetPipelineState(m_pCBTIndirectArgsPSO);
-				context.Dispatch(1);
-			});
-
-	graph.AddPass("CBT Render", RGPassFlag::Raster)
-		.Write(pCBTBuffer)
-		.Read(pIndirectArgs)
-		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true, RenderTargetLoadAction::Load)
-		.Bind([=](CommandContext& context)
-			{
-				context.SetGraphicsRootSignature(m_pCBTRS);
-				context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
-				context.SetStencilRef((uint32)StencilBit::Terrain);
-
-				struct
-				{
-					float ScreenSizeBias;
-					float HeightmapVarianceBias;
-					uint32 SplitMode;
-				} updateParams;
-				updateParams.ScreenSizeBias = CBTSettings::ScreenSizeBias;
-				updateParams.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
-				updateParams.SplitMode = m_CBTData.SplitMode;
-
-				context.BindRootCBV(0, updateParams);
-				context.BindRootCBV(1, commonArgs);
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
-				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
-					});
-
-				if (CBTSettings::MeshShader)
-				{
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDispatchMeshArgsOffset);
-				}
-				else
-				{
-					context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
-				}
-			});
-
 	// Because the bits in the bitfield are counted directly, we need a snapshot of the bitfield before subdivision starts
 	// Cache the bitfield in the second to last layer as it is unused memory now.
+	// Also required by sum reduction pass
 	graph.AddPass("CBT Cache Bitfield", RGPassFlag::Compute)
 		.Write(pCBTBuffer)
 		.Bind([=](CommandContext& context)
@@ -362,6 +301,68 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				}
 			});
 
+	graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
+		.Write({ pCBTBuffer, pIndirectArgs })
+		.Bind([=](CommandContext& context)
+			{
+				struct
+				{
+					uint32 NumCBTElements;
+				} params;
+				params.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
+
+				context.SetComputeRootSignature(m_pCBTRS);
+				context.BindRootCBV(0, params);
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
+				context.BindResources(3, {
+					pCBTBuffer->Get()->GetUAV(),
+					pIndirectArgs->Get()->GetUAV(),
+					});
+
+				context.SetPipelineState(m_pCBTIndirectArgsPSO);
+				context.Dispatch(1);
+			});
+
+	// Amplification + Mesh shader variant performs subdivision used for the next frame while rendering with the subdivision state of the previous frame.
+	graph.AddPass("CBT Render", RGPassFlag::Raster)
+		.Write(pCBTBuffer)
+		.Read(pIndirectArgs)
+		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true, RenderTargetLoadAction::Load)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetGraphicsRootSignature(m_pCBTRS);
+				context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
+				context.SetStencilRef((uint32)StencilBit::Terrain);
+
+				struct
+				{
+					float ScreenSizeBias;
+					float HeightmapVarianceBias;
+					uint32 SplitMode;
+				} updateParams;
+				updateParams.ScreenSizeBias = CBTSettings::ScreenSizeBias;
+				updateParams.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
+				updateParams.SplitMode = m_CBTData.SplitMode;
+
+				context.BindRootCBV(0, updateParams);
+				context.BindRootCBV(1, commonArgs);
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindResources(3, {
+					pCBTBuffer->Get()->GetUAV(),
+					});
+
+				if (CBTSettings::MeshShader)
+				{
+					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDispatchMeshArgsOffset);
+				}
+				else
+				{
+					context.SetPrimitiveTopology(CBTSettings::GeometryShaderSubD > 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
+				}
+			});
+
 	if (CBTSettings::DebugVisualize)
 	{
 		if (m_CBTData.pDebugVisualizeTexture)
@@ -372,10 +373,11 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 			ImGui::End();
 		}
 
-		RGTexture* pVisualizeTarget = graph.Create("CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM));
+		RGTexture* pVisualizeTarget = RGUtils::CreatePersistent(graph, "CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_CBTData.pDebugVisualizeTexture, true);
 		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
-			.Read({ pCBTBuffer, pIndirectArgs })
-			.RenderTarget(pVisualizeTarget, RenderTargetLoadAction::Load)
+			.Read(pIndirectArgs)
+			.Write(pCBTBuffer)
+			.RenderTarget(pVisualizeTarget, RenderTargetLoadAction::DontCare)
 			.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCBTRS);
@@ -396,7 +398,6 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, IndirectDrawArgsOffset);
 			});
-		graph.Export(pVisualizeTarget, &m_CBTData.pDebugVisualizeTexture, TextureFlag::ShaderResource);
 	}
 
 	m_CBTData.SplitMode = 1 - m_CBTData.SplitMode;
