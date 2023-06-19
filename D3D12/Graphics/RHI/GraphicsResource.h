@@ -62,15 +62,11 @@ public:
 	}
 	D3D12_RESOURCE_STATES Get(uint32 subResource) const
 	{
+		check(m_AllSameState || subResource < (uint32)m_ResourceStates.size());
 		if (m_AllSameState)
-		{
 			return m_CommonState;
-		}
-		else
-		{
-			assert(subResource < (uint32)m_ResourceStates.size());
-			return m_ResourceStates[subResource];
-		}
+
+		return m_ResourceStates[subResource];
 	}
 
 	static bool HasWriteResourceState(D3D12_RESOURCE_STATES state)

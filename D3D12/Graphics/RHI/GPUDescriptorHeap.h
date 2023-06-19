@@ -9,7 +9,7 @@ enum class CommandListContext;
 
 struct DescriptorHeapPage
 {
-	DescriptorHeapPage(DescriptorHandle startHandle, uint32 size)
+	DescriptorHeapPage(const DescriptorHandle& startHandle, uint32 size)
 		: StartHandle(startHandle), Size(size), CurrentOffset(0)
 	{}
 	DescriptorHandle StartHandle;

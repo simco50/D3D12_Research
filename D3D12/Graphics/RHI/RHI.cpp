@@ -126,7 +126,7 @@ namespace RHI
 		return 0;
 	}
 
-	uint64 RHI:: GetTextureMipByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth, uint32 mipIndex)
+	uint64 RHI::GetTextureMipByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth, uint32 mipIndex)
 	{
 		return GetSlicePitch(format, width, height, mipIndex) * Math::Max(1u, depth >> mipIndex);
 	}

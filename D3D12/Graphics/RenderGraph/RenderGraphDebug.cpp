@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
-#include <sstream>
 #include "imgui_internal.h"
 #include "Graphics/ImGuiRenderer.h"
 
@@ -202,7 +201,31 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 void RGGraph::DumpDebugGraph(const char* pPath) const
 {
-	std::stringstream stream;
+	struct StringStream
+	{
+		StringStream& operator<<(const char* pText)
+		{
+			if(String.size() + strlen(pText) > String.capacity())
+				String.reserve(String.capacity() * 2);
+
+			String += pText;
+			return *this;
+		}
+
+		StringStream& operator<<(const std::string& text)
+		{
+			return operator<<(text.c_str());
+		}
+
+		StringStream& operator<<(int v)
+		{
+			return operator<<(Sprintf("%d", v));
+		}
+
+		std::string String;
+	};
+
+	StringStream stream;
 
 	constexpr const char* pMermaidTemplate = R"(
 			<!DOCTYPE html>
@@ -353,7 +376,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		++passIndex;
 	}
 
-	std::string output = Sprintf(pMermaidTemplate, stream.str().c_str());
+	std::string output = Sprintf(pMermaidTemplate, stream.String.c_str());
 	Paths::CreateDirectoryTree(pPath);
 	FILE* pFile = nullptr;
 	fopen_s(&pFile, pPath, "w");

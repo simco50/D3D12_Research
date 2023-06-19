@@ -1474,10 +1474,15 @@ void DemoApp::UpdateImGui()
 		if (ImGui::Begin("Shadow Cascades"))
 		{
 			const Light& sunLight = m_World.Lights[0];
+			float cascadeImageSize = ImGui::GetAutoSize(ImVec2((float)sunLight.ShadowMapSize * Tweakables::g_ShadowCascades, (float)sunLight.ShadowMapSize)).x / Tweakables::g_ShadowCascades;
+
 			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
-				ImGui::Image(sunLight.ShadowMaps[i], ImVec2(230, 230));
-				ImGui::SameLine();
+				if(i < sunLight.ShadowMaps.size())
+				{
+					ImGui::Image(sunLight.ShadowMaps[i], ImVec2(cascadeImageSize, cascadeImageSize));
+					ImGui::SameLine();
+				}
 			}
 		}
 		ImGui::End();

@@ -135,7 +135,7 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
 	void FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
 	DescriptorHandle RegisterGlobalResourceView(D3D12_CPU_DESCRIPTOR_HANDLE view);
-	void UnregisterGlobalResourceView(DescriptorHandle& heapIndex);
+	void UnregisterGlobalResourceView(DescriptorHandle& handle);
 
 	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
 	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);

@@ -3,18 +3,20 @@
 #include "Core/Input.h"
 #include "Paths.h"
 #include "imgui_internal.h"
-#include <fstream>
 
 static std::unordered_map<StringHash, IConsoleObject*> gCvarMap;
 static std::vector<IConsoleObject*> gConsoleObjects;
 
 void ConsoleManager::Initialize()
 {
-	std::ifstream fs(Sprintf("%sConsoleVariables.ini", Paths::SavedDir().c_str()));
-	std::string line;
-	while (getline(fs, line))
+	FILE* pFile = nullptr;
+	char lineBuffer[256];
+	if(fopen_s(&pFile, Sprintf("%sConsoleVariables.ini", Paths::SavedDir()).c_str(), "rb") == 0)
 	{
-		Execute(line.c_str());
+		while(fgets(lineBuffer, ARRAYSIZE(lineBuffer), pFile))
+		{
+			Execute(lineBuffer);
+		}
 	}
 }
 

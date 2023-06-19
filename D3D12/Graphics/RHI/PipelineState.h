@@ -80,8 +80,6 @@ public:
 	void SetMeshShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
 
-	bool GetDesc(GraphicsDevice* pDevice, D3D12_PIPELINE_STATE_STREAM_DESC& outDesc);
-
 private:
 #pragma warning(push)
 	#pragma warning(disable : 4324)
@@ -127,7 +125,6 @@ private:
 	std::string m_Name;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_IlDesc;
 	PipelineStateType m_Type = PipelineStateType::MAX;
-	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
 	std::array<ShaderDesc, (int)ShaderType::MAX> m_ShaderDescs{};
 };
 
@@ -147,6 +144,7 @@ private:
 	void OnShaderReloaded(Shader* pShader);
 	RefCountPtr<ID3D12PipelineState> m_pPipelineState;
 
+	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
 	PipelineStateInitializer m_Desc;
 	DelegateHandle m_ReloadHandle;
 	bool m_NeedsReload = false;

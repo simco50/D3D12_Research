@@ -1093,7 +1093,7 @@ GraphicsDevice::DeferredDeleteQueue::~DeferredDeleteQueue()
 
 void GraphicsDevice::DeferredDeleteQueue::EnqueueResource(ID3D12Object* pResource, Fence* pFence)
 {
-	std::scoped_lock<std::mutex> lock(m_QueueCS);
+	std::scoped_lock lock(m_QueueCS);
 	FencedObject object;
 	object.pFence = pFence;
 	object.FenceValue = pFence->GetCurrentValue();
@@ -1103,7 +1103,7 @@ void GraphicsDevice::DeferredDeleteQueue::EnqueueResource(ID3D12Object* pResourc
 
 void GraphicsDevice::DeferredDeleteQueue::Clean()
 {
-	std::scoped_lock<std::mutex> lock(m_QueueCS);
+	std::scoped_lock lock(m_QueueCS);
 	while (!m_DeletionQueue.empty())
 	{
 		const FencedObject& p = m_DeletionQueue.front();

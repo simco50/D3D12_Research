@@ -250,48 +250,6 @@ void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, c
 	m_ShaderDescs[(int)ShaderType::Amplification] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-bool PipelineStateInitializer::GetDesc(GraphicsDevice* pDevice, D3D12_PIPELINE_STATE_STREAM_DESC& outDesc)
-{
-	auto GetByteCode = [this](ShaderType type) -> D3D12_SHADER_BYTECODE& {
-		switch (type)
-		{
-		case ShaderType::Vertex:		return m_Stream.VS;
-		case ShaderType::Pixel:			return m_Stream.PS;
-		case ShaderType::Mesh:			return m_Stream.MS;
-		case ShaderType::Amplification:	return m_Stream.AS;
-		case ShaderType::Compute:		return m_Stream.CS;
-		case ShaderType::MAX:
-		default:
-			noEntry();
-			static D3D12_SHADER_BYTECODE dummy;
-			return dummy;
-		}
-	};
-
-	for (uint32 i = 0; i < (int)ShaderType::MAX; ++i)
-	{
-		Shader* pShader = nullptr;
-		const ShaderDesc& desc = m_ShaderDescs[i];
-		if (desc.Path.length() > 0)
-		{
-			pShader = pDevice->GetShaderManager()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
-			if (!pShader)
-				return false;
-
-			GetByteCode((ShaderType)i) = CD3DX12_SHADER_BYTECODE(pShader->pByteCode->GetBufferPointer(), pShader->pByteCode->GetBufferSize());
-			if (m_Name.empty())
-			{
-				m_Name = Sprintf("%s (Unnamed)", pShader->EntryPoint.c_str());
-			}
-			m_Shaders[i] = pShader;
-		}
-	}
-
-	outDesc.pPipelineStateSubobjectStream = &m_Stream;
-	outDesc.SizeInBytes = sizeof(m_Stream);
-	return true;
-}
-
 PipelineState::PipelineState(GraphicsDevice* pParent)
 	: GraphicsObject(pParent)
 {
@@ -308,7 +266,6 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 {
 	check(initializer.m_Type != PipelineStateType::MAX);
 
-
 	m_Desc = initializer;
 
 	if (m_Desc.m_IlDesc.size() > 0)
@@ -317,12 +274,53 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 		ilDesc.pInputElementDescs = m_Desc.m_IlDesc.data();
 	}
 
-	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
-	if (m_Desc.GetDesc(GetParent(), streamDesc))
+	auto GetByteCode = [this](ShaderType type) -> D3D12_SHADER_BYTECODE& {
+		switch (type)
+		{
+		case ShaderType::Vertex:		return m_Desc.m_Stream.VS;
+		case ShaderType::Pixel:			return m_Desc.m_Stream.PS;
+		case ShaderType::Mesh:			return m_Desc.m_Stream.MS;
+		case ShaderType::Amplification:	return m_Desc.m_Stream.AS;
+		case ShaderType::Compute:		return m_Desc.m_Stream.CS;
+		case ShaderType::MAX:
+		default:
+			noEntry();
+			static D3D12_SHADER_BYTECODE dummy;
+			return dummy;
+		}
+	};
+
+	bool shaderCompileError = false;
+	std::string name = m_Desc.m_Name;
+	for (uint32 i = 0; i < (int)ShaderType::MAX; ++i)
+	{
+		Shader* pShader = nullptr;
+		const PipelineStateInitializer::ShaderDesc& desc = m_Desc.m_ShaderDescs[i];
+		if (desc.Path.length() > 0)
+		{
+			pShader = GetParent()->GetShaderManager()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
+			if (!pShader)
+			{
+				shaderCompileError = true;
+			}
+			else
+			{
+				GetByteCode((ShaderType)i) = CD3DX12_SHADER_BYTECODE(pShader->pByteCode->GetBufferPointer(), pShader->pByteCode->GetBufferSize());
+				if (name.empty())
+					name = Sprintf("%s (Unnamed)", pShader->EntryPoint.c_str());
+				m_Shaders[i] = pShader;
+			}
+		}
+	}
+
+	if (!shaderCompileError)
 	{
 		GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
+		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
+		streamDesc.SizeInBytes = sizeof(m_Desc.m_Stream);
+		streamDesc.pPipelineStateSubobjectStream = &m_Desc.m_Stream;
 		VERIFY_HR_EX(GetParent()->GetDevice()->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
-		D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
+		D3D::SetObjectName(m_pPipelineState.Get(), name.c_str());
 	}
 	else
 	{
@@ -343,7 +341,7 @@ void PipelineState::ConditionallyReload()
 
 void PipelineState::OnShaderReloaded(Shader* pShader)
 {
-	for (Shader*& pCurrentShader : m_Desc.m_Shaders)
+	for (Shader*& pCurrentShader : m_Shaders)
 	{
 		if (pCurrentShader && pCurrentShader == pShader)
 		{
