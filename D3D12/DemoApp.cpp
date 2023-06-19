@@ -766,7 +766,7 @@ void DemoApp::Update()
 			m_pParticles->Render(graph, pView, sceneTextures);
 
 			if (Tweakables::g_RenderTerrain.GetBool())
-				m_pCBTTessellation->Shade(graph, pView, sceneTextures);
+				m_pCBTTessellation->Shade(graph, pView, sceneTextures, pFog);
 
 			graph.AddPass("Render Sky", RGPassFlag::Raster)
 				.Read(pSky)

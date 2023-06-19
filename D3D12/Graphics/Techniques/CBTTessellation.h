@@ -21,7 +21,7 @@ public:
 	CBTTessellation(GraphicsDevice* pDevice);
 
 	void RasterMain(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures);
-	void Shade(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures);
+	void Shade(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures, RGTexture* pFog);
 	static void CBTDemo();
 
 private:

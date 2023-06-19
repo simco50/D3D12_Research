@@ -38,8 +38,9 @@ struct CommonParams
 };
 ConstantBuffer<CommonParams> cCommonParams : register(b1);
 
-Texture2D<float> tDepth : register(t0);
 ByteAddressBuffer tCBT : register(t0);
+Texture2D<float> tDepth : register(t0);
+Texture3D<float4> tFog : register(t1);
 
 RWByteAddressBuffer uCBT : register(u0);
 RWByteAddressBuffer uDispatchArgs : register(u0);
@@ -69,11 +70,13 @@ float3 FBM_WithDerivatives(float2 x, float scale, float H, uint numOctaves)
 	return float3(t, d * scale);
 }
 
-void GetTerrain(float2 worldPosition, out float height, out float3 normal)
+static const int TerrainOctaves = 16;
+
+void GetTerrain(float2 worldPosition, uint octaves, out float height, out float3 normal)
 {
 	// Some random noise with a flat round in the middle
 	float dist = saturate((length(worldPosition) - 14) / 16);
-	float3 terrain = FBM_WithDerivatives(worldPosition + 100, 0.02f, 1.0f, 16);
+	float3 terrain = FBM_WithDerivatives(worldPosition + 100, 0.02f, 1.0f, octaves);
 	terrain.x = terrain.x * 0.5f + 0.5f;
 	terrain *= cCommonParams.HeightScale;
 	height = lerp(0, terrain.x, dist) - 1;
@@ -249,7 +252,7 @@ bool HeightmapFlatness(float3x3 tri)
 	float2 center = (tri[0].xz + tri[1].xz + tri[2].xz) / 3.0f;
 	float height;
 	float3 normal;
-	GetTerrain(center, height, normal);
+	GetTerrain(center, TerrainOctaves, height, normal);
 	return abs(height) >= cUpdateParams.HeightmapVarianceBias;
 }
 
@@ -318,7 +321,7 @@ float3x3 GetVertices(uint heapIndex)
 		v.xz *= cCommonParams.PlaneScale;
 		float height;
 		float3 normal;
-		GetTerrain(v.xz, height, normal);
+		GetTerrain(v.xz, TerrainOctaves, height, normal);
 		v.y += height;
 		tri[i] = v;
 	}
@@ -492,13 +495,13 @@ void ShadePS(
 
 	float height;
 	float3 N;
-	GetTerrain(worldPos.xz, height, N);
+	GetTerrain(worldPos.xz, TerrainOctaves, height, N);
 
 	float3 V = normalize(cView.ViewLocation - worldPos);
 
 
 	MaterialProperties surface;
-	surface.BaseColor = 0.03f;
+	surface.BaseColor = 0.3f * float3(1.0f, 0.5f, 0.3f);
 	surface.Normal = N;
 	surface.Metalness = 0;
 	surface.Emissive = 0;
@@ -522,6 +525,10 @@ void ShadePS(
 	outRadiance += totalResult.Diffuse;
 	outRadiance += totalResult.Specular;
 	outRadiance += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(worldPos, N, -V);
+
+	float fogSlice = sqrt((viewPos.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
+	float4 scatteringTransmittance = tFog.SampleLevel(sLinearClamp, float3(uv, fogSlice), 0);
+	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
 	output.Color = float4(outRadiance, 1);
 	output.Normal = EncodeNormalOctahedron(surface.Normal);

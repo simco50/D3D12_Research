@@ -390,7 +390,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 	m_CBTData.SplitMode = 1 - m_CBTData.SplitMode;
 }
 
-void CBTTessellation::Shade(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures)
+void CBTTessellation::Shade(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures, RGTexture* pFog)
 {
 	struct
 	{
@@ -403,6 +403,7 @@ void CBTTessellation::Shade(RGGraph& graph, const SceneView* pView, const SceneT
 	commonArgs.NumCBTElements = (uint32)m_CBTData.pCBT->GetDesc().Size / sizeof(uint32);
 
 	graph.AddPass("CBT Shade", RGPassFlag::Raster)
+		.Read({ pFog })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false, RenderTargetLoadAction::Load)
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
 		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::Load)
@@ -415,7 +416,10 @@ void CBTTessellation::Shade(RGGraph& graph, const SceneView* pView, const SceneT
 
 				context.BindRootCBV(1, commonArgs);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
-				context.BindResources(4, sceneTextures.pDepth->Get()->GetSRV());
+				context.BindResources(4, {
+					sceneTextures.pDepth->Get()->GetSRV(),
+					pFog->Get()->GetSRV(),
+					});
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.Draw(0, 3);
