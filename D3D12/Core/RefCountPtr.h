@@ -18,18 +18,14 @@ protected:
 		}
 	}
 
-	unsigned long InternalRelease() noexcept
+	void InternalRelease() noexcept
 	{
-		unsigned long ref = 0;
 		T* temp = ptr_;
-
 		if (temp != nullptr)
 		{
 			ptr_ = nullptr;
-			ref = temp->Release();
+			temp->Release();
 		}
-
-		return ref;
 	}
 
 public:
@@ -222,8 +218,8 @@ public:
 		return Ptr;
 	}
 
-	unsigned long Reset()
+	void Reset()
 	{
-		return InternalRelease();
+		InternalRelease();
 	}
 };

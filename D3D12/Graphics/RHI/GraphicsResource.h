@@ -1,7 +1,32 @@
 #pragma once
 #include "RHI.h"
 
-class GraphicsObject
+template<typename T>
+class RefCounted
+{
+public:
+	void AddRef()
+	{
+		m_RefCount.fetch_add(1);
+	}
+
+	void Release()
+	{
+		uint32 count_prev = m_RefCount.fetch_sub(1);
+		check(count_prev >= 1);
+		if (count_prev == 1)
+			Destroy();
+	}
+
+	uint32 GetNumRefs() const { return m_RefCount; }
+
+private:
+	void Destroy() { delete static_cast<T*>(this); }
+
+	std::atomic<uint32> m_RefCount = 0;
+};
+
+class GraphicsObject : public RefCounted<GraphicsObject>
 {
 public:
 	GraphicsObject(GraphicsDevice* pParent)
@@ -9,24 +34,9 @@ public:
 	{}
 	virtual ~GraphicsObject() = default;
 
-	uint32 AddRef()
-	{
-		return ++m_RefCount;
-	}
-
-	uint32 Release()
-	{
-		uint32 result = --m_RefCount;
-		if (result == 0)
-			delete this;
-		return result;
-	}
-
-	uint32 GetNumRefs() const { return m_RefCount; }
 	GraphicsDevice* GetParent() const { return m_pParent; }
 
 private:
-	std::atomic<uint32> m_RefCount = 0;
 	GraphicsDevice* m_pParent;
 };
 
