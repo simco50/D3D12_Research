@@ -11,7 +11,6 @@
 #include "Graphics/Profiler.h"
 #include "Core/Input.h"
 #include "CBT.h"
-#include "imgui_internal.h"
 
 namespace CBTSettings
 {
@@ -293,7 +292,8 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 			});
 
 	graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
-		.Write({ pCBTBuffer, pIndirectArgs })
+		.Read(pCBTBuffer)
+		.Write({ pIndirectArgs })
 		.Bind([=](CommandContext& context)
 			{
 				struct
@@ -306,8 +306,10 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				context.BindRootCBV(0, params);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
 					pIndirectArgs->Get()->GetUAV(),
+					});
+				context.BindResources(4, {
+					pCBTBuffer->Get()->GetSRV(),
 					});
 
 				context.SetPipelineState(m_pCBTIndirectArgsPSO);
@@ -361,8 +363,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 		RGTexture* pVisualizeTarget = RGUtils::CreatePersistent(graph, "CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_CBTData.pDebugVisualizeTexture, true);
 		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
-			.Read(pIndirectArgs)
-			.Write(pCBTBuffer)
+			.Read({ pCBTBuffer, pIndirectArgs })
 			.RenderTarget(pVisualizeTarget, RenderTargetLoadAction::DontCare)
 			.Bind([=](CommandContext& context)
 			{
@@ -378,8 +379,8 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 				context.BindRootCBV(0, params);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, m_CBTData.pDebugVisualizeTexture));
-				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
+				context.BindResources(4, {
+					pCBTBuffer->Get()->GetSRV(),
 					});
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, DebugDrawArgs));

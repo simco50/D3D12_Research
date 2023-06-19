@@ -1,12 +1,30 @@
 #pragma once
 
+template<bool B, typename TypeTrue, typename TypeFalse>
+struct Conditional { using Type = TypeTrue; };
+
+template<class T, class F>
+struct Conditional<false, T, F> { using Type = F; };
+
+template<bool B, typename TypeTrue, typename TypeFalse>
+using ConditionalT = typename Conditional<B, TypeTrue, TypeFalse>::Type;
+
+template<bool ReadOnly>
+struct CBT;
+
+using ReadWriteCBT = CBT<false>;
+using ReadOnlyCBT = CBT<true>;
+
+template<bool ReadOnly>
 struct CBT
 {
-	RWByteAddressBuffer Storage;
+    using BufferType = ConditionalT<ReadOnly, ByteAddressBuffer, RWByteAddressBuffer>;
+
+	BufferType Storage;
 	uint NumElements;
 	uint MaxDepth;
 
-	void Init(RWByteAddressBuffer buffer, uint numElements)
+	void Init(BufferType buffer, uint numElements)
 	{
 		Storage = buffer;
 		NumElements = numElements;
@@ -329,7 +347,7 @@ namespace LEB
 		return diamond;
 	}
 
-	void CBTSplitConformed(CBT cbt, uint heapIndex)
+	void CBTSplitConformed(ReadWriteCBT cbt, uint heapIndex)
 	{
 		if (!cbt.IsCeilNode(heapIndex))
 		{
@@ -351,7 +369,7 @@ namespace LEB
 		}
 	}
 
-	void CBTMergeConformed(CBT cbt, uint heapIndex)
+	void CBTMergeConformed(ReadWriteCBT cbt, uint heapIndex)
 	{
 		if (cbt.GetNodeDepth(heapIndex) > 1)
 		{
@@ -372,9 +390,16 @@ namespace LEB
 	}
 }
 
-CBT InitializeCBT(RWByteAddressBuffer buffer, uint numElements)
+ReadWriteCBT InitializeCBT(RWByteAddressBuffer buffer, uint numElements)
 {
-	CBT cbt;
+	ReadWriteCBT cbt;
+	cbt.Init(buffer, numElements);
+	return cbt;
+}
+
+ReadOnlyCBT InitializeCBT(ByteAddressBuffer buffer, uint numElements)
+{
+	ReadOnlyCBT cbt;
 	cbt.Init(buffer, numElements);
 	return cbt;
 }

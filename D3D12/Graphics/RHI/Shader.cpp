@@ -8,7 +8,6 @@
 #include "D3D.h"
 #include "Core/Serializer.h"
 #include "Graphics/Profiler.h"
-#include <fstream>
 
 namespace ShaderCompiler
 {
@@ -43,7 +42,7 @@ namespace ShaderCompiler
 
 	struct CompileResult
 	{
-		static constexpr int Version = 6;
+		static constexpr int Version = 7;
 
 		std::string ErrorMessage;
 		ShaderBlob pBlob;
@@ -238,13 +237,17 @@ namespace ShaderCompiler
 			}
 		}
 
-		std::ifstream str(pFileName, std::ios::ate);
-		if (str.is_open())
+		FILE* pFile = nullptr;
+		if(fopen_s(&pFile, pFileName, "rb") == 0)
 		{
-			std::vector<char> charBuffer((size_t)str.tellg());
-			str.seekg(0);
-			str.read(charBuffer.data(), charBuffer.size());
+			check(fseek(pFile, 0, SEEK_END) == 0);
+			std::vector<char> charBuffer(ftell(pFile) + 1);
+			check(fseek(pFile, 0, SEEK_SET) == 0);
+			fread(charBuffer.data(), sizeof(char), charBuffer.size(), pFile);
+			check(fclose(pFile) == 0);
+
 			std::string buffer = CustomPreprocess(charBuffer.data());
+
 			CachedFile file;
 			file.Timestamp = fileTime;
 			hr = pUtils->CreateBlob(buffer.data(), (int)buffer.size(), 0, file.pBlob.GetAddressOf());
@@ -255,6 +258,7 @@ namespace ShaderCompiler
 				IncludeCache[pFileName] = file;
 			}
 		}
+
 		return hr;
 	}
 

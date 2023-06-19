@@ -207,7 +207,11 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	// Weight the selected light based on the total weight and light count
 
 	if(cView.LightCount <= 0)
+	{
+		lightIndex = 0;
+		sampleWeight = 0.0f;
 		return false;
+	}
 
 	Reservoir reservoir;
 	reservoir.TotalWeight = 0.0f;
@@ -233,7 +237,11 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	}
 
 	if(reservoir.TotalWeight == 0.0f)
+	{
+		lightIndex = 0;
+		sampleWeight = 0.0f;
 		return false;
+	}
 
 	lightIndex = reservoir.LightSample;
 	sampleWeight = (reservoir.TotalWeight / reservoir.M) / reservoir.SampleTargetPdf;
