@@ -240,7 +240,7 @@ void CommandContext::WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOUR
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
-	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Compute);
+	check(m_pCurrentPSO);
 	check(m_CurrentCommandContext == CommandListContext::Compute);
 	checkf(
 		groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
@@ -260,7 +260,7 @@ void CommandContext::Dispatch(const Vector3i& groupCounts)
 
 void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/, uint32 groupCountZ /*= 1*/)
 {
-	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Mesh);
+	check(m_pCurrentPSO);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	
 	PrepareDraw();
@@ -601,7 +601,7 @@ void CommandContext::EndRenderPass()
 
 void CommandContext::Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances, uint32 instanceStart)
 {
-	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
+	check(m_pCurrentPSO);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
 	m_pCommandList->DrawInstanced(vertexCount, instances, vertexStart, instanceStart);
@@ -609,7 +609,7 @@ void CommandContext::Draw(uint32 vertexStart, uint32 vertexCount, uint32 instanc
 
 void CommandContext::DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex /*= 0*/, uint32 instanceStart /*= 0*/)
 {
-	check(m_pCurrentPSO && m_pCurrentPSO->GetType() == PipelineStateType::Graphics);
+	check(m_pCurrentPSO);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
 	PrepareDraw();
 	m_pCommandList->DrawIndexedInstanced(indexCount, instanceCount, indexStart, minVertex, instanceStart);

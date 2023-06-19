@@ -267,15 +267,8 @@ namespace Renderer
 			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 			{
 				context.BindRootCBV(0, b.InstanceID);
-				if (context.GetCurrentPSO()->GetType() == PipelineStateType::Mesh)
-				{
-					context.DispatchMesh(ComputeUtils::GetNumThreadGroups(b.pMesh->NumMeshlets, 32));
-				}
-				else
-				{
-					context.SetIndexBuffer(b.pMesh->IndicesLocation);
-					context.DrawIndexedInstanced(b.pMesh->IndicesLocation.Elements, 0, 1, 0, 0);
-				}
+				context.SetIndexBuffer(b.pMesh->IndicesLocation);
+				context.DrawIndexedInstanced(b.pMesh->IndicesLocation.Elements, 0, 1, 0, 0);
 			}
 		}
 	}

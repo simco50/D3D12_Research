@@ -223,7 +223,6 @@ void PipelineStateInitializer::SetRootSignature(RootSignature* pRootSignature)
 
 void PipelineStateInitializer::SetVertexShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
-	m_Type = PipelineStateType::Graphics;
 	m_ShaderDescs[(int)ShaderType::Vertex] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
@@ -234,19 +233,16 @@ void PipelineStateInitializer::SetPixelShader(const char* pShaderPath, const cha
 
 void PipelineStateInitializer::SetComputeShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
-	m_Type = PipelineStateType::Compute;
 	m_ShaderDescs[(int)ShaderType::Compute] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
 void PipelineStateInitializer::SetMeshShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
-	m_Type = PipelineStateType::Mesh;
 	m_ShaderDescs[(int)ShaderType::Mesh] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
 void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
 {
-	m_Type = PipelineStateType::Mesh;
 	m_ShaderDescs[(int)ShaderType::Amplification] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
@@ -264,8 +260,6 @@ PipelineState::~PipelineState()
 
 void PipelineState::Create(const PipelineStateInitializer& initializer)
 {
-	check(initializer.m_Type != PipelineStateType::MAX);
-
 	m_Desc = initializer;
 
 	if (m_Desc.m_IlDesc.size() > 0)

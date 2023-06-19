@@ -19,14 +19,6 @@ enum class BlendMode
 	Undefined,
 };
 
-enum class PipelineStateType
-{
-	Graphics,
-	Compute,
-	Mesh,
-	MAX
-};
-
 struct VertexElementDesc
 {
 	const char* pSemantic;
@@ -124,7 +116,6 @@ private:
 
 	std::string m_Name;
 	std::vector<D3D12_INPUT_ELEMENT_DESC> m_IlDesc;
-	PipelineStateType m_Type = PipelineStateType::MAX;
 	std::array<ShaderDesc, (int)ShaderType::MAX> m_ShaderDescs{};
 };
 
@@ -138,7 +129,6 @@ public:
 	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState; }
 	void Create(const PipelineStateInitializer& initializer);
 	void ConditionallyReload();
-	PipelineStateType GetType() const { return m_Desc.m_Type; }
 
 private:
 	void OnShaderReloaded(Shader* pShader);
