@@ -14,7 +14,6 @@ public:
 	void InsertWait(CommandQueue* pQueue);
 
 	//Block on the CPU side
-	void WaitForFence(uint64 fenceValue);
 	void WaitForIdle();
 
 	Fence* GetFence() const { return m_pFence; }
@@ -27,7 +26,6 @@ public:
 private:
 	RefCountPtr<ID3D12CommandQueue> m_pCommandQueue;
 	FencedPool<RefCountPtr<ID3D12CommandAllocator>, true> m_AllocatorPool;
-	RefCountPtr<ID3D12GraphicsCommandList> m_pTransitionCommandlist;
 	RefCountPtr<Fence> m_pFence;
 	SyncPoint m_SyncPoint;
 	D3D12_COMMAND_LIST_TYPE m_Type;

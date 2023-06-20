@@ -95,11 +95,6 @@ void CommandQueue::InsertWait(CommandQueue* pQueue)
 	InsertWait(pQueue->m_SyncPoint);
 }
 
-void CommandQueue::WaitForFence(uint64 fenceValue)
-{
-	m_pFence->CpuWait(fenceValue);
-}
-
 void CommandQueue::WaitForIdle()
 {
 	uint64 fenceValue = m_pFence->Signal(this);
