@@ -79,7 +79,13 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 
 	RGBuffer* pRenderData = graph.Import(m_pRenderDataBuffer);
 
-	RGBuffer* pDrawArgs = graph.Create("Indirect Draw Args", BufferDesc::CreateIndirectArguments<D3D12_DRAW_ARGUMENTS>(2));
+	struct DrawArgs
+	{
+		D3D12_DRAW_ARGUMENTS TextArgs;
+		D3D12_DRAW_ARGUMENTS LineArgs;
+	};
+
+	RGBuffer* pDrawArgs = graph.Create("Indirect Draw Args", BufferDesc::CreateIndirectArguments<DrawArgs>());
 
 	graph.AddPass("Build Draw Args", RGPassFlag::Compute)
 		.Write({ pDrawArgs, pRenderData })
@@ -114,7 +120,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 					pRenderData->Get()->GetSRV(),
 					pDepth->Get()->GetSRV(),
 					});
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, sizeof(D3D12_DRAW_ARGUMENTS) * 1);
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, offsetof(DrawArgs, LineArgs));
 			});
 
 	graph.AddPass("Render Text", RGPassFlag::Raster)
@@ -139,7 +145,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 					m_pGlyphData->GetSRV(),
 					pRenderData->Get()->GetSRV()
 					});
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, sizeof(D3D12_DRAW_ARGUMENTS) * 0);
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, offsetof(DrawArgs, TextArgs));
 			});
 
 	graph.AddPass("Transition Draw Data", RGPassFlag::Raster)
