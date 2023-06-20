@@ -108,9 +108,6 @@ private:
 	RefCountPtr<PipelineState> m_pDepthPrepassOpaquePSO;
 	RefCountPtr<PipelineState> m_pDepthPrepassAlphaMaskPSO;
 
-	//MSAA Depth resolve
-	RefCountPtr<PipelineState> m_pResolveDepthPSO;
-
 	//Tonemapping
 	RefCountPtr<PipelineState> m_pToneMapPSO;
 	RefCountPtr<Texture> m_pLensDirtTexture;
@@ -119,12 +116,10 @@ private:
 	// Eye adaptation
 	RefCountPtr<Buffer> m_pAverageLuminance;
 	RefCountPtr<Texture> m_pDebugHistogramTexture;
+	RefCountPtr<PipelineState> m_pDownsampleColorPSO;
 	RefCountPtr<PipelineState> m_pLuminanceHistogramPSO;
 	RefCountPtr<PipelineState> m_pAverageLuminancePSO;
 	RefCountPtr<PipelineState> m_pDrawHistogramPSO;
-
-	//Mip generation
-	RefCountPtr<PipelineState> m_pGenerateMipsPSO;
 
 	//Depth Reduction
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO;

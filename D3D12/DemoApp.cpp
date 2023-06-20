@@ -872,7 +872,7 @@ void DemoApp::Update()
 						Texture* pTarget = pDownscaleTarget->Get();
 
 						context.SetComputeRootSignature(m_pCommonRS);
-						context.SetPipelineState(m_pGenerateMipsPSO);
+						context.SetPipelineState(m_pDownsampleColorPSO);
 
 						struct
 						{
@@ -1266,9 +1266,8 @@ void DemoApp::InitializePipelines()
 	m_pDrawHistogramPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
 	m_pAverageLuminancePSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
 	m_pToneMapPSO					= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
+	m_pDownsampleColorPSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/DownsampleColor.hlsl", "CSMain");
 
-	//Depth resolve
-	m_pResolveDepthPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "ResolveDepth.hlsl", "CSMain", { "DEPTH_RESOLVE_MIN" });
 	m_pPrepareReduceDepthPSO		= m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
 	m_pPrepareReduceDepthMsaaPSO	= m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
 	m_pReduceDepthPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
@@ -1276,7 +1275,6 @@ void DemoApp::InitializePipelines()
 	m_pCameraMotionPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
 	m_pTemporalResolvePSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
 
-	m_pGenerateMipsPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "GenerateMips.hlsl", "CSMain");
 
 	//Sky
 	{
