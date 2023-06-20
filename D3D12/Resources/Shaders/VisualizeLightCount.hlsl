@@ -10,8 +10,7 @@ struct PassParameters
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
-Texture2D<float4> tInput : register(t0);
-Texture2D<float> tSceneDepth : register(t1);
+Texture2D<float> tDepth : register(t0);
 RWTexture2D<float4> uOutput : register(u0);
 
 #if TILED_FORWARD
@@ -39,7 +38,7 @@ float3 ApplyEdgeDetection(uint2 pixel, float3 color)
 	float2 depthGrad = 0.0f;
 	for(uint i = 0; i < ArraySize(SobelWeights); ++i)
 	{
-		float linearDepth = LinearizeDepth(tSceneDepth.Load(uint3(pixel + SobelOffsets[i], 0)));
+		float linearDepth = LinearizeDepth(tDepth.Load(uint3(pixel + SobelOffsets[i], 0)));
 		float logDepth = log2(linearDepth + 1.0f) * 5.0f;
 		depthGrad += SobelWeights[i] * logDepth;
 	}
@@ -63,7 +62,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	uint2 tileIndex = uint2(floor(threadId.xy / TILED_LIGHTING_TILE_SIZE));
 	uint lightCount = tLightGrid[tileIndex].y;
 #elif CLUSTERED_FORWARD
-	float depth = tSceneDepth.Load(uint3(threadId.xy, 0));
+	float depth = tDepth.Load(uint3(threadId.xy, 0));
 	float viewDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
 	uint slice = floor(log(viewDepth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
 	uint3 clusterIndex3D = uint3(floor(threadId.xy / cPass.ClusterSize), slice);

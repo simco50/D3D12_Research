@@ -215,13 +215,13 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 			});
 }
 
-void LightCulling::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData)
+RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, RGTexture* pSceneDepth, const LightCull2DData& lightCullData)
 {
-	RGTexture* pVisualizationTarget = graph.Create("Scene Color", sceneTextures.pColorTarget->GetDesc());
+	RGTexture* pVisualizationTarget = graph.Create("Light Density Visualization", TextureDesc::Create2D(pSceneDepth->GetDesc().Width, pSceneDepth->GetDesc().Height, ResourceFormat::RGBA8_UNORM, 1));
 	RGTexture* pLightGridOpaque = lightCullData.pLightGridOpaque;
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
-		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGridOpaque })
+		.Read({ pSceneDepth, pLightGridOpaque })
 		.Write(pVisualizationTarget)
 		.Bind([=](CommandContext& context)
 			{
@@ -233,8 +233,7 @@ void LightCulling::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					sceneTextures.pColorTarget->Get()->GetSRV(),
-					sceneTextures.pDepth->Get()->GetSRV(),
+					pSceneDepth->Get()->GetSRV(),
 					pLightGridOpaque->Get()->GetSRV(),
 					});
 
@@ -243,19 +242,19 @@ void LightCulling::VisualizeLightDensity(RGGraph& graph, GraphicsDevice* pDevice
 					pTarget->GetHeight(), 16));
 			});
 
-	sceneTextures.pColorTarget = pVisualizationTarget;
+	return pVisualizationTarget;
 }
 
-void LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData)
+RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, RGTexture* pSceneDepth, const LightCull3DData& lightCullData)
 {
-	RGTexture* pVisualizationTarget = graph.Create("Scene Color", sceneTextures.pColorTarget->GetDesc());
+	RGTexture* pVisualizationTarget = graph.Create("Light Density Visualization", TextureDesc::Create2D(pSceneDepth->GetDesc().Width, pSceneDepth->GetDesc().Height, ResourceFormat::RGBA8_UNORM, 1));
 
 	RGBuffer* pLightGrid = lightCullData.pLightGrid;
 	Vector2 lightGridParams = lightCullData.LightGridParams;
 	Vector3i clusterCount = lightCullData.ClusterCount;
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
-		.Read({ sceneTextures.pDepth, sceneTextures.pColorTarget, pLightGrid })
+		.Read({ pSceneDepth, pLightGrid })
 		.Write(pVisualizationTarget)
 		.Bind([=](CommandContext& context)
 			{
@@ -279,8 +278,7 @@ void LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* pView,
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					sceneTextures.pColorTarget->Get()->GetSRV(),
-					sceneTextures.pDepth->Get()->GetSRV(),
+					pSceneDepth->Get()->GetSRV(),
 					pLightGrid->Get()->GetSRV(),
 					});
 
@@ -289,5 +287,5 @@ void LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* pView,
 					pTarget->GetHeight(), 16));
 			});
 
-	sceneTextures.pColorTarget = pVisualizationTarget;
+	return pVisualizationTarget;
 }

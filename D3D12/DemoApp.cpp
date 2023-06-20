@@ -1129,9 +1129,9 @@ void DemoApp::Update()
 			if (Tweakables::g_VisualizeLightDensity)
 			{
 				if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Visibility)
-					m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures, lightCull3DData);
+					sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull3DData);
 				else if (m_RenderPath == RenderPath::Tiled)
-					m_pLightCulling->VisualizeLightDensity(graph, m_pDevice, pView, sceneTextures, lightCull2DData);
+					sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull2DData);
 			}
 
 			if (m_RenderPath == RenderPath::Visibility && m_VisibilityDebugRenderMode > 0)
