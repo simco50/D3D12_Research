@@ -3,147 +3,44 @@
 #include "Core/Input.h"
 #include "ImGuizmo.h"
 
-void Camera::SetPosition(const Vector3& position)
-{
-	m_Position = position;
-	OnDirty();
-}
-
-void Camera::SetRotation(const Quaternion& rotation)
-{
-	m_Rotation = rotation;
-	OnDirty();
-}
-
-void Camera::SetViewport(const FloatRect& rect)
-{
-	m_Transform.Viewport = rect;
-	OnDirty();
-}
-
-void Camera::SetFoV(float fov)
-{
-	m_Transform.FoV = fov;
-	OnDirty();
-}
-
-void Camera::SetClippingPlanes(float nearPlane, float farPlane)
-{
-	m_Transform.NearPlane = nearPlane;
-	m_Transform.FarPlane = farPlane;
-	OnDirty();
-}
-
-void Camera::SetNearPlane(float nearPlane)
-{
-	m_Transform.NearPlane = nearPlane;
-	OnDirty();
-}
-
-void Camera::SetFarPlane(float farPlane)
-{
-	m_Transform.FarPlane = farPlane;
-	OnDirty();
-}
-
-void Camera::SetJitter(bool jitter)
-{
-	m_Jitter = jitter;
-	OnDirty();
-}
-
-const Matrix& Camera::GetView() const
-{
-	UpdateMatrices();
-	return m_Transform.View;
-}
-
-const Matrix& Camera::GetProjection() const
-{
-	UpdateMatrices();
-	return m_Transform.Projection;
-}
-
-const Matrix& Camera::GetViewProjection() const
-{
-	UpdateMatrices();
-	return m_Transform.ViewProjection;
-}
-
-Matrix Camera::GetViewProjectionInverse() const
-{
-	return GetProjectionInverse() * GetViewInverse();
-}
-
-const Matrix& Camera::GetViewInverse() const
-{
-	UpdateMatrices();
-	return m_Transform.ViewInverse;
-}
-
-const Matrix& Camera::GetProjectionInverse() const
-{
-	UpdateMatrices();
-	return m_Transform.ProjectionInverse;
-}
-
-const BoundingFrustum& Camera::GetFrustum() const
-{
-	UpdateMatrices();
-	return m_Transform.PerspectiveFrustum;
-}
-
-void Camera::OnDirty()
-{
-	m_Dirty = true;
-}
-
-void Camera::UpdateMatrices() const
-{
-	if (m_Dirty)
-	{
-		m_Transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
-		m_Transform.ViewInverse.Invert(m_Transform.View);
-		float aspect = m_Transform.Viewport.GetWidth() / m_Transform.Viewport.GetHeight();
-		m_Transform.Projection = Math::CreatePerspectiveMatrix(m_Transform.FoV, aspect, m_Transform.NearPlane, m_Transform.FarPlane);
-		m_Transform.UnjtteredViewProjection = m_Transform.View * m_Transform.Projection;
-
-		if (m_Jitter)
-		{
-			constexpr Math::HaltonSequence<16, 2> x;
-			constexpr Math::HaltonSequence<16, 3> y;
-
-			m_Transform.Jitter.x = (x[m_Transform.JitterIndex] * 2.0f - 1.0f) / m_Transform.Viewport.GetWidth();
-			m_Transform.Jitter.y = (y[m_Transform.JitterIndex] * 2.0f - 1.0f) / m_Transform.Viewport.GetHeight();
-			m_Transform.Projection.m[2][0] += m_Transform.Jitter.x;
-			m_Transform.Projection.m[2][1] += m_Transform.Jitter.y;
-		}
-		else
-		{
-			m_Transform.Jitter = Vector2::Zero;
-		}
-
-		m_Transform.Projection.Invert(m_Transform.ProjectionInverse);
-		m_Transform.ViewProjection = m_Transform.View * m_Transform.Projection;
-		m_Transform.PerspectiveFrustum = Math::CreateBoundingFrustum(m_Transform.Projection, m_Transform.View);
-		m_Transform.Position = m_Position;
-
-		m_Dirty = false;
-	}
-}
-
 void Camera::Update()
 {
+	// Update previous data
 	m_Transform.PositionPrev = m_Transform.Position;
 	m_Transform.ViewProjectionPrev = m_Transform.ViewProjection;
 	m_Transform.JitterPrev = m_Transform.Jitter;
 	++m_Transform.JitterIndex;
+
+	// Update current data
+	m_Transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
+	m_Transform.ViewInverse.Invert(m_Transform.View);
+	float aspect = m_Transform.Viewport.GetWidth() / m_Transform.Viewport.GetHeight();
+	m_Transform.Projection = Math::CreatePerspectiveMatrix(m_Transform.FoV, aspect, m_Transform.NearPlane, m_Transform.FarPlane);
+	m_Transform.UnjtteredViewProjection = m_Transform.View * m_Transform.Projection;
+
+	if (m_Jitter)
+	{
+		constexpr Math::HaltonSequence<16, 2> x;
+		constexpr Math::HaltonSequence<16, 3> y;
+
+		m_Transform.Jitter.x = (x[m_Transform.JitterIndex] * 2.0f - 1.0f) / m_Transform.Viewport.GetWidth();
+		m_Transform.Jitter.y = (y[m_Transform.JitterIndex] * 2.0f - 1.0f) / m_Transform.Viewport.GetHeight();
+		m_Transform.Projection.m[2][0] += m_Transform.Jitter.x;
+		m_Transform.Projection.m[2][1] += m_Transform.Jitter.y;
+	}
+	else
+	{
+		m_Transform.Jitter = Vector2::Zero;
+	}
+
+	m_Transform.Projection.Invert(m_Transform.ProjectionInverse);
+	m_Transform.ViewProjection = m_Transform.View * m_Transform.Projection;
+	m_Transform.PerspectiveFrustum = Math::CreateBoundingFrustum(m_Transform.Projection, m_Transform.View);
+	m_Transform.Position = m_Position;
 }
 
 void FreeCamera::Update()
 {
-	Camera::Update();
-
 	Vector3 movement;
 	if (Input::Instance().IsMouseDown(VK_RBUTTON))
 	{
@@ -166,7 +63,8 @@ void FreeCamera::Update()
 	m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.2f);
 
 	m_Position += m_Velocity * Time::DeltaTime() * 4.0f;
-	OnDirty();
+
+	Camera::Update();
 }
 
 Ray Camera::GetMouseRay() const
@@ -179,11 +77,10 @@ Ray Camera::GetMouseRay() const
 	ndc.x = (mousePos.x - hw) / hw;
 	ndc.y = (hh - mousePos.y) / hh;
 
-	Vector3 nearPoint, farPoint;
 	Matrix viewProjInverse;
 	m_Transform.ViewProjection.Invert(viewProjInverse);
-	nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
-	farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
+	Vector3 nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
+	Vector3 farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
 	ray.position = Vector3(nearPoint.x, nearPoint.y, nearPoint.z);
 
 	ray.direction = farPoint - nearPoint;

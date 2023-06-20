@@ -224,8 +224,6 @@ void DemoApp::Update()
 
 		UpdateImGui();
 
-		m_pCamera->SetJitter(Tweakables::g_TAA && m_RenderPath != RenderPath::PathTracing);
-		m_pCamera->Update();
 		m_RenderGraphPool->Tick();
 
 		RenderPath newRenderPath = m_RenderPath;
@@ -277,6 +275,9 @@ void DemoApp::Update()
 			volume.Origin = m_SceneData.SceneAABB.Center;
 			volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
 		}
+
+		m_pCamera->SetJitter(Tweakables::g_TAA && m_RenderPath != RenderPath::PathTracing);
+		m_pCamera->Update();
 
 		CreateShadowViews(m_SceneData, m_World);
 		m_SceneData.MainView = m_pCamera->GetViewTransform();
@@ -379,7 +380,7 @@ void DemoApp::Update()
 				TaskQueue::Execute([&](int)
 					{
 						m_SceneData.VisibilityMask.SetAll();
-						BoundingFrustum frustum = m_pCamera->GetFrustum();
+						BoundingFrustum frustum = m_pCamera->GetViewTransform().PerspectiveFrustum;
 						for (const Batch& b : m_SceneData.Batches)
 						{
 							m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
@@ -1542,14 +1543,15 @@ void DemoApp::UpdateImGui()
 				ImGui::Checkbox("Cull statistics", &Tweakables::CullDebugStats.Get());
 			}
 
+			const ViewTransform& view = m_pCamera->GetViewTransform();
 			ImGui::Text("Camera");
 			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
-			float fov = m_pCamera->GetFoV();
+			float fov = view.FoV;
 			if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
 			{
 				m_pCamera->SetFoV(fov);
 			}
-			Vector2 farNear(m_pCamera->GetFar(), m_pCamera->GetNear());
+			Vector2 farNear(view.FarPlane, view.NearPlane);
 			if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
 			{
 				m_pCamera->SetFarPlane(farNear.x);
@@ -1658,8 +1660,9 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		}
 	}
 
-	float n = m_pCamera->GetNear();
-	float f = m_pCamera->GetFar();
+	const ViewTransform& viewTransform = m_pCamera->GetViewTransform();
+	float n = viewTransform.NearPlane;
+	float f = viewTransform.FarPlane;
 	float nearPlane = Math::Min(n, f);
 	float farPlane = Math::Max(n, f);
 	float clipPlaneRange = farPlane - nearPlane;
@@ -1711,7 +1714,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		if (light.Type == LightType::Directional)
 		{
 			// Frustum corners in world space
-			const Matrix vpInverse = m_pCamera->GetViewProjection().Invert();
+			const Matrix vpInverse = viewTransform.ViewProjection.Invert();
 			const Vector3 frustumCornersWS[] = {
 				Vector3::Transform(Vector3(-1, -1, 1), vpInverse),
 				Vector3::Transform(Vector3(-1, -1, 0), vpInverse),
@@ -1772,14 +1775,14 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z, minExtents.z);
 
 				ShadowView shadowView;
-				ViewTransform& viewTransform = shadowView.View;
-				viewTransform.IsPerspective = false;
-				viewTransform.ViewProjection = lightView * projectionMatrix;
-				viewTransform.ViewProjectionPrev = viewTransform.ViewProjection;
-				viewTransform.OrthographicFrustum.Center = center;
-				viewTransform.OrthographicFrustum.Extents = maxExtents - minExtents;
-				viewTransform.OrthographicFrustum.Extents.z *= 10;
-				viewTransform.OrthographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
+				ViewTransform& shadowViewTransform = shadowView.View;
+				shadowViewTransform.IsPerspective = false;
+				shadowViewTransform.ViewProjection = lightView * projectionMatrix;
+				shadowViewTransform.ViewProjectionPrev = shadowViewTransform.ViewProjection;
+				shadowViewTransform.OrthographicFrustum.Center = center;
+				shadowViewTransform.OrthographicFrustum.Extents = maxExtents - minExtents;
+				shadowViewTransform.OrthographicFrustum.Extents.z *= 10;
+				shadowViewTransform.OrthographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
 				(&view.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
 				AddShadowView(light, shadowView, 2048, i);
 			}
@@ -1787,24 +1790,24 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		else if (light.Type == LightType::Spot)
 		{
 			BoundingBox box(light.Position, Vector3(light.Range));
-			if (!m_pCamera->GetFrustum().Contains(box))
+			if (!viewTransform.PerspectiveFrustum.Contains(box))
 				continue;
 
 			const Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.01f);
 			const Matrix lightView = (Matrix::CreateFromQuaternion(light.Rotation) * Matrix::CreateTranslation(light.Position)).Invert();
 
 			ShadowView shadowView;
-			ViewTransform& viewTransform = shadowView.View;
-			viewTransform.IsPerspective = true;
-			viewTransform.ViewProjection = lightView * projection;
-			viewTransform.ViewProjectionPrev = viewTransform.ViewProjection;
-			viewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, lightView);
+			ViewTransform& shadowViewTransform = shadowView.View;
+			shadowViewTransform.IsPerspective = true;
+			shadowViewTransform.ViewProjection = lightView * projection;
+			shadowViewTransform.ViewProjectionPrev = shadowViewTransform.ViewProjection;
+			shadowViewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, lightView);
 			AddShadowView(light, shadowView, 512, 0);
 		}
 		else if (light.Type == LightType::Point)
 		{
 			BoundingSphere sphere(light.Position, light.Range);
-			if (!m_pCamera->GetFrustum().Contains(sphere))
+			if (!viewTransform.PerspectiveFrustum.Contains(sphere))
 				continue;
 
 			Matrix viewMatrices[] = {
@@ -1820,11 +1823,11 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 			for (int i = 0; i < ARRAYSIZE(viewMatrices); ++i)
 			{
 				ShadowView shadowView;
-				ViewTransform& viewTransform = shadowView.View;
-				viewTransform.IsPerspective = true;
-				viewTransform.ViewProjection = viewMatrices[i] * projection;
-				viewTransform.ViewProjectionPrev = viewTransform.ViewProjection;
-				viewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, viewMatrices[i]);
+				ViewTransform& shadowViewTransform = shadowView.View;
+				shadowViewTransform.IsPerspective = true;
+				shadowViewTransform.ViewProjection = viewMatrices[i] * projection;
+				shadowViewTransform.ViewProjectionPrev = shadowViewTransform.ViewProjection;
+				shadowViewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, viewMatrices[i]);
 				AddShadowView(light, shadowView, 512, i);
 			}
 		}

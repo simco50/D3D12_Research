@@ -9,49 +9,28 @@ public:
 
 	virtual void Update();
 
-	void SetPosition(const Vector3& position);
-	void SetRotation(const Quaternion& rotation);
+	void SetPosition(const Vector3& position)			{ m_Position = position; }
+	void SetRotation(const Quaternion& rotation)		{ m_Rotation = rotation; }
 
-	const Vector3& GetPosition() const { return m_Position; }
-	const Quaternion& GetRotation() const { return m_Rotation; }
+	void SetViewport(const FloatRect& rect)				{ m_Transform.Viewport = rect; }
+	void SetFoV(float fov)								{ m_Transform.FoV = fov; }
+	void SetNearPlane(float nearPlane)					{ m_Transform.NearPlane = nearPlane; }
+	void SetFarPlane(float farPlane)					{ m_Transform.FarPlane = farPlane; }
+	void SetJitter(bool jitter)							{ m_Jitter = jitter; }
 
-	void SetViewport(const FloatRect& rect);
-	void SetDirty() { m_Dirty = true; }
-	void SetFoV(float fov);
-	void SetClippingPlanes(float nearPlane, float farPlane);
-
-	void SetNearPlane(float nearPlane);
-	void SetFarPlane(float farPlane);
-
-	void SetJitter(bool jitter);
-
-	const ViewTransform& GetViewTransform() const { return m_Transform; }
-
-	float GetNear() const { return m_Transform.NearPlane; }
-	float GetFar() const { return m_Transform.FarPlane; }
-	float GetFoV() const { return m_Transform.FoV; }
-
-	const Matrix& GetView() const;
-	const Matrix& GetProjection() const;
-	const Matrix& GetViewProjection() const;
-	Matrix GetViewProjectionInverse() const;
-	const Matrix& GetViewInverse() const;
-	const Matrix& GetProjectionInverse() const;
-	const Matrix& GetPreviousViewProjection() const { return m_Transform.ViewProjectionPrev; }
-	const BoundingFrustum& GetFrustum() const;
 	Ray GetMouseRay() const;
 
+	const ViewTransform& GetViewTransform() const		{ return m_Transform; }
+	const Vector3& GetPosition() const					{ return m_Position; }
+	const Quaternion& GetRotation() const				{ return m_Rotation; }
+
 protected:
-	void OnDirty();
 	Vector3 m_Position;
 	Quaternion m_Rotation;
 
 private:
-	void UpdateMatrices() const;
-
 	bool m_Jitter = true;
-	mutable ViewTransform m_Transform;
-	mutable bool m_Dirty = true;
+	ViewTransform m_Transform;
 };
 
 class FreeCamera : public Camera
