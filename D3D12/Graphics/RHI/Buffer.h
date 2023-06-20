@@ -135,13 +135,23 @@ struct BufferDesc
 class Buffer : public GraphicsResource
 {
 public:
+	friend class GraphicsDevice;
+
 	Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12Resource* pResource);
 
 	inline uint64 GetSize() const { return m_Desc.Size; }
 	inline uint32 GetNumElements() const { return m_Desc.NumElements(); }
 	inline const BufferDesc& GetDesc() const { return m_Desc; }
+	UnorderedAccessView* GetUAV() const { return m_pUAV; }
+	ShaderResourceView* GetSRV() const { return m_pSRV; }
+	uint32 GetUAVIndex() const;
+	uint32 GetSRVIndex() const;
+
 
 private:
+	RefCountPtr<UnorderedAccessView> m_pUAV;
+	RefCountPtr<ShaderResourceView> m_pSRV;
+	
 	const BufferDesc m_Desc;
 };
 

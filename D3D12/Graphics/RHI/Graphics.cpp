@@ -513,9 +513,8 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 {
 	auto GetResourceDesc = [](const TextureDesc& textureDesc)
 	{
-		const FormatInfo& info = RHI::GetFormatInfo(textureDesc.Format);
-		uint32 width = info.IsBC ? Math::Clamp(textureDesc.Width, 0u, textureDesc.Width) : textureDesc.Width;
-		uint32 height = info.IsBC ? Math::Clamp(textureDesc.Height, 0u, textureDesc.Height) : textureDesc.Height;
+		uint32 width = textureDesc.Width;
+		uint32 height = textureDesc.Height;
 		DXGI_FORMAT format = D3D::ConvertFormat(textureDesc.Format);
 
 		D3D12_RESOURCE_DESC desc{};
@@ -597,17 +596,19 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::ShaderResource))
 	{
-		pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0, (uint8)pTexture->GetMipLevels()));
+		pTexture->m_pSRV = CreateSRV(pTexture, TextureSRVDesc(0, (uint8)pTexture->GetMipLevels()));
 	}
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::UnorderedAccess))
 	{
-		TextureUAVDesc uavDesc(0);
-		pTexture->m_pUav = CreateUAV(pTexture, uavDesc);
 		pTexture->m_NeedsStateTracking = true;
+
+		pTexture->m_UAVs.resize(desc.Mips);
+		for(uint8 mip = 0; mip < desc.Mips; ++mip)
+			pTexture->m_UAVs[mip] = CreateUAV(pTexture, TextureUAVDesc(mip));
 	}
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::RenderTarget))
 	{
-		pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		pTexture->m_RTV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		pTexture->m_NeedsStateTracking = true;
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
@@ -647,12 +648,12 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 		default:
 			break;
 		}
-		GetParent()->GetDevice()->CreateRenderTargetView(pResource, &rtvDesc, pTexture->m_Rtv);
+		GetParent()->GetDevice()->CreateRenderTargetView(pResource, &rtvDesc, pTexture->m_RTV);
 	}
 	else if (EnumHasAnyFlags(desc.Usage, TextureFlag::DepthStencil))
 	{
-		pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-		pTexture->m_ReadOnlyDsv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		pTexture->m_RTV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+		pTexture->m_ReadOnlyDSV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		pTexture->m_NeedsStateTracking = true;
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
@@ -690,9 +691,9 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 		default:
 			break;
 		}
-		GetParent()->GetDevice()->CreateDepthStencilView(pResource, &dsvDesc, pTexture->m_Rtv);
+		GetParent()->GetDevice()->CreateDepthStencilView(pResource, &dsvDesc, pTexture->m_RTV);
 		dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
-		GetParent()->GetDevice()->CreateDepthStencilView(pResource, &dsvDesc, pTexture->m_ReadOnlyDsv);
+		GetParent()->GetDevice()->CreateDepthStencilView(pResource, &dsvDesc, pTexture->m_ReadOnlyDSV);
 	}
 
 	return pTexture;
@@ -716,9 +717,9 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
 	pTexture->m_NeedsStateTracking = true;
 
-	pTexture->m_Rtv = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	GetParent()->GetDevice()->CreateRenderTargetView(pSwapchainResource, nullptr, pTexture->m_Rtv);
-	pTexture->m_pSrv = CreateSRV(pTexture, TextureSRVDesc(0, 1));
+	pTexture->m_RTV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	GetParent()->GetDevice()->CreateRenderTargetView(pSwapchainResource, nullptr, pTexture->m_RTV);
+	pTexture->m_pSRV = CreateSRV(pTexture, TextureSRVDesc(0, 1));
 	return pTexture;
 }
 
@@ -727,14 +728,10 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	auto GetResourceDesc = [](const BufferDesc& bufferDesc)
 	{
 		D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferDesc.Size, D3D12_RESOURCE_FLAG_NONE);
-		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure) == false)
-		{
-			desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-		}
 		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::UnorderedAccess))
-		{
 			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		}
+		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+			desc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 		return desc;
 	};
 
@@ -785,11 +782,11 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	//#todo: Temp code. Pull out views from buffer
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
-		pBuffer->m_pSrv = CreateSRV(pBuffer, BufferSRVDesc(desc.Format, isRaw));
+		pBuffer->m_pSRV = CreateSRV(pBuffer, BufferSRVDesc(desc.Format, isRaw));
 	}
 	if (EnumHasAnyFlags(desc.Usage, BufferFlag::UnorderedAccess))
 	{
-		pBuffer->m_pUav = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, isRaw, withCounter));
+		pBuffer->m_pUAV = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, isRaw, withCounter));
 		pBuffer->m_NeedsStateTracking = true;
 	}
 

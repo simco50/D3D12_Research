@@ -1029,7 +1029,7 @@ void DemoApp::Update()
 							parameters.SourceMip = i == 0 ? 0 : i - 1;
 
 							context.BindRootCBV(0, parameters);
-							context.BindResources(2, pDownscaleTarget->Get()->GetSubResourceUAV(i));
+							context.BindResources(2, pDownscaleTarget->Get()->GetUAV(i));
 							context.BindResources(3, pSourceTexture->Get()->GetSRV());
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
 							context.InsertUAVBarrier();
@@ -1065,7 +1065,7 @@ void DemoApp::Update()
 							parameters.Radius = Tweakables::g_BloomInteralBlendFactor;
 
 							context.BindRootCBV(0, parameters);
-							context.BindResources(2, pUpscaleTarget->Get()->GetSubResourceUAV(i));
+							context.BindResources(2, pUpscaleTarget->Get()->GetUAV(i));
 							context.BindResources(3, {
 								pDownscaleTarget->Get()->GetSRV(),
 								pPreviousSource->Get()->GetSRV(),

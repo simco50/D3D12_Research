@@ -132,7 +132,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						constants.Frequency = parameters.ShapeNoiseFrequency;
 
 						context.BindRootCBV(0, constants);
-						context.BindResources(2, pNoiseTexture->Get()->GetSubResourceUAV(i));
+						context.BindResources(2, pNoiseTexture->Get()->GetUAV(i));
 
 						context.Dispatch(
 							ComputeUtils::GetNumThreadGroups(Vector3i(resolution), Vector3i(8)));
@@ -155,7 +155,7 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 						constants.Frequency = parameters.DetailNoiseFrequency;
 
 						context.BindRootCBV(0, constants);
-						context.BindResources(2, pDetailNoiseTexture->Get()->GetSubResourceUAV(i));
+						context.BindResources(2, pDetailNoiseTexture->Get()->GetUAV(i));
 
 						context.Dispatch(
 							ComputeUtils::GetNumThreadGroups(Vector3i(resolution), Vector3i(8)));

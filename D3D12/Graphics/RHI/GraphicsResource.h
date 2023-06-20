@@ -119,12 +119,6 @@ public:
 	void SetName(const char* pName);
 	const char* GetName() const { return m_Name.c_str(); }
 
-	UnorderedAccessView* GetUAV() const { return m_pUav; }
-	ShaderResourceView* GetSRV() const { return m_pSrv; }
-
-	int32 GetSRVIndex() const;
-	int32 GetUAVIndex() const;
-
 	bool UseStateTracking() const { return m_NeedsStateTracking; }
 
 	inline ID3D12Resource* GetResource() const { return m_pResource; }
@@ -140,6 +134,4 @@ protected:
 	void* m_pMappedData = nullptr;
 	ResourceState m_ResourceState;
 	bool m_NeedsStateTracking = false;
-	RefCountPtr<ShaderResourceView> m_pSrv;
-	RefCountPtr<UnorderedAccessView> m_pUav;
 };

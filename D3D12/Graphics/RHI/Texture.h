@@ -197,12 +197,17 @@ public:
 
 	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const;
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
-	UnorderedAccessView* GetSubResourceUAV(uint32 subresourceIndex);
+	UnorderedAccessView* GetUAV(uint32 subresourceIndex = 0) const;
+	ShaderResourceView* GetSRV() const { return m_pSRV; }
+	uint32 GetUAVIndex(uint32 subresourceIndex = 0) const;
+	uint32 GetSRVIndex() const;
 
 private:
 	TextureDesc m_Desc;
-	std::vector<RefCountPtr<UnorderedAccessView>> m_SubresourceUAVs;
+	
+	RefCountPtr<ShaderResourceView> m_pSRV;
+	std::vector<RefCountPtr<UnorderedAccessView>> m_UAVs;
 
-	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv = {};
+	D3D12_CPU_DESCRIPTOR_HANDLE m_RTV = {};
+	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDSV = {};
 };

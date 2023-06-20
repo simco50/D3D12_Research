@@ -649,10 +649,10 @@ void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				uint32 uavIndex = 0;
 				context.BindResources(2, pSPDCounter->Get()->GetUAV(), uavIndex++);
 				if(pHZB->GetDesc().Mips > 6)
-					context.BindResources(2, pHZB->Get()->GetSubResourceUAV(6), uavIndex++);
+					context.BindResources(2, pHZB->Get()->GetUAV(6), uavIndex++);
 				for (uint8 mipIndex = 0; mipIndex < mips; ++mipIndex)
 				{
-					context.BindResources(2, pHZB->Get()->GetSubResourceUAV(mipIndex), uavIndex++);
+					context.BindResources(2, pHZB->Get()->GetUAV(mipIndex), uavIndex++);
 				}
 				context.Dispatch(dispatchThreadGroupCountXY[0], dispatchThreadGroupCountXY[1]);
 			});

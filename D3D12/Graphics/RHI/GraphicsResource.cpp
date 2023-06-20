@@ -29,14 +29,3 @@ void GraphicsResource::SetName(const char* pName)
 	D3D::SetObjectName(m_pResource, pName);
 	m_Name = pName;
 }
-
-int32 GraphicsResource::GetSRVIndex() const
-{
-	return m_pSrv ? m_pSrv->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-}
-
-int32 GraphicsResource::GetUAVIndex() const
-{
-	return m_pUav ? m_pUav->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-}
-

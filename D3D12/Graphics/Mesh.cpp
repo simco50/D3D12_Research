@@ -239,7 +239,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			m_Materials.push_back(Material());
 			Material& material = m_Materials.back();
 
-			auto RetrieveTexture = [this, &textureMap, pContext, pFilePath](const cgltf_texture_view texture, bool srgb) -> Texture*
+			auto RetrieveTexture = [this, &textureMap, pContext, pFilePath](const cgltf_texture_view& texture, bool srgb) -> Texture*
 			{
 				if (texture.texture)
 				{
@@ -249,33 +249,28 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 					RefCountPtr<Texture> pTex;
 					if (it == textureMap.end())
 					{
+						Image image;
+						bool validImage;
 						if (pImage->buffer_view)
-						{
-							Image newImg;
-							if (newImg.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type))
-							{
-								pTex = GraphicsCommon::CreateTextureFromImage(*pContext, newImg, srgb, pName);
-							}
-						}
+							validImage = image.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type);
 						else
-						{
-							pTex = GraphicsCommon::CreateTextureFromFile(*pContext, Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), srgb, pName);
-						}
-						if (pTex.Get())
-						{
-							m_Textures.push_back(pTex);
-							textureMap[pImage] = m_Textures.back();
-							return m_Textures.back();
-						}
-						else
+							validImage =image.Load(Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str());
+
+						if(validImage)
+							pTex = GraphicsCommon::CreateTextureFromImage(*pContext, image, srgb, pName);
+
+						if (!pTex.Get())
 						{
 							E_LOG(Warning, "GLTF - Failed to load texture '%s' for '%s'", pImage->uri, pFilePath);
+							return nullptr;
 						}
+
+						m_Textures.push_back(pTex);
+						textureMap[pImage] = m_Textures.back();
+						return m_Textures.back();
+
 					}
-					else
-					{
-						return it->second;
-					}
+					return it->second;
 				}
 				return nullptr;
 			};
