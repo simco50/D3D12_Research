@@ -1,15 +1,15 @@
 #include "stdafx.h"
-#include "DynamicResourceAllocator.h"
+#include "ScratchAllocator.h"
 #include "Graphics.h"
 #include "Buffer.h"
 #include "CommandContext.h"
 
-DynamicAllocationManager::DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags, uint64 pageSize)
+ScratchAllocationManager::ScratchAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags, uint64 pageSize)
 	: GraphicsObject(pParent), m_BufferFlags(bufferFlags), m_PageSize(pageSize)
 {
 }
 
-RefCountPtr<Buffer> DynamicAllocationManager::AllocatePage()
+RefCountPtr<Buffer> ScratchAllocationManager::AllocatePage()
 {
 	auto AllocateNewPage = [this]() {
 		std::string name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * m_PageSize);
@@ -18,7 +18,7 @@ RefCountPtr<Buffer> DynamicAllocationManager::AllocatePage()
 	return m_PagePool.Allocate(AllocateNewPage);
 }
 
-void DynamicAllocationManager::FreePages(const SyncPoint& syncPoint, const std::vector<RefCountPtr<Buffer>>& pPages)
+void ScratchAllocationManager::FreePages(const SyncPoint& syncPoint, const std::vector<RefCountPtr<Buffer>>& pPages)
 {
 	for (auto pPage : pPages)
 	{
@@ -26,15 +26,15 @@ void DynamicAllocationManager::FreePages(const SyncPoint& syncPoint, const std::
 	}
 }
 
-DynamicResourceAllocator::DynamicResourceAllocator(DynamicAllocationManager* pPageManager)
+ScratchAllocator::ScratchAllocator(ScratchAllocationManager* pPageManager)
 	: m_pPageManager(pPageManager)
 {
 }
 
-DynamicAllocation DynamicResourceAllocator::Allocate(uint64 size, int alignment)
+ScratchAllocation ScratchAllocator::Allocate(uint64 size, int alignment)
 {
 	uint64 bufferSize = Math::AlignUp<uint64>(size, alignment);
-	DynamicAllocation allocation;
+	ScratchAllocation allocation;
 	allocation.Size = bufferSize;
 
 	if (bufferSize > m_pPageManager->GetPageSize())
@@ -65,7 +65,7 @@ DynamicAllocation DynamicResourceAllocator::Allocate(uint64 size, int alignment)
 	return allocation;
 }
 
-void DynamicResourceAllocator::Free(const SyncPoint& syncPoint)
+void ScratchAllocator::Free(const SyncPoint& syncPoint)
 {
 	m_pPageManager->FreePages(syncPoint, m_UsedPages);
 	m_UsedPages.clear();

@@ -6,7 +6,6 @@
 #include "RHI/RootSignature.h"
 #include "RHI/Texture.h"
 #include "RHI/CPUDescriptorHeap.h"
-#include "RHI/DynamicResourceAllocator.h"
 #include "SceneView.h"
 #include "RenderGraph/RenderGraph.h"
 #include "ImGuizmo.h"
@@ -248,11 +247,11 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 				context.BindRootCBV(1, projection);
 
 				uint32 vertexOffset = 0;
-				DynamicAllocation vertexData = context.AllocateTransientMemory(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
+				ScratchAllocation vertexData = context.AllocateScratch(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
 				context.SetVertexBuffers(VertexBufferView(vertexData.GpuHandle, pDrawData->TotalVtxCount, sizeof(ImDrawVert), 0));
 
 				uint32 indexOffset = 0;
-				DynamicAllocation indexData = context.AllocateTransientMemory(sizeof(ImDrawIdx) * pDrawData->TotalIdxCount);
+				ScratchAllocation indexData = context.AllocateScratch(sizeof(ImDrawIdx) * pDrawData->TotalIdxCount);
 				context.SetIndexBuffer(IndexBufferView(indexData.GpuHandle, pDrawData->TotalIdxCount, ResourceFormat::R16_UINT, 0));
 
 				ImVec2 clipOff = pDrawData->DisplayPos;

@@ -4,7 +4,7 @@
 
 class SyncPoint;
 
-struct DynamicAllocation
+struct ScratchAllocation
 {
 	RefCountPtr<Buffer> pBackingResource;
 	D3D12_GPU_VIRTUAL_ADDRESS GpuHandle{ 0 };
@@ -17,10 +17,10 @@ struct DynamicAllocation
 	}
 };
 
-class DynamicAllocationManager : public GraphicsObject
+class ScratchAllocationManager : public GraphicsObject
 {
 public:
-	DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags, uint64 pageSize);
+	ScratchAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags, uint64 pageSize);
 
 	RefCountPtr<Buffer> AllocatePage();
 	void FreePages(const SyncPoint& syncPoint, const std::vector<RefCountPtr<Buffer>>& pPages);
@@ -32,15 +32,15 @@ private:
 	FencedPool<RefCountPtr<Buffer>, true> m_PagePool;
 };
 
-class DynamicResourceAllocator
+class ScratchAllocator
 {
 public:
-	DynamicResourceAllocator(DynamicAllocationManager* pPageManager);
-	DynamicAllocation Allocate(uint64 size, int alignment);
+	ScratchAllocator(ScratchAllocationManager* pPageManager);
+	ScratchAllocation Allocate(uint64 size, int alignment);
 	void Free(const SyncPoint& syncPoint);
 
 private:
-	DynamicAllocationManager* m_pPageManager;
+	ScratchAllocationManager* m_pPageManager;
 
 	RefCountPtr<Buffer> m_pCurrentPage;
 	uint64 m_CurrentOffset = 0;

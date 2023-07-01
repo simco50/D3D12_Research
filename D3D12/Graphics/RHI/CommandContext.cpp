@@ -2,7 +2,6 @@
 #include "CommandContext.h"
 #include "Graphics.h"
 #include "CommandQueue.h"
-#include "DynamicResourceAllocator.h"
 #include "GPUDescriptorHeap.h"
 #include "PipelineState.h"
 #include "RootSignature.h"
@@ -12,10 +11,10 @@
 #include "ShaderBindingTable.h"
 #include "StateObject.h"
 
-CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager)
+CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pScratchAllocationManager)
 	: GraphicsObject(pParent),
 	m_ShaderResourceDescriptorAllocator(pDescriptorHeap),
-	m_DynamicAllocator(pDynamicMemoryManager),
+	m_ScratchAllocator(pScratchAllocationManager),
 	m_Type(type)
 {
 	check(pCommandList.As(&m_pCommandList));
@@ -76,7 +75,7 @@ SyncPoint CommandContext::Execute(const Span<CommandContext* const>& contexts)
 
 void CommandContext::Free(const SyncPoint& syncPoint)
 {
-	m_DynamicAllocator.Free(syncPoint);
+	m_ScratchAllocator.Free(syncPoint);
 	GetParent()->GetCommandQueue(m_Type)->FreeAllocator(syncPoint, m_pAllocator);
 	m_pAllocator = nullptr;
 	GetParent()->FreeCommandList(this);
@@ -225,7 +224,7 @@ void CommandContext::CopyBuffer(const Buffer* pSource, const Buffer* pTarget, ui
 
 void CommandContext::WriteBuffer(const Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
 {
-	DynamicAllocation allocation = AllocateTransientMemory(dataSize, 1);
+	ScratchAllocation allocation = AllocateScratch(dataSize, 1);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
 	CopyBuffer(allocation.pBackingResource, pResource, dataSize, allocation.Offset, offset);
 }
@@ -234,7 +233,7 @@ void CommandContext::WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOUR
 {
 	FlushResourceBarriers();
 	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceDatas.GetSize());
-	DynamicAllocation allocation = AllocateTransientMemory(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+	ScratchAllocation allocation = AllocateScratch(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceDatas.GetSize(), subResourceDatas.GetData());
 }
 
@@ -359,7 +358,7 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 	}
 	else
 	{
-		DynamicAllocation allocation = AllocateTransientMemory(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+		ScratchAllocation allocation = AllocateScratch(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 		memcpy(allocation.pMappedMemory, pData, dataSize);
 
 		if (m_CurrentCommandContext == CommandListContext::Graphics)
@@ -384,9 +383,9 @@ void CommandContext::SetShadingRateImage(Texture* pTexture)
 	m_pCommandList->RSSetShadingRateImage(pTexture->GetResource());
 }
 
-DynamicAllocation CommandContext::AllocateTransientMemory(uint64 size, uint32 alignment /*= 16*/)
+ScratchAllocation CommandContext::AllocateScratch(uint64 size, uint32 alignment /*= 16*/)
 {
-	return m_DynamicAllocator.Allocate(size, alignment);
+	return m_ScratchAllocator.Allocate(size, alignment);
 }
 
 bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
@@ -719,7 +718,7 @@ void CommandContext::SetViewport(const FloatRect& rect, float minDepth /*= 0.0f*
 void CommandContext::BindDynamicVertexBuffer(uint32 rootIndex, uint32 elementCount, uint32 elementSize, const void* pData)
 {
 	uint32 bufferSize = elementCount * elementSize;
-	DynamicAllocation allocation = AllocateTransientMemory(bufferSize);
+	ScratchAllocation allocation = AllocateScratch(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_VERTEX_BUFFER_VIEW view = {};
 	view.BufferLocation = allocation.GpuHandle;
@@ -731,7 +730,7 @@ void CommandContext::BindDynamicVertexBuffer(uint32 rootIndex, uint32 elementCou
 void CommandContext::BindDynamicIndexBuffer(uint32 elementCount, const void* pData, ResourceFormat format)
 {
 	uint32 bufferSize = (uint32)RHI::GetRowPitch(format, elementCount);
-	DynamicAllocation allocation = AllocateTransientMemory(bufferSize);
+	ScratchAllocation allocation = AllocateScratch(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_INDEX_BUFFER_VIEW view = {};
 	view.BufferLocation = allocation.GpuHandle;

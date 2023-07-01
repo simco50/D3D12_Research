@@ -2,7 +2,7 @@
 #include "RHI.h"
 #include "GraphicsResource.h"
 #include "GPUDescriptorHeap.h"
-#include "DynamicResourceAllocator.h"
+#include "SCratchAllocator.h"
 
 struct VertexBufferView;
 struct IndexBufferView;
@@ -135,7 +135,7 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, DynamicAllocationManager* pDynamicMemoryManager);
+	CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pDynamicMemoryManager);
 
 	void Reset();
 	SyncPoint Execute();
@@ -201,7 +201,7 @@ public:
 		BindRootCBV(rootIndex, &data, sizeof(T));
 	}
 
-	DynamicAllocation AllocateTransientMemory(uint64 size, uint32 alignment = 16u);
+	ScratchAllocation AllocateScratch(uint64 size, uint32 alignment = 16u);
 
 	ID3D12GraphicsCommandList6* GetCommandList() const { return m_pCommandList; }
 
@@ -228,7 +228,7 @@ private:
 	};
 
 	DynamicGPUDescriptorAllocator m_ShaderResourceDescriptorAllocator;
-	DynamicResourceAllocator m_DynamicAllocator;
+	ScratchAllocator m_ScratchAllocator;
 
 	RefCountPtr<ID3D12GraphicsCommandList6> m_pCommandList;
 	RefCountPtr<ID3D12CommandAllocator> m_pAllocator;

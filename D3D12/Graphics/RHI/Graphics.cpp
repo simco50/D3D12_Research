@@ -7,7 +7,6 @@
 #include "RootSignature.h"
 #include "PipelineState.h"
 #include "Shader.h"
-#include "DynamicResourceAllocator.h"
 #include "RingBufferAllocator.h"
 #include "Texture.h"
 #include "ResourceViews.h"
@@ -412,7 +411,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY]				= new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
 	const uint64 scratchAllocatorPageSize						= 256 * Math::KilobytesToBytes;
-	m_pDynamicAllocationManager									= new DynamicAllocationManager(this, BufferFlag::Upload, scratchAllocatorPageSize);
+	m_pScratchAllocationManager									= new ScratchAllocationManager(this, BufferFlag::Upload, scratchAllocatorPageSize);
 
 	const uint64 uploadRingBufferSize							= 64 * Math::MegaBytesToBytes;
 	m_pRingBufferAllocator										= new RingBufferAllocator(this, uploadRingBufferSize);
@@ -458,7 +457,7 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 			RefCountPtr<ID3D12CommandList> pCommandList;
 			VERIFY_HR(m_pDevice->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled %s Commandlist %d", D3D::CommandlistTypeToString(type), m_CommandListPool[typeIndex].size()).c_str());
-			pContext = m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, pCommandList, type, m_pGlobalViewHeap, m_pDynamicAllocationManager));
+			pContext = m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, pCommandList, type, m_pGlobalViewHeap, m_pScratchAllocationManager));
 		}
 	}
 	pContext->Reset();

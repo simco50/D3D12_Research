@@ -2,7 +2,6 @@
 #include "StateObject.h"
 #include "ShaderBindingTable.h"
 #include "CommandContext.h"
-#include "DynamicResourceAllocator.h"
 
 uint32 ComputeRecordSize(uint32 size)
 {
@@ -59,7 +58,7 @@ void ShaderBindingTable::Commit(CommandContext& context, D3D12_DISPATCH_RAYS_DES
 	uint32 hitSection = m_HitRecordSize * (uint32)m_HitGroupShaderRecords.size();
 	uint32 hitSectionAligned = Math::AlignUp<uint32>(hitSection, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
 	totalSize = Math::AlignUp<uint32>(rayGenSectionAligned + missSectionAligned + hitSectionAligned, 256);
-	DynamicAllocation allocation = context.AllocateTransientMemory(totalSize, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
+	ScratchAllocation allocation = context.AllocateScratch(totalSize, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
 	allocation.Clear();
 
 	char* pStart = (char*)allocation.pMappedMemory;

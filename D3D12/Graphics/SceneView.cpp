@@ -6,7 +6,6 @@
 #include "RHI/Texture.h"
 #include "RHI/Graphics.h"
 #include "RHI/CommandContext.h"
-#include "RHI/DynamicResourceAllocator.h"
 #include "Mesh.h"
 #include "Light.h"
 #include "Core/ConsoleVariables.h"

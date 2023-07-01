@@ -88,7 +88,7 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pT
 
 				if (numLines != 0)
 				{
-					DynamicAllocation allocation = context.AllocateTransientMemory(numLines * VertexStride);
+					ScratchAllocation allocation = context.AllocateScratch(numLines * VertexStride);
 					memcpy(allocation.pMappedMemory, m_Lines, numLines * VertexStride);
 					context.BindRootSRV(0, allocation.GpuHandle);
 					context.SetPipelineState(m_pLinesPSO);
@@ -97,7 +97,7 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pT
 				}
 				if (numTriangles != 0)
 				{
-					DynamicAllocation allocation = context.AllocateTransientMemory(numTriangles * VertexStride);
+					ScratchAllocation allocation = context.AllocateScratch(numTriangles * VertexStride);
 					memcpy(allocation.pMappedMemory, m_Triangles, numTriangles * VertexStride);
 					context.BindRootSRV(0, allocation.GpuHandle);
 					context.SetPipelineState(m_pTrianglesPSO);

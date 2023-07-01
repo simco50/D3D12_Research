@@ -7,7 +7,7 @@
 #include "D3D.h"
 #include "Fence.h"
 
-class DynamicAllocationManager;
+class ScratchAllocationManager;
 class ShaderManager;
 class GPUDescriptorHeap;
 class CPUDescriptorHeap;
@@ -226,7 +226,7 @@ private:
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 	std::array<RefCountPtr<CPUDescriptorHeap>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
-	RefCountPtr<DynamicAllocationManager> m_pDynamicAllocationManager;
+	RefCountPtr<ScratchAllocationManager> m_pScratchAllocationManager;
 	RefCountPtr<RingBufferAllocator> m_pRingBufferAllocator;
 
 	std::vector<RefCountPtr<GraphicsObject>> m_GlobalResources;

@@ -83,7 +83,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 		.Write(pPrecomputeData)
 		.Bind([=](CommandContext& context)
 			{
-				DynamicAllocation allocation = context.AllocateTransientMemory(precomputedLightDataSize);
+				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
 				const Matrix& viewMatrix = pView->MainView.View;
@@ -165,7 +165,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 		.Write(pPrecomputeData)
 		.Bind([=](CommandContext& context)
 			{
-				DynamicAllocation allocation = context.AllocateTransientMemory(precomputedLightDataSize);
+				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
 				const Matrix& viewMatrix = pView->MainView.View;
