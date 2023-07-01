@@ -413,7 +413,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	const uint64 scratchAllocatorPageSize						= 256 * Math::KilobytesToBytes;
 	m_pScratchAllocationManager									= new ScratchAllocationManager(this, BufferFlag::Upload, scratchAllocatorPageSize);
 
-	const uint64 uploadRingBufferSize							= 64 * Math::MegaBytesToBytes;
+	const uint64 uploadRingBufferSize							= 128 * Math::MegaBytesToBytes;
 	m_pRingBufferAllocator										= new RingBufferAllocator(this, uploadRingBufferSize);
 
 	m_pGlobalViewHeap											= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 16384);
