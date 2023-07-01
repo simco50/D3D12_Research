@@ -174,6 +174,6 @@ namespace GraphicsCommon
 	extern RefCountPtr<CommandSignature> pIndirectDispatchSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDispatchMeshSignature;
 
-	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, const Image& image, bool sRGB, const char* pName = nullptr);
-	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName = nullptr);
+	RefCountPtr<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName = nullptr);
+	RefCountPtr<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName = nullptr);
 }

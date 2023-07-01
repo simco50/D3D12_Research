@@ -284,16 +284,13 @@ namespace GraphicsCommon
 
 	void Create(GraphicsDevice* pDevice)
 	{
-		CommandContext& context = *pDevice->AllocateCommandContext();
-
-		auto RegisterDefaultTexture = [pDevice, &context](DefaultTexture type, const char* pName, const TextureDesc& desc, const uint32* pData)
+		auto RegisterDefaultTexture = [pDevice](DefaultTexture type, const char* pName, const TextureDesc& desc, const uint32* pData)
 		{
-			RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName);
 			D3D12_SUBRESOURCE_DATA data;
 			data.pData = pData;
 			data.RowPitch = RHI::GetRowPitch(desc.Format, desc.Width);
 			data.SlicePitch = RHI::GetSlicePitch(desc.Format, desc.Width, desc.Height);
-			context.WriteTexture(pTexture, data, 0);
+			RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName, data);
 			DefaultTextures[(int)type] = pTexture;
 		};
 
@@ -324,10 +321,8 @@ namespace GraphicsCommon
 		};
 		RegisterDefaultTexture(DefaultTexture::CheckerPattern, "Checker Pattern", TextureDesc::Create2D(2, 2, ResourceFormat::RGBA8_UNORM, 1, textureFlags), checkerPixels);
 
-		DefaultTextures[(int)DefaultTexture::ColorNoise256] = CreateTextureFromFile(context, "Resources/Textures/Noise.png", false, "Noise");
-		DefaultTextures[(int)DefaultTexture::BlueNoise512] = CreateTextureFromFile(context, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");
-
-		context.Execute();
+		DefaultTextures[(int)DefaultTexture::ColorNoise256] = CreateTextureFromFile(pDevice, "Resources/Textures/Noise.png", false, "Noise");
+		DefaultTextures[(int)DefaultTexture::BlueNoise512] = CreateTextureFromFile(pDevice, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");
 
 		{
 			CommandSignatureInitializer sigDesc;
@@ -363,9 +358,8 @@ namespace GraphicsCommon
 		return DefaultTextures[(int)type];
 	}
 
-	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, const Image& image, bool sRGB, const char* pName)
+	RefCountPtr<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName)
 	{
-		GraphicsDevice* pDevice = context.GetParent();
 		TextureDesc desc;
 		desc.Width = image.GetWidth();
 		desc.Height = image.GetHeight();
@@ -396,17 +390,16 @@ namespace GraphicsCommon
 			}
 			pImg = pImg->GetNextImage();
 		}
-		RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName ? pName : "");
-		context.WriteTexture(pTexture, subResourceData, 0);
+		RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName ? pName : "", subResourceData);
 		return pTexture;
 	}
 
-	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName)
+	RefCountPtr<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName)
 	{
 		Image image;
 		if (image.Load(pFilePath))
 		{
-			return CreateTextureFromImage(context, image, sRGB, pName);
+			return CreateTextureFromImage(pDevice, image, sRGB, pName);
 		}
 		return nullptr;
 	}

@@ -53,11 +53,11 @@ private:
 	void OnResizeViewport(int width, int height);
 
 	void InitializePipelines();
-	void SetupScene(CommandContext& context);
+	void SetupScene();
 
 	void UpdateImGui();
 
-	void LoadMesh(const std::string& filePath, CommandContext& context, World& world);
+	void LoadMesh(const std::string& filePath, World& world);
 	void CreateShadowViews(SceneView& view, World& world);
 	
 	RefCountPtr<GraphicsDevice> m_pDevice;

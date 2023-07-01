@@ -8,6 +8,7 @@
 #include "PipelineState.h"
 #include "Shader.h"
 #include "DynamicResourceAllocator.h"
+#include "RingBufferAllocator.h"
 #include "Texture.h"
 #include "ResourceViews.h"
 #include "Buffer.h"
@@ -406,18 +407,23 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 	m_pFrameFence = new Fence(this, "Frame Fence");
 
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT] =	new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE] =	new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY] =		new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_DIRECT]				= new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COMPUTE]			= new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	m_CommandQueues[D3D12_COMMAND_LIST_TYPE_COPY]				= new CommandQueue(this, D3D12_COMMAND_LIST_TYPE_COPY);
 
-	m_pDynamicAllocationManager =	new DynamicAllocationManager(this, BufferFlag::Upload);
-	m_pGlobalViewHeap =				new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 16384);
-	m_pGlobalSamplerHeap =			new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
+	const uint64 scratchAllocatorPageSize						= 256 * Math::KilobytesToBytes;
+	m_pDynamicAllocationManager									= new DynamicAllocationManager(this, BufferFlag::Upload, scratchAllocatorPageSize);
 
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] =	new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 8196);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER] =		new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 2048);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV] =			new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV] =			new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
+	const uint64 uploadRingBufferSize							= 64 * Math::MegaBytesToBytes;
+	m_pRingBufferAllocator										= new RingBufferAllocator(this, uploadRingBufferSize);
+
+	m_pGlobalViewHeap											= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 256, 16384);
+	m_pGlobalSamplerHeap										= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
+
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]	= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 8196);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]		= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 2048);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]			= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
+	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]			= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
 
 	uint8 smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
@@ -509,7 +515,7 @@ void GraphicsDevice::UnregisterGlobalResourceView(DescriptorHandle& handle)
 	}
 }
 
-RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName)
+RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData)
 {
 	auto GetResourceDesc = [](const TextureDesc& textureDesc)
 	{
@@ -593,6 +599,17 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 	Texture* pTexture = new Texture(this, desc, pResource);
 	pTexture->SetResourceState(resourceState);
 	pTexture->SetName(pName);
+
+	if (initData.GetSize() > 0)
+	{
+		check(initData.GetSize() == desc.DepthOrArraySize * desc.Mips);
+
+		uint64 requiredSize = GetRequiredIntermediateSize(pTexture->GetResource(), 0, initData.GetSize());
+		RingBufferAllocation allocation;
+		m_pRingBufferAllocator->Allocate((uint32)requiredSize, allocation);
+		UpdateSubresources(allocation.pContext->GetCommandList(), pTexture->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, 0, initData.GetSize(), initData.GetData());
+		m_pRingBufferAllocator->Free(allocation);
+	}
 
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::ShaderResource))
 	{
@@ -723,7 +740,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	return pTexture;
 }
 
-RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName)
+RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData)
 {
 	auto GetResourceDesc = [](const BufferDesc& bufferDesc)
 	{
@@ -788,6 +805,22 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	{
 		pBuffer->m_pUAV = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, isRaw, withCounter));
 		pBuffer->m_NeedsStateTracking = true;
+	}
+
+	if (pInitData)
+	{
+		if (EnumHasAllFlags(desc.Usage, BufferFlag::Upload))
+		{
+			memcpy((char*)pBuffer->GetMappedData(), pInitData, desc.Size);
+		}
+		else
+		{
+			RingBufferAllocation allocation;
+			m_pRingBufferAllocator->Allocate((uint32)desc.Size, allocation);
+			memcpy((char*)allocation.pMappedMemory, pInitData, desc.Size);
+			allocation.pContext->CopyBuffer(allocation.pBackingResource, pBuffer, desc.Size, allocation.Offset, 0);
+			m_pRingBufferAllocator->Free(allocation);
+		}
 	}
 
 	return pBuffer;

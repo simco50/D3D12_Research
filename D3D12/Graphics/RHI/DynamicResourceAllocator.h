@@ -20,15 +20,15 @@ struct DynamicAllocation
 class DynamicAllocationManager : public GraphicsObject
 {
 public:
-	DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags);
+	DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags, uint64 pageSize);
 
-	RefCountPtr<Buffer> AllocatePage(uint64 size);
-	RefCountPtr<Buffer> CreateNewPage(const char* pName, uint64 size);
-
+	RefCountPtr<Buffer> AllocatePage();
 	void FreePages(const SyncPoint& syncPoint, const std::vector<RefCountPtr<Buffer>>& pPages);
+	uint64 GetPageSize() const { return m_PageSize; }
 
 private:
 	BufferFlag m_BufferFlags;
+	uint64 m_PageSize;
 	FencedPool<RefCountPtr<Buffer>, true> m_PagePool;
 };
 

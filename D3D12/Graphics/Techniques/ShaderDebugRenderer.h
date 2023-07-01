@@ -42,7 +42,7 @@ private:
 		Vector2i Inc;
 	};
 
-	void BuildFontAtlas(GraphicsDevice* pDevice, CommandContext& context);
+	void BuildFontAtlas(GraphicsDevice* pDevice);
 
 	RefCountPtr<RootSignature> m_pCommonRS;
 

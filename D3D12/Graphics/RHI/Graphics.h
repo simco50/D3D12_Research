@@ -13,6 +13,7 @@ class GPUDescriptorHeap;
 class CPUDescriptorHeap;
 class SwapChain;
 class CommandSignatureInitializer;
+class RingBufferAllocator;
 
 using WindowHandle = HWND;
 
@@ -137,9 +138,9 @@ public:
 	DescriptorHandle RegisterGlobalResourceView(D3D12_CPU_DESCRIPTOR_HANDLE view);
 	void UnregisterGlobalResourceView(DescriptorHandle& handle);
 
-	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
+	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData = {});
 	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);
-	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
+	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
 	void DeferReleaseObject(ID3D12Object* pObject);
 
 	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
@@ -159,6 +160,7 @@ public:
 		m_GlobalResources.push_back(std::move(pResource));
 	}
 
+	RingBufferAllocator* GetRingBuffer() const { return m_pRingBufferAllocator; }
 	GPUDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
 	GPUDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
 	ID3D12Device5* GetDevice() const { return m_pDevice.Get(); }
@@ -225,6 +227,7 @@ private:
 	std::unique_ptr<ShaderManager> m_pShaderManager;
 	std::array<RefCountPtr<CPUDescriptorHeap>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
 	RefCountPtr<DynamicAllocationManager> m_pDynamicAllocationManager;
+	RefCountPtr<RingBufferAllocator> m_pRingBufferAllocator;
 
 	std::vector<RefCountPtr<GraphicsObject>> m_GlobalResources;
 

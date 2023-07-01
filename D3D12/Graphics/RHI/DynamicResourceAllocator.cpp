@@ -2,26 +2,20 @@
 #include "DynamicResourceAllocator.h"
 #include "Graphics.h"
 #include "Buffer.h"
+#include "CommandContext.h"
 
-constexpr static uint64 PAGE_SIZE = Math::MegaBytesToBytes * 1;
-
-DynamicAllocationManager::DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags)
-	: GraphicsObject(pParent), m_BufferFlags(bufferFlags)
+DynamicAllocationManager::DynamicAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags, uint64 pageSize)
+	: GraphicsObject(pParent), m_BufferFlags(bufferFlags), m_PageSize(pageSize)
 {
 }
 
-RefCountPtr<Buffer> DynamicAllocationManager::AllocatePage(uint64 size)
+RefCountPtr<Buffer> DynamicAllocationManager::AllocatePage()
 {
-	auto AllocatePage = [this, size]() {
-		std::string name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * size);
-		return CreateNewPage(name.c_str(), size);
+	auto AllocateNewPage = [this]() {
+		std::string name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * m_PageSize);
+		return GetParent()->CreateBuffer(BufferDesc::CreateBuffer(m_PageSize, BufferFlag::Upload), "Page");
 	};
-	return m_PagePool.Allocate(AllocatePage);
-}
-
-RefCountPtr<Buffer> DynamicAllocationManager::CreateNewPage(const char* pName, uint64 size)
-{
-	return GetParent()->CreateBuffer(BufferDesc::CreateBuffer((uint32)size, m_BufferFlags), pName);
+	return m_PagePool.Allocate(AllocateNewPage);
 }
 
 void DynamicAllocationManager::FreePages(const SyncPoint& syncPoint, const std::vector<RefCountPtr<Buffer>>& pPages)
@@ -43,9 +37,9 @@ DynamicAllocation DynamicResourceAllocator::Allocate(uint64 size, int alignment)
 	DynamicAllocation allocation;
 	allocation.Size = bufferSize;
 
-	if (bufferSize > PAGE_SIZE)
+	if (bufferSize > m_pPageManager->GetPageSize())
 	{
-		RefCountPtr<Buffer> pPage = m_pPageManager->CreateNewPage("Large Page", size);
+		RefCountPtr<Buffer> pPage = m_pPageManager->GetParent()->CreateBuffer(BufferDesc::CreateBuffer(size, BufferFlag::Upload), "Large Page");
 		allocation.Offset = 0;
 		allocation.GpuHandle = pPage->GetGpuHandle();
 		allocation.pBackingResource = pPage;
@@ -55,9 +49,9 @@ DynamicAllocation DynamicResourceAllocator::Allocate(uint64 size, int alignment)
 	{
 		m_CurrentOffset = Math::AlignUp<uint64>(m_CurrentOffset, alignment);
 
-		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize >= PAGE_SIZE)
+		if (m_pCurrentPage == nullptr || m_CurrentOffset + bufferSize >= m_pCurrentPage->GetSize())
 		{
-			m_pCurrentPage = m_pPageManager->AllocatePage(PAGE_SIZE);
+			m_pCurrentPage = m_pPageManager->AllocatePage();
 			m_CurrentOffset = 0;
 			m_UsedPages.push_back(m_pCurrentPage);
 		}

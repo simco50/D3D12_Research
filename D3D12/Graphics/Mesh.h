@@ -60,7 +60,7 @@ class Mesh
 {
 public:
 	~Mesh();
-	bool Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* pContext, float scale = 1.0f);
+	bool Load(const char* pFilePath, GraphicsDevice* pDevice, float scale = 1.0f);
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
 	SubMesh& GetMesh(const int index) { return m_Meshes[index]; }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }

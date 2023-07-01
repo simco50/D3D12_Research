@@ -146,9 +146,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	InitializePipelines();
 
-	CommandContext* pContext = m_pDevice->AllocateCommandContext();
-	SetupScene(*pContext);
-	pContext->Execute();
+	SetupScene();
 
 	OnResizeOrMove(windowRect.x, windowRect.y);
 	OnResizeViewport(windowRect.x, windowRect.y);
@@ -163,7 +161,7 @@ DemoApp::~DemoApp()
 	Profiler::Get()->Shutdown();
 }
 
-void DemoApp::SetupScene(CommandContext& context)
+void DemoApp::SetupScene()
 {
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetNearPlane(80.0f);
@@ -171,7 +169,7 @@ void DemoApp::SetupScene(CommandContext& context)
 	m_pCamera->SetPosition(Vector3(-1.3f, 12.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
-	LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", context, m_World);
+	LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", m_World);
 
 	{
 		Light sunLight = Light::Directional(Vector3::Zero, Vector3::Down, 10);
@@ -183,7 +181,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		Light spot = Light::Spot(Vector3(0, 0, 0), 4.0f, Vector3::Down, 70.0f, 50.0f, 100.0f);
 		spot.CastShadows = true;
 		spot.VolumetricLighting = true;
-		spot.pLightTexture = GraphicsCommon::CreateTextureFromFile(context, "Resources/Textures/LightProjector.png", false, "Light Cookie");
+		spot.pLightTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LightProjector.png", false, "Light Cookie");
 
 		spot.Position = Vector3(9.5, 3, 3.5);
 		m_World.Lights.push_back(spot);
@@ -203,7 +201,7 @@ void DemoApp::SetupScene(CommandContext& context)
 		volume.MaxNumRays = 512;
 	}
 
-	m_pLensDirtTexture = GraphicsCommon::CreateTextureFromFile(context, "Resources/Textures/LensDirt.dds", true, "Lens Dirt");
+	m_pLensDirtTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LensDirt.dds", true, "Lens Dirt");
 }
 
 void DemoApp::Update()
@@ -1374,9 +1372,7 @@ void DemoApp::UpdateImGui()
 				if (GetOpenFileNameA(&ofn) == TRUE)
 				{
 					m_World.Meshes.clear();
-					CommandContext* pContext = m_pDevice->AllocateCommandContext();
-					LoadMesh(ofn.lpstrFile, *pContext, m_World);
-					pContext->Execute();
+					LoadMesh(ofn.lpstrFile, m_World);
 				}
 			}
 			ImGui::EndMenu();
@@ -1629,10 +1625,10 @@ void DemoApp::UpdateImGui()
 	ImGui::End();
 }
 
-void DemoApp::LoadMesh(const std::string& filePath, CommandContext& context, World& world)
+void DemoApp::LoadMesh(const std::string& filePath, World& world)
 {
 	std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-	pMesh->Load(filePath.c_str(), m_pDevice, &context, 1.0f);
+	pMesh->Load(filePath.c_str(), m_pDevice, 1.0f);
 	world.Meshes.push_back(std::move(pMesh));
 }
 

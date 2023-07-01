@@ -10,6 +10,7 @@
 #include "Core/Utils.h"
 #include "ShaderInterop.h"
 #include "Graphics/SceneView.h"
+#include "Graphics/RHI/RingBufferAllocator.h"
 
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS
@@ -25,7 +26,7 @@ Mesh::~Mesh()
 {
 }
 
-bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* pContext, float uniformScale /*= 1.0f*/)
+bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, float uniformScale /*= 1.0f*/)
 {
 	struct MeshData
 	{
@@ -239,7 +240,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 			m_Materials.push_back(Material());
 			Material& material = m_Materials.back();
 
-			auto RetrieveTexture = [this, &textureMap, pContext, pFilePath](const cgltf_texture_view& texture, bool srgb) -> Texture*
+			auto RetrieveTexture = [this, &textureMap, pDevice, pFilePath](const cgltf_texture_view& texture, bool srgb) -> Texture*
 			{
 				if (texture.texture)
 				{
@@ -257,7 +258,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 							validImage =image.Load(Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str());
 
 						if(validImage)
-							pTex = GraphicsCommon::CreateTextureFromImage(*pContext, image, srgb, pName);
+							pTex = GraphicsCommon::CreateTextureFromImage(pDevice, image, srgb, pName);
 
 						if (!pTex.Get())
 						{
@@ -501,7 +502,10 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 
 	checkf(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
 	m_pGeometryData = pDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Geometry Buffer");
-	DynamicAllocation allocation = pContext->AllocateTransientMemory(bufferSize);
+
+	RingBufferAllocation allocation;
+	pDevice->GetRingBuffer()->Allocate((uint32)bufferSize, allocation);
+
 	char* pMappedMemory = (char*)allocation.pMappedMemory;
 
 	uint64 dataOffset = 0;
@@ -597,7 +601,8 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* 
 		m_Meshes.push_back(subMesh);
 	}
 
-	pContext->CopyBuffer(allocation.pBackingResource, m_pGeometryData, bufferSize, allocation.Offset, 0);
+	allocation.pContext->CopyBuffer(allocation.pBackingResource, m_pGeometryData, bufferSize, allocation.Offset, 0);
+	pDevice->GetRingBuffer()->Free(allocation);
 
 	return true;
 }

@@ -155,14 +155,12 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	unsigned char* pPixels;
 	int width, height;
 	io.Fonts->GetTexDataAsRGBA32(&pPixels, &height, &width);
-	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), "ImGui Font");
-	CommandContext* pContext = pDevice->AllocateCommandContext();
+
 	D3D12_SUBRESOURCE_DATA data;
 	data.pData = pPixels;
 	data.RowPitch = RHI::GetRowPitch(ResourceFormat::RGBA8_UNORM, width);
 	data.SlicePitch = RHI::GetSlicePitch(ResourceFormat::RGBA8_UNORM, width, height);
-	pContext->WriteTexture(gFontTexture, data, 0);
-	pContext->Execute();
+	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), "ImGui Font", data);
 
 	gImGuiRS = new RootSignature(pDevice);
 	gImGuiRS->AddRootConstants<uint32>(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
