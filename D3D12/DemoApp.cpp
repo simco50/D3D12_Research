@@ -532,7 +532,7 @@ void DemoApp::Update()
 				else
 				{
 					graph.AddPass("Depth Prepass", RGPassFlag::Raster)
-						.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true)
+						.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true, RenderTargetLoadAction::Clear)
 						.Bind([=](CommandContext& context)
 							{
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
