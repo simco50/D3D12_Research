@@ -32,7 +32,7 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 	}
 
 	const TextureDesc& desc = pTexture->GetDesc();
-	RGTexture* pTarget = graph.Create("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, ResourceFormat::RGBA8_UNORM));
+	RGTexture* pTarget = graph.Create("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource));
 	SourceName = pTexture->GetName();
 	SourceDesc = pTexture->GetDesc();
 

@@ -203,9 +203,9 @@ void ImGuiRenderer::NewFrame()
 
 void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 {
-	RG_GRAPH_SCOPE("UI", graph);
+	RG_GRAPH_SCOPE("ImGui", graph);
 
-	graph.AddPass("ImGui Submit", RGPassFlag::NeverCull)
+	graph.AddPass("Submit", RGPassFlag::NeverCull)
 		.Bind([=](CommandContext& context)
 			{
 				ImGui::Render();
@@ -219,7 +219,7 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 					{
 						const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
 						Texture* pTexture = (Texture*)pCmd->GetTexID();
-						if (pTexture)
+						if (pTexture && pTexture->UseStateTracking())
 							context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 					}
 				}
