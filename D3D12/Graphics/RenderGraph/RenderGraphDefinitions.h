@@ -43,7 +43,7 @@ public:
 	const char* GetName() const { return pName; }
 	GraphicsResource* GetPhysical() const { return pPhysicalResource; }
 
-protected:
+//protected:
 	void SetResource(RefCountPtr<GraphicsResource> resource)
 	{
 		pResourceReference = resource;

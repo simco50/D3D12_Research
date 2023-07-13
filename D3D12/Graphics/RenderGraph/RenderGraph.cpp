@@ -282,7 +282,6 @@ void RGGraph::PopEvent()
 
 void RGGraph::Execute(CommandContext* pContext)
 {
-	Compile();
 
 	if (m_EnableResourceTrackerView)
 		DrawResourceTracker(m_EnableResourceTrackerView);

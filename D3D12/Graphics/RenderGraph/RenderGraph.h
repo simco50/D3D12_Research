@@ -197,6 +197,7 @@ public:
 	RGPass& DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool write, RenderTargetLoadAction stencilAccess = RenderTargetLoadAction::NoAccess);
 
 	NO_DISCARD const char* GetName() const { return pName; }
+	uint32 GetID() const { return ID; }
 
 private:
 	struct ResourceAccess
@@ -338,6 +339,8 @@ public:
 		return nullptr;
 	}
 
+	Span<RGResource*> GetResources() const { return m_Resources; }
+
 	void EnableResourceTrackerView() { m_EnableResourceTrackerView = true; }
 	void DumpGraph(const char* pPath) { m_pDumpGraphPath = CopyString(pPath); }
 
@@ -345,6 +348,7 @@ public:
 	void PopEvent();
 
 	RGBlackboard Blackboard;
+	void Compile();
 
 private:
 	const char* CopyString(const char* pStr)
@@ -355,7 +359,6 @@ private:
 		return pNewStr;
 	}
 
-	void Compile();
 
 	void ExecutePass(RGPass* pPass, CommandContext& context);
 	void PrepareResources(RGPass* pPass, CommandContext& context);

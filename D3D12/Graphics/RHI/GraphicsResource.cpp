@@ -29,3 +29,11 @@ void GraphicsResource::SetName(const char* pName)
 	D3D::SetObjectName(m_pResource, pName);
 	m_Name = pName;
 }
+
+void GraphicsResource::GetAllocationInfo(uint64& outSize, uint64& outAlignment) const
+{
+	D3D12_RESOURCE_DESC desc = m_pResource->GetDesc();
+	D3D12_RESOURCE_ALLOCATION_INFO info = GetParent()->GetDevice()->GetResourceAllocationInfo(0, 1, &desc);
+	outSize = info.SizeInBytes;
+	outAlignment = info.Alignment;
+}

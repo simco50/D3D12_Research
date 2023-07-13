@@ -118,6 +118,7 @@ public:
 
 	void SetName(const char* pName);
 	const char* GetName() const { return m_Name.c_str(); }
+	void GetAllocationInfo(uint64& outSize, uint64& outAlignment) const;
 
 	bool UseStateTracking() const { return m_NeedsStateTracking; }
 

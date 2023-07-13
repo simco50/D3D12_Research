@@ -50,7 +50,8 @@ public:
 	void OnResizeOrMove(int width, int height);
 
 private:
-	void OnResizeViewport(int width, int height);
+	void DrawTest(Span<RGResource*> resources);
+	void OnResizeViewport(int width, int height);;
 
 	void InitializePipelines();
 	void SetupScene();

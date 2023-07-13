@@ -203,6 +203,372 @@ void DemoApp::SetupScene()
 	m_pLensDirtTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LensDirt.dds", true, "Lens Dirt");
 }
 
+namespace ImGui
+{
+	inline void AddTextVertical(ImDrawList* DrawList, const char* text, ImVec2 pos, ImU32 text_color)
+	{
+		pos.x = IM_ROUND(pos.x);
+		pos.y = IM_ROUND(pos.y);
+		ImFont* font = GImGui->Font;
+		const ImFontGlyph* glyph;
+		ImVec2 text_size = CalcTextSize(text);
+		while (*text)
+		{
+			glyph = font->FindGlyph(*text++);
+			if (!glyph) continue;
+
+			DrawList->PrimReserve(6, 4);
+			DrawList->PrimQuadUV(
+				pos + ImVec2(glyph->Y0, -glyph->X0),
+				pos + ImVec2(glyph->Y0, -glyph->X1),
+				pos + ImVec2(glyph->Y1, -glyph->X1),
+				pos + ImVec2(glyph->Y1, -glyph->X0),
+
+				ImVec2(glyph->U0, glyph->V0),
+				ImVec2(glyph->U1, glyph->V0),
+				ImVec2(glyph->U1, glyph->V1),
+				ImVec2(glyph->U0, glyph->V1),
+				text_color);
+			pos.y -= glyph->AdvanceX;
+
+		}
+	}
+}
+
+void DemoApp::DrawTest(Span<RGResource*> graphResources)
+{
+	struct IRange
+	{
+		IRange() = default;
+		IRange(int begin, int end)
+			: Begin(begin), End(end)
+		{}
+
+		int Begin = 0;
+		int End = 0;
+
+		bool Overlaps(const IRange& other) const
+		{
+			return Begin <= other.End && End >= other.Begin;
+		}
+
+		static IRange Combine(const IRange& a, const IRange& b)
+		{
+			check(a.Overlaps(b));
+			return IRange(Math::Min(a.Begin, b.Begin), Math::Max(a.End, b.End));
+		}
+	};
+
+	struct RenderResource
+	{
+		std::string Name;
+		int Size;
+		int Alignment;
+		IRange Lifetime;
+		int Offset;
+		int ID;
+		GraphicsResource* pResource;
+
+		ImColor GetColor() const
+		{
+			srand(ID);
+			return ImColor(
+				Math::RandomRange(0.0f, 1.0f),
+				Math::RandomRange(0.0f, 1.0f),
+				Math::RandomRange(0.0f, 1.0f), 1.0f);
+		}
+	};
+
+	static bool liveCapture = false;
+	static std::vector<RenderResource> resourcesActual;
+	if (liveCapture)
+	{
+		resourcesActual.clear();
+		for(RGResource* pResource : graphResources)
+		{
+			if (pResource->IsImported || pResource->IsExported || !pResource->GetPhysical())
+				continue;
+
+			RenderResource& resource = resourcesActual.emplace_back();
+			resource.Lifetime.Begin = pResource->pFirstAccess ? pResource->pFirstAccess->GetID() : 0;
+			resource.Lifetime.End = pResource->pLastAccess ? pResource->pLastAccess->GetID() : 1000;
+			resource.ID = pResource->ID;
+			resource.Name = pResource->GetName();
+			resource.pResource = pResource->GetPhysical();
+
+			uint64 size, alignment;
+			pResource->GetPhysical()->GetAllocationInfo(size, alignment);
+			resource.Size = (int)size;
+			resource.Alignment = (int)alignment;
+		}
+	}
+
+	int lastPassID = 0;
+	for (RenderResource& resource : resourcesActual)
+		lastPassID = Math::Max(resource.Lifetime.End, lastPassID);
+
+	std::vector<RenderResource*> resources;
+	for (RenderResource& resource : resourcesActual)
+		resources.push_back(&resource);
+
+	// Sort resources largest to smallest, then largest alignment to smallest.
+	std::sort(resources.begin(), resources.end(), [](RenderResource* pA, RenderResource* pB)
+		{
+			if (pA->Size == pB->Size)
+				return pA->Alignment > pB->Alignment;
+			return pA->Size > pB->Size;
+		});
+
+	struct Heap
+	{
+		std::vector<RenderResource*> Allocations;
+		int Size;
+	};
+
+	std::vector<Heap> heaps;
+	for (RenderResource* pResource : resources)
+	{
+		if (pResource->Size == 0)
+			break;
+
+		Heap* pHeap = nullptr;
+		for (Heap& heap : heaps)
+		{
+			if (pResource->Size <= heap.Size)
+			{
+				// Collect all memory ranges of the heap that overlap with the lifetime of the resource we want to fit in.
+				std::vector<IRange> restricted_ranges;
+				for (RenderResource* existing : heap.Allocations)
+				{
+					if (existing->Lifetime.Overlaps(pResource->Lifetime))
+						restricted_ranges.push_back({ existing->Offset, existing->Offset + existing->Size });
+				}
+
+				// Sort each restricted range by start offset and merge any range that overlaps.
+				std::sort(restricted_ranges.begin(), restricted_ranges.end(), [](IRange& a, IRange& b) { return a.Begin < b.Begin; });
+				if (restricted_ranges.size() > 1)
+				{
+					for (int i = 0; i < restricted_ranges.size() - 1;)
+					{
+						if (restricted_ranges[i].Overlaps(restricted_ranges[i + 1]))
+						{
+							restricted_ranges[i] = IRange::Combine(restricted_ranges[i], restricted_ranges[i + 1]);
+							restricted_ranges[i + 1] = IRange::Combine(restricted_ranges[i], restricted_ranges[i + 1]);
+						}
+					}
+				}
+
+				// No overlaps with other resources? Then it can just fit at the start.
+				if (restricted_ranges.empty())
+				{
+					pResource->Offset = 0;
+					pHeap = &heap;
+					break;
+				}
+
+				// Does it fit between the start of the heap and the first conflicting range?
+				if (pResource->Size < restricted_ranges[0].Begin)
+				{
+					pResource->Offset = 0;
+					pHeap = &heap;
+					break;
+				}
+
+				// Does it fit between any gaps of the conflicting ranges?
+				bool found = false;
+				for (int i = 0; i < restricted_ranges.size() - 1; ++i)
+				{
+					int offset = Math::AlignUp(restricted_ranges[i].End, pResource->Alignment);
+					if (offset + pResource->Size <= restricted_ranges[i + 1].Begin)
+					{
+						pResource->Offset = offset;
+						found = true;
+						pHeap = &heap;
+						break;
+					}
+				}
+				if (found)
+					break;
+
+				// Does it fit after the last conflicting range and the end of the heap?
+				int offset = Math::AlignUp(restricted_ranges.back().End, pResource->Alignment);
+				if (offset + pResource->Size <= heap.Size)
+				{
+					pResource->Offset = offset;
+					pHeap = &heap;
+					break;
+				}
+			}
+		}
+
+		// If no heap is found, allocate a new one and fit it in the start.
+		if (!pHeap)
+		{
+			Heap& heap = heaps.emplace_back();
+			heap.Size = pResource->Size;
+			pResource->Offset = 0;
+			pHeap = &heap;
+		}
+		pHeap->Allocations.push_back(pResource);
+	}
+
+	// Show allocation sizes and heap layout
+	if (ImGui::Begin("Heap Layout"))
+	{
+		int totalResourcesSize = 0;
+		for (RenderResource& resource : resourcesActual)
+			totalResourcesSize += resource.Size;
+
+		int totalHeapSize = 0;
+		for (Heap& heap : heaps)
+			totalHeapSize += heap.Size;
+
+		int totalRenderGraphSize = 0;
+		std::unordered_set<GraphicsResource*> physical_resources;
+		for (RenderResource* resource : resources)
+		{
+			if (physical_resources.find(resource->pResource) == physical_resources.end())
+			{
+				physical_resources.insert(resource->pResource);
+				totalRenderGraphSize += (int)resource->Size;
+			}
+		}
+
+		if (ImGui::TreeNodeEx("Stats", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (ImGui::BeginTable("Size Stats", 2))
+			{
+				ImGui::TableHeader("Header");
+				ImGui::TableSetupColumn("Desc");
+				ImGui::TableSetupColumn("Size");
+				ImGui::TableHeadersRow();
+
+				ImGui::TableNextColumn();
+				ImGui::Text("Total resource sizes");
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+
+				ImGui::TableNextColumn();
+				ImGui::Text("Total aliased heaps size");
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(totalHeapSize).c_str());
+
+				ImGui::TableNextColumn();
+				ImGui::Text("Aliasing savings");
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize - totalHeapSize).c_str());
+
+				ImGui::TableNextColumn();
+				ImGui::Text("RenderGraph allocations size");
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(totalRenderGraphSize).c_str());
+
+				ImGui::EndTable();
+			}
+			ImGui::TreePop();
+		}
+
+		if (ImGui::TreeNodeEx("Resource Layouts", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			for (Heap& heap : heaps)
+			{
+				ImGui::Text("Heap (Size: %s - Allocations: %d)", Math::PrettyPrintDataSize(heap.Size).c_str(), heap.Allocations.size());
+				ImGui::Text("            ---------------------------------- Lifetime ----------------------------------");
+				ImDrawList* pDraw = ImGui::GetWindowDrawList();
+
+				ImVec2 cursor = ImGui::GetCursorScreenPos();
+
+				ImVec2 cellDimensions(8, 0.00002f);
+				auto GetBarHeight = [](uint32 size)
+				{
+					return (float)size;
+				};
+				float areaHeight = Math::Max(50.0f, cellDimensions.y * GetBarHeight(heap.Size));
+
+				ImGui::AddTextVertical(pDraw, "Size", cursor + ImVec2(0, areaHeight / 2), ImColor(1.0f, 1.0f, 1.0f));
+
+				cursor.x += 20;
+				pDraw->AddRectFilled(cursor, cursor + ImVec2((float)lastPassID + 1, GetBarHeight(heap.Size)) * cellDimensions, ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+				for (RenderResource* resource : heap.Allocations)
+				{
+					ImVec2 startPos = cursor + ImVec2((float)resource->Lifetime.Begin, GetBarHeight(resource->Offset)) * cellDimensions;
+					ImVec2 endPos = cursor + ImVec2((float)(resource->Lifetime.End + 1), GetBarHeight((resource->Size + resource->Offset))) * cellDimensions;
+					pDraw->AddRectFilled(startPos, endPos, ImColor(1.0f, 1.0f, 1.0f));
+					pDraw->AddRectFilled(startPos + ImVec2(1, 1), endPos - ImVec2(1, 1), resource->GetColor());
+					ImGui::ItemAdd(ImRect(startPos, endPos), resource->ID);
+					if (ImGui::IsItemHovered() && ImGui::BeginTooltip())
+					{
+						ImGui::Text("Name: %s", resource->Name.c_str());
+						ImGui::Text("Size: %s", Math::PrettyPrintDataSize(resource->Size).c_str());
+						ImGui::EndTooltip();
+					}
+				}
+				ImGui::Dummy(ImVec2(100, areaHeight));
+			}
+
+			ImGui::TreePop();
+		}
+	}
+
+	ImGui::End();
+
+	// Show data of all captured resources
+	if (ImGui::Begin("Resource Table"))
+	{
+		int remove = -1;
+		ImGui::Checkbox("Live Capture", &liveCapture);
+		if (ImGui::Button("Clear All"))
+			resourcesActual.clear();
+
+		if (ImGui::BeginTable("TestTable", 5))
+		{
+			ImGui::TableHeader("Header");
+			ImGui::TableSetupColumn("Color");
+			ImGui::TableSetupColumn("Size");
+			ImGui::TableSetupColumn("Alignment");
+			ImGui::TableSetupColumn("Lifetime");
+			ImGui::TableSetupColumn("Remove?");
+			ImGui::TableHeadersRow();
+			int idx = 0;
+			for (RenderResource& resource : resourcesActual)
+			{
+				ImGui::PushID(resource.ID);
+				ImGui::TableNextColumn();
+				ImGui::ColorButton("##color", resource.GetColor());
+				ImGui::SameLine();
+				ImGui::Text("%s", resource.Name.c_str());
+				ImGui::TableNextColumn();
+				ImGui::SliderInt("##size", &resource.Size, 1, 100000000);
+				ImGui::TableNextColumn();
+				ImGui::SliderInt("##alignment", &resource.Alignment, 1, 1 << 16);
+				ImGui::TableNextColumn();
+				ImGui::DragIntRange2("##lifetime", &resource.Lifetime.Begin, &resource.Lifetime.End, 1.0f, 0, lastPassID);
+				ImGui::TableNextColumn();
+				if (ImGui::Button("Remove"))
+				{
+					remove = idx;
+				}
+				++idx;
+				ImGui::PopID();
+			}
+			ImGui::EndTable();
+		}
+
+		if (ImGui::Button("Add resource"))
+		{
+			static int ID = 0xFFFF;
+			resourcesActual.push_back({ "New Resource", 0, 1, {0,0}, 0, ID++ });
+		}
+
+		if (remove >= 0)
+		{
+			std::swap(resourcesActual[remove], resourcesActual[resourcesActual.size() - 1]);
+			resourcesActual.pop_back();
+		}
+	}
+	ImGui::End();
+}
+
 void DemoApp::Update()
 {
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
@@ -1184,6 +1550,10 @@ void DemoApp::Update()
 
 		{
 			GPU_PROFILE_SCOPE("Render", pContext);
+			graph.Compile();
+
+			DrawTest(graph.GetResources());
+
 			graph.Execute(pContext);
 		}
 		
