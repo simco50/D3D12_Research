@@ -348,7 +348,7 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 				std::sort(restricted_ranges.begin(), restricted_ranges.end(), [](IRange& a, IRange& b) { return a.Begin < b.Begin; });
 				if (restricted_ranges.size() > 1)
 				{
-					for (int i = 0; i < restricted_ranges.size() - 1;)
+					for (int i = 0; i < restricted_ranges.size() - 1; ++i)
 					{
 						if (restricted_ranges[i].Overlaps(restricted_ranges[i + 1]))
 						{
@@ -404,10 +404,30 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 		// If no heap is found, allocate a new one and fit it in the start.
 		if (!pHeap)
 		{
-			Heap& heap = heaps.emplace_back();
-			heap.Size = pResource->Size;
-			pResource->Offset = 0;
-			pHeap = &heap;
+			bool needNewHeap = true;
+			if (!heaps.empty())
+			{
+				for (int i = (int)heaps.size() - 1; i >= 0; --i)
+				{
+					int newSize = Math::AlignUp(pResource->Size + heaps[i].Size, pResource->Alignment);
+					if (pResource->Size + heaps[i].Size < (2 << 20))
+					{
+						heaps[i].Size = newSize;
+						pResource->Offset = newSize - pResource->Size;
+						pHeap = &heaps[i];
+						needNewHeap = false;
+						break;
+					}
+				}
+			}
+
+			if (needNewHeap)
+			{
+				Heap& heap = heaps.emplace_back();
+				heap.Size = pResource->Size;
+				pResource->Offset = 0;
+				pHeap = &heap;
+			}
 		}
 		pHeap->Allocations.push_back(pResource);
 	}
@@ -538,7 +558,7 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 				ImGui::SameLine();
 				ImGui::Text("%s", resource.Name.c_str());
 				ImGui::TableNextColumn();
-				ImGui::SliderInt("##size", &resource.Size, 1, 100000000);
+				ImGui::SliderInt("##size", &resource.Size, 1, 100000000, "%d", ImGuiSliderFlags_Logarithmic);
 				ImGui::TableNextColumn();
 				ImGui::SliderInt("##alignment", &resource.Alignment, 1, 1 << 16);
 				ImGui::TableNextColumn();
