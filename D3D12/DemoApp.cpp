@@ -336,6 +336,53 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 		{
 			if (pResource->Size <= heap.Size)
 			{
+#if 0
+				struct HeapOffset
+				{
+					int Offset;
+					bool IsFreeBegin;
+				};
+				std::vector<HeapOffset> free_ranges;
+				free_ranges.push_back({ 0, true });
+				for (RenderResource* existing : heap.Allocations)
+				{
+					if (existing->Lifetime.Overlaps(pResource->Lifetime))
+					{
+						free_ranges.push_back({ existing->Offset, false });
+						free_ranges.push_back({ existing->Offset + existing->Size, true });
+					}
+				}
+				free_ranges.push_back({ heap.Size, false });
+				std::sort(free_ranges.begin(), free_ranges.end(), [](const HeapOffset& a, const HeapOffset& b) { return a.Offset < b.Offset; });
+
+				int lastBeginOffset = 0;
+				int freeRangeCounter = 0;
+				bool found = false;
+				for (int i = 0; i < free_ranges.size(); ++i)
+				{
+					if (free_ranges[i].IsFreeBegin)
+					{
+						lastBeginOffset = free_ranges[i].Offset;
+						++freeRangeCounter;
+					}
+					else
+					{
+						--freeRangeCounter;
+						if (freeRangeCounter == 0)
+						{
+							int offset = Math::AlignUp(lastBeginOffset, pResource->Alignment);
+							if (offset + pResource->Size <= free_ranges[i].Offset)
+							{
+								pResource->Offset = offset;
+								pHeap = &heap;
+								break;
+							}
+						}
+					}
+				}
+				if (found)
+					break;
+#else
 				// Collect all memory ranges of the heap that overlap with the lifetime of the resource we want to fit in.
 				std::vector<IRange> restricted_ranges;
 				for (RenderResource* existing : heap.Allocations)
@@ -398,6 +445,7 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 					pHeap = &heap;
 					break;
 				}
+#endif
 			}
 		}
 
