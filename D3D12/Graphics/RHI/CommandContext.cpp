@@ -111,20 +111,20 @@ bool NeedsTransition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES& after,
 	return true;
 }
 
-void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
+void CommandContext::InsertResourceBarrier(GraphicsResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
-	check(pBuffer && pBuffer->GetResource());
+	check(pResource && pResource->GetResource());
 	checkf(IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
-	check(pBuffer->UseStateTracking());
+	check(pResource->UseStateTracking());
 
-	ResourceState& resourceState = m_ResourceStates[pBuffer];
+	ResourceState& resourceState = m_ResourceStates[pResource];
 	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
 	if (beforeState == D3D12_RESOURCE_STATE_UNKNOWN)
 	{
 		resourceState.Set(state, subResource);
 
 		PendingBarrier& barrier = m_PendingBarriers.emplace_back();
-		barrier.pResource = pBuffer;
+		barrier.pResource = pResource;
 		barrier.State = resourceState;
 		barrier.Subresource = subResource;
 	}
@@ -134,13 +134,12 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 		{
 			checkf(IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 			
-			ID3D12Resource* pResource = pBuffer->GetResource();
 			if (m_NumBatchedBarriers > 0)
 			{
 				// If the previous barrier is for the same resource, see if we can combine the barrier.
 				D3D12_RESOURCE_BARRIER& last = m_BatchedBarriers[m_NumBatchedBarriers - 1];
 				if (last.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
-					&& last.Transition.pResource == pResource
+					&& last.Transition.pResource == pResource->GetResource()
 					&& last.Transition.StateBefore == beforeState
 					&& ResourceState::CanCombineResourceState(state, last.Transition.StateAfter))
 				{
@@ -148,7 +147,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 					return;
 				}
 			}
-			AddBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource,
+			AddBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource->GetResource(),
 						beforeState,
 						state,
 						subResource,
@@ -160,9 +159,14 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pBuffer, D3D12_RESO
 	}
 }
 
-void CommandContext::InsertUAVBarrier(const GraphicsResource* pBuffer /*= nullptr*/)
+void CommandContext::InsertAliasingBarrier(const GraphicsResource* pResource)
 {
-	AddBarrier(CD3DX12_RESOURCE_BARRIER::UAV(pBuffer ? pBuffer->GetResource() : nullptr));
+	AddBarrier(CD3DX12_RESOURCE_BARRIER::Aliasing(nullptr, pResource->GetResource()));
+}
+
+void CommandContext::InsertUAVBarrier(const GraphicsResource* pResource /*= nullptr*/)
+{
+	AddBarrier(CD3DX12_RESOURCE_BARRIER::UAV(pResource ? pResource->GetResource() : nullptr));
 }
 
 void CommandContext::FlushResourceBarriers()
