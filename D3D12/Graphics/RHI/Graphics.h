@@ -139,7 +139,9 @@ public:
 	void UnregisterGlobalResourceView(DescriptorHandle& handle);
 
 	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData = {});
+	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData = {});
 	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);
+	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData = nullptr);
 	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
 	void DeferReleaseObject(ID3D12Object* pObject);
 

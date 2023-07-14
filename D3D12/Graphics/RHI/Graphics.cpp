@@ -516,6 +516,11 @@ void GraphicsDevice::UnregisterGlobalResourceView(DescriptorHandle& handle)
 
 RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData)
 {
+	return CreateTexture(desc, nullptr, 0, pName, initData);
+}
+
+RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData)
+{
 	auto GetResourceDesc = [](const TextureDesc& textureDesc)
 	{
 		uint32 width = textureDesc.Width;
@@ -593,7 +598,15 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 
 	ID3D12Resource* pResource;
 	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, resourceState, pClearValue, IID_PPV_ARGS(&pResource)), m_pDevice);
+
+	if (pHeap)
+	{
+		VERIFY_HR_EX(m_pDevice->CreatePlacedResource(pHeap, offset, &resourceDesc, resourceState, pClearValue, IID_PPV_ARGS(&pResource)), m_pDevice);
+	}
+	else
+	{
+		VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, resourceState, pClearValue, IID_PPV_ARGS(&pResource)), m_pDevice);
+	}
 
 	Texture* pTexture = new Texture(this, desc, pResource);
 	pTexture->SetResourceState(resourceState);
@@ -619,7 +632,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, cons
 		pTexture->m_NeedsStateTracking = true;
 
 		pTexture->m_UAVs.resize(desc.Mips);
-		for(uint8 mip = 0; mip < desc.Mips; ++mip)
+		for (uint8 mip = 0; mip < desc.Mips; ++mip)
 			pTexture->m_UAVs[mip] = CreateUAV(pTexture, TextureUAVDesc(mip));
 	}
 	if (EnumHasAnyFlags(desc.Usage, TextureFlag::RenderTarget))
@@ -739,7 +752,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	return pTexture;
 }
 
-RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData)
+RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData)
 {
 	auto GetResourceDesc = [](const BufferDesc& bufferDesc)
 	{
@@ -780,7 +793,15 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 
 	ID3D12Resource* pResource;
 	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(heapType);
-	VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, initialState, nullptr, IID_PPV_ARGS(&pResource)), m_pDevice);
+
+	if (pHeap)
+	{
+		VERIFY_HR_EX(m_pDevice->CreatePlacedResource(pHeap, offset, &resourceDesc, initialState, nullptr, IID_PPV_ARGS(&pResource)), m_pDevice);
+	}
+	else
+	{
+		VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, initialState, nullptr, IID_PPV_ARGS(&pResource)), m_pDevice);
+	}
 
 	Buffer* pBuffer = new Buffer(this, desc, pResource);
 	pBuffer->SetResourceState(initialState);
@@ -823,6 +844,11 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const c
 	}
 
 	return pBuffer;
+}
+
+RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData)
+{
+	return CreateBuffer(desc, nullptr, 0, pName, pInitData);
 }
 
 void GraphicsDevice::DeferReleaseObject(ID3D12Object* pObject)
@@ -1140,7 +1166,7 @@ void GraphicsDevice::DeferredDeleteQueue::Clean()
 		{
 			break;
 		}
-		p.pResource->Release();
+		check(p.pResource->Release() == 0);
 		m_DeletionQueue.pop();
 	}
 }
