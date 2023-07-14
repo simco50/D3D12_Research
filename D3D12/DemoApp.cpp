@@ -336,7 +336,6 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 		{
 			if (pResource->Size <= heap.Size)
 			{
-#if 0
 				struct HeapOffset
 				{
 					int Offset;
@@ -357,7 +356,6 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 
 				int lastBeginOffset = 0;
 				int freeRangeCounter = 0;
-				bool found = false;
 				for (int i = 0; i < free_ranges.size(); ++i)
 				{
 					if (free_ranges[i].IsFreeBegin)
@@ -380,72 +378,8 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 						}
 					}
 				}
-				if (found)
+				if (pHeap)
 					break;
-#else
-				// Collect all memory ranges of the heap that overlap with the lifetime of the resource we want to fit in.
-				std::vector<IRange> restricted_ranges;
-				for (RenderResource* existing : heap.Allocations)
-				{
-					if (existing->Lifetime.Overlaps(pResource->Lifetime))
-						restricted_ranges.push_back({ existing->Offset, existing->Offset + existing->Size });
-				}
-
-				// Sort each restricted range by start offset and merge any range that overlaps.
-				std::sort(restricted_ranges.begin(), restricted_ranges.end(), [](IRange& a, IRange& b) { return a.Begin < b.Begin; });
-				if (restricted_ranges.size() > 1)
-				{
-					for (int i = 0; i < restricted_ranges.size() - 1; ++i)
-					{
-						if (restricted_ranges[i].Overlaps(restricted_ranges[i + 1]))
-						{
-							restricted_ranges[i] = IRange::Combine(restricted_ranges[i], restricted_ranges[i + 1]);
-							restricted_ranges[i + 1] = IRange::Combine(restricted_ranges[i], restricted_ranges[i + 1]);
-						}
-					}
-				}
-
-				// No overlaps with other resources? Then it can just fit at the start.
-				if (restricted_ranges.empty())
-				{
-					pResource->Offset = 0;
-					pHeap = &heap;
-					break;
-				}
-
-				// Does it fit between the start of the heap and the first conflicting range?
-				if (pResource->Size < restricted_ranges[0].Begin)
-				{
-					pResource->Offset = 0;
-					pHeap = &heap;
-					break;
-				}
-
-				// Does it fit between any gaps of the conflicting ranges?
-				bool found = false;
-				for (int i = 0; i < restricted_ranges.size() - 1; ++i)
-				{
-					int offset = Math::AlignUp(restricted_ranges[i].End, pResource->Alignment);
-					if (offset + pResource->Size <= restricted_ranges[i + 1].Begin)
-					{
-						pResource->Offset = offset;
-						found = true;
-						pHeap = &heap;
-						break;
-					}
-				}
-				if (found)
-					break;
-
-				// Does it fit after the last conflicting range and the end of the heap?
-				int offset = Math::AlignUp(restricted_ranges.back().End, pResource->Alignment);
-				if (offset + pResource->Size <= heap.Size)
-				{
-					pResource->Offset = offset;
-					pHeap = &heap;
-					break;
-				}
-#endif
 			}
 		}
 
@@ -504,32 +438,41 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 
 		if (ImGui::TreeNodeEx("Stats", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			if (ImGui::BeginTable("Size Stats", 2))
+			if (ImGui::BeginTable("Size Stats", 4))
 			{
 				ImGui::TableHeader("Header");
-				ImGui::TableSetupColumn("Desc");
-				ImGui::TableSetupColumn("Size");
+				ImGui::TableSetupColumn("Mode");
+				ImGui::TableSetupColumn("Unaliased");
+				ImGui::TableSetupColumn("Aliased");
+				ImGui::TableSetupColumn("Difference");
 				ImGui::TableHeadersRow();
 
 				ImGui::TableNextColumn();
-				ImGui::Text("Total resource sizes");
+				ImGui::Text("No Aliasing");
 				ImGui::TableNextColumn();
 				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(0).c_str());
 
 				ImGui::TableNextColumn();
-				ImGui::Text("Total aliased heaps size");
+				ImGui::Text("Per Resource Aliasing");
 				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(totalHeapSize).c_str());
-
-				ImGui::TableNextColumn();
-				ImGui::Text("Aliasing savings");
-				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize - totalHeapSize).c_str());
-
-				ImGui::TableNextColumn();
-				ImGui::Text("RenderGraph allocations size");
+				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
 				ImGui::TableNextColumn();
 				ImGui::Text(Math::PrettyPrintDataSize(totalRenderGraphSize).c_str());
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize - totalRenderGraphSize).c_str());
+
+				ImGui::TableNextColumn();
+				ImGui::Text("Heap Resource Aliasing");
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(totalHeapSize).c_str());
+				ImGui::TableNextColumn();
+				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize - totalHeapSize).c_str());
 
 				ImGui::EndTable();
 			}
@@ -584,6 +527,7 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 	if (ImGui::Begin("Resource Table"))
 	{
 		int remove = -1;
+		int duplicate = -1;
 		ImGui::Checkbox("Live Capture", &liveCapture);
 		if (ImGui::Button("Clear All"))
 			resourcesActual.clear();
@@ -606,32 +550,39 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 				ImGui::SameLine();
 				ImGui::Text("%s", resource.Name.c_str());
 				ImGui::TableNextColumn();
-				ImGui::SliderInt("##size", &resource.Size, 1, 100000000, "%d", ImGuiSliderFlags_Logarithmic);
+				ImGui::SliderInt("##size", &resource.Size, 0, Math::MegaBytesToBytes * 10);
 				ImGui::TableNextColumn();
-				ImGui::SliderInt("##alignment", &resource.Alignment, 1, 1 << 16);
+				ImGui::SliderInt("##alignment", &resource.Alignment, 16, Math::KilobytesToBytes * 64);
 				ImGui::TableNextColumn();
 				ImGui::DragIntRange2("##lifetime", &resource.Lifetime.Begin, &resource.Lifetime.End, 1.0f, 0, lastPassID);
 				ImGui::TableNextColumn();
 				if (ImGui::Button("Remove"))
-				{
 					remove = idx;
-				}
+				ImGui::SameLine();
+				if (ImGui::Button("Duplicate"))
+					duplicate = idx;
 				++idx;
 				ImGui::PopID();
 			}
 			ImGui::EndTable();
 		}
 
+		static int ID = 0xFFFF;
 		if (ImGui::Button("Add resource"))
 		{
-			static int ID = 0xFFFF;
-			resourcesActual.push_back({ "New Resource", 0, 1, {0,0}, 0, ID++ });
+			resourcesActual.push_back({ "New Resource", 128, 1, {0,100}, 0, ID++ });
 		}
 
 		if (remove >= 0)
 		{
 			std::swap(resourcesActual[remove], resourcesActual[resourcesActual.size() - 1]);
-			resourcesActual.pop_back();
+			resourcesActual.erase(resourcesActual.begin() + remove);
+		}
+		if(duplicate >= 0)
+		{
+			RenderResource newResource = resourcesActual[duplicate];
+			newResource.ID = ID++;
+			resourcesActual.insert(resourcesActual.begin() + duplicate + 1, newResource);
 		}
 	}
 	ImGui::End();
