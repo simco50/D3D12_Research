@@ -870,16 +870,12 @@ RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RootSignature* 
 
 RefCountPtr<PipelineState> GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
 {
-	PipelineState* pPipeline = new PipelineState(this);
-	pPipeline->Create(psoDesc);
-	return pPipeline;
+	return new PipelineState(this, psoDesc);
 }
 
 RefCountPtr<StateObject> GraphicsDevice::CreateStateObject(const StateObjectInitializer& stateDesc)
 {
-	StateObject* pStateObject = new StateObject(this);
-	pStateObject->Create(stateDesc);
-	return pStateObject;
+	return new StateObject(this, stateDesc);
 }
 
 RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)

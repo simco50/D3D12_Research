@@ -59,11 +59,10 @@ private:
 class StateObject : public GraphicsObject
 {
 public:
-	StateObject(GraphicsDevice* pParent);
+	StateObject(GraphicsDevice* pParent, const StateObjectInitializer& initializer);
 	StateObject(const StateObject& rhs) = delete;
 	StateObject& operator=(const StateObject& rhs) = delete;
 
-	void Create(const StateObjectInitializer& initializer);
 	void ConditionallyReload();
 	const StateObjectInitializer& GetDesc() const { return m_Desc; }
 
@@ -71,6 +70,7 @@ public:
 	ID3D12StateObjectProperties* GetStateObjectProperties() const { return m_pStateObjectProperties.Get(); }
 
 private:
+	void CreateInternal();
 	void OnLibraryReloaded(Shader* pLibrary);
 
 	bool m_NeedsReload = false;

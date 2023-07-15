@@ -122,15 +122,15 @@ private:
 class PipelineState : public GraphicsObject
 {
 public:
-	PipelineState(GraphicsDevice* pParent);
+	PipelineState(GraphicsDevice* pParent, const PipelineStateInitializer& initializer);
 	PipelineState(const PipelineState& rhs) = delete;
 	PipelineState& operator=(const PipelineState& rhs) = delete;
 	~PipelineState();
 	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState; }
-	void Create(const PipelineStateInitializer& initializer);
 	void ConditionallyReload();
 
 private:
+	void CreateInternal();
 	void OnShaderReloaded(Shader* pShader);
 	RefCountPtr<ID3D12PipelineState> m_pPipelineState;
 

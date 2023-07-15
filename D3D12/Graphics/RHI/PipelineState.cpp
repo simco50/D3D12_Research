@@ -246,8 +246,8 @@ void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, c
 	m_ShaderDescs[(int)ShaderType::Amplification] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-PipelineState::PipelineState(GraphicsDevice* pParent)
-	: GraphicsObject(pParent)
+PipelineState::PipelineState(GraphicsDevice* pParent, const PipelineStateInitializer& initializer)
+	: GraphicsObject(pParent), m_Desc(initializer)
 {
 	m_ReloadHandle = pParent->GetShaderManager()->OnShaderEditedEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
 }
@@ -258,10 +258,8 @@ PipelineState::~PipelineState()
 	GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
 }
 
-void PipelineState::Create(const PipelineStateInitializer& initializer)
+void PipelineState::CreateInternal()
 {
-	m_Desc = initializer;
-
 	if (m_Desc.m_IlDesc.size() > 0)
 	{
 		D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.m_Stream.InputLayout;
@@ -321,15 +319,15 @@ void PipelineState::Create(const PipelineStateInitializer& initializer)
 		E_LOG(Warning, "Failed to compile PipelineState '%s'", m_Desc.m_Name);
 	}
 	check(m_pPipelineState);
+	E_LOG(Info, "Compiled Pipeline: %s", m_Desc.m_Name.c_str());
 }
 
 void PipelineState::ConditionallyReload()
 {
-	if (m_NeedsReload)
+	if (m_NeedsReload || !m_pPipelineState)
 	{
-		Create(m_Desc);
+		CreateInternal();
 		m_NeedsReload = false;
-		E_LOG(Info, "Reloaded Pipeline: %s", m_Desc.m_Name.c_str());
 	}
 }
 

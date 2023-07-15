@@ -40,15 +40,14 @@ private:
 	DataAllocator<1 << 10> ContentData{};
 };
 
-StateObject::StateObject(GraphicsDevice* pParent)
-	: GraphicsObject(pParent)
+StateObject::StateObject(GraphicsDevice* pParent, const StateObjectInitializer& initializer)
+	: GraphicsObject(pParent), m_Desc(initializer)
 {
 	m_ReloadHandle = pParent->GetShaderManager()->OnShaderEditedEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
 }
 
-void StateObject::Create(const StateObjectInitializer& initializer)
+void StateObject::CreateInternal()
 {
-	m_Desc = initializer;
 	StateObjectStream stateObjectStream;
 	if (m_Desc.CreateStateObjectStream(stateObjectStream, GetParent()))
 	{
@@ -60,18 +59,18 @@ void StateObject::Create(const StateObjectInitializer& initializer)
 	}
 	else
 	{
-		E_LOG(Warning, "Failed to compile StateObject '%s'", initializer.Name);
+		E_LOG(Warning, "Failed to compile StateObject '%s'", m_Desc.Name);
 	}
+	E_LOG(Info, "Compiled State Object: %s", m_Desc.Name.c_str());
 	check(m_pStateObject);
 }
 
 void StateObject::ConditionallyReload()
 {
-	if (m_NeedsReload)
+	if (m_NeedsReload || !m_pStateObject)
 	{
-		Create(m_Desc);
+		CreateInternal();
 		m_NeedsReload = false;
-		E_LOG(Info, "Reloaded State Object: %s", m_Desc.Name.c_str());
 	}
 }
 
