@@ -203,38 +203,6 @@ void DemoApp::SetupScene()
 	m_pLensDirtTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LensDirt.dds", true, "Lens Dirt");
 }
 
-namespace ImGui
-{
-	inline void AddTextVertical(ImDrawList* DrawList, const char* text, ImVec2 pos, ImU32 text_color)
-	{
-		pos.x = IM_ROUND(pos.x);
-		pos.y = IM_ROUND(pos.y);
-		ImFont* font = GImGui->Font;
-		const ImFontGlyph* glyph;
-		ImVec2 text_size = CalcTextSize(text);
-		while (*text)
-		{
-			glyph = font->FindGlyph(*text++);
-			if (!glyph) continue;
-
-			DrawList->PrimReserve(6, 4);
-			DrawList->PrimQuadUV(
-				pos + ImVec2(glyph->Y0, -glyph->X0),
-				pos + ImVec2(glyph->Y0, -glyph->X1),
-				pos + ImVec2(glyph->Y1, -glyph->X1),
-				pos + ImVec2(glyph->Y1, -glyph->X0),
-
-				ImVec2(glyph->U0, glyph->V0),
-				ImVec2(glyph->U1, glyph->V0),
-				ImVec2(glyph->U1, glyph->V1),
-				ImVec2(glyph->U0, glyph->V1),
-				text_color);
-			pos.y -= glyph->AdvanceX;
-
-		}
-	}
-}
-
 void DemoApp::DrawTest(Span<RGResource*> graphResources)
 {
 	struct IRange
