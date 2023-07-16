@@ -14,6 +14,7 @@
 #include "Graphics/RHI/ShaderBindingTable.h"
 #include "Graphics/RHI/StateObject.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
+#include "Graphics/RenderGraph/RenderGraphResourcePool.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Graphics/Techniques/RTAO.h"
 #include "Graphics/Techniques/ForwardRenderer.h"

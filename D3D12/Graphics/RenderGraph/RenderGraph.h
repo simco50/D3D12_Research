@@ -8,6 +8,7 @@
 
 class RGGraph;
 class RGPass;
+class RGResourcePool;
 
 // Flags assigned to a pass that can determine various things
 enum class RGPassFlag
@@ -223,31 +224,6 @@ private:
 	std::vector<RenderTargetAccess> RenderTargets;
 	DepthStencilAccess DepthStencilTarget{};
 	IRGPassCallback* pExecuteCallback = nullptr;
-};
-
-class RGResourcePool : public GraphicsObject
-{
-public:
-	RGResourcePool(GraphicsDevice* pDevice)
-		: GraphicsObject(pDevice)
-	{}
-
-	NO_DISCARD RefCountPtr<Texture> Allocate(const char* pName, const TextureDesc& desc);
-	NO_DISCARD RefCountPtr<Buffer> Allocate(const char* pName, const BufferDesc& desc);
-	void Tick();
-
-private:
-	template<typename T>
-	struct PooledResource
-	{
-		RefCountPtr<T> pResource;
-		uint32 LastUsedFrame;
-	};
-	using PooledTexture = PooledResource<Texture>;
-	using PooledBuffer = PooledResource<Buffer>;
-	std::vector<PooledTexture> m_TexturePool;
-	std::vector<PooledBuffer> m_BufferPool;
-	uint32 m_FrameIndex = 0;
 };
 
 
