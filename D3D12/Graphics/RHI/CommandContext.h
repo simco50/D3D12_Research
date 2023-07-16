@@ -223,7 +223,8 @@ private:
 	}
 	struct PendingBarrier
 	{
-		GraphicsResource* pResource;
+		// #todo. Having a ref here is not nice but necessary. A GraphicsResource may be deleted before the commandlist is executed.
+		RefCountPtr<GraphicsResource> pResource;
 		ResourceState State;
 		uint32 Subresource;
 	};
