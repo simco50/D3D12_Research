@@ -205,3 +205,44 @@ using Vector4i = TVector4<int32>;
 using Vector2u = TVector2<uint32>;
 using Vector3u = TVector3<uint32>;
 using Vector4u = TVector4<uint32>;
+
+// An inclusive range
+template<typename T>
+struct TRange
+{
+	TRange()
+		: Begin(0), End(0)
+	{}
+
+	TRange(T begin, T end)
+		: Begin(begin), End(end)
+	{}
+
+	static bool Overlaps(const TRange& lhs, const TRange& rhs)
+	{
+		return lhs.Begin <= rhs.End && lhs.End >= rhs.Begin;
+	}
+
+	static bool Combine(const TRange& lhs, const TRange& rhs, TRange& combinedRange)
+	{
+		if (!Overlaps(lhs, rhs))
+			return false;
+		return TRange(
+			lhs.Begin < rhs.Begin ? lhs.Begin : rhs.Begin,
+			lhs.End > rhs.End ? lhs.End : rhs.End);
+	}
+
+	bool Overlaps(const TRange& rhs) const
+	{
+		return Overlaps(*this, rhs);
+	}
+
+	T GetLength() const { return End - Begin + 1; }
+
+	T Begin;
+	T End;
+};
+
+using IRange = TRange<int>;
+using URange = TRange<uint32>;
+using FRange = TRange<float>;

@@ -42,6 +42,10 @@ public:
 
 	const char* GetName() const { return pName; }
 	GraphicsResource* GetPhysical() const { return pPhysicalResource; }
+	const URange& GetLifetime() const { return Lifetime; }
+
+	bool IsExternal() const { return IsImported || IsExported; }
+	bool IsAliased() const { return false; }
 
 //protected:
 	void SetResource(RefCountPtr<GraphicsResource> resource)
@@ -63,8 +67,7 @@ public:
 	RGResourceType Type;
 	RefCountPtr<GraphicsResource> pResourceReference;
 	GraphicsResource* pPhysicalResource = nullptr;
-	const RGPass* pFirstAccess = nullptr;
-	const RGPass* pLastAccess = nullptr;
+	URange Lifetime = URange(0xFFFFFFFF, 0xFFFFFFFF);
 };
 
 template<typename T>

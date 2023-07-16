@@ -128,15 +128,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				resourceToIndex[pResource->GetPhysical()] = resourceIndex++;
 			int physicalResourceIndex = resourceToIndex[pResource->GetPhysical()];
 
-			const RGPass* pFirstPass = pResource->pFirstAccess;
-			const RGPass* pLastPass = pResource->pLastAccess;
-			if (pFirstPass == nullptr || pLastPass == nullptr)
-				continue;
-
-			uint32 firstPassOffset = pFirstPass->ID;
-			uint32 lastPassOffset = pResource->IsExported ? (int)m_RenderPasses.size() - 1 : pLastPass->ID;
-
-			ImRect itemRect(resourceAccessPos + ImVec2(firstPassOffset * boxSize.x + 1, physicalResourceIndex * boxSize.y + 1), resourceAccessPos + ImVec2((lastPassOffset + 1) * boxSize.x - 1, (physicalResourceIndex + 1) * boxSize.y - 1));
+			ImRect itemRect(resourceAccessPos + ImVec2(pResource->Lifetime.Begin * boxSize.x + 1, physicalResourceIndex * boxSize.y + 1), resourceAccessPos + ImVec2((pResource->Lifetime.End + 1) * boxSize.x - 1, (physicalResourceIndex + 1) * boxSize.y - 1));
 			ImGui::ItemAdd(itemRect, pResource->ID);
 			bool isHovered = ImGui::IsItemHovered();
 

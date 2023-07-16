@@ -4,6 +4,8 @@
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/RHI/CommandContext.h"
 #include "Graphics/Profiler.h"
+#include "Graphics/ImGuiRenderer.h"
+#include "imgui_internal.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
@@ -159,8 +161,8 @@ void RGGraph::Compile()
 		for (const RGPass::ResourceAccess& access : pPass->Accesses)
 		{
 			RGResource* pResource = access.pResource;
-			pResource->pFirstAccess = pResource->pFirstAccess ? pResource->pFirstAccess : pPass;
-			pResource->pLastAccess = pPass;
+			pResource->Lifetime.Begin = pResource->Lifetime.Begin == 0xFFFFFFFF ? pPass->GetID() : pResource->Lifetime.Begin;
+			pResource->Lifetime.End = pPass->GetID();
 
 			D3D12_RESOURCE_STATES state = access.Access;
 			if (pResource->Type == RGResourceType::Buffer)
@@ -186,6 +188,7 @@ void RGGraph::Compile()
 		}
 	}
 
+
 	// Go through all resources accesses and allocate on first access and de-allocate on last access
 	// It's important to make the distinction between the RefCountPtr allocation and the Raw resource itself.
 	// A de-allocate returns the resource back to the pool by resetting the RefCountPtr however the Raw resource keeps a reference to it to use during execution.
@@ -195,33 +198,43 @@ void RGGraph::Compile()
 		if (pPass->IsCulled)
 			continue;
 
+		// First allocate all first-use resources for this pass
 		for (const RGPass::ResourceAccess& access : pPass->Accesses)
 		{
 			RGResource* pResource = access.pResource;
-			if (!pResource->pPhysicalResource)
+			if (pResource->Lifetime.Begin == pPass->ID)
 			{
-				if (pResource->Type == RGResourceType::Texture)
-					pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
-				else if (pResource->Type == RGResourceType::Buffer)
-					pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
-				else
-					noEntry();
+				if (!pResource->IsImported)
+				{
+					checkf(!pResource->pPhysicalResource, "Resource is used for the first time so is assumed to still be nullptr.");
+					if (pResource->Type == RGResourceType::Texture)
+						pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
+					else if (pResource->Type == RGResourceType::Buffer)
+						pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
+					else
+						noEntry();
+				}
 			}
-			check(pResource->pPhysicalResource);
+			checkf(pResource->pPhysicalResource, "Resource should be valid in a pass that accesses it.");
 		}
 
+		// Secondly allocate all last-use resources for this pass
 		for (const RGPass::ResourceAccess& access : pPass->Accesses)
 		{
 			RGResource* pResource = access.pResource;
-			if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
+			if (pResource->Lifetime.End == pPass->ID)
 			{
-				check(pResource->pPhysicalResource);
-				pResource->Release();
+				if (!pResource->IsExternal())
+				{
+					checkf(pResource->pPhysicalResource, "Resource must be valid if the current pass uses it for the last time.");
+					pResource->Release();
+				}
 			}
 		}
 	}
 
-	// #todo Should exported resources that are not used actually be exported?
+	// Is a resource is exported but not used anywhere, create it.
+	// #todo. Maybe this should not happen, or a dummy resource should be returned?
 	for (RGResource* pResource : m_Resources)
 	{
 		if (pResource->IsExported && !pResource->pPhysicalResource)
@@ -235,7 +248,7 @@ void RGGraph::Compile()
 		}
 	}
 
-	// Export resources first so they can be available during pass execution.
+	// Export resources so they are available during pass execution.
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
 		check(exportResource.pTexture->pPhysicalResource);
@@ -341,10 +354,16 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 	for (const RGPass::ResourceAccess& access : pPass->Accesses)
 	{
 		RGResource* pResource = access.pResource;
-		checkf(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
-		checkf(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
-		if(pResource->GetPhysical()->UseStateTracking())
+
+		// If the resource is accessed for the first time and it is aliased, an aliasing barrier is required.
+		if (pResource->Lifetime.Begin == pPass->ID && pResource->IsAliased())
+			context.InsertAliasingBarrier(pResource->pPhysicalResource);
+
+		// Transition after
+		if (pResource->GetPhysical()->UseStateTracking())
 			context.InsertResourceBarrier(pResource->pPhysicalResource, access.Access);
+
+		// #todo: if the resource is aliased, it may have to be discarded
 	}
 
 	context.FlushResourceBarriers();
