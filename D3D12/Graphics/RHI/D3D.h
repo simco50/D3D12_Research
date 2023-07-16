@@ -241,4 +241,61 @@ namespace D3D
 	{
 		return gDXGIFormatMap[(uint32)format];
 	}
+
+	static std::string GetResourceDescription(ID3D12Resource* pResource)
+	{
+		if (!pResource)
+			return "nullptr";
+
+		D3D12_RESOURCE_DESC resourceDesc = pResource->GetDesc();
+		RefCountPtr<ID3D12Device> pDevice;
+		pResource->GetDevice(IID_PPV_ARGS(pDevice.GetAddressOf()));
+		D3D12_RESOURCE_ALLOCATION_INFO allocationInfo = pDevice->GetResourceAllocationInfo(1, 1, &resourceDesc);
+
+		if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+		{
+			return Sprintf("[Buffer] '%s' | %s | Alignment: %s",
+				D3D::GetObjectName(pResource),
+				Math::PrettyPrintDataSize(allocationInfo.SizeInBytes),
+				Math::PrettyPrintDataSize(allocationInfo.Alignment));
+		}
+		else if(resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D ||
+			resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
+			resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D)
+		{
+			const char* pType = "";
+			switch (resourceDesc.Dimension)
+			{
+			case D3D12_RESOURCE_DIMENSION_TEXTURE1D:	pType = "Texture1D"; break;
+			case D3D12_RESOURCE_DIMENSION_TEXTURE2D:	pType = "Texture2D"; break;
+			case D3D12_RESOURCE_DIMENSION_TEXTURE3D:	pType = "Texture3D"; break;
+			default: noEntry();
+			}
+
+			// Find ResourceFormat from DXGI_FORMAT
+			ResourceFormat format = ResourceFormat::Unknown;
+			for (int i = 0; i < ARRAYSIZE(gDXGIFormatMap); ++i)
+			{
+				if (resourceDesc.Format == gDXGIFormatMap[i])
+				{
+					format = (ResourceFormat)i;
+					break;
+				} 
+			}
+			const FormatInfo& info = RHI::GetFormatInfo(format);
+
+			return Sprintf("[%s] '%s' | %s | %dx%dx%d | %s | Alignment: %s",
+				pType,
+				D3D::GetObjectName(pResource),
+				info.pName,
+				resourceDesc.Width,
+				resourceDesc.Height,
+				resourceDesc.DepthOrArraySize,
+				Math::PrettyPrintDataSize(allocationInfo.SizeInBytes),
+				Math::PrettyPrintDataSize(allocationInfo.Alignment));
+		}
+		return "Unknown";
+	}
+
+	static Utils::ForceFunctionToBeLinked forceLink(GetResourceDescription);
 }
