@@ -62,4 +62,8 @@
 		<DisplayString>{InnerObject}</DisplayString>
 	</Type>
 
+	<Type Name="ID3D12Resource">
+		<DisplayString>{D3D::GetResourceDescription(this)}</DisplayString>
+	</Type>
+
 </AutoVisualizer>

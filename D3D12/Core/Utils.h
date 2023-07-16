@@ -2,6 +2,11 @@
 
 namespace Utils
 {
+	struct ForceFunctionToBeLinked
+	{
+		ForceFunctionToBeLinked(const void* p) { SetLastError(PtrToInt(p)); }
+	};
+
 	inline std::string GetTimeString()
 	{
 		SYSTEMTIME time;
