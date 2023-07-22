@@ -4,6 +4,7 @@
 #include "RHI/CommandContext.h"
 #include "RHI/CommandQueue.h"
 #include "RHI/Buffer.h"
+#include "FooProfiler.h"
 
 void ProfileNode::StartTimer(CommandContext* pInContext)
 {
@@ -121,6 +122,8 @@ void Profiler::Shutdown()
 
 void Profiler::Begin(const char* pName, CommandContext* pContext)
 {
+	gProfiler.BeginRegion(pName);
+
 	if (m_pCurrentBlock->Map.find(pName) != m_pCurrentBlock->Map.end())
 	{
 		m_pCurrentBlock = m_pCurrentBlock->GetChild(pName);
@@ -150,6 +153,7 @@ void Profiler::End()
 	m_pCurrentBlock->EndTimer();
 	m_pPreviousBlock = m_pCurrentBlock;
 	m_pCurrentBlock = m_pCurrentBlock->pParent;
+	gProfiler.EndRegion();
 }
 
 void Profiler::Resolve(CommandContext* pContext)

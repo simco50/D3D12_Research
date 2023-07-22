@@ -6,10 +6,11 @@ FooProfiler gProfiler;
 
 void FooProfiler::DrawTimings()
 {
+	static int HistoryIndex = 0;
 	// The height of each bar
-	static float BarHeight = 20.0f;
+	static float BarHeight = 25.0f;
 	// The max depth of each thread
-	static int MaxDepth = 6;
+	static int MaxDepth = 8;
 	// The zoom scale of the timeline
 	static float timelineScale = 1.0f;
 
@@ -40,11 +41,8 @@ void FooProfiler::DrawTimings()
 		timelineScale = Math::Clamp(expf(logScale), 1.0f, 20.0f);
 	}
 
-	uint64 baseTime = m_SampleRegions[GetThreadData().Head].BeginTime;
-	uint64 endTime = m_SampleRegions[GetThreadData().Head].EndTime;
-	uint64 frameTicks = endTime - baseTime;
-	float frameTime = (float)frameTicks / ticksPerMs;
-
+	ImGui::Checkbox("Pause", &m_Paused);
+	ImGui::SameLine();
 	ImGui::SetNextItemWidth(100);
 	ImGui::SliderFloat("Scale", &timelineScale, 1, 20, "%.2f");
 	ImGui::SameLine();
@@ -53,13 +51,31 @@ void FooProfiler::DrawTimings()
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(100);
 	ImGui::SliderInt("Max Depth", &MaxDepth, 1, 20);
+
+	if (m_Paused)
+	{
+		if (ImGui::Button("<") || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
+			++HistoryIndex;
+		ImGui::SameLine();
+		if (ImGui::Button(">") || ImGui::IsKeyPressed(ImGuiKey_RightArrow))
+			--HistoryIndex;
+		HistoryIndex = Math::Clamp(HistoryIndex, 0, (int)m_SampleHistory.size() - 2);
+		ImGui::SameLine();
+		ImGui::Text("Frame: %d", -HistoryIndex - 1);
+	}
+
+	SampleHistory& data = GetHistoryData(HistoryIndex);
+
+	uint64 frameTicks = data.TicksEnd - data.TicksBegin;
+	float frameTime = (float)frameTicks / ticksPerMs;
+
 	ImGui::Text("Frame time: %.2f ms", frameTime);
 
 	float timelineHeight = MaxDepth * BarHeight * m_ThreadData.size();
 	if(ImGui::BeginChild("TimelineWindow", ImVec2(0, timelineHeight), false, ImGuiWindowFlags_NoBackground))
 	{
 		ImVec2 area = ImGui::GetContentRegionAvail();
-		if (ImGui::BeginChild("TimelineWindow", ImVec2(200, 0), false, ImGuiWindowFlags_NoBackground))
+		if (ImGui::BeginChild("ChildTimelineWindow", ImVec2(200, 0), false, ImGuiWindowFlags_NoBackground))
 		{
 			ImGui::Text("Test");
 			ImGui::Text("Test");
@@ -89,46 +105,45 @@ void FooProfiler::DrawTimings()
 					pDraw->AddLine(ImVec2(x, cursor.y), ImVec2(x, cursor.y + ImGui::GetContentRegionAvail().y), lineColor);
 				}
 
-				std::vector<uint32> sortedThreads;
-				for (auto& data : m_ThreadData)
-					sortedThreads.push_back(data.second.ThreadID);
-				std::sort(sortedThreads.begin(), sortedThreads.end());
+				std::unordered_map<uint32, uint32> threadToIndex;
+				for (auto& threadData : m_ThreadData)
+					threadToIndex[threadData.second.ThreadID] = (uint32)threadToIndex.size();
 
-				for (uint32 threadId : sortedThreads)
+				for (uint32 i = 0; i < data.CurrentIndex; ++i)
 				{
-					for(uint32 currentRegion = GetFirstRegion(threadId); currentRegion != 0xFFFFFFFF; currentRegion = m_SampleRegions[currentRegion].Next)
+					const SampleRegion& region = data.Regions[i];
+					if (region.Depth >= (uint32)MaxDepth)
+						continue;
+
+					check(region.EndTime >= region.BeginTime);
+					uint64 numTicks = region.EndTime - region.BeginTime;
+
+					float width = tickScale * numTicks;
+					float startPos = tickScale * (region.BeginTime - data.TicksBegin);
+
+					ImVec2 min(startPos, region.Depth * BarHeight + MaxDepth * BarHeight * threadToIndex[region.ThreadID]);
+					ImVec2 extents(width, BarHeight);
+					ImVec2 max = min + extents;
+
+					if (ImGui::ItemAdd(ImRect(cursor + min, cursor + max), i))
 					{
-						const SampleRegion& region = m_SampleRegions[currentRegion];
-						if (region.Depth >= (uint32)MaxDepth)
-							continue;
-
-						check(region.EndTime >= region.BeginTime);
-						uint64 numTicks = region.EndTime - region.BeginTime;
-
-						float width = tickScale * numTicks;
-						float startPos = tickScale * (region.BeginTime - baseTime);
-
-						ImVec2 min(startPos, region.Depth * BarHeight);
-						ImVec2 extents(width, BarHeight);
-						ImVec2 max = min + extents;
-
-						if (ImGui::ItemAdd(ImRect(cursor + min, cursor + max), currentRegion))
+						pDraw->AddRectFilled(cursor + min, cursor + max, ImColor(0, 0, 0));
+						pDraw->AddRectFilled(cursor + min + ImVec2(2, 2), cursor + max - ImVec2(2, 2), region.Color);
+						ImVec2 textSize = ImGui::CalcTextSize(region.pName);
+						if (textSize.x < width)
 						{
-							pDraw->AddRectFilled(cursor + min, cursor + max, region.Color);
-							if (ImGui::IsItemHovered())
+							pDraw->AddText(cursor + min + (ImVec2(width, BarHeight) - textSize) * 0.5f, ImColor(0.0f, 0.0f, 0.0f), region.pName);
+						}
+						if (ImGui::IsItemHovered())
+						{
+							if (ImGui::BeginTooltip())
 							{
-								if (ImGui::BeginTooltip())
-								{
-									ImGui::Text("Name: %s", region.pName);
-									ImGui::Text("Time: %f", (float)(region.EndTime - region.BeginTime) / frequency * 1000.0f);
-									ImGui::EndTooltip();
-								}
+								ImGui::Text("Name: %s", region.pName);
+								ImGui::Text("Time: %f", (float)(region.EndTime - region.BeginTime) / frequency * 1000.0f);
+								ImGui::EndTooltip();
 							}
 						}
 					}
-
-					cursor.y += (BarHeight * MaxDepth);
-					pDraw->AddLine(cursor, cursor + ImVec2(ImGui::GetContentRegionAvail().x, 0), lineColor);
 				}
 			}
 			ImGui::EndChild();

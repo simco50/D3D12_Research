@@ -38,6 +38,8 @@
 #include "IconsFontAwesome4.h"
 #include "FooProfiler.h"
 
+#define ENABLE_STUFF 1
+
 namespace Tweakables
 {
 	ConsoleVariable g_Vsync("r.Vsync", true);
@@ -131,7 +133,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	ImGuiRenderer::Initialize(m_pDevice, window);
 
-#if 0
+#if ENABLE_STUFF
 	m_pMeshletRasterizer	= std::make_unique<MeshletRasterizer>(m_pDevice);
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
 	m_pClouds				= std::make_unique<Clouds>(m_pDevice);
@@ -209,6 +211,9 @@ void DemoApp::SetupScene()
 
 void DemoApp::Update()
 {
+	gProfiler.BeginFrame();
+	FOO_SCOPE("Update");
+
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	Profiler::Get()->Resolve(pContext);
 
@@ -227,7 +232,7 @@ void DemoApp::Update()
 
 		m_RenderGraphPool->Tick();
 
-#if 0
+#if ENABLE_STUFF
 		RenderPath newRenderPath = m_RenderPath;
 		if (!ImGui::IsAnyItemActive())
 		{
@@ -288,7 +293,9 @@ void DemoApp::Update()
 #endif
 	}
 	{
-#if 0
+		RGGraph graph(*m_RenderGraphPool);
+
+#if ENABLE_STUFF
 		GPU_PROFILE_SCOPE("Render", pContext);
 
 		if (Tweakables::g_Screenshot)
@@ -383,6 +390,7 @@ void DemoApp::Update()
 			{
 				TaskQueue::Execute([&](int)
 					{
+						FOO_SCOPE("Frustum Cull Main");
 						m_SceneData.VisibilityMask.SetAll();
 						BoundingFrustum frustum = m_pCamera->GetViewTransform().PerspectiveFrustum;
 						for (const Batch& b : m_SceneData.Batches)
@@ -395,6 +403,7 @@ void DemoApp::Update()
 			{
 				TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
 					{
+						FOO_SCOPE("Frustum Cull Shadows");
 						ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
 						shadowView.Visibility.SetAll();
 						for (const Batch& b : m_SceneData.Batches)
@@ -406,6 +415,7 @@ void DemoApp::Update()
 
 			TaskQueue::Execute([&](int)
 				{
+					FOO_SCOPE("Compute Bounds");
 					bool boundsSet = false;
 					for (const Batch& b : m_SceneData.Batches)
 					{
@@ -423,8 +433,6 @@ void DemoApp::Update()
 
 			TaskQueue::Join(taskContext);
 		}
-
-		RGGraph graph(*m_RenderGraphPool);
 
 		const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
@@ -1177,8 +1185,6 @@ void DemoApp::Update()
 
 #endif
 
-		RGGraph graph(*m_RenderGraphPool);
-
 		/*
 			UI & Present
 		*/
@@ -1210,6 +1216,8 @@ void DemoApp::Update()
 		++m_Frame;
 		m_SceneData.CameraCut = false;
 	}
+
+	gProfiler.EndFrame();
 }
 
 void DemoApp::OnResizeOrMove(int width, int height)
@@ -1350,39 +1358,6 @@ void DemoApp::UpdateImGui()
 	{
 
 		PROFILE_SCOPE("Profiler");
-
-		gProfiler.BeginFrame();
-
-		{
-			{
-				FOO_SCOPE("Main", Colors::Red);
-				{
-					FOO_SCOPE("SubMain", Colors::Green);
-					sleep(100);
-				}
-				sleep(100);
-			}
-
-			TaskContext context;
-			TaskQueue::ExecuteMany([&](TaskDistributeArgs)
-				{
-					sleep(100);
-					{
-						FOO_SCOPE("Task");
-						sleep(100);
-						{
-							FOO_SCOPE("SubTask", Colors::Green);
-							sleep(100);
-						}
-						sleep(100);
-					}
-					sleep(100);
-				}, context, 10, 1);
-
-			TaskQueue::Join(context);
-		}
-
-		gProfiler.EndFrame();
 
 		if (ImGui::Begin("Timings"))
 			gProfiler.DrawTimings();

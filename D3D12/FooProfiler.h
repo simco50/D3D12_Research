@@ -9,15 +9,15 @@ class FooProfiler
 public:
 	FooProfiler()
 	{
-		m_SampleRegions.resize(1024);
 		m_ThreadData.reserve(128);
 	}
 
 	void BeginRegion(const char* pName, const Color& color = Colors::White)
 	{
 		uint32 regionIndex = AllocateRegion();
-		SampleRegion& region = m_SampleRegions[regionIndex];
-		region.pName = pName;
+		SampleHistory& data = GetCurrentData();
+		SampleRegion& region = data.Regions[regionIndex];
+		region.pName = StoreString(pName);
 		region.Color = Math::Pack_RGBA8_UNORM(color);
 		QueryPerformanceCounter((LARGE_INTEGER*)(&region.BeginTime));
 	}
@@ -26,7 +26,7 @@ public:
 	{
 		ThreadData& data = GetThreadData();
 		check(data.CurrentRegion != 0xFFFFFFFF);
-		SampleRegion& region = m_SampleRegions[data.CurrentRegion];
+		SampleRegion& region = GetCurrentData().Regions[data.CurrentRegion];
 		region.pFilePath = pFilePath;
 		region.LineNumber = lineNumber;
 	}
@@ -35,7 +35,7 @@ public:
 	{
 		ThreadData& data = GetThreadData();
 		check(data.CurrentRegion != 0xFFFFFFFF);
-		SampleRegion& region = m_SampleRegions[data.CurrentRegion];
+		SampleRegion& region = GetCurrentData().Regions[data.CurrentRegion];
 		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTime));
 		data.CurrentRegion = region.Parent;
 		check(data.Depth > 0);
@@ -44,88 +44,112 @@ public:
 
 	void BeginFrame()
 	{
-		m_SampleRegionIndex = 0;
-		m_ThreadData.clear();
-		QueryPerformanceCounter((LARGE_INTEGER*)(&m_SampleRegions[GetThreadData().Head].BeginTime));
+		if (!m_Paused)
+			++m_FrameIndex;
+
+		SampleHistory& data = GetCurrentData();
+		data.CharIndex = 0;
+		data.CurrentIndex = 0;
+
+		for (auto& threadData : m_ThreadData)
+			threadData.second.Head = 0xFFFFFFFF;
+		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksBegin));
 	}
 
 	void EndFrame()
 	{
-		QueryPerformanceCounter((LARGE_INTEGER*)(&m_SampleRegions[GetThreadData().Head].EndTime));
+		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksEnd));
 	}
 
 	void DrawTimings();
 
 private:
+	const char* StoreString(const char* pText)
+	{
+		SampleHistory& data = GetCurrentData();
+		const char* pOut = &data.StringBuffer[data.CharIndex];
+		while (*pText)
+			data.StringBuffer[data.CharIndex++] = *pText++;
+		data.StringBuffer[data.CharIndex++] = 0;
+		return pOut;
+	}
 
 	struct ThreadData
 	{
-		uint32 Head = 0;
-		uint32 CurrentRegion = 0;
+		uint32 Head = 0xFFFFFFFF;
+		uint32 CurrentRegion = 0xFFFFFFFF;
 		uint32 Depth = 0;
 		uint32 ThreadID = 0;
-		uint32 LastIndex = 0;
 	};
 
 	ThreadData& GetThreadData()
 	{
 		std::lock_guard lock(m_ThreadIndexLock);
-		if (m_ThreadData.find(Thread::GetCurrentId()) == m_ThreadData.end())
-		{
-			ThreadData& data = m_ThreadData[Thread::GetCurrentId()];
-			data.Head = m_SampleRegionIndex.fetch_add(1);
-			data.CurrentRegion = data.Head;
-			data.ThreadID = Thread::GetCurrentId();
-			data.LastIndex = data.Head;
-			m_SampleRegions[data.Head].pName = "HEAD";
-			return data;
-		}
-
-		return m_ThreadData[Thread::GetCurrentId()];
+		ThreadData& data = m_ThreadData[Thread::GetCurrentId()];
+		data.ThreadID = Thread::GetCurrentId();
+		return data;
 	}
 
 	struct SampleRegion
 	{
 		const char* pName;
-		const char* pFilePath = nullptr;
+		uint32 ThreadID = 0xFFFFFFFF;
 		uint64 BeginTime = 0;
 		uint64 EndTime = 0;
 		uint32 Color = 0xFFFF00FF;
 		uint32 Parent = 0xFFFFFFFF;
 		uint32 Depth = 0;
 		uint32 LineNumber = 0;
-		uint32 Next = 0xFFFFFFFF;
+		const char* pFilePath = nullptr;
 	};
 
-	uint32 GetFirstRegion(uint32 threadId) const
+	struct SampleHistory
 	{
-		const ThreadData& data = m_ThreadData.at(threadId);
-		return m_SampleRegions[data.Head].Next;
-	}
+		uint64 TicksBegin;
+		uint64 TicksEnd;
+		std::array<SampleRegion, 1024> Regions;
+		std::atomic<uint32> CurrentIndex = 0;
+
+		uint32 CharIndex = 0;
+		char StringBuffer[1 << 16];
+	};
 
 	uint32 AllocateRegion()
 	{
 		ThreadData& threadData = GetThreadData();
+		SampleHistory& data = GetCurrentData();
 
-		uint32 newIndex = m_SampleRegionIndex.fetch_add(1);
-		check(newIndex < m_SampleRegions.size());
+		uint32 newIndex = data.CurrentIndex.fetch_add(1);
+		check(newIndex < data.Regions.size());
 
-		m_SampleRegions[threadData.LastIndex].Next = newIndex;
-		threadData.LastIndex = newIndex;
-
-		SampleRegion& newRegion = m_SampleRegions[newIndex];
+		SampleRegion& newRegion = data.Regions[newIndex];
 		newRegion.Parent = threadData.CurrentRegion;
 		newRegion.Depth = threadData.Depth;
+		newRegion.ThreadID = Thread::GetCurrentId();
 		threadData.CurrentRegion = newIndex;
+		threadData.Head = threadData.Head == 0xFFFFFFFF ? newIndex : threadData.Head;
 		threadData.Depth++;
 		return newIndex;
+	}
+
+	SampleHistory& GetCurrentData()
+	{
+		return m_SampleHistory[m_FrameIndex % m_SampleHistory.size()];
+	}
+
+	SampleHistory& GetHistoryData(int numFrames)
+	{
+		numFrames = Math::Min(numFrames, (int)m_SampleHistory.size() - 2);
+		int index = (m_FrameIndex + (int)m_SampleHistory.size() - 1 - numFrames) % (int)m_SampleHistory.size();
+		return m_SampleHistory[index];
 	}
 
 	std::mutex m_ThreadIndexLock;
 	std::unordered_map<uint32, ThreadData> m_ThreadData;
 
-	std::atomic<uint32> m_SampleRegionIndex = 0;
-	std::vector<SampleRegion> m_SampleRegions;
+	bool m_Paused = false;
+	uint32 m_FrameIndex = 0;
+	std::array<SampleHistory, 4> m_SampleHistory;
 };
 
 struct FooProfileScope
