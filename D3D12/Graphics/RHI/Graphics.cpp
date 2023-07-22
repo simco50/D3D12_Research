@@ -1304,8 +1304,6 @@ SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHan
 	desc.SampleDesc.Quality = 0;
 
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
-	fsDesc.RefreshRate.Denominator = 60;
-	fsDesc.RefreshRate.Numerator = 1;
 	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	fsDesc.Windowed = true;
@@ -1389,18 +1387,15 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 
 void SwapChain::Present()
 {
-	// Wait until the current backbuffer image is ready - Not doing this makes running under PIX crash
-	SyncPoint& presentSyncPoint = m_PresentSyncPoints[m_pSwapchain->GetCurrentBackBufferIndex()];
-	if (presentSyncPoint)
-		presentSyncPoint.Wait();
-
 	m_pSwapchain->Present(m_Vsync ? 1 : 0, !m_Vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 
+	// Signal and store when the GPU work for the frame we just flipped is finished.
 	CommandQueue* pDirectQueue = GetParent()->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	uint64 fenceValue = m_pPresentFence->Signal(pDirectQueue);
 
-	presentSyncPoint = SyncPoint(m_pPresentFence, fenceValue);
+	m_pPresentFence->CpuWait(m_PresentFenceValue);
+	m_PresentFenceValue = fenceValue;
 }
 
 bool SwapChain::DisplaySupportsHDR() const

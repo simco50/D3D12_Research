@@ -73,7 +73,7 @@ public:
 private:
 	WindowHandle m_Window;
 	DisplayMode m_DesiredDisplayMode;
-	std::array<SyncPoint, NUM_FRAMES> m_PresentSyncPoints;
+	uint64 m_PresentFenceValue = 0;
 	RefCountPtr<Fence> m_pPresentFence;
 	std::array<RefCountPtr<Texture>, NUM_FRAMES> m_Backbuffers;
 	RefCountPtr<IDXGISwapChain4> m_pSwapchain;

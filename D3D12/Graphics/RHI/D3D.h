@@ -3,6 +3,7 @@
 #define ENABLE_PIX 1
 
 #if ENABLE_PIX
+#define USE_PIX
 #include "pix3.h"
 #endif
 
