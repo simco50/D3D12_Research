@@ -67,11 +67,10 @@ private:
 	const char* StoreString(const char* pText)
 	{
 		SampleHistory& data = GetCurrentData();
-		const char* pOut = &data.StringBuffer[data.CharIndex];
-		while (*pText)
-			data.StringBuffer[data.CharIndex++] = *pText++;
-		data.StringBuffer[data.CharIndex++] = 0;
-		return pOut;
+		uint32 len = (uint32)strlen(pText) + 1;
+		uint32 offset = data.CharIndex.fetch_add(len);
+		strcpy_s(&data.StringBuffer[offset], len, pText);
+		return &data.StringBuffer[offset];
 	}
 
 	struct ThreadData
@@ -109,8 +108,7 @@ private:
 		uint64 TicksEnd;
 		std::array<SampleRegion, 1024> Regions;
 		std::atomic<uint32> CurrentIndex = 0;
-
-		uint32 CharIndex = 0;
+		std::atomic<uint32> CharIndex = 0;
 		char StringBuffer[1 << 16];
 	};
 
