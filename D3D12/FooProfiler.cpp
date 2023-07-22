@@ -52,6 +52,9 @@ void FooProfiler::DrawTimings()
 	ImGui::SetNextItemWidth(100);
 	ImGui::SliderInt("Max Depth", &MaxDepth, 1, 20);
 
+	if (ImGui::IsKeyPressed(ImGuiKey_Space))
+		m_Paused = !m_Paused;
+
 	if (m_Paused)
 	{
 		if (ImGui::Button("<") || ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
@@ -62,6 +65,10 @@ void FooProfiler::DrawTimings()
 		HistoryIndex = Math::Clamp(HistoryIndex, 0, (int)m_SampleHistory.size() - 2);
 		ImGui::SameLine();
 		ImGui::Text("Frame: %d", -HistoryIndex - 1);
+	}
+	else
+	{
+		HistoryIndex = 0;
 	}
 
 	SampleHistory& data = GetHistoryData(HistoryIndex);
@@ -99,15 +106,22 @@ void FooProfiler::DrawTimings()
 			{
 				ImVec2 cursor = ImGui::GetCursorScreenPos();
 				ImDrawList* pDraw = ImGui::GetWindowDrawList();
+
+				std::unordered_map<uint32, uint32> threadToIndex;
+				for (auto& threadData : m_ThreadData)
+					threadToIndex[threadData.second.ThreadID] = (uint32)threadToIndex.size();
+
 				for (int i = 0; i < MaxMs; ++i)
 				{
 					float x = cursor.x + tickScale * MsToTicks((float)i);
 					pDraw->AddLine(ImVec2(x, cursor.y), ImVec2(x, cursor.y + ImGui::GetContentRegionAvail().y), lineColor);
 				}
 
-				std::unordered_map<uint32, uint32> threadToIndex;
-				for (auto& threadData : m_ThreadData)
-					threadToIndex[threadData.second.ThreadID] = (uint32)threadToIndex.size();
+				for (int i = 0; i <= (int)threadToIndex.size(); ++i)
+				{
+					float y = BarHeight * MaxDepth * i;
+					pDraw->AddLine(ImVec2(cursor.x, cursor.y + y), ImVec2(cursor.x + ImGui::GetContentRegionAvail().x, cursor.y + y), lineColor);
+				}
 
 				for (uint32 i = 0; i < data.CurrentIndex; ++i)
 				{
@@ -130,7 +144,7 @@ void FooProfiler::DrawTimings()
 						pDraw->AddRectFilled(cursor + min, cursor + max, ImColor(0, 0, 0));
 						pDraw->AddRectFilled(cursor + min + ImVec2(2, 2), cursor + max - ImVec2(2, 2), region.Color);
 						ImVec2 textSize = ImGui::CalcTextSize(region.pName);
-						if (textSize.x < width)
+						if (textSize.x < width * 0.9f)
 						{
 							pDraw->AddText(cursor + min + (ImVec2(width, BarHeight) - textSize) * 0.5f, ImColor(0.0f, 0.0f, 0.0f), region.pName);
 						}
