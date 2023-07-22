@@ -36,6 +36,7 @@
 #include "Core/Utils.h"
 #include "imgui_internal.h"
 #include "IconsFontAwesome4.h"
+#include "FooProfiler.h"
 
 namespace Tweakables
 {
@@ -129,6 +130,8 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pShaderDebugRenderer->GetGPUData(&m_SceneData.DebugRenderData);
 
 	ImGuiRenderer::Initialize(m_pDevice, window);
+
+#if 0
 	m_pMeshletRasterizer	= std::make_unique<MeshletRasterizer>(m_pDevice);
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
 	m_pClouds				= std::make_unique<Clouds>(m_pDevice);
@@ -146,6 +149,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	InitializePipelines();
 
 	SetupScene();
+#endif
 
 	OnResizeOrMove(windowRect.x, windowRect.y);
 	OnResizeViewport(windowRect.x, windowRect.y);
@@ -223,6 +227,7 @@ void DemoApp::Update()
 
 		m_RenderGraphPool->Tick();
 
+#if 0
 		RenderPath newRenderPath = m_RenderPath;
 		if (!ImGui::IsAnyItemActive())
 		{
@@ -280,8 +285,10 @@ void DemoApp::Update()
 		m_SceneData.MainView = m_pCamera->GetViewTransform();
 		m_SceneData.FrameIndex = m_Frame;
 		m_SceneData.pWorld = &m_World;
+#endif
 	}
 	{
+#if 0
 		GPU_PROFILE_SCOPE("Render", pContext);
 
 		if (Tweakables::g_Screenshot)
@@ -1168,6 +1175,10 @@ void DemoApp::Update()
 
 		graph.Export(sceneTextures.pColorTarget, &m_pColorOutput, TextureFlag::ShaderResource);
 
+#endif
+
+		RGGraph graph(*m_RenderGraphPool);
+
 		/*
 			UI & Present
 		*/
@@ -1210,7 +1221,8 @@ void DemoApp::OnResizeOrMove(int width, int height)
 void DemoApp::OnResizeViewport(int width, int height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
-	m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
+	if(m_pCamera)
+		m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
 	m_SceneData.CameraCut = true;
 }
 
@@ -1320,10 +1332,65 @@ void DemoApp::InitializePipelines()
 
 
 
+volatile float a = 0;
+
+void sleep(int u)
+{
+	for (int i = 0; i < u * 100; ++i)
+	{
+		a += sqrtf(a);
+	}
+}
+
 void DemoApp::UpdateImGui()
 {
 	PROFILE_SCOPE("ImGui Update");
 	ImGuiRenderer::NewFrame();
+
+	{
+
+		PROFILE_SCOPE("Profiler");
+
+		gProfiler.BeginFrame();
+
+		{
+			{
+				FOO_SCOPE("Main", Colors::Red);
+				{
+					FOO_SCOPE("SubMain", Colors::Green);
+					sleep(100);
+				}
+				sleep(100);
+			}
+
+			TaskContext context;
+			TaskQueue::ExecuteMany([&](TaskDistributeArgs)
+				{
+					sleep(100);
+					{
+						FOO_SCOPE("Task");
+						sleep(100);
+						{
+							FOO_SCOPE("SubTask", Colors::Green);
+							sleep(100);
+						}
+						sleep(100);
+					}
+					sleep(100);
+				}, context, 10, 1);
+
+			TaskQueue::Join(context);
+		}
+
+		gProfiler.EndFrame();
+
+		if (ImGui::Begin("Timings"))
+			gProfiler.DrawTimings();
+		ImGui::End();
+	}
+
+
+
 
 	m_FrameHistory.AddTime(Time::DeltaTime());
 
@@ -1444,7 +1511,8 @@ void DemoApp::UpdateImGui()
 	ImGui::End();
 
 	ImGuizmo::SetRect(viewportOrigin.x, viewportOrigin.y, viewportExtents.x, viewportExtents.y);
-	m_pVisualizeTexture->RenderUI(viewportOrigin, viewportExtents);
+	if(m_pVisualizeTexture)
+		m_pVisualizeTexture->RenderUI(viewportOrigin, viewportExtents);
 
 	console.Update();
 
@@ -1536,19 +1604,22 @@ void DemoApp::UpdateImGui()
 				ImGui::Checkbox("Cull statistics", &Tweakables::CullDebugStats.Get());
 			}
 
-			const ViewTransform& view = m_pCamera->GetViewTransform();
-			ImGui::Text("Camera");
-			ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
-			float fov = view.FoV;
-			if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
+			if (m_pCamera)
 			{
-				m_pCamera->SetFoV(fov);
-			}
-			Vector2 farNear(view.FarPlane, view.NearPlane);
-			if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
-			{
-				m_pCamera->SetFarPlane(farNear.x);
-				m_pCamera->SetNearPlane(farNear.y);
+				const ViewTransform& view = m_pCamera->GetViewTransform();
+				ImGui::Text("Camera");
+				ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
+				float fov = view.FoV;
+				if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
+				{
+					m_pCamera->SetFoV(fov);
+				}
+				Vector2 farNear(view.FarPlane, view.NearPlane);
+				if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
+				{
+					m_pCamera->SetFarPlane(farNear.x);
+					m_pCamera->SetNearPlane(farNear.y);
+				}
 			}
 		}
 
