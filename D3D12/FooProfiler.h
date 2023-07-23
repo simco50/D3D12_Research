@@ -8,7 +8,7 @@ class FooProfiler
 {
 public:
 	static constexpr int MAX_DEPTH = 32;
-	static constexpr int STRING_BUFFER_SIZE = 1 < 16;
+	static constexpr int STRING_BUFFER_SIZE = 1 << 16;
 	static constexpr int MAX_NUM_REGIONS = 1024;
 
 
@@ -26,15 +26,15 @@ public:
 		ThreadData& threadData = GetThreadData();
 		check(threadData.StackDepth < ARRAYSIZE(threadData.RegionStack));
 
-		threadData.RegionStack[threadData.StackDepth] = newIndex;
-		threadData.StackDepth++;
-
 		SampleRegion& newRegion = data.Regions[newIndex];
 		newRegion.StackDepth = threadData.StackDepth;
 		newRegion.ThreadID = Thread::GetCurrentId();
 		newRegion.pName = StoreString(pName);
 		newRegion.Color = Math::Pack_RGBA8_UNORM(color);
 		QueryPerformanceCounter((LARGE_INTEGER*)(&newRegion.BeginTicks));
+
+		threadData.RegionStack[threadData.StackDepth] = newIndex;
+		threadData.StackDepth++;
 	}
 
 	void SetFileInfo(const char* pFilePath, uint32 lineNumber)
@@ -83,7 +83,8 @@ private:
 		SampleHistory& data = GetCurrentData();
 		uint32 len = (uint32)strlen(pText) + 1;
 		uint32 offset = data.CharIndex.fetch_add(len);
-		strcpy_s(&data.StringBuffer[offset], len, pText);
+		check(offset + len <= ARRAYSIZE(data.StringBuffer));
+		strcpy_s(data.StringBuffer + offset, len, pText);
 		return &data.StringBuffer[offset];
 	}
 
@@ -118,7 +119,7 @@ private:
 	{
 		uint64 TicksBegin;									//< The start ticks of the frame on the main thread
 		uint64 TicksEnd;									//< The end ticks of the frame on the main thread
-		std::array<SampleRegion, MAX_NUM_REASONS> Regions;	//< All sample regions of the frame
+		std::array<SampleRegion, MAX_NUM_REGIONS> Regions;	//< All sample regions of the frame
 		std::atomic<uint32> CurrentIndex = 0;				//< The index to the next free sample region
 		std::atomic<uint32> CharIndex = 0;					//< The index to the next free char buffer
 		char StringBuffer[STRING_BUFFER_SIZE];				//< Blob to store dynamic strings for the frame
@@ -129,7 +130,7 @@ private:
 		return m_SampleHistory[m_FrameIndex % m_SampleHistory.size()];
 	}
 
-	SampleHistory& GetHistoryData(int numFrames)
+	const SampleHistory& GetHistoryData(int numFrames) const
 	{
 		numFrames = Math::Min(numFrames, (int)m_SampleHistory.size() - 2);
 		int index = (m_FrameIndex + (int)m_SampleHistory.size() - 1 - numFrames) % (int)m_SampleHistory.size();

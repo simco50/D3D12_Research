@@ -71,7 +71,7 @@ void FooProfiler::DrawTimings()
 		HistoryIndex = 0;
 	}
 
-	SampleHistory& data = GetHistoryData(HistoryIndex);
+	const SampleHistory& data = GetHistoryData(HistoryIndex);
 
 	uint64 frameTicks = data.TicksEnd - data.TicksBegin;
 	float frameTime = (float)frameTicks / ticksPerMs;
