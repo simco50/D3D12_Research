@@ -129,11 +129,11 @@ void FooProfiler::DrawTimings()
 					if (region.Depth >= (uint32)MaxDepth)
 						continue;
 
-					check(region.EndTime >= region.BeginTime);
-					uint64 numTicks = region.EndTime - region.BeginTime;
+					check(region.EndTicks >= region.BeginTicks);
+					uint64 numTicks = region.EndTicks - region.BeginTicks;
 
 					float width = tickScale * numTicks;
-					float startPos = tickScale * (region.BeginTime - data.TicksBegin);
+					float startPos = tickScale * (region.BeginTicks - data.TicksBegin);
 
 					ImVec2 min(startPos, region.Depth * BarHeight + MaxDepth * BarHeight * threadToIndex[region.ThreadID]);
 					ImVec2 extents(width, BarHeight);
@@ -153,7 +153,7 @@ void FooProfiler::DrawTimings()
 							if (ImGui::BeginTooltip())
 							{
 								ImGui::Text("Name: %s", region.pName);
-								ImGui::Text("Time: %f", (float)(region.EndTime - region.BeginTime) / frequency * 1000.0f);
+								ImGui::Text("Time: %f", (float)(region.EndTicks - region.BeginTicks) / frequency * 1000.0f);
 								ImGui::EndTooltip();
 							}
 						}

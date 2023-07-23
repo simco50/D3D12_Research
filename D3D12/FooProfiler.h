@@ -19,7 +19,7 @@ public:
 		SampleRegion& region = data.Regions[regionIndex];
 		region.pName = StoreString(pName);
 		region.Color = Math::Pack_RGBA8_UNORM(color);
-		QueryPerformanceCounter((LARGE_INTEGER*)(&region.BeginTime));
+		QueryPerformanceCounter((LARGE_INTEGER*)(&region.BeginTicks));
 	}
 
 	void SetFileInfo(const char* pFilePath, uint32 lineNumber)
@@ -36,7 +36,7 @@ public:
 		ThreadData& data = GetThreadData();
 		check(data.CurrentRegion != 0xFFFFFFFF);
 		SampleRegion& region = GetCurrentData().Regions[data.CurrentRegion];
-		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTime));
+		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTicks));
 		data.CurrentRegion = region.Parent;
 		check(data.Depth > 0);
 		--data.Depth;
@@ -88,25 +88,25 @@ private:
 
 	struct SampleRegion
 	{
-		const char* pName;
-		uint32 ThreadID = 0xFFFFFFFF;
-		uint64 BeginTime = 0;
-		uint64 EndTime = 0;
-		uint32 Color = 0xFFFF00FF;
-		uint32 Parent = 0xFFFFFFFF;
-		uint32 Depth = 0;
-		uint32 LineNumber = 0;
-		const char* pFilePath = nullptr;
+		const char* pName;						// Name of the region
+		uint32 ThreadID = 0xFFFFFFFF;			// Thread ID of the thread that recorderd this region
+		uint64 BeginTicks = 0;					// The ticks at the start of this region
+		uint64 EndTicks = 0;					// The ticks at the end of this region
+		uint32 Color = 0xFFFF00FF;				// Color of region
+		uint32 Parent = 0xFFFFFFFF;				// Parent of region
+		uint32 Depth = 0;						// Depth of the region
+		uint32 LineNumber = 0;					// Line number of file in which this region is recorded
+		const char* pFilePath = nullptr;		// File path of file in which this region is recorded
 	};
 
 	struct SampleHistory
 	{
-		uint64 TicksBegin;
-		uint64 TicksEnd;
-		std::array<SampleRegion, 1024> Regions;
-		std::atomic<uint32> CurrentIndex = 0;
-		std::atomic<uint32> CharIndex = 0;
-		char StringBuffer[1 << 16];
+		uint64 TicksBegin;						// The start ticks of the frame on the main thread
+		uint64 TicksEnd;						// The end ticks of the frame on the main thread
+		std::array<SampleRegion, 1024> Regions;	// All sample regions of the frame
+		std::atomic<uint32> CurrentIndex = 0;	// The index to the next free sample region
+		std::atomic<uint32> CharIndex = 0;		// The index to the next free char buffer
+		char StringBuffer[1 << 16];				// Blob to store dynamic strings for the frame
 	};
 
 	uint32 AllocateRegion()
