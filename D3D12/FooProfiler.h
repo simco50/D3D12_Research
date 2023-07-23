@@ -42,8 +42,10 @@ public:
 		--data.Depth;
 	}
 
-	void BeginFrame()
+	void Tick()
 	{
+		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksEnd));
+
 		if (!m_Paused)
 			++m_FrameIndex;
 
@@ -54,11 +56,6 @@ public:
 		for (auto& threadData : m_ThreadData)
 			threadData.second.Head = 0xFFFFFFFF;
 		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksBegin));
-	}
-
-	void EndFrame()
-	{
-		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksEnd));
 	}
 
 	void DrawTimings();

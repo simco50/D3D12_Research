@@ -211,7 +211,7 @@ void DemoApp::SetupScene()
 
 void DemoApp::Update()
 {
-	gProfiler.BeginFrame();
+	gProfiler.Tick();
 	FOO_SCOPE("Update");
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
@@ -1216,8 +1216,6 @@ void DemoApp::Update()
 		++m_Frame;
 		m_SceneData.CameraCut = false;
 	}
-
-	gProfiler.EndFrame();
 }
 
 void DemoApp::OnResizeOrMove(int width, int height)
