@@ -4,7 +4,7 @@
 
 FooProfiler gProfiler;
 
-void FooProfiler::DrawTimings()
+void FooProfiler::DrawHUD()
 {
 	static int HistoryIndex = 0;
 	// The height of each bar

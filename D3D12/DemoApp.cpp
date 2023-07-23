@@ -1358,7 +1358,7 @@ void DemoApp::UpdateImGui()
 		PROFILE_SCOPE("Profiler");
 
 		if (ImGui::Begin("Timings"))
-			gProfiler.DrawTimings();
+			gProfiler.DrawHUD();
 		ImGui::End();
 	}
 

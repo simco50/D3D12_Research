@@ -23,26 +23,26 @@ public:
 		uint32 newIndex = data.CurrentIndex.fetch_add(1);
 		check(newIndex < data.Regions.size());
 
-		ThreadData& threadData = GetThreadData();
-		check(threadData.StackDepth < ARRAYSIZE(threadData.RegionStack));
+		TLS& tls = GetTLS();
+		check(tls.StackDepth < ARRAYSIZE(tls.RegionStack));
 
 		SampleRegion& newRegion = data.Regions[newIndex];
-		newRegion.StackDepth = threadData.StackDepth;
+		newRegion.StackDepth = tls.StackDepth;
 		newRegion.ThreadID = Thread::GetCurrentId();
 		newRegion.pName = StoreString(pName);
 		newRegion.Color = Math::Pack_RGBA8_UNORM(color);
 		QueryPerformanceCounter((LARGE_INTEGER*)(&newRegion.BeginTicks));
 
-		threadData.RegionStack[threadData.StackDepth] = newIndex;
-		threadData.StackDepth++;
+		tls.RegionStack[tls.StackDepth] = newIndex;
+		tls.StackDepth++;
 	}
 
 	void SetFileInfo(const char* pFilePath, uint32 lineNumber)
 	{
 		SampleHistory& data = GetCurrentData();
-		ThreadData& threadData = GetThreadData();
+		TLS& tls = GetTLS();
 
-		SampleRegion& region = data.Regions[threadData.RegionStack[threadData.StackDepth]];
+		SampleRegion& region = data.Regions[tls.RegionStack[tls.StackDepth]];
 		region.pFilePath = pFilePath;
 		region.LineNumber = lineNumber;
 	}
@@ -50,11 +50,11 @@ public:
 	void EndRegion()
 	{
 		SampleHistory& data = GetCurrentData();
-		ThreadData& threadData = GetThreadData();
+		TLS& tls = GetTLS();
 
-		check(threadData.StackDepth > 0);
-		--threadData.StackDepth;
-		SampleRegion& region = data.Regions[threadData.RegionStack[threadData.StackDepth]];
+		check(tls.StackDepth > 0);
+		--tls.StackDepth;
+		SampleRegion& region = data.Regions[tls.RegionStack[tls.StackDepth]];
 		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTicks));
 	}
 
@@ -62,8 +62,8 @@ public:
 	{
 		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksEnd));
 
-		for (auto& threadData : m_ThreadData)
-			check(threadData.second.StackDepth == 0);
+		for (auto& tls : m_ThreadData)
+			check(tls.second.StackDepth == 0);
 
 		if (!m_Paused)
 			++m_FrameIndex;
@@ -75,7 +75,7 @@ public:
 		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksBegin));
 	}
 
-	void DrawTimings();
+	void DrawHUD();
 
 private:
 	const char* StoreString(const char* pText)
@@ -88,17 +88,17 @@ private:
 		return &data.StringBuffer[offset];
 	}
 
-	struct ThreadData
+	struct TLS
 	{
 		uint32 ThreadID = 0;
 		uint32 StackDepth = 0;
 		uint32 RegionStack[MAX_DEPTH];
 	};
 
-	ThreadData& GetThreadData()
+	TLS& GetTLS()
 	{
 		std::lock_guard lock(m_ThreadIndexLock);
-		ThreadData& data = m_ThreadData[Thread::GetCurrentId()];
+		TLS& data = m_ThreadData[Thread::GetCurrentId()];
 		data.ThreadID = Thread::GetCurrentId();
 		return data;
 	}
@@ -138,7 +138,7 @@ private:
 	}
 
 	std::mutex m_ThreadIndexLock;
-	std::unordered_map<uint32, ThreadData> m_ThreadData;
+	std::unordered_map<uint32, TLS> m_ThreadData;
 
 	bool m_Paused = false;
 	uint32 m_FrameIndex = 0;
