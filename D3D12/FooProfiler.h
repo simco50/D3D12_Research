@@ -7,6 +7,11 @@ extern class FooProfiler gProfiler;
 class FooProfiler
 {
 public:
+	static constexpr int MAX_DEPTH = 32;
+	static constexpr int STRING_BUFFER_SIZE = 1 < 16;
+	static constexpr int MAX_NUM_REGIONS = 1024;
+
+
 	FooProfiler()
 	{
 		m_ThreadData.reserve(128);
@@ -14,37 +19,51 @@ public:
 
 	void BeginRegion(const char* pName, const Color& color = Colors::White)
 	{
-		uint32 regionIndex = AllocateRegion();
 		SampleHistory& data = GetCurrentData();
-		SampleRegion& region = data.Regions[regionIndex];
-		region.pName = StoreString(pName);
-		region.Color = Math::Pack_RGBA8_UNORM(color);
-		QueryPerformanceCounter((LARGE_INTEGER*)(&region.BeginTicks));
+		uint32 newIndex = data.CurrentIndex.fetch_add(1);
+		check(newIndex < data.Regions.size());
+
+		ThreadData& threadData = GetThreadData();
+		check(threadData.StackDepth < ARRAYSIZE(threadData.RegionStack));
+
+		threadData.RegionStack[threadData.StackDepth] = newIndex;
+		threadData.StackDepth++;
+
+		SampleRegion& newRegion = data.Regions[newIndex];
+		newRegion.StackDepth = threadData.StackDepth;
+		newRegion.ThreadID = Thread::GetCurrentId();
+		newRegion.pName = StoreString(pName);
+		newRegion.Color = Math::Pack_RGBA8_UNORM(color);
+		QueryPerformanceCounter((LARGE_INTEGER*)(&newRegion.BeginTicks));
 	}
 
 	void SetFileInfo(const char* pFilePath, uint32 lineNumber)
 	{
-		ThreadData& data = GetThreadData();
-		check(data.CurrentRegion != 0xFFFFFFFF);
-		SampleRegion& region = GetCurrentData().Regions[data.CurrentRegion];
+		SampleHistory& data = GetCurrentData();
+		ThreadData& threadData = GetThreadData();
+
+		SampleRegion& region = data.Regions[threadData.RegionStack[threadData.StackDepth]];
 		region.pFilePath = pFilePath;
 		region.LineNumber = lineNumber;
 	}
 
 	void EndRegion()
 	{
-		ThreadData& data = GetThreadData();
-		check(data.CurrentRegion != 0xFFFFFFFF);
-		SampleRegion& region = GetCurrentData().Regions[data.CurrentRegion];
+		SampleHistory& data = GetCurrentData();
+		ThreadData& threadData = GetThreadData();
+
+		check(threadData.StackDepth > 0);
+		--threadData.StackDepth;
+		SampleRegion& region = data.Regions[threadData.RegionStack[threadData.StackDepth]];
 		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTicks));
-		data.CurrentRegion = region.Parent;
-		check(data.Depth > 0);
-		--data.Depth;
 	}
 
 	void Tick()
 	{
 		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksEnd));
+
+		for (auto& threadData : m_ThreadData)
+			check(threadData.second.StackDepth == 0);
 
 		if (!m_Paused)
 			++m_FrameIndex;
@@ -53,8 +72,6 @@ public:
 		data.CharIndex = 0;
 		data.CurrentIndex = 0;
 
-		for (auto& threadData : m_ThreadData)
-			threadData.second.Head = 0xFFFFFFFF;
 		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksBegin));
 	}
 
@@ -72,10 +89,9 @@ private:
 
 	struct ThreadData
 	{
-		uint32 Head = 0xFFFFFFFF;
-		uint32 CurrentRegion = 0xFFFFFFFF;
-		uint32 Depth = 0;
 		uint32 ThreadID = 0;
+		uint32 StackDepth = 0;
+		uint32 RegionStack[MAX_DEPTH];
 	};
 
 	ThreadData& GetThreadData()
@@ -88,44 +104,25 @@ private:
 
 	struct SampleRegion
 	{
-		const char* pName;						// Name of the region
-		uint32 ThreadID = 0xFFFFFFFF;			// Thread ID of the thread that recorderd this region
-		uint64 BeginTicks = 0;					// The ticks at the start of this region
-		uint64 EndTicks = 0;					// The ticks at the end of this region
-		uint32 Color = 0xFFFF00FF;				// Color of region
-		uint32 Parent = 0xFFFFFFFF;				// Parent of region
-		uint32 Depth = 0;						// Depth of the region
-		uint32 LineNumber = 0;					// Line number of file in which this region is recorded
-		const char* pFilePath = nullptr;		// File path of file in which this region is recorded
+		const char* pName;									//< Name of the region
+		uint32 ThreadID = 0xFFFFFFFF;						//< Thread ID of the thread that recorderd this region
+		uint64 BeginTicks = 0;								//< The ticks at the start of this region
+		uint64 EndTicks = 0;								//< The ticks at the end of this region
+		uint32 Color = 0xFFFF00FF;							//< Color of region
+		uint32 StackDepth = 0;								//< StackDepth of the region
+		uint32 LineNumber = 0;								//< Line number of file in which this region is recorded
+		const char* pFilePath = nullptr;					//< File path of file in which this region is recorded
 	};
 
 	struct SampleHistory
 	{
-		uint64 TicksBegin;						// The start ticks of the frame on the main thread
-		uint64 TicksEnd;						// The end ticks of the frame on the main thread
-		std::array<SampleRegion, 1024> Regions;	// All sample regions of the frame
-		std::atomic<uint32> CurrentIndex = 0;	// The index to the next free sample region
-		std::atomic<uint32> CharIndex = 0;		// The index to the next free char buffer
-		char StringBuffer[1 << 16];				// Blob to store dynamic strings for the frame
+		uint64 TicksBegin;									//< The start ticks of the frame on the main thread
+		uint64 TicksEnd;									//< The end ticks of the frame on the main thread
+		std::array<SampleRegion, MAX_NUM_REASONS> Regions;	//< All sample regions of the frame
+		std::atomic<uint32> CurrentIndex = 0;				//< The index to the next free sample region
+		std::atomic<uint32> CharIndex = 0;					//< The index to the next free char buffer
+		char StringBuffer[STRING_BUFFER_SIZE];				//< Blob to store dynamic strings for the frame
 	};
-
-	uint32 AllocateRegion()
-	{
-		ThreadData& threadData = GetThreadData();
-		SampleHistory& data = GetCurrentData();
-
-		uint32 newIndex = data.CurrentIndex.fetch_add(1);
-		check(newIndex < data.Regions.size());
-
-		SampleRegion& newRegion = data.Regions[newIndex];
-		newRegion.Parent = threadData.CurrentRegion;
-		newRegion.Depth = threadData.Depth;
-		newRegion.ThreadID = Thread::GetCurrentId();
-		threadData.CurrentRegion = newIndex;
-		threadData.Head = threadData.Head == 0xFFFFFFFF ? newIndex : threadData.Head;
-		threadData.Depth++;
-		return newIndex;
-	}
 
 	SampleHistory& GetCurrentData()
 	{

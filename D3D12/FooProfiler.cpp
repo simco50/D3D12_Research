@@ -126,7 +126,7 @@ void FooProfiler::DrawTimings()
 				for (uint32 i = 0; i < data.CurrentIndex; ++i)
 				{
 					const SampleRegion& region = data.Regions[i];
-					if (region.Depth >= (uint32)MaxDepth)
+					if (region.StackDepth >= (uint32)MaxDepth)
 						continue;
 
 					check(region.EndTicks >= region.BeginTicks);
@@ -135,7 +135,7 @@ void FooProfiler::DrawTimings()
 					float width = tickScale * numTicks;
 					float startPos = tickScale * (region.BeginTicks - data.TicksBegin);
 
-					ImVec2 min(startPos, region.Depth * BarHeight + MaxDepth * BarHeight * threadToIndex[region.ThreadID]);
+					ImVec2 min(startPos, region.StackDepth* BarHeight + MaxDepth * BarHeight * threadToIndex[region.ThreadID]);
 					ImVec2 extents(width, BarHeight);
 					ImVec2 max = min + extents;
 
