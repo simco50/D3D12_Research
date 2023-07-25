@@ -305,6 +305,9 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 							if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
 								continue;
 
+							if ((int)pCmd->ClipRect.x >= (int)pCmd->ClipRect.z || (int)pCmd->ClipRect.y >= (int)pCmd->ClipRect.w)
+								continue;
+
 							Texture* pTexture = (Texture*)pCmd->GetTexID();
 							if (!pTexture)
 								pTexture = gFontTexture;

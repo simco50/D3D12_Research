@@ -1,78 +1,109 @@
 #pragma once
 
-#define FOO_SCOPE(...) FooProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__VA_ARGS__, __FILE__, __LINE__)
+#define FOO_SCOPE(...) FooProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define FOO_REGISTER_THREAD(...) gProfiler.RegisterThread(__VA_ARGS__)
+#define FOO_FRAME() gProfiler.Tick();
 
 extern class FooProfiler gProfiler;
 
 class FooProfiler
 {
 public:
+	static constexpr int REGION_HISTORY = 4;
 	static constexpr int MAX_DEPTH = 32;
 	static constexpr int STRING_BUFFER_SIZE = 1 << 16;
 	static constexpr int MAX_NUM_REGIONS = 1024;
 
+	FooProfiler() = default;
 
-	FooProfiler()
+	void BeginRegion(const char* pName, const Color& color = Color(0.8f, 0.8f, 0.8f))
 	{
-		m_ThreadData.reserve(128);
-	}
+		if (m_Paused)
+			return;
 
-	void BeginRegion(const char* pName, const Color& color = Colors::White)
-	{
 		SampleHistory& data = GetCurrentData();
 		uint32 newIndex = data.CurrentIndex.fetch_add(1);
 		check(newIndex < data.Regions.size());
 
 		TLS& tls = GetTLS();
-		check(tls.StackDepth < ARRAYSIZE(tls.RegionStack));
+		check(tls.Depth < ARRAYSIZE(tls.RegionStack));
 
 		SampleRegion& newRegion = data.Regions[newIndex];
-		newRegion.StackDepth = tls.StackDepth;
-		newRegion.ThreadID = Thread::GetCurrentId();
+		newRegion.Depth = tls.Depth;
+		newRegion.ThreadIndex = tls.ThreadIndex;
 		newRegion.pName = StoreString(pName);
 		newRegion.Color = Math::Pack_RGBA8_UNORM(color);
 		QueryPerformanceCounter((LARGE_INTEGER*)(&newRegion.BeginTicks));
 
-		tls.RegionStack[tls.StackDepth] = newIndex;
-		tls.StackDepth++;
+		tls.RegionStack[tls.Depth] = newIndex;
+		tls.Depth++;
 	}
 
 	void SetFileInfo(const char* pFilePath, uint32 lineNumber)
 	{
+		if (m_Paused)
+			return;
+
 		SampleHistory& data = GetCurrentData();
 		TLS& tls = GetTLS();
 
-		SampleRegion& region = data.Regions[tls.RegionStack[tls.StackDepth]];
+		SampleRegion& region = data.Regions[tls.RegionStack[tls.Depth - 1]];
 		region.pFilePath = pFilePath;
 		region.LineNumber = lineNumber;
 	}
 
 	void EndRegion()
 	{
+		if (m_Paused)
+			return;
+
 		SampleHistory& data = GetCurrentData();
 		TLS& tls = GetTLS();
 
-		check(tls.StackDepth > 0);
-		--tls.StackDepth;
-		SampleRegion& region = data.Regions[tls.RegionStack[tls.StackDepth]];
+		check(tls.Depth > 0);
+		--tls.Depth;
+		SampleRegion& region = data.Regions[tls.RegionStack[tls.Depth]];
 		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTicks));
 	}
 
 	void Tick()
 	{
+		if (m_Paused)
+			return;
+			
 		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksEnd));
 
-		for (auto& tls : m_ThreadData)
-			check(tls.second.StackDepth == 0);
+		for (auto& threadData : m_ThreadData)
+			check(threadData.pTLS->Depth == 0);
 
-		if (!m_Paused)
-			++m_FrameIndex;
-
+		++m_FrameIndex;
 		SampleHistory& data = GetCurrentData();
 		data.CharIndex = 0;
 		data.CurrentIndex = 0;
 
 		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksBegin));
+	}
+
+	void RegisterThread(const char* pName = nullptr)
+	{
+		TLS& tls = GetTLSUnsafe();
+		check(!tls.IsInitialized);
+		tls.IsInitialized = true;
+		std::scoped_lock lock(m_ThreadDataLock);
+		tls.ThreadIndex = (uint32)m_ThreadData.size();
+		ThreadData& data = m_ThreadData.emplace_back();
+		if (pName)
+		{
+			data.Name = pName;
+		}
+		else
+		{
+			PWSTR pDescription = nullptr;
+			GetThreadDescription(GetCurrentThread(), &pDescription);
+			data.Name = UNICODE_TO_MULTIBYTE(pDescription);
+		}
+		data.ThreadID = GetCurrentThreadId();
+		data.pTLS = &tls;
 	}
 
 	void DrawHUD();
@@ -90,27 +121,34 @@ private:
 
 	struct TLS
 	{
-		uint32 ThreadID = 0;
-		uint32 StackDepth = 0;
+		uint32 ThreadIndex = 0;
+		uint32 Depth = 0;
 		uint32 RegionStack[MAX_DEPTH];
+		bool IsInitialized = false;
 	};
+
+	TLS& GetTLSUnsafe()
+	{
+		static thread_local TLS tls;
+		return tls;
+	}
 
 	TLS& GetTLS()
 	{
-		std::lock_guard lock(m_ThreadIndexLock);
-		TLS& data = m_ThreadData[Thread::GetCurrentId()];
-		data.ThreadID = Thread::GetCurrentId();
-		return data;
+		TLS& tls = GetTLSUnsafe();
+		if (!tls.IsInitialized)
+			RegisterThread();
+		return tls;
 	}
 
 	struct SampleRegion
 	{
 		const char* pName;									//< Name of the region
-		uint32 ThreadID = 0xFFFFFFFF;						//< Thread ID of the thread that recorderd this region
+		uint32 ThreadIndex = 0xFFFFFFFF;					//< Thread Index of the thread that recorderd this region
 		uint64 BeginTicks = 0;								//< The ticks at the start of this region
 		uint64 EndTicks = 0;								//< The ticks at the end of this region
 		uint32 Color = 0xFFFF00FF;							//< Color of region
-		uint32 StackDepth = 0;								//< StackDepth of the region
+		uint32 Depth = 0;									//< Depth of the region
 		uint32 LineNumber = 0;								//< Line number of file in which this region is recorded
 		const char* pFilePath = nullptr;					//< File path of file in which this region is recorded
 	};
@@ -137,25 +175,32 @@ private:
 		return m_SampleHistory[index];
 	}
 
-	std::mutex m_ThreadIndexLock;
-	std::unordered_map<uint32, TLS> m_ThreadData;
+	struct ThreadData
+	{
+		std::string Name = "";
+		uint32 ThreadID = 0;
+		const TLS* pTLS = nullptr;
+	};
+
+	std::mutex m_ThreadDataLock;
+	std::vector<ThreadData> m_ThreadData;
 
 	bool m_Paused = false;
 	uint32 m_FrameIndex = 0;
-	std::array<SampleHistory, 4> m_SampleHistory;
+	std::array<SampleHistory, REGION_HISTORY> m_SampleHistory;
 };
 
 struct FooProfileScope
 {
-	FooProfileScope(const char* pName, const char* pFilePath, uint32 lineNumber)
+	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName, const Color& color)
 	{
-		gProfiler.BeginRegion(pName);
+		gProfiler.BeginRegion(pName ? pName : pFunctionName, color);
 		gProfiler.SetFileInfo(pFilePath, lineNumber);
 	}
 
-	FooProfileScope(const char* pName, const Color& color, const char* pFilePath, uint32 lineNumber)
+	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName = nullptr)
 	{
-		gProfiler.BeginRegion(pName, color);
+		gProfiler.BeginRegion(pName ? pName : pFunctionName);
 		gProfiler.SetFileInfo(pFilePath, lineNumber);
 	}
 

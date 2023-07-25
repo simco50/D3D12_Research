@@ -7,6 +7,7 @@
 #include "Core/ConsoleVariables.h"
 #include "Core/Window.h"
 #include "DemoApp.h"
+#include "FooProfiler.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
@@ -37,6 +38,8 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 
 	Console::Initialize();
 	ConsoleManager::Initialize();
+
+	FOO_REGISTER_THREAD("Main Thread");
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 	Vector2i displayDimensions = Window::GetDisplaySize();

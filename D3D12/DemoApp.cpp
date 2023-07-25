@@ -155,6 +155,31 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	OnResizeOrMove(windowRect.x, windowRect.y);
 	OnResizeViewport(windowRect.x, windowRect.y);
+
+	struct QueueCalibration
+	{
+		QueueCalibration(ID3D12CommandQueue* pQueue)
+		{
+			pQueue->GetClockCalibration(&CPUCalibrationTicks, &GPUCalibrationTicks);
+			pQueue->GetTimestampFrequency(&GPUFrequency);
+			QueryPerformanceFrequency((LARGE_INTEGER*)&CPUFrequency);
+		}
+
+		uint64 GpuToCpuTicks(uint64 gpuTicks) const
+		{
+			check(gpuTicks >= GPUCalibrationTicks);
+			return CPUCalibrationTicks + (gpuTicks - CPUCalibrationTicks) * CPUFrequency / GPUFrequency;
+		}
+
+		uint64 GPUCalibrationTicks;
+		uint64 CPUCalibrationTicks;
+		uint64 GPUFrequency;
+		uint64 CPUFrequency;
+	};
+
+	QueueCalibration clock(m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue());
+	uint64 i = clock.GpuToCpuTicks(100000000000000000);
+	i;
 }
 
 DemoApp::~DemoApp()
@@ -211,7 +236,7 @@ void DemoApp::SetupScene()
 
 void DemoApp::Update()
 {
-	gProfiler.Tick();
+	FOO_FRAME();
 	FOO_SCOPE("Update");
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();

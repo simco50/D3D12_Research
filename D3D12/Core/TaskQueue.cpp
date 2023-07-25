@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "TaskQueue.h"
+#include "FooProfiler.h"
 
 struct AsyncTask
 {
@@ -51,6 +52,8 @@ bool DoWork(uint32 threadIndex)
 
 DWORD WINAPI WorkFunction(LPVOID lpParameter)
 {
+	FOO_REGISTER_THREAD();
+
 	wchar_t* pDescription;
 	GetThreadDescription(GetCurrentThread(), &pDescription);
 
