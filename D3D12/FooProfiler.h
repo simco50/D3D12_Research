@@ -18,9 +18,6 @@ public:
 
 	void BeginRegion(const char* pName, const Color& color = Color(0.8f, 0.8f, 0.8f))
 	{
-		if (m_Paused)
-			return;
-
 		SampleHistory& data = GetCurrentData();
 		uint32 newIndex = data.CurrentIndex.fetch_add(1);
 		check(newIndex < data.Regions.size());
@@ -41,9 +38,6 @@ public:
 
 	void SetFileInfo(const char* pFilePath, uint32 lineNumber)
 	{
-		if (m_Paused)
-			return;
-
 		SampleHistory& data = GetCurrentData();
 		TLS& tls = GetTLS();
 
@@ -54,9 +48,6 @@ public:
 
 	void EndRegion()
 	{
-		if (m_Paused)
-			return;
-
 		SampleHistory& data = GetCurrentData();
 		TLS& tls = GetTLS();
 
@@ -68,15 +59,14 @@ public:
 
 	void Tick()
 	{
-		if (m_Paused)
-			return;
-			
 		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksEnd));
 
 		for (auto& threadData : m_ThreadData)
 			check(threadData.pTLS->Depth == 0);
 
-		++m_FrameIndex;
+		if (!m_Paused)
+			++m_FrameIndex;
+
 		SampleHistory& data = GetCurrentData();
 		data.CharIndex = 0;
 		data.CurrentIndex = 0;
@@ -168,11 +158,21 @@ private:
 		return m_SampleHistory[m_FrameIndex % m_SampleHistory.size()];
 	}
 
-	const SampleHistory& GetHistoryData(int numFrames) const
+	template<typename Fn>
+	void ForEachHistory(Fn&& fn) const
 	{
-		numFrames = Math::Min(numFrames, (int)m_SampleHistory.size() - 2);
-		int index = (m_FrameIndex + (int)m_SampleHistory.size() - 1 - numFrames) % (int)m_SampleHistory.size();
-		return m_SampleHistory[index];
+		uint32 currentIndex = (m_FrameIndex + 1) % (uint32)m_SampleHistory.size();
+		while (currentIndex != m_FrameIndex % m_SampleHistory.size() && currentIndex < m_FrameIndex)
+		{
+			fn(m_SampleHistory[currentIndex]);
+			currentIndex = (currentIndex + 1) % (uint32)m_SampleHistory.size();
+		}
+	}
+
+	const SampleHistory& GetHistory() const
+	{
+		uint32 currentIndex = (m_FrameIndex + 1) % (uint32)m_SampleHistory.size();
+		return m_SampleHistory[currentIndex];
 	}
 
 	struct ThreadData

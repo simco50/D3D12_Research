@@ -38,7 +38,7 @@
 #include "IconsFontAwesome4.h"
 #include "FooProfiler.h"
 
-#define ENABLE_STUFF 1
+#define ENABLE_STUFF 0
 
 namespace Tweakables
 {
