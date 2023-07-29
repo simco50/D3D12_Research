@@ -22,8 +22,7 @@ struct StyleOptions
 	float BarHeight = 25;
 	float BarPadding = 2;
 	ImVec4 BarColorMultiplier = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-	ImVec4 LineColor = ImVec4(1.0f, 1.0f, 1.0f, 0.1f);
-	ImVec4 BGTextColor = ImVec4(1.0f, 1.0f, 1.0f, 0.4f);
+	ImVec4 BGTextColor = ImVec4(1.0f, 1.0f, 1.0f, 0.5f);
 	ImVec4 FGTextColor = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
 	ImVec4 BarHighlightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 };
@@ -38,7 +37,6 @@ void EditStyle()
 	ImGui::SliderFloat("Bar Height", &gStyle.BarHeight, 8, 33);
 	ImGui::SliderFloat("Bar Padding", &gStyle.BarPadding, 0, 5);
 	ImGui::ColorEdit4("Bar Color Multiplier", &gStyle.BarColorMultiplier.x);
-	ImGui::ColorEdit4("Line Color", &gStyle.LineColor.x);
 	ImGui::ColorEdit4("Background Text Color", &gStyle.BGTextColor.x);
 	ImGui::ColorEdit4("Foreground Text Color", &gStyle.FGTextColor.x);
 	ImGui::ColorEdit4("Bar Highlight Color", &gStyle.BarHighlightColor.x);
@@ -74,11 +72,9 @@ void FooProfiler::DrawHUD()
 		const uint64 frameTicks = data.TicksEnd - data.TicksBegin;
 		const float frameTime = (float)frameTicks / ticksPerMs;
 
-		ImGui::Text("Frame time: %.2f ms", frameTime);
-		ImGui::SameLine();
-
 		ImGui::Checkbox("Pause", &m_Paused);
-
+		ImGui::SameLine();
+		ImGui::Text("Frame time: %.2f ms", frameTime);
 		ImGui::SameLine(ImGui::GetWindowWidth() - 30);
 		static bool styleEditor = false;
 		if (ImGui::Button(ICON_FA_PAINT_BRUSH "##styleeditor"))
@@ -102,6 +98,7 @@ void FooProfiler::DrawHUD()
 		float availableWidth = ImGui::GetContentRegionAvail().x;
 		float timelineWidth = availableWidth * gHUDContext.TimelineScale;
 
+		ImVec2 localCursor = ImGui::GetCursorScreenPos();
 		ImVec2 cursor = ImGui::GetCursorScreenPos();
 		ImVec2 timelineDimensions(timelineWidth, timelineHeight);
 		ImRect timelineRect(cursor, cursor + timelineDimensions);
@@ -130,11 +127,12 @@ void FooProfiler::DrawHUD()
 				|	|	|	|
 				|	|	|	|
 			*/
-			for (int i = 2; i < gStyle.MaxTime; i += 2)
+			for (int i = 0; i < gStyle.MaxTime; i += 2)
 			{
-				float x = cursor.x + tickScale * MsToTicks((float)i);
-				pDraw->AddLine(ImVec2(x, cursor.y), ImVec2(x, cursor.y + timelineHeight), ImColor(gStyle.LineColor));
-				pDraw->AddText(ImVec2(x, cursor.y), ImColor(gStyle.BGTextColor), Sprintf("%d ms", i).c_str());
+				float x0 = tickScale * MsToTicks((float)i);
+				float x1 = tickScale * MsToTicks((float)i + 1);
+				pDraw->AddRectFilled(ImVec2(cursor.x + x0, localCursor.y + gStyle.BarHeight), ImVec2(cursor.x + x1, localCursor.y + timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.02f));
+				pDraw->AddText(ImVec2(cursor.x + x0, localCursor.y), ImColor(gStyle.BGTextColor), Sprintf("%d ms", i).c_str());
 			}
 
 			// Add thread names for each track
@@ -149,7 +147,7 @@ void FooProfiler::DrawHUD()
 			{
 				float y = trackHeight * i;
 				const ThreadData& threadData = m_ThreadData[i];
-				pDraw->AddText(ImVec2(cursor.x, cursor.y + y), ImColor(gStyle.BGTextColor), Sprintf("%s [%d]", threadData.Name.c_str(), threadData.ThreadID).c_str());
+				pDraw->AddText(ImVec2(localCursor.x, cursor.y + y), ImColor(gStyle.BGTextColor), Sprintf("%s [%d]", threadData.Name.c_str(), threadData.ThreadID).c_str());
 			}
 
 			// Interval times and name headers take up one bar's space
@@ -164,7 +162,7 @@ void FooProfiler::DrawHUD()
 			for (int i = 0; i < (int)m_ThreadData.size(); ++i)
 			{
 				float y = trackHeight * i;
-				pDraw->AddLine(ImVec2(cursor.x, cursor.y + y), ImVec2(cursor.x + timelineWidth, cursor.y + y), ImColor(gStyle.LineColor));
+				pDraw->AddLine(ImVec2(cursor.x, cursor.y + y), ImVec2(cursor.x + timelineWidth, cursor.y + y), ImColor(gStyle.BGTextColor));
 			}
 
 			// Add a bar in the right place for each sample region
@@ -175,7 +173,6 @@ void FooProfiler::DrawHUD()
 				|		[===========]		|
 				|			[======]		|
 			*/
-
 			ForEachHistory([&](const SampleHistory& regionData) {
 
 #if 0

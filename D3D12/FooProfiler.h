@@ -1,5 +1,6 @@
 #pragma once
 
+// FOO_SCOPE() or FOO_SCOPE(name) or FOO_SCOPE(name, color) or FOO_SCOPE(color)
 #define FOO_SCOPE(...) FooProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 #define FOO_REGISTER_THREAD(...) gProfiler.RegisterThread(__VA_ARGS__)
 #define FOO_FRAME() gProfiler.Tick();
@@ -16,7 +17,7 @@ public:
 
 	FooProfiler() = default;
 
-	void BeginRegion(const char* pName, const Color& color = Color(0.8f, 0.8f, 0.8f))
+	void BeginRegion(const char* pName, const Color& color)
 	{
 		SampleHistory& data = GetCurrentData();
 		uint32 newIndex = data.CurrentIndex.fetch_add(1);
@@ -34,6 +35,20 @@ public:
 
 		tls.RegionStack[tls.Depth] = newIndex;
 		tls.Depth++;
+	}
+
+	void BeginRegion(const char* pName)
+	{
+		// Add a region and inherit the color
+		TLS& tls = GetTLS();
+		check(tls.Depth < ARRAYSIZE(tls.RegionStack));
+		Color color(1.0f, 1.0f, 1.0f, 1.0f);
+		if(tls.Depth > 0)
+		{
+			const SampleHistory& data = GetCurrentData();
+			color = data.Regions[tls.RegionStack[tls.Depth - 1]].Color;
+		}
+		BeginRegion(pName, color);
 	}
 
 	void SetFileInfo(const char* pFilePath, uint32 lineNumber)
@@ -192,15 +207,31 @@ private:
 
 struct FooProfileScope
 {
+	// Name + Color
 	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName, const Color& color)
 	{
 		gProfiler.BeginRegion(pName ? pName : pFunctionName, color);
 		gProfiler.SetFileInfo(pFilePath, lineNumber);
 	}
 
-	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName = nullptr)
+	// Just Color
+	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const Color& color)
 	{
-		gProfiler.BeginRegion(pName ? pName : pFunctionName);
+		gProfiler.BeginRegion(pFunctionName, color);
+		gProfiler.SetFileInfo(pFilePath, lineNumber);
+	}
+
+	// Just Name
+	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName)
+	{
+		gProfiler.BeginRegion(pName);
+		gProfiler.SetFileInfo(pFilePath, lineNumber);
+	}
+
+	// No Name or Color
+	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber)
+	{
+		gProfiler.BeginRegion(pFunctionName);
 		gProfiler.SetFileInfo(pFilePath, lineNumber);
 	}
 
