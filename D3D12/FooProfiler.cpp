@@ -9,8 +9,11 @@ FooProfiler gProfiler;
 
 struct HUDContext
 {
-	float TimelineScale = 1.0f;
+	float TimelineScale = 3.0f;
 	ImVec2 TimelineOffset = ImVec2(0.0f, 0.0f);
+
+	bool IsSelectingRange = false;
+	float RangeSelectionStart = 0.0f;
 };
 
 static HUDContext gHUDContext;
@@ -18,7 +21,7 @@ static HUDContext gHUDContext;
 struct StyleOptions
 {
 	int MaxDepth = 8;
-	int MaxTime = 22;
+	int MaxTime = 66;
 
 	float BarHeight = 25;
 	float BarPadding = 2;
@@ -36,7 +39,7 @@ void EditStyle()
 {
 	ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.7f);
 	ImGui::SliderInt("Depth", &gStyle.MaxDepth, 1, 12);
-	ImGui::SliderInt("Max Time", &gStyle.MaxTime, 8, 33);
+	ImGui::SliderInt("Max Time", &gStyle.MaxTime, 8, 66);
 	ImGui::SliderFloat("Bar Height", &gStyle.BarHeight, 8, 33);
 	ImGui::SliderFloat("Bar Padding", &gStyle.BarPadding, 0, 5);
 	ImGui::ColorEdit4("Bar Color Multiplier", &gStyle.BarColorMultiplier.x);
@@ -55,7 +58,7 @@ void FooProfiler::DrawHUD()
 		QueryPerformanceFrequency((LARGE_INTEGER*)&frequency);
 		float ticksPerMs = (float)frequency / 1000.0f;
 
-		auto TicksToMs = [&](uint64 ticks) { return (float)ticks / ticksPerMs; };
+		auto TicksToMs = [&](float ticks) { return (float)ticks / ticksPerMs; };
 		auto MsToTicks = [&](float ms) { return ms * ticksPerMs; };
 
 		// How many ticks are in the timeline
@@ -99,7 +102,6 @@ void FooProfiler::DrawHUD()
 			float timelineWidth = availableWidth * gHUDContext.TimelineScale;
 			ImVec2 timelineSize = ImVec2(timelineWidth, timelineHeight);
 
-			if(ImGui::IsWindowFocused())
 			{
 				// Zoom behavior
 				float zoomDelta = 0.0f;
@@ -148,6 +150,35 @@ void FooProfiler::DrawHUD()
 			// How many pixels is one tick
 			float tickScale = timelineWidth / ticksInTimeline;
 
+			// Profile range
+			if (ImGui::IsItemHovered())
+			{
+				if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle))
+				{
+					if (!gHUDContext.IsSelectingRange)
+					{
+						gHUDContext.RangeSelectionStart = ImGui::GetMousePos().x;
+						gHUDContext.IsSelectingRange = true;
+					}
+				}
+				else if (ImGui::IsMouseReleased(ImGuiMouseButton_Middle) && gHUDContext.IsSelectingRange)
+				{
+					gHUDContext.IsSelectingRange = false;
+				}
+				else if (gHUDContext.IsSelectingRange)
+				{
+					if (fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) > 1)
+					{
+						pDraw->AddRectFilled(ImVec2(gHUDContext.RangeSelectionStart, localCursor.y), ImVec2(ImGui::GetMousePos().x, localCursor.y + timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+						if (ImGui::BeginTooltip())
+						{
+							ImGui::Text("Time: %.3f ms", TicksToMs(fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) / tickScale));
+							ImGui::EndTooltip();
+						}
+					}
+				}
+			}
+
 
 			// Add vertical lines for each ms interval
 			/*
@@ -160,7 +191,7 @@ void FooProfiler::DrawHUD()
 			{
 				float x0 = tickScale * MsToTicks((float)i);
 				float x1 = tickScale * MsToTicks((float)i + 1);
-				pDraw->AddRectFilled(ImVec2(cursor.x + x0, localCursor.y + gStyle.BarHeight), ImVec2(cursor.x + x1, localCursor.y + timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.02f));
+				pDraw->AddRectFilled(ImVec2(cursor.x + x0, localCursor.y + gStyle.BarHeight), ImVec2(cursor.x + x1, localCursor.y + timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.04f));
 				pDraw->AddText(ImVec2(cursor.x + x0, localCursor.y), ImColor(gStyle.BGTextColor), Sprintf("%d ms", i).c_str());
 			}
 
@@ -218,6 +249,8 @@ void FooProfiler::DrawHUD()
 					}
 				}
 #endif
+				float frameTimeEnd = (regionData.TicksEnd - beginAnchor) * tickScale;
+				pDraw->AddLine(cursor + ImVec2(frameTimeEnd, 0), cursor + ImVec2(frameTimeEnd, timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.1f), 4.0f);
 
 				for (uint32 i = 0; i < regionData.CurrentIndex; ++i)
 				{
@@ -242,7 +275,7 @@ void FooProfiler::DrawHUD()
 						{
 							if (ImGui::BeginTooltip())
 							{
-								ImGui::Text("%s | %.3f ms", region.pName, TicksToMs(region.EndTicks - region.BeginTicks));
+								ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(region.EndTicks - region.BeginTicks)));
 								if (region.pFilePath)
 									ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
 								ImGui::EndTooltip();
@@ -252,7 +285,16 @@ void FooProfiler::DrawHUD()
 						bool h, held;
 						if (ImGui::ButtonBehavior(ImRect(barTopLeft, barBottomRight), ImGui::GetItemID(), &h, &held, ImGuiButtonFlags_MouseButtonLeft))
 						{
-							// On bar pressed
+							// The zoom required to make the bar fit the entire window
+							float zoom = timelineWidth / width;
+							gHUDContext.TimelineScale = zoom;
+
+							// Recompute the timeline size with new zoom
+							float newTimelineWidth = availableWidth * gHUDContext.TimelineScale;
+							float newTickScale = newTimelineWidth / ticksInTimeline;
+							float newStartPos = newTickScale * (region.BeginTicks - beginAnchor);
+
+							gHUDContext.TimelineOffset.x = -newStartPos;
 						}
 
 						const float rounding = 0.0f;
