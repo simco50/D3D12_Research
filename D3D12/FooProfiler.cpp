@@ -26,6 +26,8 @@ struct StyleOptions
 	ImVec4 BGTextColor = ImVec4(1.0f, 1.0f, 1.0f, 0.5f);
 	ImVec4 FGTextColor = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
 	ImVec4 BarHighlightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+	bool DebugMode = false;
 };
 
 static StyleOptions gStyle;
@@ -41,6 +43,7 @@ void EditStyle()
 	ImGui::ColorEdit4("Background Text Color", &gStyle.BGTextColor.x);
 	ImGui::ColorEdit4("Foreground Text Color", &gStyle.FGTextColor.x);
 	ImGui::ColorEdit4("Bar Highlight Color", &gStyle.BarHighlightColor.x);
+	ImGui::Checkbox("Debug Mode", &gStyle.DebugMode);
 	ImGui::PopItemWidth();
 }
 
@@ -133,9 +136,14 @@ void FooProfiler::DrawHUD()
 			ImVec2 cursor = localCursor + gHUDContext.TimelineOffset;
 
 			ImDrawList* pDraw = ImGui::GetWindowDrawList();
-			pDraw->PushClipRect(ImVec2(0, 0), ImVec2(100000, 100000), false);
-			pDraw->AddRect(cursor, cursor + timelineSize, ImColor(1.0f, 0.0f, 0.0f, 1.0f));
-			pDraw->PopClipRect();
+
+			if (gStyle.DebugMode)
+			{
+				pDraw->PushClipRect(ImVec2(0, 0), ImVec2(100000, 100000), false);
+				pDraw->AddRect(cursor, cursor + timelineSize, ImColor(1.0f, 0.0f, 0.0f));
+				pDraw->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), ImColor(0.0f, 1.0f, 0.0f));
+				pDraw->PopClipRect();
+			}
 
 			// How many pixels is one tick
 			float tickScale = timelineWidth / ticksInTimeline;
