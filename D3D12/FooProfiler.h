@@ -15,7 +15,7 @@ public:
 	static constexpr int STRING_BUFFER_SIZE = 1 << 16;
 	static constexpr int MAX_NUM_REGIONS = 1024;
 
-	FooProfiler() = default;
+	FooProfiler();
 
 	void BeginRegion(const char* pName, uint32 color)
 	{
