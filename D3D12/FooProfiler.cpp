@@ -1,3 +1,4 @@
+
 #include "stdafx.h"
 #include "FooProfiler.h"
 #include "imgui_internal.h"
@@ -106,13 +107,14 @@ void FooProfiler::DrawHUD()
 
 				if (zoomDelta != 0)
 				{
-					// Compute the offset in texture space from the mouse pos to the left top corner
-					ImVec2 d = (ImGui::GetMousePos() - localCursor - gHUDContext.TimelineOffset) / gHUDContext.TimelineScale;
-
 					float logScale = logf(gHUDContext.TimelineScale);
 					logScale += zoomDelta;
-					gHUDContext.TimelineScale = Math::Clamp(expf(logScale), 1.0f, 100.0f);
-					gHUDContext.TimelineOffset.x = -d.x * (gHUDContext.TimelineScale - 1.0f);
+					float newScale = Math::Clamp(expf(logScale), 1.0f, 100.0f);
+
+					float scaleFactor = newScale / gHUDContext.TimelineScale;
+					gHUDContext.TimelineScale *= scaleFactor;
+					ImVec2 mousePos = ImGui::GetMousePos() - localCursor;
+					gHUDContext.TimelineOffset.x = mousePos.x - (mousePos.x - gHUDContext.TimelineOffset.x) * scaleFactor;
 				}
 
 				// Panning behavior
@@ -130,10 +132,14 @@ void FooProfiler::DrawHUD()
 
 			ImVec2 cursor = localCursor + gHUDContext.TimelineOffset;
 
+			ImDrawList* pDraw = ImGui::GetWindowDrawList();
+			pDraw->PushClipRect(ImVec2(0, 0), ImVec2(100000, 100000), false);
+			pDraw->AddRect(cursor, cursor + timelineSize, ImColor(1.0f, 0.0f, 0.0f, 1.0f));
+			pDraw->PopClipRect();
+
 			// How many pixels is one tick
 			float tickScale = timelineWidth / ticksInTimeline;
 
-			ImDrawList* pDraw = ImGui::GetWindowDrawList();
 
 			// Add vertical lines for each ms interval
 			/*

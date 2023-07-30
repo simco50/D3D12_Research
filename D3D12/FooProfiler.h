@@ -17,7 +17,7 @@ public:
 
 	FooProfiler() = default;
 
-	void BeginRegion(const char* pName, const Color& color)
+	void BeginRegion(const char* pName, uint32 color)
 	{
 		SampleHistory& data = GetCurrentData();
 		uint32 newIndex = data.CurrentIndex.fetch_add(1);
@@ -30,7 +30,7 @@ public:
 		newRegion.Depth = tls.Depth;
 		newRegion.ThreadIndex = tls.ThreadIndex;
 		newRegion.pName = StoreString(pName);
-		newRegion.Color = Math::Pack_RGBA8_UNORM(color);
+		newRegion.Color = color;
 		QueryPerformanceCounter((LARGE_INTEGER*)(&newRegion.BeginTicks));
 
 		tls.RegionStack[tls.Depth] = newIndex;
@@ -42,7 +42,7 @@ public:
 		// Add a region and inherit the color
 		TLS& tls = GetTLS();
 		check(tls.Depth < ARRAYSIZE(tls.RegionStack));
-		Color color(0.7f, 0.7f, 0.7f, 1.0f);
+		uint32 color = 0xFFFFFFFF;
 		if(tls.Depth > 0)
 		{
 			const SampleHistory& data = GetCurrentData();
@@ -210,14 +210,14 @@ struct FooProfileScope
 	// Name + Color
 	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName, const Color& color)
 	{
-		gProfiler.BeginRegion(pName ? pName : pFunctionName, color);
+		gProfiler.BeginRegion(pName ? pName : pFunctionName, Math::Pack_RGBA8_UNORM(color));
 		gProfiler.SetFileInfo(pFilePath, lineNumber);
 	}
 
 	// Just Color
 	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const Color& color)
 	{
-		gProfiler.BeginRegion(pFunctionName, color);
+		gProfiler.BeginRegion(pFunctionName, Math::Pack_RGBA8_UNORM(color));
 		gProfiler.SetFileInfo(pFilePath, lineNumber);
 	}
 
