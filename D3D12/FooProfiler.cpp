@@ -57,16 +57,6 @@ void FooProfiler::DrawHUD()
 		// How many ticks are in the timeline
 		float ticksInTimeline = ticksPerMs * gStyle.MaxTime;
 
-		if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl))
-		{
-			ImGui::SetItemKeyOwner(ImGuiKey_LeftCtrl);
-			ImGui::SetItemKeyOwner(ImGuiKey_RightCtrl);
-
-			float logScale = logf(gHUDContext.TimelineScale);
-			logScale += ImGui::GetIO().MouseWheel / 5.0f;
-			gHUDContext.TimelineScale = Math::Clamp(expf(logScale), 1.0f, 100.0f);
-		}
-
 		const SampleHistory& data = GetHistory();
 		const uint64 beginAnchor = data.TicksBegin;
 		const uint64 frameTicks = data.TicksEnd - data.TicksBegin;
@@ -76,15 +66,13 @@ void FooProfiler::DrawHUD()
 		ImGui::SameLine();
 		ImGui::Text("Frame time: %.2f ms", frameTime);
 		ImGui::SameLine(ImGui::GetWindowWidth() - 30);
-		static bool styleEditor = false;
 		if (ImGui::Button(ICON_FA_PAINT_BRUSH "##styleeditor"))
-			styleEditor = !styleEditor;
+			ImGui::OpenPopup("Style Editor");
 
-		if (styleEditor)
+		if (ImGui::BeginPopup("Style Editor"))
 		{
-			ImGui::Begin("Style Editor", &styleEditor);
 			EditStyle();
-			ImGui::End();
+			ImGui::EndPopup();
 		}
 
 		if (ImGui::IsKeyPressed(ImGuiKey_Space))
@@ -96,24 +84,51 @@ void FooProfiler::DrawHUD()
 
 		// The width of the timeline
 		float availableWidth = ImGui::GetContentRegionAvail().x;
-		float timelineWidth = availableWidth * gHUDContext.TimelineScale;
-
 		ImVec2 localCursor = ImGui::GetCursorScreenPos();
-		ImVec2 cursor = ImGui::GetCursorScreenPos();
-		ImVec2 timelineDimensions(timelineWidth, timelineHeight);
-		ImRect timelineRect(cursor, cursor + timelineDimensions);
+
+		ImRect timelineRect(localCursor, localCursor + ImGui::GetContentRegionAvail());
 		if (ImGui::ItemAdd(timelineRect, ImGui::GetID("Timeline")))
 		{
 			ImGui::PushClipRect(timelineRect.Min, timelineRect.Max, true);
 
-			// Panning behavior
-			bool h, held;
-			ImGui::ButtonBehavior(timelineRect, ImGui::GetID("Timeline"), &h, &held, ImGuiButtonFlags_MouseButtonLeft);
-			if (held)
-				gHUDContext.TimelineOffset += ImGui::GetIO().MouseDelta;
-			ImVec2 available = ImGui::GetContentRegionAvail();
-			gHUDContext.TimelineOffset = ImClamp(gHUDContext.TimelineOffset, ImGui::GetContentRegionAvail() - timelineDimensions, ImVec2(0.0f, 0.0f));
-			cursor += gHUDContext.TimelineOffset;
+			// The current (scaled) size of the timeline
+			float timelineWidth = availableWidth * gHUDContext.TimelineScale;
+			ImVec2 timelineSize = ImVec2(timelineWidth, timelineHeight);
+
+			if(ImGui::IsWindowFocused())
+			{
+				// Zoom behavior
+				float zoomDelta = 0.0f;
+				if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl))
+					zoomDelta += ImGui::GetIO().MouseWheel / 5.0f;
+				zoomDelta -= 0.3f * ImGui::IsKeyPressed(ImGuiKey_O);
+				zoomDelta += 0.3f * ImGui::IsKeyPressed(ImGuiKey_P);
+
+				if (zoomDelta != 0)
+				{
+					// Compute the offset in texture space from the mouse pos to the left top corner
+					ImVec2 d = (ImGui::GetMousePos() - localCursor - gHUDContext.TimelineOffset) / gHUDContext.TimelineScale;
+
+					float logScale = logf(gHUDContext.TimelineScale);
+					logScale += zoomDelta;
+					gHUDContext.TimelineScale = Math::Clamp(expf(logScale), 1.0f, 100.0f);
+					gHUDContext.TimelineOffset.x = -d.x * (gHUDContext.TimelineScale - 1.0f);
+				}
+
+				// Panning behavior
+				bool h, held;
+				ImGui::ButtonBehavior(timelineRect, ImGui::GetItemID(), &h, &held, ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_AllowItemOverlap);
+				ImGui::SetItemAllowOverlap();
+				if (held)
+					gHUDContext.TimelineOffset += ImGui::GetIO().MouseDelta;
+
+				// Compute the new timeline size to correctly clamp the offset
+				timelineWidth = availableWidth * gHUDContext.TimelineScale;
+				timelineSize = ImVec2(timelineWidth, timelineHeight);
+				gHUDContext.TimelineOffset = ImClamp(gHUDContext.TimelineOffset, ImGui::GetContentRegionAvail() - timelineSize, ImVec2(0.0f, 0.0f));
+			}
+
+			ImVec2 cursor = localCursor + gHUDContext.TimelineOffset;
 
 			// How many pixels is one tick
 			float tickScale = timelineWidth / ticksInTimeline;
@@ -173,6 +188,7 @@ void FooProfiler::DrawHUD()
 				|		[===========]		|
 				|			[======]		|
 			*/
+
 			ForEachHistory([&](const SampleHistory& regionData) {
 
 #if 0
@@ -204,7 +220,7 @@ void FooProfiler::DrawHUD()
 					ImVec2 barTopLeft = cursor + ImVec2(startPos, region.ThreadIndex * trackHeight + gStyle.BarHeight * region.Depth);
 					ImVec2 barBottomRight = barTopLeft + ImVec2(width, gStyle.BarHeight);
 
-					uint32 itemID = ImGui::GetID(Sprintf("##bar_%d", i).c_str());
+					uint32 itemID = ImGui::GetID(&region);
 					if (ImGui::ItemAdd(ImRect(barTopLeft, barBottomRight), itemID, 0))
 					{
 						bool hovered = ImGui::IsItemHovered();
@@ -217,6 +233,12 @@ void FooProfiler::DrawHUD()
 									ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
 								ImGui::EndTooltip();
 							}
+						}
+
+						bool h, held;
+						if (ImGui::ButtonBehavior(ImRect(barTopLeft, barBottomRight), ImGui::GetItemID(), &h, &held, ImGuiButtonFlags_MouseButtonLeft))
+						{
+							// On bar pressed
 						}
 
 						const float rounding = 0.0f;

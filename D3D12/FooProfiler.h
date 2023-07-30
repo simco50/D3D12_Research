@@ -42,7 +42,7 @@ public:
 		// Add a region and inherit the color
 		TLS& tls = GetTLS();
 		check(tls.Depth < ARRAYSIZE(tls.RegionStack));
-		Color color(1.0f, 1.0f, 1.0f, 1.0f);
+		Color color(0.7f, 0.7f, 0.7f, 1.0f);
 		if(tls.Depth > 0)
 		{
 			const SampleHistory& data = GetCurrentData();
