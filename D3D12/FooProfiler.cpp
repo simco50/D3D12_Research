@@ -14,6 +14,7 @@ struct HUDContext
 
 	bool IsSelectingRange = false;
 	float RangeSelectionStart = 0.0f;
+	char SearchString[128]{};
 };
 
 static HUDContext gHUDContext;
@@ -75,7 +76,16 @@ void FooProfiler::DrawHUD()
 	ImGui::Checkbox("Pause", &m_Paused);
 	ImGui::SameLine();
 	ImGui::Text("Frame time: %.2f ms", frameTime);
-	ImGui::SameLine(ImGui::GetWindowWidth() - 30);
+
+	ImGui::SameLine(ImGui::GetWindowWidth() - 250);
+	ImGui::Text("Filter");
+	ImGui::SetNextItemWidth(150);
+	ImGui::SameLine();
+	ImGui::InputText("##Search", gHUDContext.SearchString, ARRAYSIZE(gHUDContext.SearchString));
+	ImGui::SameLine();
+	if (ImGui::Button(ICON_FA_TIMES "##clearfilter"))
+		gHUDContext.SearchString[0] = 0;
+	ImGui::SameLine();
 	if (ImGui::Button(ICON_FA_PAINT_BRUSH "##styleeditor"))
 		ImGui::OpenPopup("Style Editor");
 
@@ -94,17 +104,20 @@ void FooProfiler::DrawHUD()
 
 	// The width of the timeline
 	float availableWidth = ImGui::GetContentRegionAvail().x;
-	ImVec2 localCursor = ImGui::GetCursorScreenPos();
+	
+	// The current (scaled) size of the timeline
+	float timelineWidth = availableWidth * gHUDContext.TimelineScale;
+	ImVec2 timelineSize = ImVec2(timelineWidth, timelineHeight);
 
-	ImRect timelineRect(localCursor, localCursor + ImGui::GetContentRegionAvail());
+	ImGui::Dummy(ImGui::GetContentRegionAvail() - ImVec2(0, 15));
+	ImRect timelineRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
 	ImGuiID timelineID = ImGui::GetID("Timeline");
+
+	ImVec2 localCursor = timelineRect.Min;
+
 	if (ImGui::ItemAdd(timelineRect, timelineID))
 	{
-		ImGui::PushClipRect(timelineRect.Min, timelineRect.Max, true);
-
-		// The current (scaled) size of the timeline
-		float timelineWidth = availableWidth * gHUDContext.TimelineScale;
-		ImVec2 timelineSize = ImVec2(timelineWidth, timelineHeight);
+		ImGui::PushClipRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), true);
 
 		ImVec2 cursor = localCursor + gHUDContext.TimelineOffset;
 
@@ -113,6 +126,7 @@ void FooProfiler::DrawHUD()
 
 		ImDrawList* pDraw = ImGui::GetWindowDrawList();
 
+		// Draw a debug rect around the timeline item and the whole (unclipped) timeline rect
 		if (gStyle.DebugMode)
 		{
 			pDraw->PushClipRect(ImVec2(0, 0), ImVec2(100000, 100000), false);
@@ -185,6 +199,10 @@ void FooProfiler::DrawHUD()
 					if (region.Depth >= (uint32)gStyle.MaxDepth)
 						continue;
 
+					ImColor color = ImColor(region.Color);
+					if (gHUDContext.SearchString[0] != 0 && !strstr(region.pName, gHUDContext.SearchString))
+						color.Value.w *= 0.3f;
+
 					check(region.EndTicks >= region.BeginTicks);
 					uint64 numTicks = region.EndTicks - region.BeginTicks;
 
@@ -200,7 +218,7 @@ void FooProfiler::DrawHUD()
 						bool hovered = ImGui::IsItemHovered();
 						if (hovered)
 						{
-							if (!gHUDContext.IsSelectingRange && ImGui::BeginTooltip())
+							if (ImGui::BeginTooltip())
 							{
 								ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(region.EndTicks - region.BeginTicks)));
 								if (region.pFilePath)
@@ -209,8 +227,7 @@ void FooProfiler::DrawHUD()
 							}
 						}
 
-						bool h, held;
-						if (ImGui::ButtonBehavior(ImRect(barTopLeft, barBottomRight), ImGui::GetItemID(), &h, &held, ImGuiButtonFlags_MouseButtonLeft))
+						if (ImGui::ButtonBehavior(ImRect(barTopLeft, barBottomRight), ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
 						{
 							// The zoom required to make the bar fit the entire window
 							float zoom = timelineWidth / width;
@@ -228,7 +245,7 @@ void FooProfiler::DrawHUD()
 						const ImVec2 padding(gStyle.BarPadding, gStyle.BarPadding);
 						if (hovered)
 							pDraw->AddRectFilled(barTopLeft, barBottomRight, ImColor(gStyle.BarHighlightColor), rounding);
-						pDraw->AddRectFilled(barTopLeft + padding, barBottomRight - padding, ImColor((ImVec4)ImColor(region.Color) * gStyle.BarColorMultiplier), rounding);
+						pDraw->AddRectFilled(barTopLeft + padding, barBottomRight - padding, ImColor((ImVec4)color * gStyle.BarColorMultiplier), rounding);
 						ImVec2 textSize = ImGui::CalcTextSize(region.pName);
 						if (textSize.x < width * 0.9f)
 						{
@@ -244,10 +261,10 @@ void FooProfiler::DrawHUD()
 				}
 			});
 
-		// Profile range
-		if (!gHUDContext.IsSelectingRange)
+		if (ImGui::GetHoveredID() == timelineID)
 		{
-			if (ImGui::GetHoveredID() == timelineID)
+			// Profile range
+			if (!gHUDContext.IsSelectingRange)
 			{
 				if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 				{
@@ -255,25 +272,37 @@ void FooProfiler::DrawHUD()
 					gHUDContext.IsSelectingRange = true;
 				}
 			}
-		}
-		else
-		{
-			if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+			else
 			{
-				gHUDContext.IsSelectingRange = false;
-			}
-			else if (fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) > 1)
-			{
-				pDraw->AddRectFilled(ImVec2(gHUDContext.RangeSelectionStart, localCursor.y), ImVec2(ImGui::GetMousePos().x, localCursor.y + timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
-				if (ImGui::BeginTooltip())
+				if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 				{
-					ImGui::Text("Time: %.3f ms", TicksToMs(fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) / tickScale));
-					ImGui::EndTooltip();
+					gHUDContext.IsSelectingRange = false;
+				}
+				else if (fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) > 1)
+				{
+					pDraw->AddRectFilled(ImVec2(gHUDContext.RangeSelectionStart, localCursor.y), ImVec2(ImGui::GetMousePos().x, localCursor.y + timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+
+					const ImColor measureColor(1.0f, 1.0f, 1.0f);
+					ImVec2 lineStart = ImVec2(gHUDContext.RangeSelectionStart, ImGui::GetMousePos().y);
+					ImVec2 lineEnd = ImGui::GetMousePos();
+					if (lineStart.x > lineEnd.x)
+						std::swap(lineStart.x, lineEnd.x);
+
+					// Add line and arrows
+					pDraw->AddLine(lineStart, lineEnd, measureColor);
+					pDraw->AddLine(lineStart, lineStart + ImVec2(5, 5), measureColor);
+					pDraw->AddLine(lineStart, lineStart + ImVec2(5, -5), measureColor);
+					pDraw->AddLine(lineEnd, lineEnd + ImVec2(-5, 5), measureColor);
+					pDraw->AddLine(lineEnd, lineEnd + ImVec2(-5, -5), measureColor);
+
+					// Add text in the middle
+					std::string text = Sprintf("Time: %.3f ms", TicksToMs(fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) / tickScale));
+					ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
+					pDraw->AddText((lineEnd + lineStart) / 2 - ImVec2(textSize.x * 0.5f, textSize.y), measureColor, text.c_str());
+					
 				}
 			}
-		}
 
-		{
 			// Zoom behavior
 			float zoomDelta = 0.0f;
 			if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl))
@@ -292,20 +321,24 @@ void FooProfiler::DrawHUD()
 				ImVec2 mousePos = ImGui::GetMousePos() - localCursor;
 				gHUDContext.TimelineOffset.x = mousePos.x - (mousePos.x - gHUDContext.TimelineOffset.x) * scaleFactor;
 			}
-
-			// Panning behavior
-			bool h, held;
-			ImGui::ButtonBehavior(timelineRect, ImGui::GetItemID(), &h, &held, ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_AllowItemOverlap);
-			ImGui::SetItemAllowOverlap();
-			if (held)
-				gHUDContext.TimelineOffset += ImGui::GetIO().MouseDelta;
-
-			// Compute the new timeline size to correctly clamp the offset
-			timelineWidth = availableWidth * gHUDContext.TimelineScale;
-			timelineSize = ImVec2(timelineWidth, timelineHeight);
-			gHUDContext.TimelineOffset = ImClamp(gHUDContext.TimelineOffset, ImGui::GetContentRegionAvail() - timelineSize, ImVec2(0.0f, 0.0f));
 		}
+
+		// Panning behavior
+		bool held;
+		ImGui::ButtonBehavior(timelineRect, timelineID, nullptr, &held, ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_AllowItemOverlap);
+		ImGui::SetItemAllowOverlap();
+		if (held)
+			gHUDContext.TimelineOffset += ImGui::GetIO().MouseDelta;
+
+		// Compute the new timeline size to correctly clamp the offset
+		timelineWidth = availableWidth * gHUDContext.TimelineScale;
+		timelineSize = ImVec2(timelineWidth, timelineHeight);
+		gHUDContext.TimelineOffset = ImClamp(gHUDContext.TimelineOffset, ImGui::GetContentRegionAvail() - timelineSize, ImVec2(0.0f, 0.0f));
 
 		ImGui::PopClipRect();
 	}
+
+	ImS64 scroll = -(ImS64)gHUDContext.TimelineOffset.x;
+	ImGui::ScrollbarEx(ImRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionMax()), ImGui::GetID("Scroll"), ImGuiAxis_X, &scroll, (ImS64)timelineRect.GetSize().x, (ImS64)timelineWidth, ImDrawFlags_None);
+	gHUDContext.TimelineOffset.x = -(float)scroll;
 }
