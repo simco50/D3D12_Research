@@ -1,9 +1,59 @@
 #pragma once
 #include "Graphics/RHI/D3D.h"
 
-extern class GPUProfiler gGPUProfiler;
+// Linear Allocator
+class LinearAllocator
+{
+public:
+	LinearAllocator(uint32 size)
+		: m_pData(new char[size]), m_Size(size), m_Offset(0)
+	{
+	}
 
-#define FOO_GPU_SCOPE(...) FooGPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__VA_ARGS__)
+	~LinearAllocator()
+	{
+		delete[] m_pData;
+	}
+
+	void Reset()
+	{
+		m_Offset = 0;
+	}
+
+	template<typename T, typename... Args>
+	T* Allocate(Args... args)
+	{
+		void* pData = Allocate(sizeof(T));
+		T* pValue = new (pData) T(std::forward<Args>(args)...);
+		return pValue;
+	}
+
+	void* Allocate(uint32 size)
+	{
+		uint32 offset = m_Offset.fetch_add(size);
+		check(offset + size <= m_Size);
+		return m_pData + offset;
+	}
+
+	const char* String(const char* pStr)
+	{
+		uint32 len = (uint32)strlen(pStr) + 1;
+		char* pData = (char*)Allocate(len);
+		strcpy_s(pData, len, pStr);
+		return pData;
+	}
+
+private:
+	char* m_pData;
+	uint32 m_Size;
+	std::atomic<uint32> m_Offset;
+};
+
+
+////////////////////
+/// GPU Profiler ///
+////////////////////
+
 
 class GPUTimeQueryHeap
 {
@@ -14,8 +64,8 @@ public:
 		MaxNumQueries = numQueries;
 		NumFrames = numFrames;
 
-		RefCountPtr<ID3D12Device4> pDevice4;
-		VERIFY_HR(pDevice->QueryInterface(pDevice4.GetAddressOf()));
+		ID3D12Device4* pDevice4 = nullptr;
+		VERIFY_HR(pDevice->QueryInterface(&pDevice4));
 		D3D12_COMMAND_LIST_TYPE commandListType = pQueue->GetDesc().Type;
 
 		uint32 numQueryEntries = numQueries * 2;
@@ -25,31 +75,33 @@ public:
 		queryHeapDesc.Count = numQueryEntries;
 		queryHeapDesc.Type = commandListType == D3D12_COMMAND_LIST_TYPE_COPY ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 		queryHeapDesc.NodeMask = 0;
-		VERIFY_HR(pDevice->CreateQueryHeap(&queryHeapDesc, IID_PPV_ARGS(pQueryHeap.GetAddressOf())));
+		VERIFY_HR(pDevice->CreateQueryHeap(&queryHeapDesc, IID_PPV_ARGS(&pQueryHeap)));
 
 		// Readback resource that fits all frames
 		D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(numQueryEntries * sizeof(uint64) * numFrames);
 		D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
-		VERIFY_HR(pDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(pReadbackResource.GetAddressOf())));
+		VERIFY_HR(pDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&pReadbackResource)));
 		void* pMappedAddress = nullptr;
 		pReadbackResource->Map(0, nullptr, &pMappedAddress);
+		m_pReadbackData = static_cast<uint64*>(pMappedAddress);
 
 		pFrameData = new FrameData[numFrames];
 		// Create CommandAllocator for each frame and store readback address
 		for(uint32 i = 0; i < numFrames; ++i)
 		{
 			FrameData& frame = pFrameData[i];
-			VERIFY_HR(pDevice->CreateCommandAllocator(commandListType, IID_PPV_ARGS(frame.pAllocator.GetAddressOf())));
-			frame.QueryStart = numQueryEntries * i;
-			frame.ReadbackQueries = Span(static_cast<uint64*>(pMappedAddress) + frame.QueryStart, numQueryEntries);
+			VERIFY_HR(pDevice->CreateCommandAllocator(commandListType, IID_PPV_ARGS(&frame.pAllocator)));
+			frame.QueryStartOffset = numQueryEntries * i;
 		}
 
 		// Create CommandList for ResolveQueryData
-		VERIFY_HR(pDevice4->CreateCommandList1(0, commandListType, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pResolveCommandList.GetAddressOf())));
+		VERIFY_HR(pDevice4->CreateCommandList1(0, commandListType, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&pResolveCommandList)));
 
 		// Create Fence to check readback status
-		VERIFY_HR(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(pFence.GetAddressOf())));
+		VERIFY_HR(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
 		FenceEvent = CreateEventExA(nullptr, "Timestamp Query Fence", 0, EVENT_ALL_ACCESS);
+
+		pDevice4->Release();
 	}
 
 	void Shutdown()
@@ -61,11 +113,14 @@ public:
 
 		// Destroy resources
 		CloseHandle(FenceEvent);
-		pQueryHeap.Reset();
-		pReadbackResource.Reset();
+		pQueryHeap->Release();
+		pReadbackResource->Release();
+		pResolveCommandList->Release();
+		pFence->Release();
+
+		for (uint32 i = 0; i < NumFrames; ++i)
+			pFrameData[i].pAllocator->Release();
 		delete[] pFrameData;
-		pResolveCommandList.Reset();
-		pFence.Reset();
 	}
 
 	uint32 QueryBegin(ID3D12GraphicsCommandList* pCommandList)
@@ -90,51 +145,54 @@ public:
 
 	void Resolve()
 	{
+		// Queue a resolve for the current frame
 		FrameData& frame = GetData();
-
-		// Don't start resolve until the current resolve is complete
-		if (frame.FenceValue > pFence->GetCompletedValue())
-		{
-			pFence->SetEventOnCompletion(frame.FenceValue, FenceEvent);
-			WaitForSingleObject(FenceEvent, INFINITE);
-		}
-
 		if (frame.QueryIndex > 0)
 		{
 			pResolveCommandList->Reset(frame.pAllocator, nullptr);
 			uint32 count = frame.QueryIndex * 2;
-			pResolveCommandList->ResolveQueryData(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, count, pReadbackResource, frame.QueryStart * sizeof(uint64));
+			pResolveCommandList->ResolveQueryData(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, count, pReadbackResource, frame.QueryStartOffset * sizeof(uint64));
 			pResolveCommandList->Close();
-			ID3D12CommandList* pResolveCommandLists[] = { pResolveCommandList.Get() };
+			ID3D12CommandList* pResolveCommandLists[] = { pResolveCommandList };
 			pResolveQueue->ExecuteCommandLists(1, pResolveCommandLists);
 		}
-		frame.NumResolvedQueries = frame.QueryIndex;
+		frame.ReadbackQueries = Span<uint64>(m_pReadbackData + frame.QueryStartOffset, frame.QueryIndex * 2);
+		// Increment fence value, signal queue and store FenceValue in frame.
+		++FenceValue;
+		pResolveQueue->Signal(pFence, FenceValue);
 		frame.FenceValue = FenceValue;
-		pResolveQueue->Signal(pFence, FenceValue++);
-		++FrameIndex;
 
+		// Advance to next frame and reset
+		++FrameIndex;
 		FrameData& newFrame = GetData();
 		newFrame.QueryIndex = 0;
+
+		// Don't allow the next frame to start until its resolve is finished.
+		if (newFrame.FenceValue > pFence->GetCompletedValue())
+		{
+			pFence->SetEventOnCompletion(newFrame.FenceValue, FenceEvent);
+			WaitForSingleObject(FenceEvent, INFINITE);
+		}
 	}
 
-	bool GetResolvedQueries(uint32 index, Span<uint64>& outData)
+	// Return the view to the resolved queries and returns true if it's valid to read from
+	bool GetResolvedQueries(uint32 frameIndex, Span<uint64>& outData)
 	{
-		const FrameData& data = pFrameData[index % NumFrames];
+		const FrameData& data = pFrameData[frameIndex % NumFrames];
 		if (data.FenceValue > pFence->GetCompletedValue())
 			return false;
-		outData = data.ReadbackQueries.Subspan(0, data.NumResolvedQueries * 2);
+		outData = data.ReadbackQueries;
 		return true;
 	}
 
 private:
 	struct FrameData
 	{
-		RefCountPtr<ID3D12CommandAllocator> pAllocator;
-		Span<uint64> ReadbackQueries;
-		std::atomic<uint32> QueryIndex = 0;
-		uint64 FenceValue = 0;
-		uint32 QueryStart = 0;
-		uint32 NumResolvedQueries = 0;
+		Span<uint64> ReadbackQueries;						//< View to resolved query data
+		ID3D12CommandAllocator* pAllocator;					//< CommandAllocator for this frame
+		std::atomic<uint32> QueryIndex = 0;					//< Current number of queries
+		uint64 FenceValue = 0;								//< FenceValue indicating when Resolve is finished
+		uint32 QueryStartOffset = 0;						//< Offset in readback buffer to where queries start
 	};
 
 	FrameData& GetData()
@@ -144,22 +202,27 @@ private:
 
 	uint32 NumFrames = 0;
 	FrameData* pFrameData = nullptr;
-	ID3D12CommandQueue* pResolveQueue;
-	RefCountPtr<ID3D12GraphicsCommandList> pResolveCommandList;
-	RefCountPtr<ID3D12QueryHeap> pQueryHeap;
-	RefCountPtr<ID3D12Resource> pReadbackResource;
+	ID3D12CommandQueue* pResolveQueue = nullptr;
+	ID3D12GraphicsCommandList* pResolveCommandList = nullptr;
+	ID3D12QueryHeap* pQueryHeap = nullptr;
+	ID3D12Resource* pReadbackResource = nullptr;
 	uint32 FrameIndex = 0;
-	uint32 MaxNumQueries;
+	uint32 MaxNumQueries = 0;
+	const uint64* m_pReadbackData = nullptr;
 
-	RefCountPtr<ID3D12Fence> pFence;
-	uint64 FenceValue = 1;
+	ID3D12Fence* pFence = nullptr;
+	uint64 FenceValue = 0;
 	HANDLE FenceEvent = nullptr;
 };
+
+extern class GPUProfiler gGPUProfiler;
+
+#define FOO_GPU_SCOPE(...) FooGPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__VA_ARGS__)
 
 class GPUProfiler
 {
 public:
-	void Initialize(ID3D12Device4* pDevice, Span<ID3D12CommandQueue*> queues)
+	void Initialize(ID3D12Device* pDevice, Span<ID3D12CommandQueue*> queues)
 	{
 		for (ID3D12CommandQueue* pQueue : queues)
 		{
@@ -168,12 +231,14 @@ public:
 
 			QueueInfo& queueInfo = m_Queues.emplace_back();
 			queueInfo.IsCopyQueue = isCopyQueue;
-			queueInfo.Name = D3D::GetObjectName(pQueue);
+			uint32 size = ARRAYSIZE(queueInfo.Name);
+			pQueue->GetPrivateData(WKPDID_D3DDebugObjectName, &size, queueInfo.Name);
 			queueInfo.pQueue = pQueue;
 			queueInfo.InitCalibration();
 
 			if (!m_CopyQueryHeap.IsInitialized() && isCopyQueue)
 				m_CopyQueryHeap.Initialize(pDevice, pQueue, 1024, 4);
+
 			if (!m_MainQueryHeap.IsInitialized() && !isCopyQueue)
 				m_MainQueryHeap.Initialize(pDevice, pQueue, 1024, 4);
 		}
@@ -190,7 +255,7 @@ public:
 		uint32 index = data.CurrentIndex.fetch_add(1);
 		check(index < data.Regions.size());
 		SampleRegion& region = data.Regions[index];
-		region.pName = pName;
+		region.pName = data.Allocator.String(pName);
 		region.QueueIndex = queueIndex;
 		region.TimerIndex = GetHeap(isCopyQueue).QueryBegin(pCmd);
 
@@ -225,27 +290,18 @@ public:
 
 	void Tick()
 	{
-		if (m_Paused)
-			return;
-
-		for (const TLS* pTLS : m_ThreadData)
-			check(pTLS->RegionDepth == 0);
-
-		if (m_CopyQueryHeap.IsInitialized())
-			m_CopyQueryHeap.Resolve();
-		if (m_MainQueryHeap.IsInitialized())
-			m_MainQueryHeap.Resolve();
-
-		++m_FrameIndex;
-
-		while (m_LastResolvedFrame < m_FrameIndex - 1)
+		// While the next frame to resolve is not the last one, attempt access the readback data and advance.
+		while (m_FrameToResolve < m_FrameIndex)
 		{
+			// #todo: One readback may be finished while the other is not. Could maybe cause problems?
 			Span<uint64> copyQueries, mainQueries;
-			bool copiesValid = !m_CopyQueryHeap.IsInitialized() || m_CopyQueryHeap.GetResolvedQueries(m_LastResolvedFrame, copyQueries);
-			bool mainValid = !m_MainQueryHeap.IsInitialized() || m_MainQueryHeap.GetResolvedQueries(m_LastResolvedFrame, mainQueries);
+			bool copiesValid = !m_CopyQueryHeap.IsInitialized() || m_CopyQueryHeap.GetResolvedQueries(m_FrameToResolve, copyQueries);
+			bool mainValid = !m_MainQueryHeap.IsInitialized() || m_MainQueryHeap.GetResolvedQueries(m_FrameToResolve, mainQueries);
 			if (!copiesValid || !mainValid)
 				break;
-			SampleHistory& data = m_SampleData[m_LastResolvedFrame % m_SampleData.size()];
+
+			// Copy the timing data
+			SampleHistory& data = m_SampleData[m_FrameToResolve % m_SampleData.size()];
 			check(copyQueries.GetSize() + mainQueries.GetSize() == data.CurrentIndex * 2);
 			for (uint32 i = 0; i < data.CurrentIndex; ++i)
 			{
@@ -255,12 +311,60 @@ public:
 				region.BeginTicks = queries[region.TimerIndex * 2 + 0];
 				region.EndTicks = queries[region.TimerIndex * 2 + 1];
 			}
-			data.ResolvedRegions = data.CurrentIndex;
-			++m_LastResolvedFrame;
+			data.NumRegions = data.CurrentIndex;
+
+			// Sort the regions and resolve the stack depth
+			uint32 Depth = 0;
+			std::array<uint32, 64> Stack;
+			std::sort(data.Regions.begin(), data.Regions.begin() + data.NumRegions, [](const SampleRegion& a, const SampleRegion& b) { return a.BeginTicks < b.BeginTicks; });
+			for (uint32 i = 0; i < data.NumRegions; ++i)
+			{
+				SampleRegion& region = data.Regions[i];
+
+				// While there is a parent and the current region starts after the parent ends, pop it off the stack
+				while (Depth > 0)
+				{
+					const SampleRegion* pParent = &data.Regions[Stack[Depth - 1]];
+					if (region.BeginTicks >= pParent->EndTicks)
+					{
+						--Depth;
+					}
+					else
+					{
+						check(region.EndTicks <= pParent->EndTicks);
+						break;
+					}
+				}
+
+				Stack[Depth] = i;
+
+				// Set the region's depth
+				region.Depth = Depth;
+				++Depth;
+			}
+
+			++m_FrameToResolve;
 		}
 
-		m_SampleData[m_FrameIndex % m_SampleData.size()].CurrentIndex = 0;
-		m_SampleData[m_FrameIndex % m_SampleData.size()].ResolvedRegions = 0;
+		if (m_Paused)
+			return;
+
+		// Make sure all last frame's regions have ended
+		for (const TLS* pTLS : m_ThreadData)
+			check(pTLS->RegionDepth == 0);
+
+		// Schedule a resolve for last frame
+		if (m_CopyQueryHeap.IsInitialized())
+			m_CopyQueryHeap.Resolve();
+		if (m_MainQueryHeap.IsInitialized())
+			m_MainQueryHeap.Resolve();
+
+		// Advance frame and clear data
+		++m_FrameIndex;
+		SampleHistory& newFrameData = GetData();
+		newFrameData.CurrentIndex = 0;
+		newFrameData.NumRegions = 0;
+		newFrameData.Allocator.Reset();
 	}
 
 	void Shutdown()
@@ -268,8 +372,9 @@ public:
 		m_MainQueryHeap.Shutdown();
 	}
 
-	struct QueueInfo
+	class QueueInfo
 	{
+	public:
 		void InitCalibration()
 		{
 			pQueue->GetClockCalibration(&GPUCalibrationTicks, &CPUCalibrationTicks);
@@ -288,32 +393,37 @@ public:
 			return (float)ticks / GPUFrequency * 1000.0f;
 		}
 
-		std::string Name;
+		char Name[128];
+		bool IsCopyQueue;
+		ID3D12CommandQueue* pQueue;
+
+	private:
 		uint64 GPUCalibrationTicks;
 		uint64 CPUCalibrationTicks;
 		uint64 GPUFrequency;
 		uint64 CPUFrequency;
-		bool IsCopyQueue;
-		ID3D12CommandQueue* pQueue;
 	};
 
 	struct SampleRegion
 	{
-		const char* pName;
-		uint32 Depth = 0; 
-		uint64 BeginTicks;
-		uint64 EndTicks;
-		uint32 QueueIndex;
-		uint32 TimerIndex;
+		const char* pName = "";			//< Name of the region
+		uint32 Depth = 0;				//< Stack depth of the region
+		uint64 BeginTicks = 0;			//< GPU ticks of start of the region
+		uint64 EndTicks = 0;			//< GPU ticks of end of the region
+		uint32 QueueIndex = 0xFFFFFFFF;	//< The index of the queue this region is executed on (QueueInfo)
+		uint32 TimerIndex = 0xFFFFFFFF;	//< The index in the query heap for the timer
 	};
 
 	struct SampleHistory
 	{
+		SampleHistory()
+			: Allocator(1 << 16)
+		{}
+
 		std::array<SampleRegion, 1024> Regions;
-		std::atomic<uint32> CurrentIndex = 0;				//< The index to the next free sample region
-		uint32 ResolvedRegions = 0;
-		std::atomic<uint32> CharIndex = 0;					//< The index to the next free char buffer
-		char StringBuffer[1 << 16];							//< Blob to store dynamic strings for the frame
+		uint32 NumRegions = 0;
+		std::atomic<uint32> CurrentIndex = 0;		//< The index to the next free sample region
+		LinearAllocator Allocator;
 	};
 
 	const Span<QueueInfo> GetQueueInfo() const { return m_Queues; }
@@ -321,16 +431,20 @@ public:
 	template<typename Fn>
 	void ForEachHistory(Fn&& fn)
 	{
-		for (SampleHistory& data : m_SampleData)
+		uint32 leadingFrames = m_FrameIndex - m_FrameToResolve - 1;
+		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, (uint32)m_SampleData.size()) - leadingFrames;
+		while (currentIndex < m_FrameToResolve)
 		{
-			if (data.ResolvedRegions > 0)
-				fn(data);
+			fn(currentIndex, m_SampleData[currentIndex % m_SampleData.size()]);
+			++currentIndex;
 		}
 	}
 
 	bool m_Paused = false;
 
 private:
+	SampleHistory& GetData() { return m_SampleData[m_FrameIndex % m_SampleData.size()]; }
+
 	struct TLS
 	{
 		struct StackData
@@ -362,7 +476,7 @@ private:
 	GPUTimeQueryHeap m_CopyQueryHeap;
 	std::array<SampleHistory, 10> m_SampleData;
 	uint32 m_FrameIndex = 0;
-	uint32 m_LastResolvedFrame = 0;
+	uint32 m_FrameToResolve = 0;
 };
 
 struct FooGPUProfileScope
@@ -380,16 +494,9 @@ struct FooGPUProfileScope
 
 
 
-
-
-
-
-
-
-
-
-
-
+////////////////////
+/// CPU Profiler ///
+////////////////////
 
 /* Options:
 	FOO_SCOPE(const char* pName, const Color& color)
@@ -415,14 +522,23 @@ extern class FooProfiler gProfiler;
 class FooProfiler
 {
 public:
-	static constexpr int REGION_HISTORY = 4;
+	static constexpr int REGION_HISTORY = 10;
 	static constexpr int MAX_DEPTH = 32;
 	static constexpr int STRING_BUFFER_SIZE = 1 << 16;
 	static constexpr int MAX_NUM_REGIONS = 1024;
 
-	FooProfiler();
+	FooProfiler()
+		: m_HistorySize(REGION_HISTORY)
+	{
+		m_pSampleHistory = new SampleHistory[REGION_HISTORY];
+	}
 
-	void BeginRegion(const char* pName, uint32 color)
+	~FooProfiler()
+	{
+		delete[] m_pSampleHistory;
+	}
+
+	void BeginRegion(const char* pName, uint32 color, const char* pFilePath = nullptr, uint32 lineNumber = 0)
 	{
 		SampleHistory& data = GetCurrentData();
 		uint32 newIndex = data.CurrentIndex.fetch_add(1);
@@ -434,15 +550,17 @@ public:
 		SampleRegion& newRegion = data.Regions[newIndex];
 		newRegion.Depth = tls.Depth;
 		newRegion.ThreadIndex = tls.ThreadIndex;
-		newRegion.pName = StoreString(pName);
+		newRegion.pName = data.Allocator.String(pName);
 		newRegion.Color = color;
+		newRegion.pFilePath = pFilePath;
+		newRegion.LineNumber = lineNumber;
 		QueryPerformanceCounter((LARGE_INTEGER*)(&newRegion.BeginTicks));
 
 		tls.RegionStack[tls.Depth] = newIndex;
 		tls.Depth++;
 	}
 
-	void BeginRegion(const char* pName)
+	void BeginRegion(const char* pName, const char* pFilePath = nullptr, uint32 lineNumber = 0)
 	{
 		// Add a region and inherit the color
 		TLS& tls = GetTLS();
@@ -453,17 +571,7 @@ public:
 			const SampleHistory& data = GetCurrentData();
 			color = data.Regions[tls.RegionStack[tls.Depth - 1]].Color;
 		}
-		BeginRegion(pName, color);
-	}
-
-	void SetFileInfo(const char* pFilePath, uint32 lineNumber)
-	{
-		SampleHistory& data = GetCurrentData();
-		TLS& tls = GetTLS();
-
-		SampleRegion& region = data.Regions[tls.RegionStack[tls.Depth - 1]];
-		region.pFilePath = pFilePath;
-		region.LineNumber = lineNumber;
+		BeginRegion(pName, color, pFilePath, lineNumber);
 	}
 
 	void EndRegion()
@@ -490,8 +598,8 @@ public:
 			++m_FrameIndex;
 
 		SampleHistory& data = GetCurrentData();
-		data.CharIndex = 0;
 		data.CurrentIndex = 0;
+		data.Allocator.Reset();
 
 		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksBegin));
 	}
@@ -521,16 +629,6 @@ public:
 	void DrawHUD();
 
 private:
-	const char* StoreString(const char* pText)
-	{
-		SampleHistory& data = GetCurrentData();
-		uint32 len = (uint32)strlen(pText) + 1;
-		uint32 offset = data.CharIndex.fetch_add(len);
-		check(offset + len <= ARRAYSIZE(data.StringBuffer));
-		strcpy_s(data.StringBuffer + offset, len, pText);
-		return &data.StringBuffer[offset];
-	}
-
 	struct TLS
 	{
 		uint32 ThreadIndex = 0;
@@ -567,34 +665,37 @@ private:
 
 	struct SampleHistory
 	{
-		uint64 TicksBegin;									//< The start ticks of the frame on the main thread
-		uint64 TicksEnd;									//< The end ticks of the frame on the main thread
+		SampleHistory()
+			: Allocator(STRING_BUFFER_SIZE)
+		{}
+
+		uint64 TicksBegin = 0;								//< The start ticks of the frame on the main thread
+		uint64 TicksEnd = 0;								//< The end ticks of the frame on the main thread
 		std::array<SampleRegion, MAX_NUM_REGIONS> Regions;	//< All sample regions of the frame
 		std::atomic<uint32> CurrentIndex = 0;				//< The index to the next free sample region
-		std::atomic<uint32> CharIndex = 0;					//< The index to the next free char buffer
-		char StringBuffer[STRING_BUFFER_SIZE];				//< Blob to store dynamic strings for the frame
+		LinearAllocator	Allocator;
 	};
 
 	SampleHistory& GetCurrentData()
 	{
-		return m_SampleHistory[m_FrameIndex % m_SampleHistory.size()];
+		return m_pSampleHistory[m_FrameIndex % m_HistorySize];
 	}
 
 	template<typename Fn>
 	void ForEachHistory(Fn&& fn) const
 	{
-		uint32 currentIndex = (m_FrameIndex + 1) % (uint32)m_SampleHistory.size();
-		while (currentIndex != m_FrameIndex % m_SampleHistory.size() && currentIndex < m_FrameIndex)
+		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, m_HistorySize) + 1;
+		while (currentIndex < m_FrameIndex)
 		{
-			fn(m_SampleHistory[currentIndex]);
-			currentIndex = (currentIndex + 1) % (uint32)m_SampleHistory.size();
+			fn(currentIndex, m_pSampleHistory[currentIndex % m_HistorySize]);
+			++currentIndex;
 		}
 	}
 
 	const SampleHistory& GetHistory() const
 	{
-		uint32 currentIndex = (m_FrameIndex + 1) % (uint32)m_SampleHistory.size();
-		return m_SampleHistory[currentIndex];
+		uint32 currentIndex = (m_FrameIndex + 1) % m_HistorySize;
+		return m_pSampleHistory[currentIndex];
 	}
 
 	struct ThreadData
@@ -609,7 +710,8 @@ private:
 
 	bool m_Paused = false;
 	uint32 m_FrameIndex = 0;
-	std::array<SampleHistory, REGION_HISTORY> m_SampleHistory;
+	uint32 m_HistorySize = 0;
+	SampleHistory* m_pSampleHistory = nullptr;
 };
 
 struct FooProfileScope
@@ -617,29 +719,25 @@ struct FooProfileScope
 	// Name + Color
 	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName, const Color& color)
 	{
-		gProfiler.BeginRegion(pName ? pName : pFunctionName, Math::Pack_RGBA8_UNORM(color));
-		gProfiler.SetFileInfo(pFilePath, lineNumber);
+		gProfiler.BeginRegion(pName ? pName : pFunctionName, Math::Pack_RGBA8_UNORM(color), pFilePath, lineNumber);
 	}
 
 	// Just Color
 	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const Color& color)
 	{
-		gProfiler.BeginRegion(pFunctionName, Math::Pack_RGBA8_UNORM(color));
-		gProfiler.SetFileInfo(pFilePath, lineNumber);
+		gProfiler.BeginRegion(pFunctionName, Math::Pack_RGBA8_UNORM(color), pFilePath, lineNumber);
 	}
 
 	// Just Name
 	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName)
 	{
-		gProfiler.BeginRegion(pName);
-		gProfiler.SetFileInfo(pFilePath, lineNumber);
+		gProfiler.BeginRegion(pName, pFilePath, lineNumber);
 	}
 
 	// No Name or Color
 	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber)
 	{
-		gProfiler.BeginRegion(pFunctionName);
-		gProfiler.SetFileInfo(pFilePath, lineNumber);
+		gProfiler.BeginRegion(pFunctionName, pFilePath, lineNumber);
 	}
 
 	~FooProfileScope()

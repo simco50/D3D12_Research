@@ -123,6 +123,8 @@ void Profiler::Shutdown()
 void Profiler::Begin(const char* pName, CommandContext* pContext)
 {
 	gProfiler.BeginRegion(pName);
+	if (pContext)
+		gGPUProfiler.BeginRegion(pName, pContext->GetCommandList(), 0);
 
 	if (m_pCurrentBlock->Map.find(pName) != m_pCurrentBlock->Map.end())
 	{
@@ -151,9 +153,13 @@ void Profiler::Begin(const char* pName, CommandContext* pContext)
 void Profiler::End()
 {
 	m_pCurrentBlock->EndTimer();
+
+	gProfiler.EndRegion();
+	if(m_pCurrentBlock->pContext)
+		gGPUProfiler.EndRegion();
+
 	m_pPreviousBlock = m_pCurrentBlock;
 	m_pCurrentBlock = m_pCurrentBlock->pParent;
-	gProfiler.EndRegion();
 }
 
 void Profiler::Resolve(CommandContext* pContext)

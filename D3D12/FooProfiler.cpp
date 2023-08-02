@@ -10,7 +10,7 @@ GPUProfiler gGPUProfiler;
 
 struct HUDContext
 {
-	float TimelineScale = 3.0f;
+	float TimelineScale = 5.0f;
 	ImVec2 TimelineOffset = ImVec2(0.0f, 0.0f);
 
 	bool IsSelectingRange = false;
@@ -23,7 +23,7 @@ static HUDContext gHUDContext;
 struct StyleOptions
 {
 	int MaxDepth = 8;
-	int MaxTime = 66;
+	int MaxTime = 120;
 
 	float BarHeight = 25;
 	float BarPadding = 2;
@@ -50,10 +50,6 @@ void EditStyle()
 	ImGui::ColorEdit4("Bar Highlight Color", &gStyle.BarHighlightColor.x);
 	ImGui::Checkbox("Debug Mode", &gStyle.DebugMode);
 	ImGui::PopItemWidth();
-}
-
-FooProfiler::FooProfiler()
-{
 }
 
 void FooProfiler::DrawHUD()
@@ -192,39 +188,9 @@ void FooProfiler::DrawHUD()
 			|		[===========]		|
 			|			[======]		|
 		*/
-
-		gGPUProfiler.ForEachHistory([&](GPUProfiler::SampleHistory& data)
+		gGPUProfiler.ForEachHistory([&](uint32 frameIndex, GPUProfiler::SampleHistory& data)
 			{
-				uint32 Depth = 0;
-				std::array<uint32, 256> Stack;
-				std::sort(data.Regions.begin(), data.Regions.begin() + data.ResolvedRegions, [](const GPUProfiler::SampleRegion& a, const GPUProfiler::SampleRegion& b) { return a.BeginTicks < b.BeginTicks; });
-				for (uint32 i = 0; i < data.ResolvedRegions; ++i)
-				{
-					GPUProfiler::SampleRegion& region = data.Regions[i];
-
-					// While there is a parent and the current region starts after the parent ends, pop it off the stack
-					while (Depth > 0)
-					{
-						const GPUProfiler::SampleRegion* pParent = &data.Regions[Stack[Depth - 1]];
-						if (region.BeginTicks >= pParent->EndTicks)
-						{
-							--Depth;
-						}
-						else
-						{
-							//check(region.EndTicks <= pParent->EndTicks);
-							break;
-						}
-					}
-
-					Stack[Depth] = i;
-
-					// Set the region's depth
-					region.Depth = Depth;
-					++Depth;
-				}
-
-				for (uint32 i = 0; i < data.ResolvedRegions; ++i)
+				for (uint32 i = 0; i < data.NumRegions; ++i)
 				{
 					const GPUProfiler::SampleRegion& region = data.Regions[i];
 					const GPUProfiler::QueueInfo& queue = gGPUProfiler.GetQueueInfo()[region.QueueIndex];
@@ -235,7 +201,7 @@ void FooProfiler::DrawHUD()
 					{
 						float startPos = tickScale * (cpuBeginTicks < beginAnchor ? 0 : cpuBeginTicks - beginAnchor);
 						float endPos = tickScale * (cpuEndTicks - beginAnchor);
-						float y = trackHeight + region.Depth * gStyle.BarHeight;
+						float y = region.Depth * gStyle.BarHeight;
 						ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + gStyle.BarHeight));
 
 						uint32 itemID = ImGui::GetID(&region);
@@ -246,6 +212,7 @@ void FooProfiler::DrawHUD()
 							{
 								if (ImGui::BeginTooltip())
 								{
+									ImGui::Text("Frame %d", frameIndex);
 									ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(cpuEndTicks - cpuBeginTicks)));
 									ImGui::EndTooltip();
 								}
@@ -255,7 +222,7 @@ void FooProfiler::DrawHUD()
 							const ImVec2 padding(gStyle.BarPadding, gStyle.BarPadding);
 							if (hovered)
 								pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), rounding);
-							pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, ImColor(gStyle.BarColorMultiplier), rounding);
+							pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, ImColor(0.4f, 0.3f, 0.7f), rounding);
 							ImVec2 textSize = ImGui::CalcTextSize(region.pName);
 							if (textSize.x < itemRect.GetWidth() * 0.9f)
 							{
@@ -272,7 +239,9 @@ void FooProfiler::DrawHUD()
 				}
 			});
 
-		ForEachHistory([&](const SampleHistory& regionData)
+		cursor.y += trackHeight;
+
+		ForEachHistory([&](uint32 frameIndex, const SampleHistory& regionData)
 			{
 				float frameTimeEnd = (regionData.TicksEnd - beginAnchor) * tickScale;
 				pDraw->AddLine(cursor + ImVec2(frameTimeEnd, 0), cursor + ImVec2(frameTimeEnd, timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.1f), 4.0f);
@@ -305,6 +274,7 @@ void FooProfiler::DrawHUD()
 						{
 							if (ImGui::BeginTooltip())
 							{
+								ImGui::Text("Frame %d", frameIndex);
 								ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(region.EndTicks - region.BeginTicks)));
 								if (region.pFilePath)
 									ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
