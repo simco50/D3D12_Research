@@ -6,6 +6,7 @@
 #include "IconsFontAwesome4.h"
 
 FooProfiler gProfiler;
+GPUProfiler gGPUProfiler;
 
 struct HUDContext
 {
@@ -96,7 +97,10 @@ void FooProfiler::DrawHUD()
 	}
 
 	if (ImGui::IsKeyPressed(ImGuiKey_Space))
+	{
 		m_Paused = !m_Paused;
+		gGPUProfiler.m_Paused = !gGPUProfiler.m_Paused;
+	}
 
 	// Include a row for the track header
 	const float trackHeight = (gStyle.MaxDepth + 1) * gStyle.BarHeight;
@@ -188,6 +192,86 @@ void FooProfiler::DrawHUD()
 			|		[===========]		|
 			|			[======]		|
 		*/
+
+		gGPUProfiler.ForEachHistory([&](GPUProfiler::SampleHistory& data)
+			{
+				uint32 Depth = 0;
+				std::array<uint32, 256> Stack;
+				std::sort(data.Regions.begin(), data.Regions.begin() + data.ResolvedRegions, [](const GPUProfiler::SampleRegion& a, const GPUProfiler::SampleRegion& b) { return a.BeginTicks < b.BeginTicks; });
+				for (uint32 i = 0; i < data.ResolvedRegions; ++i)
+				{
+					GPUProfiler::SampleRegion& region = data.Regions[i];
+
+					// While there is a parent and the current region starts after the parent ends, pop it off the stack
+					while (Depth > 0)
+					{
+						const GPUProfiler::SampleRegion* pParent = &data.Regions[Stack[Depth - 1]];
+						if (region.BeginTicks >= pParent->EndTicks)
+						{
+							--Depth;
+						}
+						else
+						{
+							//check(region.EndTicks <= pParent->EndTicks);
+							break;
+						}
+					}
+
+					Stack[Depth] = i;
+
+					// Set the region's depth
+					region.Depth = Depth;
+					++Depth;
+				}
+
+				for (uint32 i = 0; i < data.ResolvedRegions; ++i)
+				{
+					const GPUProfiler::SampleRegion& region = data.Regions[i];
+					const GPUProfiler::QueueInfo& queue = gGPUProfiler.GetQueueInfo()[region.QueueIndex];
+					uint64 cpuBeginTicks = queue.GpuToCpuTicks(region.BeginTicks);
+					uint64 cpuEndTicks = queue.GpuToCpuTicks(region.EndTicks);
+
+					if (cpuEndTicks > beginAnchor)
+					{
+						float startPos = tickScale * (cpuBeginTicks < beginAnchor ? 0 : cpuBeginTicks - beginAnchor);
+						float endPos = tickScale * (cpuEndTicks - beginAnchor);
+						float y = trackHeight + region.Depth * gStyle.BarHeight;
+						ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + gStyle.BarHeight));
+
+						uint32 itemID = ImGui::GetID(&region);
+						if (ImGui::ItemAdd(itemRect, itemID, 0))
+						{
+							bool hovered = ImGui::IsItemHovered();
+							if (hovered)
+							{
+								if (ImGui::BeginTooltip())
+								{
+									ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(cpuEndTicks - cpuBeginTicks)));
+									ImGui::EndTooltip();
+								}
+							}
+
+							const float rounding = 0.0f;
+							const ImVec2 padding(gStyle.BarPadding, gStyle.BarPadding);
+							if (hovered)
+								pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), rounding);
+							pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, ImColor(gStyle.BarColorMultiplier), rounding);
+							ImVec2 textSize = ImGui::CalcTextSize(region.pName);
+							if (textSize.x < itemRect.GetWidth() * 0.9f)
+							{
+								pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, ImColor(gStyle.FGTextColor), region.pName);
+							}
+							else if (itemRect.GetWidth() > 30.0f)
+							{
+								pDraw->PushClipRect(itemRect.Min + padding, itemRect.Max - padding, true);
+								pDraw->AddText(itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f), ImColor(gStyle.FGTextColor), region.pName);
+								pDraw->PopClipRect();
+							}
+						}
+					}
+				}
+			});
+
 		ForEachHistory([&](const SampleHistory& regionData)
 			{
 				float frameTimeEnd = (regionData.TicksEnd - beginAnchor) * tickScale;
@@ -211,9 +295,10 @@ void FooProfiler::DrawHUD()
 
 					ImVec2 barTopLeft = cursor + ImVec2(startPos, region.ThreadIndex * trackHeight + gStyle.BarHeight * region.Depth);
 					ImVec2 barBottomRight = barTopLeft + ImVec2(width, gStyle.BarHeight);
+					ImRect itemRect = ImRect(barTopLeft, barBottomRight);
 
 					uint32 itemID = ImGui::GetID(&region);
-					if (ImGui::ItemAdd(ImRect(barTopLeft, barBottomRight), itemID, 0))
+					if (ImGui::ItemAdd(itemRect, itemID, 0))
 					{
 						bool hovered = ImGui::IsItemHovered();
 						if (hovered)
@@ -227,7 +312,7 @@ void FooProfiler::DrawHUD()
 							}
 						}
 
-						if (ImGui::ButtonBehavior(ImRect(barTopLeft, barBottomRight), ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
+						if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
 						{
 							// The zoom required to make the bar fit the entire window
 							float zoom = timelineWidth / width;
@@ -244,17 +329,17 @@ void FooProfiler::DrawHUD()
 						const float rounding = 0.0f;
 						const ImVec2 padding(gStyle.BarPadding, gStyle.BarPadding);
 						if (hovered)
-							pDraw->AddRectFilled(barTopLeft, barBottomRight, ImColor(gStyle.BarHighlightColor), rounding);
-						pDraw->AddRectFilled(barTopLeft + padding, barBottomRight - padding, ImColor((ImVec4)color * gStyle.BarColorMultiplier), rounding);
+							pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), rounding);
+						pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, ImColor((ImVec4)color * gStyle.BarColorMultiplier), rounding);
 						ImVec2 textSize = ImGui::CalcTextSize(region.pName);
 						if (textSize.x < width * 0.9f)
 						{
-							pDraw->AddText(barTopLeft + (ImVec2(width, gStyle.BarHeight) - textSize) * 0.5f, ImColor(gStyle.FGTextColor), region.pName);
+							pDraw->AddText(itemRect.Min + (ImVec2(width, gStyle.BarHeight) - textSize) * 0.5f, ImColor(gStyle.FGTextColor), region.pName);
 						}
 						else if (width > 30.0f)
 						{
-							pDraw->PushClipRect(barTopLeft + padding, barBottomRight - padding, true);
-							pDraw->AddText(barTopLeft + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f), ImColor(gStyle.FGTextColor), region.pName);
+							pDraw->PushClipRect(itemRect.Min + padding, itemRect.Max - padding, true);
+							pDraw->AddText(itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f), ImColor(gStyle.FGTextColor), region.pName);
 							pDraw->PopClipRect();
 						}
 					}

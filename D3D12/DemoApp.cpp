@@ -38,7 +38,7 @@
 #include "IconsFontAwesome4.h"
 #include "FooProfiler.h"
 
-#define ENABLE_STUFF 0
+#define ENABLE_STUFF 1
 
 namespace Tweakables
 {
@@ -119,6 +119,11 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	options.UseStablePowerState =	CommandLine::GetBool("stablepowerstate");
 	m_pDevice = new GraphicsDevice(options);
 
+	gGPUProfiler.Initialize(m_pDevice->GetDevice(),
+		{
+			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
+		});
+
 	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, window);
 
 	GraphicsCommon::Create(m_pDevice);
@@ -155,36 +160,14 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	OnResizeOrMove(windowRect.x, windowRect.y);
 	OnResizeViewport(windowRect.x, windowRect.y);
-
-	struct QueueCalibration
-	{
-		QueueCalibration(ID3D12CommandQueue* pQueue)
-		{
-			pQueue->GetClockCalibration(&CPUCalibrationTicks, &GPUCalibrationTicks);
-			pQueue->GetTimestampFrequency(&GPUFrequency);
-			QueryPerformanceFrequency((LARGE_INTEGER*)&CPUFrequency);
-		}
-
-		uint64 GpuToCpuTicks(uint64 gpuTicks) const
-		{
-			check(gpuTicks >= GPUCalibrationTicks);
-			return CPUCalibrationTicks + (gpuTicks - CPUCalibrationTicks) * CPUFrequency / GPUFrequency;
-		}
-
-		uint64 GPUCalibrationTicks;
-		uint64 CPUCalibrationTicks;
-		uint64 GPUFrequency;
-		uint64 CPUFrequency;
-	};
-
-	QueueCalibration clock(m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue());
-	uint64 i = clock.GpuToCpuTicks(100000000000000000);
-	i;
 }
 
 DemoApp::~DemoApp()
 {
 	m_pDevice->IdleGPU();
+
+	gGPUProfiler.Shutdown();
+
 	ImGuiRenderer::Shutdown();
 	GraphicsCommon::Destroy();
 	DebugRenderer::Get()->Shutdown();
