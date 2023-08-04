@@ -22,13 +22,13 @@ static HUDContext gHUDContext;
 
 struct StyleOptions
 {
-	int MaxDepth = 8;
+	int MaxDepth = 10;
 	int MaxTime = 120;
 
 	float BarHeight = 25;
 	float BarPadding = 2;
 	ImVec4 BarColorMultiplier = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-	ImVec4 BGTextColor = ImVec4(1.0f, 1.0f, 1.0f, 0.5f);
+	ImVec4 BGTextColor = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 	ImVec4 FGTextColor = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
 	ImVec4 BarHighlightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -98,42 +98,23 @@ void FooProfiler::DrawHUD()
 		gGPUProfiler.m_Paused = !gGPUProfiler.m_Paused;
 	}
 
-	// Include a row for the track header
-	const float trackHeight = (gStyle.MaxDepth + 1) * gStyle.BarHeight;
-	const float timelineHeight = trackHeight * m_ThreadData.size();
-
-	// The width of the timeline
-	float availableWidth = ImGui::GetContentRegionAvail().x;
-	
-	// The current (scaled) size of the timeline
-	float timelineWidth = availableWidth * gHUDContext.TimelineScale;
-	ImVec2 timelineSize = ImVec2(timelineWidth, timelineHeight);
-
 	ImGui::Dummy(ImGui::GetContentRegionAvail() - ImVec2(0, 15));
 	ImRect timelineRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+
+	// The current (scaled) size of the timeline
+	float timelineWidth = timelineRect.GetWidth() * gHUDContext.TimelineScale;
+
+	ImVec2 cursor = timelineRect.Min + gHUDContext.TimelineOffset;
+	ImVec2 cursorStart = cursor;
+	ImDrawList* pDraw = ImGui::GetWindowDrawList();
+
 	ImGuiID timelineID = ImGui::GetID("Timeline");
-
-	ImVec2 localCursor = timelineRect.Min;
-
 	if (ImGui::ItemAdd(timelineRect, timelineID))
 	{
 		ImGui::PushClipRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), true);
 
-		ImVec2 cursor = localCursor + gHUDContext.TimelineOffset;
-
 		// How many pixels is one tick
 		float tickScale = timelineWidth / ticksInTimeline;
-
-		ImDrawList* pDraw = ImGui::GetWindowDrawList();
-
-		// Draw a debug rect around the timeline item and the whole (unclipped) timeline rect
-		if (gStyle.DebugMode)
-		{
-			pDraw->PushClipRect(ImVec2(0, 0), ImVec2(100000, 100000), false);
-			pDraw->AddRect(cursor, cursor + timelineSize, ImColor(1.0f, 0.0f, 0.0f));
-			pDraw->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), ImColor(0.0f, 1.0f, 0.0f));
-			pDraw->PopClipRect();
-		}
 
 		// Add vertical lines for each ms interval
 		/*
@@ -146,63 +127,157 @@ void FooProfiler::DrawHUD()
 		{
 			float x0 = tickScale * MsToTicks((float)i);
 			float x1 = tickScale * MsToTicks((float)i + 1);
-			pDraw->AddRectFilled(ImVec2(cursor.x + x0, localCursor.y + gStyle.BarHeight), ImVec2(cursor.x + x1, localCursor.y + timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.02f));
-			pDraw->AddText(ImVec2(cursor.x + x0, localCursor.y), ImColor(gStyle.BGTextColor), Sprintf("%d ms", i).c_str());
+			pDraw->AddRectFilled(ImVec2(cursor.x + x0, timelineRect.Min.y + gStyle.BarHeight), ImVec2(cursor.x + x1, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.02f));
+			pDraw->AddText(ImVec2(cursor.x + x0, timelineRect.Min.y), ImColor(gStyle.BGTextColor), Sprintf("%d ms", i).c_str());
 		}
 
-		// Add thread names for each track
+		// Draw a vertical line to mark each CPU frame
 		/*
-			0	1	2	3
-			Main Thread
-			|	|	|	|
-			Worker Thread
-			|	|	|	|
+			|		|	|
+			|		|	|
+			|		|	|
 		*/
-		for (int i = 0; i < (int)m_ThreadData.size(); ++i)
-		{
-			float y = trackHeight * i;
-			const ThreadData& threadData = m_ThreadData[i];
-			pDraw->AddText(ImVec2(localCursor.x, cursor.y + y), ImColor(gStyle.BGTextColor), Sprintf("%s [%d]", threadData.Name.c_str(), threadData.ThreadID).c_str());
-		}
+		ForEachHistory([&](uint32 frameIndex, const SampleHistory& regionData)
+			{
+				float frameTimeEnd = (regionData.TicksEnd - beginAnchor) * tickScale;
+				pDraw->AddLine(ImVec2(cursor.x + frameTimeEnd, timelineRect.Min.y), ImVec2(cursor.x + frameTimeEnd, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.1f), 4.0f);
+			});
 
-		// Interval times and name headers take up one bar's space
 		cursor.y += gStyle.BarHeight;
 
-		// Add horizontal lines for each thread track
-		/*
-			_______________
-			_______________
-			_______________
-		*/
-		for (int i = 0; i < (int)m_ThreadData.size(); ++i)
+		// Draw each GPU thread track
+		Span<GPUProfiler::QueueInfo> queues = gGPUProfiler.GetQueueInfo();
+		for (uint32 queueIndex = 0; queueIndex < queues.GetSize(); ++queueIndex)
 		{
-			float y = trackHeight * i;
-			pDraw->AddLine(ImVec2(cursor.x, cursor.y + y), ImVec2(cursor.x + timelineWidth, cursor.y + y), ImColor(gStyle.BGTextColor));
+			const GPUProfiler::QueueInfo& queue = queues[queueIndex];
+
+			// Add thread name for track
+			pDraw->AddText(ImVec2(timelineRect.Min.x, cursor.y), ImColor(gStyle.BGTextColor), queue.Name);
+			cursor.y += gStyle.BarHeight;
+
+			uint32 maxDepth = 0;
+
+			// Add a bar in the right place for each sample region
+			/*
+				|[=============]			|
+				|	[======]				|
+				|---------------------------|
+				|		[===========]		|
+				|			[======]		|
+			*/
+			gGPUProfiler.ForEachHistory([&](uint32 frameIndex, GPUProfiler::SampleHistory& data)
+				{
+					for (uint32 i = 0; i < data.NumRegions; ++i)
+					{
+						const GPUProfiler::SampleRegion& region = data.Regions[i];
+
+						if ((int)region.Depth >= gStyle.MaxDepth)
+							continue;
+
+						if (queueIndex != region.QueueIndex)
+							continue;
+
+						maxDepth = Math::Max(maxDepth, region.Depth);
+
+						uint64 cpuBeginTicks = queue.GpuToCpuTicks(region.BeginTicks);
+						uint64 cpuEndTicks = queue.GpuToCpuTicks(region.EndTicks);
+
+						if (cpuEndTicks > beginAnchor)
+						{
+							float startPos = tickScale * (cpuBeginTicks < beginAnchor ? 0 : cpuBeginTicks - beginAnchor);
+							float endPos = tickScale * (cpuEndTicks - beginAnchor);
+							float y = region.Depth * gStyle.BarHeight;
+							ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + gStyle.BarHeight));
+
+							uint32 itemID = ImGui::GetID(&region);
+							if (ImGui::ItemAdd(itemRect, itemID, 0))
+							{
+								bool hovered = ImGui::IsItemHovered();
+								if (hovered)
+								{
+									if (ImGui::BeginTooltip())
+									{
+										ImGui::Text("Frame %d", frameIndex);
+										ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(cpuEndTicks - cpuBeginTicks)));
+										ImGui::EndTooltip();
+									}
+								}
+
+								const float rounding = 0.0f;
+								const ImVec2 padding(gStyle.BarPadding, gStyle.BarPadding);
+								if (hovered)
+									pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), rounding);
+								pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, ImColor(0.491f, 0.650f, 0.455f), rounding);
+								ImVec2 textSize = ImGui::CalcTextSize(region.pName);
+								if (textSize.x < itemRect.GetWidth() * 0.9f)
+								{
+									pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, ImColor(gStyle.FGTextColor), region.pName);
+								}
+								else if (itemRect.GetWidth() > 30.0f)
+								{
+									//pDraw->PushClipRect(itemRect.Min + padding, itemRect.Max - padding, true);
+									pDraw->AddText(itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f), ImColor(gStyle.FGTextColor), region.pName);
+									//pDraw->PopClipRect();
+								}
+							}
+						}
+					}
+				});
+
+			// Add vertical line to end track
+			cursor.y += (maxDepth + 1) * gStyle.BarHeight;
+			pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(gStyle.BGTextColor));
 		}
 
-		// Add a bar in the right place for each sample region
-		/*
-			|[=============]			|
-			|	[======]				|
-			|---------------------------|
-			|		[===========]		|
-			|			[======]		|
-		*/
-		gGPUProfiler.ForEachHistory([&](uint32 frameIndex, GPUProfiler::SampleHistory& data)
-			{
-				for (uint32 i = 0; i < data.NumRegions; ++i)
-				{
-					const GPUProfiler::SampleRegion& region = data.Regions[i];
-					const GPUProfiler::QueueInfo& queue = gGPUProfiler.GetQueueInfo()[region.QueueIndex];
-					uint64 cpuBeginTicks = queue.GpuToCpuTicks(region.BeginTicks);
-					uint64 cpuEndTicks = queue.GpuToCpuTicks(region.EndTicks);
+		// Split between GPU and CPU tracks
+		pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(gStyle.BGTextColor), 6);
 
-					if (cpuEndTicks > beginAnchor)
+		// Draw each CPU thread track
+		for (uint32 threadIndex = 0; threadIndex < (uint32)m_ThreadData.size(); ++threadIndex)
+		{
+			// Add thread name for track
+			const ThreadData& thread = m_ThreadData[threadIndex];
+			pDraw->AddText(ImVec2(timelineRect.Min.x, cursor.y), ImColor(gStyle.BGTextColor), Sprintf("%s [%d]", thread.Name.c_str(), thread.ThreadID).c_str());
+			cursor.y += gStyle.BarHeight;
+
+			uint32 maxDepth = 0;
+
+			// Add a bar in the right place for each sample region
+			/*
+				|[=============]			|
+				|	[======]				|
+				|---------------------------|
+				|		[===========]		|
+				|			[======]		|
+			*/
+			ForEachHistory([&](uint32 frameIndex, const SampleHistory& regionData)
+				{
+					for (uint32 i = 0; i < regionData.CurrentIndex; ++i)
 					{
-						float startPos = tickScale * (cpuBeginTicks < beginAnchor ? 0 : cpuBeginTicks - beginAnchor);
-						float endPos = tickScale * (cpuEndTicks - beginAnchor);
-						float y = region.Depth * gStyle.BarHeight;
-						ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + gStyle.BarHeight));
+						const SampleRegion& region = regionData.Regions[i];
+
+						// Only process regions for the current thread
+						if (region.ThreadIndex != threadIndex)
+							continue;
+
+						if (region.Depth >= (uint32)gStyle.MaxDepth)
+							continue;
+
+						maxDepth = Math::Max(region.Depth, maxDepth);
+
+						ImColor color = ImColor(region.Color);
+						if (gHUDContext.SearchString[0] != 0 && !strstr(region.pName, gHUDContext.SearchString))
+							color.Value.w *= 0.3f;
+
+						check(region.EndTicks >= region.BeginTicks);
+						uint64 numTicks = region.EndTicks - region.BeginTicks;
+
+						float width = tickScale * numTicks;
+						float startPos = tickScale * (region.BeginTicks - beginAnchor);
+
+						ImVec2 barTopLeft = cursor + ImVec2(startPos, gStyle.BarHeight * region.Depth);
+						ImVec2 barBottomRight = barTopLeft + ImVec2(width, gStyle.BarHeight);
+						ImRect itemRect = ImRect(barTopLeft, barBottomRight);
 
 						uint32 itemID = ImGui::GetID(&region);
 						if (ImGui::ItemAdd(itemRect, itemID, 0))
@@ -213,108 +288,54 @@ void FooProfiler::DrawHUD()
 								if (ImGui::BeginTooltip())
 								{
 									ImGui::Text("Frame %d", frameIndex);
-									ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(cpuEndTicks - cpuBeginTicks)));
+									ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(region.EndTicks - region.BeginTicks)));
+									if (region.pFilePath)
+										ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
 									ImGui::EndTooltip();
 								}
+							}
+
+							if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
+							{
+								// The zoom required to make the bar fit the entire window
+								float zoom = timelineWidth / width;
+								gHUDContext.TimelineScale = zoom;
+
+								// Recompute the timeline size with new zoom
+								float newTimelineWidth = timelineRect.GetWidth() * gHUDContext.TimelineScale;
+								float newTickScale = newTimelineWidth / ticksInTimeline;
+								float newStartPos = newTickScale * (region.BeginTicks - beginAnchor);
+
+								gHUDContext.TimelineOffset.x = -newStartPos;
 							}
 
 							const float rounding = 0.0f;
 							const ImVec2 padding(gStyle.BarPadding, gStyle.BarPadding);
 							if (hovered)
 								pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), rounding);
-							pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, ImColor(0.4f, 0.3f, 0.7f), rounding);
+							pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, ImColor((ImVec4)color * gStyle.BarColorMultiplier), rounding);
 							ImVec2 textSize = ImGui::CalcTextSize(region.pName);
-							if (textSize.x < itemRect.GetWidth() * 0.9f)
+							if (textSize.x < width * 0.9f)
 							{
-								pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, ImColor(gStyle.FGTextColor), region.pName);
+								pDraw->AddText(itemRect.Min + (ImVec2(width, gStyle.BarHeight) - textSize) * 0.5f, ImColor(gStyle.FGTextColor), region.pName);
 							}
-							else if (itemRect.GetWidth() > 30.0f)
+							else if (width > 30.0f)
 							{
-								pDraw->PushClipRect(itemRect.Min + padding, itemRect.Max - padding, true);
+								//pDraw->PushClipRect(itemRect.Min + padding, itemRect.Max - padding, true);
 								pDraw->AddText(itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f), ImColor(gStyle.FGTextColor), region.pName);
-								pDraw->PopClipRect();
+								//pDraw->PopClipRect();
 							}
 						}
 					}
-				}
-			});
+				});
 
-		cursor.y += trackHeight;
+			// Add vertical line to end track
+			cursor.y += (maxDepth + 1) * gStyle.BarHeight;
+			pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(gStyle.BGTextColor));
+		}
 
-		ForEachHistory([&](uint32 frameIndex, const SampleHistory& regionData)
-			{
-				float frameTimeEnd = (regionData.TicksEnd - beginAnchor) * tickScale;
-				pDraw->AddLine(cursor + ImVec2(frameTimeEnd, 0), cursor + ImVec2(frameTimeEnd, timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.1f), 4.0f);
-
-				for (uint32 i = 0; i < regionData.CurrentIndex; ++i)
-				{
-					const SampleRegion& region = regionData.Regions[i];
-					if (region.Depth >= (uint32)gStyle.MaxDepth)
-						continue;
-
-					ImColor color = ImColor(region.Color);
-					if (gHUDContext.SearchString[0] != 0 && !strstr(region.pName, gHUDContext.SearchString))
-						color.Value.w *= 0.3f;
-
-					check(region.EndTicks >= region.BeginTicks);
-					uint64 numTicks = region.EndTicks - region.BeginTicks;
-
-					float width = tickScale * numTicks;
-					float startPos = tickScale * (region.BeginTicks - beginAnchor);
-
-					ImVec2 barTopLeft = cursor + ImVec2(startPos, region.ThreadIndex * trackHeight + gStyle.BarHeight * region.Depth);
-					ImVec2 barBottomRight = barTopLeft + ImVec2(width, gStyle.BarHeight);
-					ImRect itemRect = ImRect(barTopLeft, barBottomRight);
-
-					uint32 itemID = ImGui::GetID(&region);
-					if (ImGui::ItemAdd(itemRect, itemID, 0))
-					{
-						bool hovered = ImGui::IsItemHovered();
-						if (hovered)
-						{
-							if (ImGui::BeginTooltip())
-							{
-								ImGui::Text("Frame %d", frameIndex);
-								ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(region.EndTicks - region.BeginTicks)));
-								if (region.pFilePath)
-									ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
-								ImGui::EndTooltip();
-							}
-						}
-
-						if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
-						{
-							// The zoom required to make the bar fit the entire window
-							float zoom = timelineWidth / width;
-							gHUDContext.TimelineScale = zoom;
-
-							// Recompute the timeline size with new zoom
-							float newTimelineWidth = availableWidth * gHUDContext.TimelineScale;
-							float newTickScale = newTimelineWidth / ticksInTimeline;
-							float newStartPos = newTickScale * (region.BeginTicks - beginAnchor);
-
-							gHUDContext.TimelineOffset.x = -newStartPos;
-						}
-
-						const float rounding = 0.0f;
-						const ImVec2 padding(gStyle.BarPadding, gStyle.BarPadding);
-						if (hovered)
-							pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), rounding);
-						pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, ImColor((ImVec4)color * gStyle.BarColorMultiplier), rounding);
-						ImVec2 textSize = ImGui::CalcTextSize(region.pName);
-						if (textSize.x < width * 0.9f)
-						{
-							pDraw->AddText(itemRect.Min + (ImVec2(width, gStyle.BarHeight) - textSize) * 0.5f, ImColor(gStyle.FGTextColor), region.pName);
-						}
-						else if (width > 30.0f)
-						{
-							pDraw->PushClipRect(itemRect.Min + padding, itemRect.Max - padding, true);
-							pDraw->AddText(itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f), ImColor(gStyle.FGTextColor), region.pName);
-							pDraw->PopClipRect();
-						}
-					}
-				}
-			});
+		// The final height of the timeline
+		float timelineHeight = cursor.y - cursorStart.y;
 
 		if (ImGui::GetHoveredID() == timelineID)
 		{
@@ -335,7 +356,7 @@ void FooProfiler::DrawHUD()
 				}
 				else if (fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) > 1)
 				{
-					pDraw->AddRectFilled(ImVec2(gHUDContext.RangeSelectionStart, localCursor.y), ImVec2(ImGui::GetMousePos().x, localCursor.y + timelineHeight), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+					pDraw->AddRectFilled(ImVec2(gHUDContext.RangeSelectionStart, timelineRect.Min.y), ImVec2(ImGui::GetMousePos().x, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
 
 					const ImColor measureColor(1.0f, 1.0f, 1.0f);
 					ImVec2 lineStart = ImVec2(gHUDContext.RangeSelectionStart, ImGui::GetMousePos().y);
@@ -373,7 +394,7 @@ void FooProfiler::DrawHUD()
 
 				float scaleFactor = newScale / gHUDContext.TimelineScale;
 				gHUDContext.TimelineScale *= scaleFactor;
-				ImVec2 mousePos = ImGui::GetMousePos() - localCursor;
+				ImVec2 mousePos = ImGui::GetMousePos() - timelineRect.Min;
 				gHUDContext.TimelineOffset.x = mousePos.x - (mousePos.x - gHUDContext.TimelineOffset.x) * scaleFactor;
 			}
 		}
@@ -386,14 +407,20 @@ void FooProfiler::DrawHUD()
 			gHUDContext.TimelineOffset += ImGui::GetIO().MouseDelta;
 
 		// Compute the new timeline size to correctly clamp the offset
-		timelineWidth = availableWidth * gHUDContext.TimelineScale;
-		timelineSize = ImVec2(timelineWidth, timelineHeight);
-		gHUDContext.TimelineOffset = ImClamp(gHUDContext.TimelineOffset, ImGui::GetContentRegionAvail() - timelineSize, ImVec2(0.0f, 0.0f));
+		timelineWidth = timelineRect.GetWidth() * gHUDContext.TimelineScale;
+		gHUDContext.TimelineOffset = ImClamp(gHUDContext.TimelineOffset, timelineRect.GetSize() - ImVec2(timelineWidth, timelineHeight), ImVec2(0.0f, 0.0f));
 
 		ImGui::PopClipRect();
 	}
 
 	ImS64 scroll = -(ImS64)gHUDContext.TimelineOffset.x;
-	ImGui::ScrollbarEx(ImRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionMax()), ImGui::GetID("Scroll"), ImGuiAxis_X, &scroll, (ImS64)timelineRect.GetSize().x, (ImS64)timelineWidth, ImDrawFlags_None);
+	ImGui::ScrollbarEx(ImRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + timelineRect.Max), ImGui::GetID("Scroll"), ImGuiAxis_X, &scroll, (ImS64)timelineRect.GetSize().x, (ImS64)timelineWidth, ImDrawFlags_None);
 	gHUDContext.TimelineOffset.x = -(float)scroll;
+
+	// Draw a debug rect around the timeline item and the whole (unclipped) timeline rect
+	if (gStyle.DebugMode)
+	{
+		//pDraw->AddRect(cursor, cursor + ImVec2(timelineWidth, timelineHeight), ImColor(1.0f, 0.0f, 0.0f));
+		pDraw->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), ImColor(0.0f, 1.0f, 0.0f));
+	}
 }

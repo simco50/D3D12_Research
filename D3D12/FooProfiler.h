@@ -474,7 +474,7 @@ private:
 	std::vector<QueueInfo> m_Queues;
 	GPUTimeQueryHeap m_MainQueryHeap;
 	GPUTimeQueryHeap m_CopyQueryHeap;
-	std::array<SampleHistory, 10> m_SampleData;
+	std::array<SampleHistory, 5> m_SampleData;
 	uint32 m_FrameIndex = 0;
 	uint32 m_FrameToResolve = 0;
 };
@@ -522,7 +522,7 @@ extern class FooProfiler gProfiler;
 class FooProfiler
 {
 public:
-	static constexpr int REGION_HISTORY = 10;
+	static constexpr int REGION_HISTORY = 5;
 	static constexpr int MAX_DEPTH = 32;
 	static constexpr int STRING_BUFFER_SIZE = 1 << 16;
 	static constexpr int MAX_NUM_REGIONS = 1024;

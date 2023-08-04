@@ -122,6 +122,8 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	gGPUProfiler.Initialize(m_pDevice->GetDevice(),
 		{
 			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
+			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
+			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
 		});
 
 	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, window);
