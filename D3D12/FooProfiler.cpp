@@ -305,8 +305,13 @@ void FooProfiler::DrawHUD()
 		};
 
 		// Add track name and expander
+		/*
+			(>) Main Thread [1234]
+		*/
 		auto TrackHeader = [&](const char* pName, uint32 id)
 		{
+			pDraw->AddRectFilled(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y + gStyle.BarHeight), ImColor(1.0f, 1.0f, 1.0f, 0.05f));
+
 			ImVec2 trackTextCursor = ImVec2(timelineRect.Min.x, cursor.y);
 			ImVec2 circleCenter = trackTextCursor + ImVec2(gStyle.BarHeight, gStyle.BarHeight) * 0.5f;
 			float triSize = ImGui::GetTextLineHeight() * 0.2f;
@@ -362,9 +367,11 @@ void FooProfiler::DrawHUD()
 			*/
 			gGPUProfiler.ForEachRegion([&](uint32 frameIndex, GPUProfiler::SampleRegion& region)
 				{
-					if ((int)region.Depth >= maxDepth)
-						return;
+					// Only process regions for the current queue
 					if (queueIndex != region.QueueIndex)
+						return;
+					// Skip regions above the max depth
+					if ((int)region.Depth >= maxDepth)
 						return;
 
 					trackDepth = Math::Max(trackDepth, (uint32)region.Depth + 1);
@@ -408,6 +415,7 @@ void FooProfiler::DrawHUD()
 					// Only process regions for the current thread
 					if (region.ThreadIndex != threadIndex)
 						return;
+					// Skip regions above the max depth
 					if (region.Depth >= maxDepth)
 						return;
 
@@ -476,8 +484,8 @@ void FooProfiler::DrawHUD()
 			float zoomDelta = 0.0f;
 			if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl))
 				zoomDelta += ImGui::GetIO().MouseWheel / 5.0f;
-			zoomDelta -= 0.3f * ImGui::IsKeyPressed(ImGuiKey_O);
-			zoomDelta += 0.3f * ImGui::IsKeyPressed(ImGuiKey_P);
+			// zoomDelta -= 0.3f * ImGui::IsKeyPressed(ImGuiKey_O);
+			// zoomDelta += 0.3f * ImGui::IsKeyPressed(ImGuiKey_P);
 
 			if (zoomDelta != 0)
 			{

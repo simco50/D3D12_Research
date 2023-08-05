@@ -38,7 +38,7 @@
 #include "IconsFontAwesome4.h"
 #include "FooProfiler.h"
 
-#define ENABLE_STUFF 0
+#define ENABLE_STUFF 1
 
 namespace Tweakables
 {
@@ -1488,15 +1488,6 @@ void DemoApp::UpdateImGui()
 
 	console.Update();
 
-	{
-
-		PROFILE_SCOPE("Profiler");
-
-		if (ImGui::Begin("Timings"))
-			gProfiler.DrawHUD();
-		ImGui::End();
-	}
-
 	if (showImguiDemo)
 	{
 		ImGui::ShowDemoWindow();
@@ -1674,6 +1665,14 @@ void DemoApp::UpdateImGui()
 		}
 	}
 	ImGui::End();
+
+	{
+		PROFILE_SCOPE("Profiler");
+
+		if (ImGui::Begin("Timings"))
+			gProfiler.DrawHUD();
+		ImGui::End();
+	}
 }
 
 void DemoApp::LoadMesh(const std::string& filePath, World& world)
