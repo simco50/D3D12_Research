@@ -214,7 +214,13 @@ GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
 	RefCountPtr<IDXGIDebug1> pDXGIDebug;
 	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pDXGIDebug.GetAddressOf()))))
 	{
-		pDXGIDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
+		RefCountPtr<IDXGIInfoQueue> pInfoQueue;
+		VERIFY_HR(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pInfoQueue.GetAddressOf())));
+		pInfoQueue->ClearStoredMessages(DXGI_DEBUG_ALL);
+
+		VERIFY_HR(pDXGIDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_IGNORE_INTERNAL | DXGI_DEBUG_RLO_DETAIL)));
+
+		check(pInfoQueue->GetNumStoredMessages(DXGI_DEBUG_ALL) == 0);
 	}
 }
 
@@ -434,6 +440,13 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 GraphicsDevice::~GraphicsDevice()
 {
 	IdleGPU();
+
+	// Disable break on validation before destroying to not make live-leak detection break each time.
+	RefCountPtr<ID3D12InfoQueue> pInfoQueue;
+	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
+	{
+		pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, FALSE);
+	}
 }
 
 CommandQueue* GraphicsDevice::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
