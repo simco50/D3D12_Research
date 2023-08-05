@@ -223,7 +223,6 @@ void DemoApp::SetupScene()
 void DemoApp::Update()
 {
 	FOO_FRAME();
-	FOO_SCOPE("Update");
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 	Profiler::Get()->Resolve(pContext);

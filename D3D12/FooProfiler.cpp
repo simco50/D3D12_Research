@@ -201,15 +201,14 @@ void FooProfiler::DrawHUD()
 		// How many pixels is one tick
 		float tickScale = timelineWidth / ticksInTimeline;
 
-		// Add vertical lines for each ms interval
+		// Add vertical bars for each ms interval
 		/*
 			0	1	2	3
 			|	|	|	|
 			|	|	|	|
 			|	|	|	|
 		*/
-
-		pDraw->AddRectFilled(timelineRect.Min, ImVec2(timelineRect.Max.x, timelineRect.Min.y + gStyle.BarHeight), ImColor(1.0f, 1.0f, 1.0f, 0.1f));
+		pDraw->AddRectFilled(timelineRect.Min, ImVec2(timelineRect.Max.x, timelineRect.Min.y + gStyle.BarHeight), ImColor(0.0f, 0.0f, 0.0f, 0.1f));
 		pDraw->AddRect(timelineRect.Min - ImVec2(10, 0), ImVec2(timelineRect.Max.x + 10, timelineRect.Min.y + gStyle.BarHeight), ImColor(1.0f, 1.0f, 1.0f, 0.4f));
 		for (int i = 0; i < gStyle.MaxTime; i += 2)
 		{
@@ -221,13 +220,14 @@ void FooProfiler::DrawHUD()
 			pDraw->AddLine(tickPos + ImVec2(0, gStyle.BarHeight * 0.5f), tickPos + ImVec2(0, gStyle.BarHeight), ImColor(gStyle.BGTextColor));
 			pDraw->AddLine(tickPos + ImVec2(msWidth, gStyle.BarHeight * 0.75f), tickPos + ImVec2(msWidth, gStyle.BarHeight), ImColor(gStyle.BGTextColor));
 		}
-
 		cursor.y += gStyle.BarHeight;
-
 
 		ImGui::PushClipRect(timelineRect.Min + ImVec2(0, gStyle.BarHeight), timelineRect.Max, true);
 
 		// Common function to draw a single bar
+		/*
+			[=== SomeFunction (1.2 ms) ===]
+		*/
 		auto DrawBar = [&](uint32 id, uint64 beginTicks, uint64 endTicks, uint32 depth, const char* pName, ImColor barColor, auto tooltipFn)
 		{
 			if (endTicks > beginAnchor)
@@ -320,7 +320,7 @@ void FooProfiler::DrawHUD()
 		*/
 		auto TrackHeader = [&](const char* pName, uint32 id)
 		{
-			pDraw->AddRectFilled(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y + gStyle.BarHeight), ImColor(1.0f, 1.0f, 1.0f, 0.05f));
+			pDraw->AddRectFilled(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y + gStyle.BarHeight), ImColor(0.0f, 0.0f, 0.0f, 0.3f));
 
 			ImVec2 trackTextCursor = ImVec2(timelineRect.Min.x, cursor.y);
 			ImVec2 circleCenter = trackTextCursor + ImVec2(gStyle.BarHeight, gStyle.BarHeight) * 0.5f;
