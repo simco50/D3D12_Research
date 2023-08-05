@@ -50,9 +50,9 @@ private:
 };
 
 
-////////////////////
-/// GPU Profiler ///
-////////////////////
+//-----------------------------------------------------------------------------
+// [SECTION] GPU Profiler
+//-----------------------------------------------------------------------------
 
 
 class GPUTimeQueryHeap
@@ -71,7 +71,7 @@ public:
 		uint32 numQueryEntries = numQueries * 2;
 
 		// Query heap that fits desired number of queries
-		D3D12_QUERY_HEAP_DESC queryHeapDesc;
+		D3D12_QUERY_HEAP_DESC queryHeapDesc{};
 		queryHeapDesc.Count = numQueryEntries;
 		queryHeapDesc.Type = commandListType == D3D12_COMMAND_LIST_TYPE_COPY ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
 		queryHeapDesc.NodeMask = 0;
@@ -220,6 +220,9 @@ private:
 
 extern class GPUProfiler gGPUProfiler;
 
+// Usage:
+//		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
+//		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList)
 #define FOO_GPU_SCOPE(...) FooGPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__VA_ARGS__)
 
 class GPUProfiler
@@ -247,7 +250,7 @@ public:
 		}
 	}
 
-	void BeginRegion(const char* pName, ID3D12GraphicsCommandList* pCmd, uint32 queueIndex)
+	void PushRegion(const char* pName, ID3D12GraphicsCommandList* pCmd, uint32 queueIndex)
 	{
 		if (m_Paused)
 			return;
@@ -271,7 +274,7 @@ public:
 		check(tls.RegionDepth < ARRAYSIZE(tls.RegionStack))
 	}
 
-	void EndRegion()
+	void PopRegion()
 	{
 		if (m_Paused)
 			return;
@@ -351,6 +354,7 @@ public:
 				// Set the region's depth
 				region.Depth = stack.Depth;
 				++stack.Depth;
+				check(stack.Depth < ARRAYSIZE(stack.Stack));
 			}
 
 			++m_FrameToResolve;
@@ -440,13 +444,15 @@ public:
 	const Span<QueueInfo> GetQueueInfo() const { return m_Queues; }
 
 	template<typename Fn>
-	void ForEachHistory(Fn&& fn)
+	void ForEachRegion(Fn&& fn)
 	{
 		uint32 leadingFrames = m_FrameIndex - m_FrameToResolve - 1;
 		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, (uint32)m_SampleData.size()) - leadingFrames;
 		while (currentIndex < m_FrameToResolve)
 		{
-			fn(currentIndex, m_SampleData[currentIndex % m_SampleData.size()]);
+			SampleHistory& data = m_SampleData[currentIndex % m_SampleData.size()];
+			for(uint32 i = 0; i < data.NumRegions; ++i)
+				fn(currentIndex, data.Regions[i]);
 			++currentIndex;
 		}
 	}
@@ -494,42 +500,42 @@ struct FooGPUProfileScope
 {
 	FooGPUProfileScope(const char* pName, ID3D12GraphicsCommandList* pCmd, uint32 queueIndex = 0)
 	{
-		gGPUProfiler.BeginRegion(pName, pCmd, queueIndex);
+		gGPUProfiler.PushRegion(pName, pCmd, queueIndex);
 	}
 
 	~FooGPUProfileScope()
 	{
-		gGPUProfiler.EndRegion();
+		gGPUProfiler.PopRegion();
 	}
 };
 
 
 
-////////////////////
-/// CPU Profiler ///
-////////////////////
+//-----------------------------------------------------------------------------
+// [SECTION] CPU Profiler
+//-----------------------------------------------------------------------------
 
-/* Options:
-	FOO_SCOPE(const char* pName, const Color& color)
-	FOO_SCOPE(const Color& color)
-	FOO_SCOPE(const char* pName)
-	FOO_SCOPE()
-*/
+// Usage:
+//		FOO_SCOPE(const char* pNamer)
+//		FOO_SCOPE(const char* pName)
+//		FOO_SCOPE()
 #define FOO_SCOPE(...) FooProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 
-/* Options:
-	FOO_REGISTER_THREAD(const char* pName)
-	FOO_REGISTER_THREAD()
-*/
+// Usage:
+//		FOO_REGISTER_THREAD(const char* pName)
+//		FOO_REGISTER_THREAD()
 #define FOO_REGISTER_THREAD(...) gProfiler.RegisterThread(__VA_ARGS__)
 
-/* Options:
-	FOO_FRAME()
-*/
+/// Usage:
+//		FOO_FRAME()
 #define FOO_FRAME() gProfiler.Tick();
 
+// Global CPU Profiler
 extern class FooProfiler gProfiler;
 
+// CPU Profiler
+// Also responsible for updating GPU profiler
+// Also responsible for drawing HUD
 class FooProfiler
 {
 public:
@@ -541,7 +547,7 @@ public:
 	FooProfiler()
 		: m_HistorySize(REGION_HISTORY)
 	{
-		m_pSampleHistory = new SampleHistory[REGION_HISTORY];
+		m_pSampleHistory = new SampleHistory[m_HistorySize];
 	}
 
 	~FooProfiler()
@@ -549,9 +555,10 @@ public:
 		delete[] m_pSampleHistory;
 	}
 
-	void BeginRegion(const char* pName, uint32 color, const char* pFilePath = nullptr, uint32 lineNumber = 0)
+	// Start and push a region on the current thread
+	void PushRegion(const char* pName, const char* pFilePath = nullptr, uint32 lineNumber = 0)
 	{
-		SampleHistory& data = GetCurrentData();
+		SampleHistory& data = GetData();
 		uint32 newIndex = data.CurrentIndex.fetch_add(1);
 		check(newIndex < data.Regions.size());
 
@@ -562,7 +569,6 @@ public:
 		newRegion.Depth = tls.Depth;
 		newRegion.ThreadIndex = tls.ThreadIndex;
 		newRegion.pName = data.Allocator.String(pName);
-		newRegion.Color = color;
 		newRegion.pFilePath = pFilePath;
 		newRegion.LineNumber = lineNumber;
 		QueryPerformanceCounter((LARGE_INTEGER*)(&newRegion.BeginTicks));
@@ -571,23 +577,10 @@ public:
 		tls.Depth++;
 	}
 
-	void BeginRegion(const char* pName, const char* pFilePath = nullptr, uint32 lineNumber = 0)
+	// End and pop the last pushed region on the current thread
+	void PopRegion()
 	{
-		// Add a region and inherit the color
-		TLS& tls = GetTLS();
-		check(tls.Depth < ARRAYSIZE(tls.RegionStack));
-		uint32 color = 0xFFFFFFFF;
-		if(tls.Depth > 0)
-		{
-			const SampleHistory& data = GetCurrentData();
-			color = data.Regions[tls.RegionStack[tls.Depth - 1]].Color;
-		}
-		BeginRegion(pName, color, pFilePath, lineNumber);
-	}
-
-	void EndRegion()
-	{
-		SampleHistory& data = GetCurrentData();
+		SampleHistory& data = GetData();
 		TLS& tls = GetTLS();
 
 		check(tls.Depth > 0);
@@ -596,25 +589,28 @@ public:
 		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTicks));
 	}
 
+	// Resolve the last frame and advance to the next frame.
+	// Call at the START of the frame.
 	void Tick()
 	{
+		if(m_FrameIndex)
+			PopRegion();
+
 		gGPUProfiler.Tick();
-
-		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksEnd));
-
 		for (auto& threadData : m_ThreadData)
 			check(threadData.pTLS->Depth == 0);
 
 		if (!m_Paused)
 			++m_FrameIndex;
 
-		SampleHistory& data = GetCurrentData();
+		SampleHistory& data = GetData();
 		data.CurrentIndex = 0;
 		data.Allocator.Reset();
 
-		QueryPerformanceCounter((LARGE_INTEGER*)(&GetCurrentData().TicksBegin));
+		PushRegion(Sprintf("Frame %d", m_FrameIndex).c_str());
 	}
 
+	// Initialize a thread with an optional name
 	void RegisterThread(const char* pName = nullptr)
 	{
 		TLS& tls = GetTLSUnsafe();
@@ -623,15 +619,18 @@ public:
 		std::scoped_lock lock(m_ThreadDataLock);
 		tls.ThreadIndex = (uint32)m_ThreadData.size();
 		ThreadData& data = m_ThreadData.emplace_back();
+
+		// If the name is not provided, retrieve it using GetThreadDescription()
 		if (pName)
 		{
-			data.Name = pName;
+			strcpy_s(data.Name, ARRAYSIZE(data.Name), pName);
 		}
 		else
 		{
 			PWSTR pDescription = nullptr;
-			GetThreadDescription(GetCurrentThread(), &pDescription);
-			data.Name = UNICODE_TO_MULTIBYTE(pDescription);
+			::GetThreadDescription(GetCurrentThread(), &pDescription);
+			size_t converted = 0;
+			wcstombs_s(&converted, data.Name, ARRAYSIZE(data.Name), pDescription, ARRAYSIZE(data.Name));
 		}
 		data.ThreadID = GetCurrentThreadId();
 		data.pTLS = &tls;
@@ -668,7 +667,6 @@ private:
 		uint32 ThreadIndex = 0xFFFFFFFF;					//< Thread Index of the thread that recorderd this region
 		uint64 BeginTicks = 0;								//< The ticks at the start of this region
 		uint64 EndTicks = 0;								//< The ticks at the end of this region
-		uint32 Color = 0xFFFF00FF;							//< Color of region
 		uint32 Depth = 0;									//< Depth of the region
 		uint32 LineNumber = 0;								//< Line number of file in which this region is recorded
 		const char* pFilePath = nullptr;					//< File path of file in which this region is recorded
@@ -680,25 +678,26 @@ private:
 			: Allocator(STRING_BUFFER_SIZE)
 		{}
 
-		uint64 TicksBegin = 0;								//< The start ticks of the frame on the main thread
-		uint64 TicksEnd = 0;								//< The end ticks of the frame on the main thread
 		std::array<SampleRegion, MAX_NUM_REGIONS> Regions;	//< All sample regions of the frame
 		std::atomic<uint32> CurrentIndex = 0;				//< The index to the next free sample region
 		LinearAllocator	Allocator;
 	};
 
-	SampleHistory& GetCurrentData()
+	SampleHistory& GetData()
 	{
 		return m_pSampleHistory[m_FrameIndex % m_HistorySize];
 	}
 
 	template<typename Fn>
-	void ForEachHistory(Fn&& fn) const
+	void ForEachRegion(Fn&& fn) const
 	{
 		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, m_HistorySize) + 1;
 		while (currentIndex < m_FrameIndex)
 		{
-			fn(currentIndex, m_pSampleHistory[currentIndex % m_HistorySize]);
+			const SampleHistory& data = m_pSampleHistory[currentIndex % m_HistorySize];
+			uint32 numRegions = data.CurrentIndex;
+			for(uint32 i = 0; i < numRegions; ++i)
+				fn(currentIndex, data.Regions[i]);
 			++currentIndex;
 		}
 	}
@@ -711,7 +710,7 @@ private:
 
 	struct ThreadData
 	{
-		std::string Name = "";
+		char Name[128];
 		uint32 ThreadID = 0;
 		const TLS* pTLS = nullptr;
 	};
@@ -727,33 +726,21 @@ private:
 
 struct FooProfileScope
 {
-	// Name + Color
-	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName, const Color& color)
-	{
-		gProfiler.BeginRegion(pName ? pName : pFunctionName, Math::Pack_RGBA8_UNORM(color), pFilePath, lineNumber);
-	}
-
-	// Just Color
-	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const Color& color)
-	{
-		gProfiler.BeginRegion(pFunctionName, Math::Pack_RGBA8_UNORM(color), pFilePath, lineNumber);
-	}
-
 	// Just Name
 	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName)
 	{
-		gProfiler.BeginRegion(pName, pFilePath, lineNumber);
+		gProfiler.PushRegion(pName, pFilePath, lineNumber);
 	}
 
-	// No Name or Color
+	// No Name
 	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber)
 	{
-		gProfiler.BeginRegion(pFunctionName, pFilePath, lineNumber);
+		gProfiler.PushRegion(pFunctionName, pFilePath, lineNumber);
 	}
 
 	~FooProfileScope()
 	{
-		gProfiler.EndRegion();
+		gProfiler.PopRegion();
 	}
 };
 

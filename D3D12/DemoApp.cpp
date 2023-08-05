@@ -38,7 +38,7 @@
 #include "IconsFontAwesome4.h"
 #include "FooProfiler.h"
 
-#define ENABLE_STUFF 1
+#define ENABLE_STUFF 0
 
 namespace Tweakables
 {
@@ -1363,18 +1363,6 @@ void DemoApp::UpdateImGui()
 	PROFILE_SCOPE("ImGui Update");
 	ImGuiRenderer::NewFrame();
 
-	{
-
-		PROFILE_SCOPE("Profiler");
-
-		if (ImGui::Begin("Timings"))
-			gProfiler.DrawHUD();
-		ImGui::End();
-	}
-
-
-
-
 	m_FrameHistory.AddTime(Time::DeltaTime());
 
 	static ImGuiConsole console;
@@ -1498,6 +1486,15 @@ void DemoApp::UpdateImGui()
 		m_pVisualizeTexture->RenderUI(viewportOrigin, viewportExtents);
 
 	console.Update();
+
+	{
+
+		PROFILE_SCOPE("Profiler");
+
+		if (ImGui::Begin("Timings"))
+			gProfiler.DrawHUD();
+		ImGui::End();
+	}
 
 	if (showImguiDemo)
 	{
