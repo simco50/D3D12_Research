@@ -119,12 +119,13 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	options.UseStablePowerState =	CommandLine::GetBool("stablepowerstate");
 	m_pDevice = new GraphicsDevice(options);
 
-	gGPUProfiler.Initialize(m_pDevice->GetDevice(),
-		{
+	ID3D12CommandQueue* pQueues[] = {
 			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
 			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
 			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
-		});
+	};
+
+	gGPUProfiler.Initialize(m_pDevice->GetDevice(), pQueues, ARRAYSIZE(pQueues));
 
 	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, window);
 

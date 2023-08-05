@@ -367,7 +367,7 @@ void FooProfiler::DrawHUD()
 					if (queueIndex != region.QueueIndex)
 						return;
 
-					trackDepth = Math::Max(trackDepth, region.Depth + 1);
+					trackDepth = Math::Max(trackDepth, (uint32)region.Depth + 1);
 
 					uint64 cpuBeginTicks = queue.GpuToCpuTicks(region.BeginTicks);
 					uint64 cpuEndTicks = queue.GpuToCpuTicks(region.EndTicks);
@@ -411,7 +411,7 @@ void FooProfiler::DrawHUD()
 					if (region.Depth >= maxDepth)
 						return;
 
-					trackDepth = Math::Max(trackDepth, region.Depth + 1);
+					trackDepth = Math::Max(trackDepth, (uint32)region.Depth + 1);
 
 					DrawBar(ImGui::GetID(&region), region.BeginTicks, region.EndTicks, region.Depth, region.pName, ColorFromString(region.pName), [&]()
 						{
