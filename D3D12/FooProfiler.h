@@ -207,7 +207,7 @@ private:
 	struct FrameData
 	{
 		Span<uint64> ReadbackQueries;						//< View to resolved query data
-		ID3D12CommandAllocator* pAllocator;					//< CommandAllocator for this frame
+		ID3D12CommandAllocator* pAllocator = nullptr;		//< CommandAllocator for this frame
 		std::atomic<uint32> QueryIndex = 0;					//< Current number of queries
 		uint64 FenceValue = 0;								//< FenceValue indicating when Resolve is finished
 		uint32 QueryStartOffset = 0;						//< Offset in readback buffer to where queries start
@@ -238,7 +238,7 @@ extern class GPUProfiler gGPUProfiler;
 // Usage:
 //		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
 //		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList)
-#define FOO_GPU_SCOPE(...) FooGPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__VA_ARGS__)
+#define FOO_GPU_SCOPE(...) FooGPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 
 class GPUProfiler
 {
@@ -281,7 +281,7 @@ public:
 	}
 
 	// Start and push a region on the provided commandlist to be executed on the given queue index
-	void PushRegion(const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex)
+	void PushRegion(const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0, const char* pFilePath = nullptr, uint16 lineNr = 0)
 	{
 		if (m_Paused)
 			return;
@@ -295,6 +295,8 @@ public:
 		region.pName = data.Allocator.String(pName);
 		region.QueueIndex = queueIndex;
 		region.TimerIndex = GetHeap(isCopyQueue).QueryBegin(pCmd);
+		region.pFilePath = pFilePath;
+		region.LineNumber = lineNr;
 
 		TLS& tls = GetTLS();
 		check(tls.RegionDepth >= 0);
@@ -457,12 +459,14 @@ public:
 	// Structure representating a single sample region
 	struct SampleRegion
 	{
-		const char* pName = "";			//< Name of the region
-		uint64 BeginTicks = 0;			//< GPU ticks of start of the region
-		uint64 EndTicks = 0;			//< GPU ticks of end of the region
-		uint32 TimerIndex = 0xFFFFFFFF;	//< The index in the query heap for the timer
-		uint16 QueueIndex = 0xFFFF;		//< The index of the queue this region is executed on (QueueInfo)
-		uint16 Depth = 0;				//< Stack depth of the region
+		const char* pName = "";				//< Name of the region
+		uint64 BeginTicks = 0;				//< GPU ticks of start of the region
+		uint64 EndTicks = 0;				//< GPU ticks of end of the region
+		const char* pFilePath = nullptr;	//< File path of the sample region
+		uint32 TimerIndex = 0xFFFFFFFF;		//< The index in the query heap for the timer
+		uint16 QueueIndex = 0xFFFF;			//< The index of the queue this region is executed on (QueueInfo)
+		uint16 Depth = 0;					//< Stack depth of the region
+		uint16 LineNumber = 0;				//< Line number of the sample region
 	};
 
 	// Struct containing all sampling data of a single frame
@@ -512,7 +516,7 @@ private:
 			uint32 RegionIndex;
 			ID3D12GraphicsCommandList* pCommandList;
 		};
-		StackData RegionStack[MAX_DEPTH];
+		StackData RegionStack[MAX_DEPTH]{};
 		uint32 RegionDepth = 0;
 		bool IsInitialized = false;
 	};
@@ -546,9 +550,14 @@ private:
 // Helper RAII-style structure to push and pop a GPU sample region
 struct FooGPUProfileScope
 {
-	FooGPUProfileScope(const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0)
+	FooGPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0)
 	{
-		gGPUProfiler.PushRegion(pName, pCmd, queueIndex);
+		gGPUProfiler.PushRegion(pName, pCmd, queueIndex, pFilePath, lineNr);
+	}
+
+	FooGPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0)
+	{
+		gGPUProfiler.PushRegion(pFunction, pCmd, queueIndex, pFilePath, lineNr);
 	}
 
 	~FooGPUProfileScope()

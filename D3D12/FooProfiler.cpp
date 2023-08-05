@@ -153,13 +153,14 @@ void FooProfiler::DrawHUD()
 	const SampleHistory& data = GetHistory();
 	const SampleRegion& frameSample = data.Regions[0];
 	const uint64 beginAnchor = frameSample.BeginTicks;
-	const uint64 frameTicks = frameSample.EndTicks - frameSample.BeginTicks;
-	const float frameTime = (float)frameTicks / ticksPerMs;
 
-	ImGui::Text("Frame time: %.2f ms", frameTime);
+	if (!m_Paused)
+		ImGui::Text("Press Space to pause");
+	else
+		ImGui::Text("Paused");
 
-	ImGui::SameLine(ImGui::GetWindowWidth() - 250);
-	ImGui::Text("Filter");
+	ImGui::SameLine(ImGui::GetWindowWidth() - 260);
+	ImGui::Text("Search");
 	ImGui::SetNextItemWidth(150);
 	ImGui::SameLine();
 	ImGui::InputText("##Search", gHUDContext.SearchString, ARRAYSIZE(gHUDContext.SearchString));
@@ -245,6 +246,7 @@ void FooProfiler::DrawHUD()
 						color.Value.w *= 0.3f;
 						textColor.Value.w *= 0.5f;
 					}
+					ImColor colorBottom = color.Value * ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
 
 					bool hovered = ImGui::IsItemHovered();
 					if (hovered)
@@ -259,7 +261,7 @@ void FooProfiler::DrawHUD()
 					if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
 					{
 						// The zoom required to make the bar fit the entire window
-						float zoom = timelineWidth / ImGui::GetItemRectSize().x;
+						float zoom = timelineWidth / itemRect.GetWidth();
 						gHUDContext.TimelineScale = zoom;
 
 						// Recompute the timeline size with new zoom
@@ -274,31 +276,39 @@ void FooProfiler::DrawHUD()
 					const ImVec2 padding(gStyle.BarPadding, gStyle.BarPadding);
 					if (hovered)
 						pDraw->AddRect(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), rounding, ImDrawFlags_None, 3.0f);
-					pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, color, rounding);
-					ImVec2 textSize = ImGui::CalcTextSize(pName);
-					const char* pEtc = "...";
-					float etcWidth = 20.0f;
-					if (textSize.x < itemRect.GetWidth() * 0.9f)
+
+					pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
+
+					if (itemRect.GetWidth() > 10)
 					{
-						pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, textColor, pName);
-					}
-					else if (itemRect.GetWidth() > etcWidth + 10)
-					{
-						const char* pChar = pName;
-						float currentOffset = 10;
-						while (*pChar++)
+						float ms = TicksToMs((float)(endTicks - beginTicks));
+						std::string text = Sprintf("%s (%.2f ms)", pName, ms);
+
+						ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
+						const char* pEtc = "...";
+						float etcWidth = 20.0f;
+						if (textSize.x < itemRect.GetWidth() * 0.9f)
 						{
-							float width = ImGui::CalcTextSize(pChar, pChar + 1).x;
-							if (currentOffset + width + etcWidth > itemRect.GetWidth())
-								break;
-							currentOffset += width;
+							pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, textColor, text.c_str());
 						}
+						else if (itemRect.GetWidth() > etcWidth + 10)
+						{
+							const char* pChar = text.c_str();
+							float currentOffset = 10;
+							while (*pChar++)
+							{
+								float width = ImGui::CalcTextSize(pChar, pChar + 1).x;
+								if (currentOffset + width + etcWidth > itemRect.GetWidth())
+									break;
+								currentOffset += width;
+							}
 
-						float textWidth = ImGui::CalcTextSize(pName, pChar).x;
+							float textWidth = ImGui::CalcTextSize(text.c_str(), pChar).x;
 
-						ImVec2 textPos = itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f);
-						pDraw->AddText(textPos, textColor, pName, pChar);
-						pDraw->AddText(textPos + ImVec2(textWidth, 0), textColor, pEtc);
+							ImVec2 textPos = itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f);
+							pDraw->AddText(textPos, textColor, text.c_str(), pChar);
+							pDraw->AddText(textPos + ImVec2(textWidth, 0), textColor, pEtc);
+						}
 					}
 				}
 			}
@@ -383,6 +393,8 @@ void FooProfiler::DrawHUD()
 						{
 							ImGui::Text("Frame %d", frameIndex);
 							ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(cpuEndTicks - cpuBeginTicks)));
+							if (region.pFilePath)
+								ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
 						});
 				});
 
