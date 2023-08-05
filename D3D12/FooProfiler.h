@@ -106,21 +106,24 @@ public:
 
 	void Shutdown()
 	{
-		// Wait for the resolve queue to finish.
-		pResolveQueue->Signal(pFence, ~0ull);
-		pFence->SetEventOnCompletion(~0ull, FenceEvent);
-		WaitForSingleObject(FenceEvent, INFINITE);
+		if (IsInitialized())
+		{
+			// Wait for the resolve queue to finish.
+			pResolveQueue->Signal(pFence, ~0ull);
+			pFence->SetEventOnCompletion(~0ull, FenceEvent);
+			WaitForSingleObject(FenceEvent, INFINITE);
 
-		// Destroy resources
-		CloseHandle(FenceEvent);
-		pQueryHeap->Release();
-		pReadbackResource->Release();
-		pResolveCommandList->Release();
-		pFence->Release();
+			// Destroy resources
+			CloseHandle(FenceEvent);
+			pQueryHeap->Release();
+			pReadbackResource->Release();
+			pResolveCommandList->Release();
+			pFence->Release();
 
-		for (uint32 i = 0; i < NumFrames; ++i)
-			pFrameData[i].pAllocator->Release();
-		delete[] pFrameData;
+			for (uint32 i = 0; i < NumFrames; ++i)
+				pFrameData[i].pAllocator->Release();
+			delete[] pFrameData;
+		}
 	}
 
 	uint32 QueryBegin(ID3D12GraphicsCommandList* pCommandList)
@@ -370,6 +373,7 @@ public:
 	void Shutdown()
 	{
 		m_MainQueryHeap.Shutdown();
+		m_CopyQueryHeap.Shutdown();
 	}
 
 	class QueueInfo
