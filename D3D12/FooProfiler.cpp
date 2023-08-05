@@ -233,8 +233,12 @@ void FooProfiler::DrawHUD()
 				if (ImGui::ItemAdd(itemRect, id, 0))
 				{
 					ImColor color = barColor * gStyle.BarColorMultiplier;
+					ImColor textColor = gStyle.FGTextColor;
 					if (gHUDContext.SearchString[0] != 0 && !strstr(pName, gHUDContext.SearchString))
+					{
 						color.Value.w *= 0.3f;
+						textColor.Value.w *= 0.5f;
+					}
 
 					bool hovered = ImGui::IsItemHovered();
 					if (hovered)
@@ -270,7 +274,7 @@ void FooProfiler::DrawHUD()
 					ImVec2 etcSize = ImGui::CalcTextSize(pEtc);
 					if (textSize.x < itemRect.GetWidth() * 0.9f)
 					{
-						pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, ImColor(gStyle.FGTextColor), pName);
+						pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, textColor, pName);
 					}
 					else if (itemRect.GetWidth() > etcSize.x + 10)
 					{
@@ -287,8 +291,8 @@ void FooProfiler::DrawHUD()
 						float textWidth = ImGui::CalcTextSize(pName, pChar).x;
 
 						ImVec2 textPos = itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f);
-						pDraw->AddText(textPos, ImColor(gStyle.FGTextColor), pName, pChar);
-						pDraw->AddText(textPos + ImVec2(textWidth, 0), ImColor(gStyle.FGTextColor), pEtc);
+						pDraw->AddText(textPos, textColor, pName, pChar);
+						pDraw->AddText(textPos + ImVec2(textWidth, 0), textColor, pEtc);
 					}
 				}
 			}

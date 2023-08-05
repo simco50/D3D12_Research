@@ -317,20 +317,27 @@ public:
 			data.NumRegions = data.CurrentIndex;
 
 			// Sort the regions and resolve the stack depth
-			uint32 Depth = 0;
-			std::array<uint32, 64> Stack;
 			std::sort(data.Regions.begin(), data.Regions.begin() + data.NumRegions, [](const SampleRegion& a, const SampleRegion& b) { return a.BeginTicks < b.BeginTicks; });
+
+			struct QueueStack
+			{
+				uint32 Depth = 0;
+				uint32 Stack[64];
+			};
+			std::vector<QueueStack> queueStacks(m_Queues.size());
+
 			for (uint32 i = 0; i < data.NumRegions; ++i)
 			{
 				SampleRegion& region = data.Regions[i];
+				QueueStack& stack = queueStacks[region.QueueIndex];
 
 				// While there is a parent and the current region starts after the parent ends, pop it off the stack
-				while (Depth > 0)
+				while (stack.Depth > 0)
 				{
-					const SampleRegion* pParent = &data.Regions[Stack[Depth - 1]];
+					const SampleRegion* pParent = &data.Regions[stack.Stack[stack.Depth - 1]];
 					if (region.BeginTicks >= pParent->EndTicks)
 					{
-						--Depth;
+						--stack.Depth;
 					}
 					else
 					{
@@ -339,11 +346,11 @@ public:
 					}
 				}
 
-				Stack[Depth] = i;
+				stack.Stack[stack.Depth] = i;
 
 				// Set the region's depth
-				region.Depth = Depth;
-				++Depth;
+				region.Depth = stack.Depth;
+				++stack.Depth;
 			}
 
 			++m_FrameToResolve;
@@ -485,9 +492,9 @@ private:
 
 struct FooGPUProfileScope
 {
-	FooGPUProfileScope(const char* pName, ID3D12GraphicsCommandList* pCmd)
+	FooGPUProfileScope(const char* pName, ID3D12GraphicsCommandList* pCmd, uint32 queueIndex = 0)
 	{
-		gGPUProfiler.BeginRegion(pName, pCmd, 0);
+		gGPUProfiler.BeginRegion(pName, pCmd, queueIndex);
 	}
 
 	~FooGPUProfileScope()
