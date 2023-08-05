@@ -23,13 +23,13 @@ static HUDContext gHUDContext;
 struct StyleOptions
 {
 	int MaxDepth = 10;
-	int MaxTime = 120;
+	int MaxTime = 80;
 
 	float BarHeight = 25;
 	float BarPadding = 2;
 	ImVec4 BarColorMultiplier = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	ImVec4 BGTextColor = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
-	ImVec4 FGTextColor = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+	ImVec4 FGTextColor = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
 	ImVec4 BarHighlightColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
 	bool DebugMode = false;
@@ -37,7 +37,7 @@ struct StyleOptions
 
 static StyleOptions gStyle;
 
-void EditStyle()
+static void EditStyle()
 {
 	ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.7f);
 	ImGui::SliderInt("Depth", &gStyle.MaxDepth, 1, 12);
@@ -52,10 +52,79 @@ void EditStyle()
 	ImGui::PopItemWidth();
 }
 
+static ImColor ColorFromString(const char* pName)
+{
+	/*
+	  Converts a given set of HSV values `h', `s', `v' into RGB
+	  coordinates. The output RGB values are in the range [0, 1], and
+	  the input HSV values are in the ranges h = [0, 360], and s, v =
+	  [0, 1], respectively.|
+	*/
+	auto HSVtoRGB = [](float h, float s, float v)
+	{
+		ImVec4 rgb;
+		float fC = v * s;
+		float fHPrime = fmodf(h / 60.0f, 6);
+		float fX = fC * (1 - fabs(fmodf(fHPrime, 2) - 1));
+		float fM = v - fC;
+
+		if (0 <= fHPrime && fHPrime < 1)
+		{
+			rgb.x = fC;
+			rgb.y = fX;
+			rgb.z = 0;
+		}
+		else if (1 <= fHPrime && fHPrime < 2)
+		{
+			rgb.x = fX;
+			rgb.y = fC;
+			rgb.z = 0;
+		}
+		else if (2 <= fHPrime && fHPrime < 3)
+		{
+			rgb.x = 0;
+			rgb.y = fC;
+			rgb.z = fX;
+		}
+		else if (3 <= fHPrime && fHPrime < 4)
+		{
+			rgb.x = 0;
+			rgb.y = fX;
+			rgb.z = fC;
+		}
+		else if (4 <= fHPrime && fHPrime < 5)
+		{
+			rgb.x = fX;
+			rgb.y = 0;
+			rgb.z = fC;
+		}
+		else if (5 <= fHPrime && fHPrime < 6)
+		{
+			rgb.x = fC;
+			rgb.y = 0;
+			rgb.z = fX;
+		}
+		else
+		{
+			rgb.x = 0;
+			rgb.y = 0;
+			rgb.z = 0;
+		}
+
+		rgb.x += fM;
+		rgb.y += fM;
+		rgb.z += fM;
+		rgb.w = 1.0f;
+		return rgb;
+	};
+
+	uint64 hash = std::hash<std::string>{}(pName);
+	uint32 h = (uint32)(hash % 360);
+	return ImColor(HSVtoRGB((float)h, 0.5f, 0.6f));
+}
+
 void FooProfiler::DrawHUD()
 {
-	ImGuiWindow* pWindow = ImGui::GetCurrentWindow();
-
 	// How many ticks per ms
 	uint64 frequency = 0;
 	QueryPerformanceFrequency((LARGE_INTEGER*)&frequency);
@@ -100,7 +169,7 @@ void FooProfiler::DrawHUD()
 		gGPUProfiler.m_Paused = !gGPUProfiler.m_Paused;
 	}
 
-	ImRect timelineRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionAvail() - ImVec2(0, 15));
+	ImRect timelineRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionAvail() - ImVec2(15, 15));
 	ImGui::ItemSize(timelineRect);
 
 	// The current (scaled) size of the timeline
@@ -197,15 +266,29 @@ void FooProfiler::DrawHUD()
 						pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), rounding);
 					pDraw->AddRectFilled(itemRect.Min + padding, itemRect.Max - padding, color, rounding);
 					ImVec2 textSize = ImGui::CalcTextSize(pName);
+					const char* pEtc = "...";
+					ImVec2 etcSize = ImGui::CalcTextSize(pEtc);
 					if (textSize.x < itemRect.GetWidth() * 0.9f)
 					{
 						pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, ImColor(gStyle.FGTextColor), pName);
 					}
-					else if (itemRect.GetWidth() > 30.0f)
+					else if (itemRect.GetWidth() > etcSize.x + 10)
 					{
-						//pDraw->PushClipRect(itemRect.Min + padding, itemRect.Max - padding, true);
-						pDraw->AddText(itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f), ImColor(gStyle.FGTextColor), pName);
-						//pDraw->PopClipRect();
+						const char* pChar = pName;
+						float currentOffset = 10;
+						while (*pChar++)
+						{
+							float width = ImGui::CalcTextSize(pChar, pChar + 1).x;
+							if (currentOffset + width + etcSize.x > itemRect.GetWidth())
+								break;
+							currentOffset += width;
+						}
+
+						float textWidth = ImGui::CalcTextSize(pName, pChar).x;
+
+						ImVec2 textPos = itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f);
+						pDraw->AddText(textPos, ImColor(gStyle.FGTextColor), pName, pChar);
+						pDraw->AddText(textPos + ImVec2(textWidth, 0), ImColor(gStyle.FGTextColor), pEtc);
 					}
 				}
 			}
@@ -249,7 +332,7 @@ void FooProfiler::DrawHUD()
 						uint64 cpuBeginTicks = queue.GpuToCpuTicks(region.BeginTicks);
 						uint64 cpuEndTicks = queue.GpuToCpuTicks(region.EndTicks);
 
-						DrawBar(ImGui::GetID(&region), cpuBeginTicks, cpuEndTicks, region.Depth, region.pName, ImColor(0.491f, 0.650f, 0.455f), [&]()
+						DrawBar(ImGui::GetID(&region), cpuBeginTicks, cpuEndTicks, region.Depth, region.pName, ColorFromString(region.pName), [&]()
 							{
 								ImGui::Text("Frame %d", frameIndex);
 								ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(cpuEndTicks - cpuBeginTicks)));
@@ -263,7 +346,7 @@ void FooProfiler::DrawHUD()
 		}
 
 		// Split between GPU and CPU tracks
-		pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(gStyle.BGTextColor), 6);
+		pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(gStyle.BGTextColor), 4);
 
 		// Draw each CPU thread track
 		for (uint32 threadIndex = 0; threadIndex < (uint32)m_ThreadData.size(); ++threadIndex)
@@ -299,7 +382,7 @@ void FooProfiler::DrawHUD()
 
 						trackDepth = Math::Max(trackDepth, region.Depth + 1);
 
-						DrawBar(ImGui::GetID(&region), region.BeginTicks, region.EndTicks, region.Depth, region.pName, region.Color, [&]()
+						DrawBar(ImGui::GetID(&region), region.BeginTicks, region.EndTicks, region.Depth, region.pName, ColorFromString(region.pName), [&]()
 							{
 								ImGui::Text("Frame %d", frameIndex);
 								ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(region.EndTicks - region.BeginTicks)));
@@ -317,7 +400,7 @@ void FooProfiler::DrawHUD()
 		// The final height of the timeline
 		float timelineHeight = cursor.y - cursorStart.y;
 
-		if (ImGui::IsWindowFocused())
+		if (ImGui::IsWindowFocused() && ImGui::IsMouseHoveringRect(timelineRect.Min, timelineRect.Max))
 		{
 			// Profile range
 			if (!gHUDContext.IsSelectingRange)
@@ -355,7 +438,7 @@ void FooProfiler::DrawHUD()
 					std::string text = Sprintf("Time: %.3f ms", TicksToMs(fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) / tickScale));
 					ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
 					pDraw->AddText((lineEnd + lineStart) / 2 - ImVec2(textSize.x * 0.5f, textSize.y), measureColor, text.c_str());
-					
+
 				}
 			}
 
@@ -401,9 +484,13 @@ void FooProfiler::DrawHUD()
 			pDraw->AddRect(timelineRect.Min, timelineRect.Max, ImColor(0.0f, 1.0f, 0.0f), 0.0f, ImDrawFlags_None, 2.0f);
 			pDraw->PopClipRect();
 		}
-	}
 
-	ImS64 scroll = -(ImS64)gHUDContext.TimelineOffset.x;
-	ImGui::ScrollbarEx(ImRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionAvail()), ImGui::GetID("Scroll"), ImGuiAxis_X, &scroll, (ImS64)timelineRect.GetSize().x, (ImS64)timelineWidth, ImDrawFlags_None);
-	gHUDContext.TimelineOffset.x = -(float)scroll;
+		ImS64 scrollH = -(ImS64)gHUDContext.TimelineOffset.x;
+		ImGui::ScrollbarEx(ImRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionAvail()), ImGui::GetID("ScrollH"), ImGuiAxis_X, &scrollH, (ImS64)timelineRect.GetSize().x, (ImS64)timelineWidth, ImDrawFlags_None);
+		gHUDContext.TimelineOffset.x = -(float)scrollH;
+
+		ImS64 scrollV = -(ImS64)gHUDContext.TimelineOffset.y;
+		ImGui::ScrollbarEx(ImRect(ImVec2(timelineRect.Max.x, timelineRect.Min.y), ImVec2(timelineRect.Max.x + 15, timelineRect.Max.y)), ImGui::GetID("ScrollV"), ImGuiAxis_Y, &scrollV, (ImS64)timelineRect.GetSize().y, (ImS64)timelineHeight, ImDrawFlags_None);
+		gHUDContext.TimelineOffset.y = -(float)scrollV;
+	}
 }
