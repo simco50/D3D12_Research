@@ -49,189 +49,11 @@ private:
 	std::atomic<uint32> m_Offset;
 };
 
+void DrawProfilerHUD();
 
 //-----------------------------------------------------------------------------
 // [SECTION] GPU Profiler
 //-----------------------------------------------------------------------------
-
-// Query heap providing the mechanism to record timestamp events on the GPU and resolving them for readback
-class GPUTimeQueryHeap
-{
-public:
-	// Initialize the query heap using the provided CommandQueue to resolve queries
-	void Initialize(ID3D12Device* pDevice, ID3D12CommandQueue* pQueue, uint32 numQueries, uint32 numFrames)
-	{
-		pResolveQueue = pQueue;
-		MaxNumQueries = numQueries;
-		NumFrames = numFrames;
-
-		D3D12_COMMAND_LIST_TYPE commandListType = pQueue->GetDesc().Type;
-		uint32 numQueryEntries = numQueries * 2;
-
-		{
-			// Query heap that fits desired number of queries
-			D3D12_QUERY_HEAP_DESC queryHeapDesc{};
-			queryHeapDesc.Count = numQueryEntries;
-			queryHeapDesc.Type = commandListType == D3D12_COMMAND_LIST_TYPE_COPY ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-			queryHeapDesc.NodeMask = 0;
-			VERIFY_HR(pDevice->CreateQueryHeap(&queryHeapDesc, IID_PPV_ARGS(&pQueryHeap)));
-		}
-		{
-			// Readback resource that fits all frames
-			D3D12_RESOURCE_DESC resourceDesc{};
-			resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-			resourceDesc.Width = numQueryEntries * sizeof(uint64) * numFrames;
-			resourceDesc.Height = 1;
-			resourceDesc.DepthOrArraySize = 1;
-			resourceDesc.MipLevels = 1;
-			resourceDesc.SampleDesc.Count = 1;
-			resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-			D3D12_HEAP_PROPERTIES heapProperties{};
-			heapProperties.Type = D3D12_HEAP_TYPE_READBACK;
-			VERIFY_HR(pDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&pReadbackResource)));
-			void* pMappedAddress = nullptr;
-			pReadbackResource->Map(0, nullptr, &pMappedAddress);
-			m_pReadbackData = static_cast<uint64*>(pMappedAddress);
-		}
-		{
-			// Allocate frame data for each frame
-			pFrameData = new FrameData[numFrames];
-
-			// Create CommandAllocator for each frame and store readback address
-			for (uint32 i = 0; i < numFrames; ++i)
-			{
-				FrameData& frame = pFrameData[i];
-				VERIFY_HR(pDevice->CreateCommandAllocator(commandListType, IID_PPV_ARGS(&frame.pAllocator)));
-				frame.QueryStartOffset = numQueryEntries * i;
-			}
-		}
-		{
-			// Create CommandList for ResolveQueryData
-			ID3D12Device4* pDevice4 = nullptr;
-			VERIFY_HR(pDevice->QueryInterface(&pDevice4));
-			VERIFY_HR(pDevice4->CreateCommandList1(0, commandListType, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&pResolveCommandList)));
-			pDevice4->Release();
-		}
-		{
-			// Create Fence to check readback status
-			VERIFY_HR(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
-			FenceEvent = CreateEventExA(nullptr, "Timestamp Query Fence", 0, EVENT_ALL_ACCESS);
-		}
-	}
-
-	void Shutdown()
-	{
-		if (pResolveCommandList)
-		{
-			// Wait for the resolve queue to finish.
-			pResolveQueue->Signal(pFence, ~0ull);
-			pFence->SetEventOnCompletion(~0ull, FenceEvent);
-			WaitForSingleObject(FenceEvent, INFINITE);
-
-			// Destroy resources
-			CloseHandle(FenceEvent);
-			pQueryHeap->Release();
-			pReadbackResource->Release();
-			pResolveCommandList->Release();
-			pFence->Release();
-
-			for (uint32 i = 0; i < NumFrames; ++i)
-				pFrameData[i].pAllocator->Release();
-			delete[] pFrameData;
-		}
-	}
-
-	// Start a timestamp query and return the index of the query
-	uint32 QueryBegin(ID3D12GraphicsCommandList* pCommandList)
-	{
-		FrameData& frame = GetData();
-		uint32 index = frame.QueryIndex.fetch_add(1);
-		check(index < MaxNumQueries);
-		pCommandList->EndQuery(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, index * 2);
-		return index;
-	}
-
-	// End a timestamp query of the provided index previously returned in QueryBegin()
-	void EndQuery(uint32 index, ID3D12GraphicsCommandList* pCommandList)
-	{
-		check(index >= 0 && index < MaxNumQueries);
-		pCommandList->EndQuery(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, index * 2 + 1);
-	}
-
-	// Queues a ResolveQueryData of the last frame and advances to the next frame
-	void Resolve()
-	{
-		// Queue a resolve for the current frame
-		FrameData& frame = GetData();
-		if (frame.QueryIndex > 0)
-		{
-			pResolveCommandList->Reset(frame.pAllocator, nullptr);
-			uint32 count = frame.QueryIndex * 2;
-			pResolveCommandList->ResolveQueryData(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, count, pReadbackResource, frame.QueryStartOffset * sizeof(uint64));
-			pResolveCommandList->Close();
-			ID3D12CommandList* pResolveCommandLists[] = { pResolveCommandList };
-			pResolveQueue->ExecuteCommandLists(1, pResolveCommandLists);
-		}
-		frame.ReadbackQueries = Span<uint64>(m_pReadbackData + frame.QueryStartOffset, frame.QueryIndex * 2);
-		// Increment fence value, signal queue and store FenceValue in frame.
-		++FenceValue;
-		pResolveQueue->Signal(pFence, FenceValue);
-		frame.FenceValue = FenceValue;
-
-		// Advance to next frame and reset
-		++FrameIndex;
-		FrameData& newFrame = GetData();
-		newFrame.QueryIndex = 0;
-
-		// Don't allow the next frame to start until its resolve is finished.
-		if (newFrame.FenceValue > pFence->GetCompletedValue())
-		{
-			checkf(false, "Resolve() should not have to wait for the resolve of the upcoming frame to finish. Increase NumFrames.");
-			pFence->SetEventOnCompletion(newFrame.FenceValue, FenceEvent);
-			WaitForSingleObject(FenceEvent, INFINITE);
-		}
-	}
-
-	// Return the view to the resolved queries and returns true if it's valid to read from
-	bool GetResolvedQueries(uint32 frameIndex, Span<uint64>& outData)
-	{
-		const FrameData& data = pFrameData[frameIndex % NumFrames];
-		if (data.FenceValue > pFence->GetCompletedValue())
-			return false;
-		outData = data.ReadbackQueries;
-		return true;
-	}
-
-private:
-	struct FrameData
-	{
-		Span<uint64> ReadbackQueries;						//< View to resolved query data
-		ID3D12CommandAllocator* pAllocator = nullptr;		//< CommandAllocator for this frame
-		std::atomic<uint32> QueryIndex = 0;					//< Current number of queries
-		uint64 FenceValue = 0;								//< FenceValue indicating when Resolve is finished
-		uint32 QueryStartOffset = 0;						//< Offset in readback buffer to where queries start
-	};
-
-	FrameData& GetData()
-	{
-		return pFrameData[FrameIndex % NumFrames];
-	}
-
-	uint32 NumFrames = 0;
-	FrameData* pFrameData = nullptr;
-	ID3D12CommandQueue* pResolveQueue = nullptr;
-	ID3D12GraphicsCommandList* pResolveCommandList = nullptr;
-	ID3D12QueryHeap* pQueryHeap = nullptr;
-	ID3D12Resource* pReadbackResource = nullptr;
-	uint32 FrameIndex = 0;
-	uint32 MaxNumQueries = 0;
-	const uint64* m_pReadbackData = nullptr;
-
-	ID3D12Fence* pFence = nullptr;
-	uint64 FenceValue = 0;
-	HANDLE FenceEvent = nullptr;
-};
 
 extern class GPUProfiler gGPUProfiler;
 
@@ -242,6 +64,186 @@ extern class GPUProfiler gGPUProfiler;
 
 class GPUProfiler
 {
+private:
+	// Query heap providing the mechanism to record timestamp events on the GPU and resolving them for readback
+	class GPUTimeQueryHeap
+	{
+	public:
+		// Initialize the query heap using the provided CommandQueue to resolve queries
+		void Initialize(ID3D12Device* pDevice, ID3D12CommandQueue* pQueue, uint32 numQueries, uint32 numFrames)
+		{
+			pResolveQueue = pQueue;
+			MaxNumQueries = numQueries;
+			NumFrames = numFrames;
+
+			D3D12_COMMAND_LIST_TYPE commandListType = pQueue->GetDesc().Type;
+			uint32 numQueryEntries = numQueries * 2;
+
+			{
+				// Query heap that fits desired number of queries
+				D3D12_QUERY_HEAP_DESC queryHeapDesc{};
+				queryHeapDesc.Count = numQueryEntries;
+				queryHeapDesc.Type = commandListType == D3D12_COMMAND_LIST_TYPE_COPY ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+				queryHeapDesc.NodeMask = 0;
+				VERIFY_HR(pDevice->CreateQueryHeap(&queryHeapDesc, IID_PPV_ARGS(&pQueryHeap)));
+			}
+			{
+				// Readback resource that fits all frames
+				D3D12_RESOURCE_DESC resourceDesc{};
+				resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+				resourceDesc.Width = numQueryEntries * sizeof(uint64) * numFrames;
+				resourceDesc.Height = 1;
+				resourceDesc.DepthOrArraySize = 1;
+				resourceDesc.MipLevels = 1;
+				resourceDesc.SampleDesc.Count = 1;
+				resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+				D3D12_HEAP_PROPERTIES heapProperties{};
+				heapProperties.Type = D3D12_HEAP_TYPE_READBACK;
+				VERIFY_HR(pDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&pReadbackResource)));
+				void* pMappedAddress = nullptr;
+				pReadbackResource->Map(0, nullptr, &pMappedAddress);
+				m_pReadbackData = static_cast<uint64*>(pMappedAddress);
+			}
+			{
+				// Allocate frame data for each frame
+				pFrameData = new FrameData[numFrames];
+
+				// Create CommandAllocator for each frame and store readback address
+				for (uint32 i = 0; i < numFrames; ++i)
+				{
+					FrameData& frame = pFrameData[i];
+					VERIFY_HR(pDevice->CreateCommandAllocator(commandListType, IID_PPV_ARGS(&frame.pAllocator)));
+					frame.QueryStartOffset = numQueryEntries * i;
+				}
+			}
+			{
+				// Create CommandList for ResolveQueryData
+				ID3D12Device4* pDevice4 = nullptr;
+				VERIFY_HR(pDevice->QueryInterface(&pDevice4));
+				VERIFY_HR(pDevice4->CreateCommandList1(0, commandListType, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&pResolveCommandList)));
+				pDevice4->Release();
+			}
+			{
+				// Create Fence to check readback status
+				VERIFY_HR(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
+				FenceEvent = CreateEventExA(nullptr, "Timestamp Query Fence", 0, EVENT_ALL_ACCESS);
+			}
+		}
+
+		void Shutdown()
+		{
+			if (pResolveCommandList)
+			{
+				// Wait for the resolve queue to finish.
+				pResolveQueue->Signal(pFence, ~0ull);
+				pFence->SetEventOnCompletion(~0ull, FenceEvent);
+				WaitForSingleObject(FenceEvent, INFINITE);
+
+				// Destroy resources
+				CloseHandle(FenceEvent);
+				pQueryHeap->Release();
+				pReadbackResource->Release();
+				pResolveCommandList->Release();
+				pFence->Release();
+
+				for (uint32 i = 0; i < NumFrames; ++i)
+					pFrameData[i].pAllocator->Release();
+				delete[] pFrameData;
+			}
+		}
+
+		// Start a timestamp query and return the index of the query
+		uint32 QueryBegin(ID3D12GraphicsCommandList* pCommandList)
+		{
+			FrameData& frame = GetData();
+			uint32 index = frame.QueryIndex.fetch_add(1);
+			check(index < MaxNumQueries);
+			pCommandList->EndQuery(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, index * 2);
+			return index;
+		}
+
+		// End a timestamp query of the provided index previously returned in QueryBegin()
+		void EndQuery(uint32 index, ID3D12GraphicsCommandList* pCommandList)
+		{
+			check(index >= 0 && index < MaxNumQueries);
+			pCommandList->EndQuery(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, index * 2 + 1);
+		}
+
+		// Queues a ResolveQueryData of the last frame and advances to the next frame
+		void Resolve()
+		{
+			// Queue a resolve for the current frame
+			FrameData& frame = GetData();
+			if (frame.QueryIndex > 0)
+			{
+				pResolveCommandList->Reset(frame.pAllocator, nullptr);
+				uint32 count = frame.QueryIndex * 2;
+				pResolveCommandList->ResolveQueryData(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, count, pReadbackResource, frame.QueryStartOffset * sizeof(uint64));
+				pResolveCommandList->Close();
+				ID3D12CommandList* pResolveCommandLists[] = { pResolveCommandList };
+				pResolveQueue->ExecuteCommandLists(1, pResolveCommandLists);
+			}
+			frame.ReadbackQueries = Span<uint64>(m_pReadbackData + frame.QueryStartOffset, frame.QueryIndex * 2);
+			// Increment fence value, signal queue and store FenceValue in frame.
+			++FenceValue;
+			pResolveQueue->Signal(pFence, FenceValue);
+			frame.FenceValue = FenceValue;
+
+			// Advance to next frame and reset
+			++FrameIndex;
+			FrameData& newFrame = GetData();
+			newFrame.QueryIndex = 0;
+
+			// Don't allow the next frame to start until its resolve is finished.
+			if (newFrame.FenceValue > pFence->GetCompletedValue())
+			{
+				checkf(false, "Resolve() should not have to wait for the resolve of the upcoming frame to finish. Increase NumFrames.");
+				pFence->SetEventOnCompletion(newFrame.FenceValue, FenceEvent);
+				WaitForSingleObject(FenceEvent, INFINITE);
+			}
+		}
+
+		// Return the view to the resolved queries and returns true if it's valid to read from
+		bool GetResolvedQueries(uint32 frameIndex, Span<uint64>& outData)
+		{
+			const FrameData& data = pFrameData[frameIndex % NumFrames];
+			if (data.FenceValue > pFence->GetCompletedValue())
+				return false;
+			outData = data.ReadbackQueries;
+			return true;
+		}
+
+	private:
+		struct FrameData
+		{
+			Span<uint64> ReadbackQueries;						//< View to resolved query data
+			ID3D12CommandAllocator* pAllocator = nullptr;		//< CommandAllocator for this frame
+			std::atomic<uint32> QueryIndex = 0;					//< Current number of queries
+			uint64 FenceValue = 0;								//< FenceValue indicating when Resolve is finished
+			uint32 QueryStartOffset = 0;						//< Offset in readback buffer to where queries start
+		};
+
+		FrameData& GetData()
+		{
+			return pFrameData[FrameIndex % NumFrames];
+		}
+
+		uint32 NumFrames = 0;
+		FrameData* pFrameData = nullptr;
+		ID3D12CommandQueue* pResolveQueue = nullptr;
+		ID3D12GraphicsCommandList* pResolveCommandList = nullptr;
+		ID3D12QueryHeap* pQueryHeap = nullptr;
+		ID3D12Resource* pReadbackResource = nullptr;
+		uint32 FrameIndex = 0;
+		uint32 MaxNumQueries = 0;
+		const uint64* m_pReadbackData = nullptr;
+
+		ID3D12Fence* pFence = nullptr;
+		uint64 FenceValue = 0;
+		HANDLE FenceEvent = nullptr;
+	};
+
 public:
 	static constexpr uint32 MAX_NUM_MAIN_REGIONS = 1024;
 	static constexpr uint32 MAX_NUM_COPY_QUEUE_REGIONS = 1024;
@@ -499,7 +501,8 @@ public:
 		}
 	}
 
-	bool m_Paused = false;
+	void SetPaused(bool paused) { m_Paused = paused; }
+	bool IsPaused() const { return m_Paused; }
 
 private:
 	// Return the sample data of the current frame
@@ -546,6 +549,8 @@ private:
 	std::array<SampleHistory, HISTORY_SIZE> m_SampleData;
 	uint32 m_FrameIndex = 0;
 	uint32 m_FrameToResolve = 0;
+
+	bool m_Paused = false;
 };
 
 
@@ -693,34 +698,6 @@ public:
 		data.pTLS = &tls;
 	}
 
-	void DrawHUD();
-
-private:
-	// Thread-local storage to keep track of current depth and region stack
-	struct TLS
-	{
-		uint32 ThreadIndex = 0;
-		uint32 RegionStack[MAX_DEPTH]{};
-		bool IsInitialized = false;
-		uint16 Depth = 0;
-	};
-
-	// Retrieve thread-local storage without initialization
-	TLS& GetTLSUnsafe()
-	{
-		static thread_local TLS tls;
-		return tls;
-	}
-
-	// Retrieve the thread-local storage
-	TLS& GetTLS()
-	{
-		TLS& tls = GetTLSUnsafe();
-		if (!tls.IsInitialized)
-			RegisterThread();
-		return tls;
-	}
-
 	// Structure representating a single sample region
 	struct SampleRegion
 	{
@@ -745,11 +722,22 @@ private:
 		LinearAllocator	Allocator;							//< Scratch allocator storing all dynamic allocations of the frame
 	};
 
-	// Return the sample data of the current frame
-	SampleHistory& GetData()
+	// Thread-local storage to keep track of current depth and region stack
+	struct TLS
 	{
-		return m_pSampleHistory[m_FrameIndex % m_HistorySize];
-	}
+		uint32 ThreadIndex = 0;
+		uint32 RegionStack[MAX_DEPTH]{};
+		bool IsInitialized = false;
+		uint16 Depth = 0;
+	};
+
+	// Structure describing a registered thread
+	struct ThreadData
+	{
+		char Name[128]{};
+		uint32 ThreadID = 0;
+		const TLS* pTLS = nullptr;
+	};
 
 	// Iterate over all sample regions
 	template<typename Fn>
@@ -760,7 +748,7 @@ private:
 		{
 			const SampleHistory& data = m_pSampleHistory[currentIndex % m_HistorySize];
 			uint32 numRegions = data.CurrentIndex;
-			for(uint32 i = 0; i < numRegions; ++i)
+			for (uint32 i = 0; i < numRegions; ++i)
 				fn(currentIndex, data.Regions[i]);
 			++currentIndex;
 		}
@@ -773,13 +761,33 @@ private:
 		return m_pSampleHistory[currentIndex];
 	}
 
-	// Structure describing a registered thread
-	struct ThreadData
+	Span<ThreadData> GetThreads() const { return m_ThreadData; }
+
+	void SetPaused(bool paused) { m_Paused = paused; }
+	bool IsPaused() const { return m_Paused; }
+
+private:
+	// Retrieve thread-local storage without initialization
+	TLS& GetTLSUnsafe()
 	{
-		char Name[128]{};
-		uint32 ThreadID = 0;
-		const TLS* pTLS = nullptr;
-	};
+		static thread_local TLS tls;
+		return tls;
+	}
+
+	// Retrieve the thread-local storage
+	TLS& GetTLS()
+	{
+		TLS& tls = GetTLSUnsafe();
+		if (!tls.IsInitialized)
+			RegisterThread();
+		return tls;
+	}
+
+	// Return the sample data of the current frame
+	SampleHistory& GetData()
+	{
+		return m_pSampleHistory[m_FrameIndex % m_HistorySize];
+	}
 
 	std::mutex m_ThreadDataLock;
 	std::vector<ThreadData> m_ThreadData;

@@ -90,7 +90,7 @@ static ImColor ColorFromString(const char* pName)
 	return ImColor(HSVtoRGB(hashF, 0.5f, 0.6f));
 }
 
-void FooProfiler::DrawHUD()
+void DrawProfilerHUD()
 {
 	// How many ticks per ms
 	uint64 frequency = 0;
@@ -103,14 +103,14 @@ void FooProfiler::DrawHUD()
 	// How many ticks are in the timeline
 	float ticksInTimeline = ticksPerMs * gStyle.MaxTime;
 
-	const SampleHistory& data = GetHistory();
-	const SampleRegion& frameSample = data.Regions[0];
+	const FooProfiler::SampleHistory& data = gProfiler.GetHistory();
+	const FooProfiler::SampleRegion& frameSample = data.Regions[0];
 	const uint64 beginAnchor = frameSample.BeginTicks;
 
-	if (!m_Paused)
-		ImGui::Text("Press Space to pause");
-	else
+	if (gProfiler.IsPaused())
 		ImGui::Text("Paused");
+	else
+		ImGui::Text("Press Space to pause");
 
 	ImGui::SameLine(ImGui::GetWindowWidth() - 260);
 	ImGui::Text("Search");
@@ -132,8 +132,8 @@ void FooProfiler::DrawHUD()
 
 	if (ImGui::IsKeyPressed(ImGuiKey_Space))
 	{
-		m_Paused = !m_Paused;
-		gGPUProfiler.m_Paused = !gGPUProfiler.m_Paused;
+		gProfiler.SetPaused(!gProfiler.IsPaused());
+		gGPUProfiler.SetPaused(!gGPUProfiler.IsPaused());
 	}
 
 	ImRect timelineRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionAvail() - ImVec2(15, 15));
@@ -349,10 +349,11 @@ void FooProfiler::DrawHUD()
 		pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(gStyle.BGTextColor), 4);
 
 		// Draw each CPU thread track
-		for (uint32 threadIndex = 0; threadIndex < (uint32)m_ThreadData.size(); ++threadIndex)
+		Span<FooProfiler::ThreadData> threads = gProfiler.GetThreads();
+		for (uint32 threadIndex = 0; threadIndex < (uint32)threads.GetSize(); ++threadIndex)
 		{
 			// Add thread name for track
-			const ThreadData& thread = m_ThreadData[threadIndex];
+			const FooProfiler::ThreadData& thread = threads[threadIndex];
 			const char* pHeaderText;
 			ImFormatStringToTempBuffer(&pHeaderText, nullptr, "%s [%d]", thread.Name, thread.ThreadID);
 			bool isOpen = TrackHeader(pHeaderText, ImGui::GetID(&thread));
@@ -366,7 +367,7 @@ void FooProfiler::DrawHUD()
 				|[=============]			|
 				|	[======]				|
 			*/
-			ForEachRegion([&](uint32 frameIndex, const SampleRegion& region)
+			gProfiler.ForEachRegion([&](uint32 frameIndex, const FooProfiler::SampleRegion& region)
 				{
 					// Only process regions for the current thread
 					if (region.ThreadIndex != threadIndex)
