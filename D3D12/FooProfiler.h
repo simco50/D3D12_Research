@@ -255,7 +255,7 @@ public:
 	// Initialize the GPU profiler using the provided CommandQueues
 	void Initialize(ID3D12Device* pDevice, ID3D12CommandQueue** pQueues, uint32 numQueues)
 	{
-		for(uint32 queueIndex = 0; queueIndex < numQueues; ++queueIndex)
+		for (uint32 queueIndex = 0; queueIndex < numQueues; ++queueIndex)
 		{
 			ID3D12CommandQueue* pQueue = pQueues[queueIndex];
 			D3D12_COMMAND_QUEUE_DESC queueDesc = pQueue->GetDesc();
@@ -495,7 +495,7 @@ public:
 		while (currentIndex < m_FrameToResolve)
 		{
 			SampleHistory& data = m_SampleData[currentIndex % m_SampleData.size()];
-			for(uint32 i = 0; i < data.NumRegions; ++i)
+			for (uint32 i = 0; i < data.NumRegions; ++i)
 				fn(currentIndex, data.Regions[i]);
 			++currentIndex;
 		}
@@ -591,7 +591,7 @@ struct FooGPUProfileScope
 
 /// Usage:
 //		FOO_FRAME()
-#define FOO_FRAME() gProfiler.Tick();
+#define FOO_FRAME() gProfiler.Tick(); gGPUProfiler.Tick()
 
 // Global CPU Profiler
 extern class FooProfiler gProfiler;
@@ -655,10 +655,9 @@ public:
 	// Call at the START of the frame.
 	void Tick()
 	{
-		if(m_FrameIndex)
+		if (m_FrameIndex)
 			PopRegion();
 
-		gGPUProfiler.Tick();
 		for (auto& threadData : m_ThreadData)
 			check(threadData.pTLS->Depth == 0);
 
@@ -669,7 +668,7 @@ public:
 		data.CurrentIndex = 0;
 		data.Allocator.Reset();
 
-		PushRegion(Sprintf("Frame %d", m_FrameIndex).c_str());
+		PushRegion("CPU Frame");
 	}
 
 	// Initialize a thread with an optional name
@@ -750,6 +749,19 @@ public:
 			uint32 numRegions = data.CurrentIndex;
 			for (uint32 i = 0; i < numRegions; ++i)
 				fn(currentIndex, data.Regions[i]);
+			++currentIndex;
+		}
+	}
+
+	// Iterate over all frames
+	template<typename Fn>
+	void ForEachFrame(Fn&& fn) const
+	{
+		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, m_HistorySize) + 1;
+		while (currentIndex < m_FrameIndex)
+		{
+			const SampleHistory& data = m_pSampleHistory[currentIndex % m_HistorySize];
+			fn(currentIndex, data);
 			++currentIndex;
 		}
 	}

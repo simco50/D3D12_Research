@@ -182,7 +182,19 @@ void DrawProfilerHUD()
 			pDraw->AddLine(tickPos + ImVec2(0, style.BarHeight * 0.5f), tickPos + ImVec2(0, style.BarHeight), ImColor(style.BGTextColor));
 			pDraw->AddLine(tickPos + ImVec2(msWidth, style.BarHeight * 0.75f), tickPos + ImVec2(msWidth, style.BarHeight), ImColor(style.BGTextColor));
 		}
+
 		cursor.y += style.BarHeight;
+
+		// Add dark shade background for every even frame
+		gProfiler.ForEachFrame([&](uint32 frameIndex, const FooProfiler::SampleHistory& data)
+			{
+				if (frameIndex % 2 == 0)
+				{
+					float beginOffset = (data.Regions[0].BeginTicks - beginAnchor) * tickScale;
+					float endOffset = (data.Regions[0].EndTicks - beginAnchor) * tickScale;
+					pDraw->AddRectFilled(ImVec2(cursor.x + beginOffset, timelineRect.Min.y), ImVec2(cursor.x + endOffset, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.05f));
+				}
+			});
 
 		ImGui::PushClipRect(timelineRect.Min + ImVec2(0, style.BarHeight), timelineRect.Max, true);
 
@@ -295,6 +307,8 @@ void DrawProfilerHUD()
 			float caretSize = ImGui::GetTextLineHeight();
 			if (ImGui::ItemAdd(ImRect(trackTextCursor, trackTextCursor + ImVec2(caretSize, caretSize)), id))
 			{
+				if (ImGui::IsItemHovered())
+					pDraw->AddRect(ImGui::GetItemRectMin() + ImVec2(2, 2), ImGui::GetItemRectMax() - ImVec2(2, 2), ImColor(style.BGTextColor), 3.0f);
 				pDraw->AddText(ImGui::GetItemRectMin() + ImVec2(2, 2), ImColor(style.BGTextColor), isOpen ? ICON_FA_CARET_DOWN : ICON_FA_CARET_RIGHT);
 				if (ImGui::ButtonBehavior(ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()), id, nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft))
 				{
@@ -302,6 +316,7 @@ void DrawProfilerHUD()
 					ImGui::GetCurrentWindow()->StateStorage.SetBool(id, isOpen);
 				}
 			}
+
 			trackTextCursor.x += caretSize;
 			pDraw->AddText(trackTextCursor, ImColor(style.BGTextColor), pName);
 			return isOpen;
@@ -340,8 +355,8 @@ void DrawProfilerHUD()
 
 					DrawBar(ImGui::GetID(&region), cpuBeginTicks, cpuEndTicks, region.Depth, region.pName, ColorFromString(region.pName), [&]()
 						{
-							ImGui::Text("Frame %d", frameIndex);
 							ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(cpuEndTicks - cpuBeginTicks)));
+							ImGui::Text("Frame %d", frameIndex);
 							if (region.pFilePath)
 								ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
 						});
@@ -387,8 +402,8 @@ void DrawProfilerHUD()
 
 					DrawBar(ImGui::GetID(&region), region.BeginTicks, region.EndTicks, region.Depth, region.pName, ColorFromString(region.pName), [&]()
 						{
-							ImGui::Text("Frame %d", frameIndex);
 							ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(region.EndTicks - region.BeginTicks)));
+							ImGui::Text("Frame %d", frameIndex);
 							if (region.pFilePath)
 								ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
 						});
