@@ -16,8 +16,43 @@
 
 #define BREAK_ON_ALLOC 0
 
+#ifdef LIVE_PP_PATH
+#include "LPP_API_x64_CPP.h"
+#define LIVE_PP() LivePPAgent livePP;
+struct LivePPAgent
+{
+	LivePPAgent()
+	{
+		// create a default agent, loading the Live++ agent from the given path, e.g. "ThirdParty/LivePP"
+		Agent = lpp::LppCreateDefaultAgent(LIVE_PP_PATH);
+		// bail out in case the agent is not valid
+		if (lpp::LppIsValidDefaultAgent(&Agent))
+		{
+			// enable Live++ for all loaded modules
+			Agent.EnableModule(lpp::LppGetCurrentModulePath(), lpp::LPP_MODULES_OPTION_ALL_IMPORT_MODULES, nullptr, nullptr);
+		}
+	}
+
+	~LivePPAgent()
+	{
+		if (lpp::LppIsValidDefaultAgent(&Agent))
+		{
+			// destroy the Live++ agent
+			lpp::LppDestroyDefaultAgent(&Agent);
+		}
+	}
+
+	lpp::LppDefaultAgent Agent;
+};
+#else
+#define LIVE_PP()
+#endif
+
+
 int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPSTR /*lpCmdLine*/, _In_ int /*nShowCmd*/)
 {
+	LIVE_PP();
+
 #ifdef _DEBUG
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #if BREAK_ON_ALLOC > 0
