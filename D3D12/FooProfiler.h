@@ -64,6 +64,16 @@ extern class GPUProfiler gGPUProfiler;
 
 class GPUProfiler
 {
+public:
+	static constexpr uint32 MAX_NUM_MAIN_REGIONS = 1024;
+	static constexpr uint32 MAX_NUM_COPY_QUEUE_REGIONS = 1024;
+	static constexpr uint32 MAX_NUM_REGIONS = MAX_NUM_MAIN_REGIONS + MAX_NUM_COPY_QUEUE_REGIONS;
+	static constexpr uint32 NUM_GPU_FRAMES = 3;
+	static constexpr uint32 HISTORY_SIZE = 5;
+	static constexpr uint32 MAX_DEPTH = 32;
+
+	static constexpr uint16 INVALID_QUEUE = 0xFFFF;
+
 private:
 	// Query heap providing the mechanism to record timestamp events on the GPU and resolving them for readback
 	class GPUTimeQueryHeap
@@ -119,10 +129,7 @@ private:
 			}
 			{
 				// Create CommandList for ResolveQueryData
-				ID3D12Device4* pDevice4 = nullptr;
-				VERIFY_HR(pDevice->QueryInterface(&pDevice4));
-				VERIFY_HR(pDevice4->CreateCommandList1(0, commandListType, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(&pResolveCommandList)));
-				pDevice4->Release();
+				VERIFY_HR(pDevice->CreateCommandList(0, commandListType, pFrameData[0].pAllocator, nullptr, IID_PPV_ARGS(&pResolveCommandList)));
 			}
 			{
 				// Create Fence to check readback status
@@ -177,7 +184,6 @@ private:
 			FrameData& frame = GetData();
 			if (frame.QueryIndex > 0)
 			{
-				pResolveCommandList->Reset(frame.pAllocator, nullptr);
 				uint32 count = frame.QueryIndex * 2;
 				pResolveCommandList->ResolveQueryData(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, count, pReadbackResource, frame.QueryStartOffset * sizeof(uint64));
 				pResolveCommandList->Close();
@@ -194,6 +200,7 @@ private:
 			++FrameIndex;
 			FrameData& newFrame = GetData();
 			newFrame.QueryIndex = 0;
+			pResolveCommandList->Reset(newFrame.pAllocator, nullptr);
 
 			// Don't allow the next frame to start until its resolve is finished.
 			if (newFrame.FenceValue > pFence->GetCompletedValue())
@@ -214,14 +221,16 @@ private:
 			return true;
 		}
 
+		ID3D12GraphicsCommandList* GetCommandList() const { return pResolveCommandList; }
+
 	private:
 		struct FrameData
 		{
-			Span<uint64> ReadbackQueries;						//< View to resolved query data
-			ID3D12CommandAllocator* pAllocator = nullptr;		//< CommandAllocator for this frame
-			std::atomic<uint32> QueryIndex = 0;					//< Current number of queries
-			uint64 FenceValue = 0;								//< FenceValue indicating when Resolve is finished
-			uint32 QueryStartOffset = 0;						//< Offset in readback buffer to where queries start
+			Span<uint64> ReadbackQueries;						// View to resolved query data
+			ID3D12CommandAllocator* pAllocator = nullptr;		// CommandAllocator for this frame
+			std::atomic<uint32> QueryIndex = 0;					// Current number of queries
+			uint64 FenceValue = 0;								// FenceValue indicating when Resolve is finished
+			uint32 QueryStartOffset = 0;						// Offset in readback buffer to where queries start
 		};
 
 		FrameData& GetData()
@@ -245,17 +254,10 @@ private:
 	};
 
 public:
-	static constexpr uint32 MAX_NUM_MAIN_REGIONS = 1024;
-	static constexpr uint32 MAX_NUM_COPY_QUEUE_REGIONS = 1024;
-	static constexpr uint32 MAX_NUM_REGIONS = MAX_NUM_MAIN_REGIONS + MAX_NUM_COPY_QUEUE_REGIONS;
-	static constexpr uint32 NUM_GPU_FRAMES = 3;
-	static constexpr uint32 HISTORY_SIZE = 5;
-	static constexpr uint32 MAX_DEPTH = 32;
-
 	// Initialize the GPU profiler using the provided CommandQueues
-	void Initialize(ID3D12Device* pDevice, ID3D12CommandQueue** pQueues, uint32 numQueues)
+	void Initialize(ID3D12Device* pDevice, ID3D12CommandQueue** pQueues, uint16 numQueues)
 	{
-		for (uint32 queueIndex = 0; queueIndex < numQueues; ++queueIndex)
+		for (uint16 queueIndex = 0; queueIndex < numQueues; ++queueIndex)
 		{
 			ID3D12CommandQueue* pQueue = pQueues[queueIndex];
 			D3D12_COMMAND_QUEUE_DESC queueDesc = pQueue->GetDesc();
@@ -269,12 +271,12 @@ public:
 			queueInfo.InitCalibration();
 
 			// If the query heap is not yet initialized and there is an appropriate queue, initialize it
-			if (m_ResolveCopyQueueIndex == 0xFFFFFFFF && isCopyQueue)
+			if (m_ResolveCopyQueueIndex == INVALID_QUEUE && isCopyQueue)
 			{
 				m_CopyQueryHeap.Initialize(pDevice, pQueue, MAX_NUM_MAIN_REGIONS, NUM_GPU_FRAMES);
 				m_ResolveCopyQueueIndex = queueIndex;
 			}
-			else if (m_ResolveMainQueueIndex == 0xFFFFFFFF && !isCopyQueue)
+			else if (m_ResolveMainQueueIndex == INVALID_QUEUE && !isCopyQueue)
 			{
 				m_MainQueryHeap.Initialize(pDevice, pQueue, MAX_NUM_MAIN_REGIONS, NUM_GPU_FRAMES);
 				m_ResolveMainQueueIndex = queueIndex;
@@ -285,7 +287,7 @@ public:
 	// Start and push a region on the provided commandlist to be executed on the given queue index
 	void PushRegion(const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0, const char* pFilePath = nullptr, uint16 lineNr = 0)
 	{
-		if (m_Paused)
+		if (m_IsPaused)
 			return;
 
 		bool isCopyQueue = m_Queues[queueIndex].IsCopyQueue;
@@ -312,7 +314,7 @@ public:
 	// End and pop the region on the top of the stack
 	void PopRegion()
 	{
-		if (m_Paused)
+		if (m_IsPaused)
 			return;
 
 		TLS& tls = GetTLS();
@@ -333,14 +335,18 @@ public:
 
 	void Tick()
 	{
+		// Apply the pausing.
+		// Pausing is deferred because it may happen in the middle of the frame and that would cause remaining regions to not finish.
+		m_IsPaused = m_QueuedPause;
+
 		// While the next frame to resolve is not the last one, attempt access the readback data and advance.
 		while (m_FrameToResolve < m_FrameIndex)
 		{
 			// #todo: One readback may be finished while the other is not. Could maybe cause problems?
 			Span<uint64> copyQueries, mainQueries;
 
-			bool copiesValid = m_ResolveCopyQueueIndex == 0xFFFFFFFF || m_CopyQueryHeap.GetResolvedQueries(m_FrameToResolve, copyQueries);
-			bool mainValid = m_ResolveMainQueueIndex == 0xFFFFFFFF || m_MainQueryHeap.GetResolvedQueries(m_FrameToResolve, mainQueries);
+			bool copiesValid = m_ResolveCopyQueueIndex == INVALID_QUEUE || m_CopyQueryHeap.GetResolvedQueries(m_FrameToResolve, copyQueries);
+			bool mainValid = m_ResolveMainQueueIndex == INVALID_QUEUE || m_MainQueryHeap.GetResolvedQueries(m_FrameToResolve, mainQueries);
 			if (!copiesValid || !mainValid)
 				break;
 
@@ -398,7 +404,7 @@ public:
 			++m_FrameToResolve;
 		}
 
-		if (m_Paused)
+		if (m_IsPaused)
 			return;
 
 		// Make sure all last frame's regions have ended
@@ -406,9 +412,9 @@ public:
 			check(pTLS->RegionDepth == 0);
 
 		// Schedule a resolve for last frame
-		if (m_ResolveCopyQueueIndex != 0xFFFFFFFF)
+		if (m_ResolveCopyQueueIndex != INVALID_QUEUE)
 			m_CopyQueryHeap.Resolve();
-		if (m_ResolveMainQueueIndex != 0xFFFFFFFF)
+		if (m_ResolveMainQueueIndex != INVALID_QUEUE)
 			m_MainQueryHeap.Resolve();
 
 		// Advance frame and clear data
@@ -447,28 +453,28 @@ public:
 			return (float)ticks / GPUFrequency * 1000.0f;
 		}
 
-		ID3D12CommandQueue* pQueue;
-		char Name[128];
-		bool IsCopyQueue;
+		ID3D12CommandQueue* pQueue;							// The D3D queue object
+		char Name[128];										// Name of the queue
+		bool IsCopyQueue;									// Whether this queue is a copy queue
 
 	private:
-		uint64 GPUCalibrationTicks;
-		uint64 CPUCalibrationTicks;
-		uint64 GPUFrequency;
-		uint64 CPUFrequency;
+		uint64 GPUCalibrationTicks;							// The number of GPU ticks when the calibration was done
+		uint64 CPUCalibrationTicks;							// The number of CPU ticks when the calibration was done
+		uint64 GPUFrequency;								// The GPU tick frequency
+		uint64 CPUFrequency;								// The CPU tick frequency
 	};
 
 	// Structure representating a single sample region
 	struct SampleRegion
 	{
-		const char* pName = "";				//< Name of the region
-		uint64 BeginTicks = 0;				//< GPU ticks of start of the region
-		uint64 EndTicks = 0;				//< GPU ticks of end of the region
-		const char* pFilePath = nullptr;	//< File path of the sample region
-		uint32 TimerIndex = 0xFFFFFFFF;		//< The index in the query heap for the timer
-		uint16 QueueIndex = 0xFFFF;			//< The index of the queue this region is executed on (QueueInfo)
-		uint16 Depth = 0;					//< Stack depth of the region
-		uint16 LineNumber = 0;				//< Line number of the sample region
+		const char* pName = "";								// Name of the region
+		uint64 BeginTicks = 0;								// GPU ticks of start of the region
+		uint64 EndTicks = 0;								// GPU ticks of end of the region
+		const char* pFilePath = nullptr;					// File path of the sample region
+		uint32 TimerIndex = 0xFFFFFFFF;						// The index in the query heap for the timer
+		uint16 QueueIndex = INVALID_QUEUE;					// The index of the queue this region is executed on (QueueInfo)
+		uint16 Depth = 0;									// Stack depth of the region
+		uint16 LineNumber = 0;								// Line number of the sample region
 	};
 
 	// Struct containing all sampling data of a single frame
@@ -478,10 +484,10 @@ public:
 			: Allocator(1 << 16)
 		{}
 
-		std::array<SampleRegion, MAX_NUM_REGIONS> Regions;	//< All sample regions of the frame
-		uint32 NumRegions = 0;								//< The number of resolved regions
-		std::atomic<uint32> CurrentIndex = 0;				//< The index to the next free sample region
-		LinearAllocator Allocator;							//< Scratch allocator storing all dynamic allocations of the frame
+		std::array<SampleRegion, MAX_NUM_REGIONS> Regions;	// All sample regions of the frame
+		uint32 NumRegions = 0;								// The number of resolved regions
+		std::atomic<uint32> CurrentIndex = 0;				// The index to the next free sample region
+		LinearAllocator Allocator;							// Scratch allocator storing all dynamic allocations of the frame
 	};
 
 	const Span<QueueInfo> GetQueueInfo() const { return m_Queues; }
@@ -501,10 +507,11 @@ public:
 		}
 	}
 
-	void SetPaused(bool paused) { m_Paused = paused; }
-	bool IsPaused() const { return m_Paused; }
+	void SetPaused(bool paused) { m_QueuedPause = paused; }
+	bool IsPaused() const { return m_IsPaused; }
 
 private:
+
 	// Return the sample data of the current frame
 	SampleHistory& GetData()
 	{
@@ -540,17 +547,17 @@ private:
 	std::mutex m_ThreadDataMutex;
 	std::vector<const TLS*> m_ThreadData;
 
-	std::vector<QueueInfo> m_Queues;
-	GPUTimeQueryHeap m_MainQueryHeap;
-	uint32 m_ResolveMainQueueIndex = 0xFFFFFFFF;
-	GPUTimeQueryHeap m_CopyQueryHeap;
-	uint32 m_ResolveCopyQueueIndex = 0xFFFFFFFF;
+	std::vector<QueueInfo> m_Queues;						// Data of all registered queues
+	GPUTimeQueryHeap m_MainQueryHeap;						// The main normal timestamp heap
+	uint16 m_ResolveMainQueueIndex = INVALID_QUEUE;			// The index of the queue to resolve normal timestamps with
+	GPUTimeQueryHeap m_CopyQueryHeap;						// The copy query timestamp heap
+	uint16 m_ResolveCopyQueueIndex = INVALID_QUEUE;			// The index of the queue to resolve copy timestamps with
 
-	std::array<SampleHistory, HISTORY_SIZE> m_SampleData;
-	uint32 m_FrameIndex = 0;
-	uint32 m_FrameToResolve = 0;
-
-	bool m_Paused = false;
+	std::array<SampleHistory, HISTORY_SIZE> m_SampleData;	// Per-frame sample data
+	uint32 m_FrameIndex = 0;								// The current frame index
+	uint32 m_FrameToResolve = 0;							// The frame index to resolve next
+	bool m_QueuedPause = false;								// The pause state to be queued next Tick
+	bool m_IsPaused = false;								// The current pause state
 };
 
 
@@ -700,13 +707,13 @@ public:
 	// Structure representating a single sample region
 	struct SampleRegion
 	{
-		const char* pName = "";								//< Name of the region
-		uint64 BeginTicks = 0;								//< The ticks at the start of this region
-		uint64 EndTicks = 0;								//< The ticks at the end of this region
-		const char* pFilePath = nullptr;					//< File path of file in which this region is recorded
-		uint32 ThreadIndex = 0xFFFFFFFF;					//< Thread Index of the thread that recorderd this region
-		uint16 Depth = 0;									//< Depth of the region
-		uint16 LineNumber = 0;								//< Line number of file in which this region is recorded
+		const char* pName = "";								// Name of the region
+		uint64 BeginTicks = 0;								// The ticks at the start of this region
+		uint64 EndTicks = 0;								// The ticks at the end of this region
+		const char* pFilePath = nullptr;					// File path of file in which this region is recorded
+		uint32 ThreadIndex = 0xFFFFFFFF;					// Thread Index of the thread that recorderd this region
+		uint16 Depth = 0;									// Depth of the region
+		uint16 LineNumber = 0;								// Line number of file in which this region is recorded
 	};
 
 	// Struct containing all sampling data of a single frame
@@ -716,9 +723,9 @@ public:
 			: Allocator(1 << 16)
 		{}
 
-		std::array<SampleRegion, MAX_NUM_REGIONS> Regions;	//< All sample regions of the frame
-		std::atomic<uint32> CurrentIndex = 0;				//< The index to the next free sample region
-		LinearAllocator	Allocator;							//< Scratch allocator storing all dynamic allocations of the frame
+		std::array<SampleRegion, MAX_NUM_REGIONS> Regions;	// All sample regions of the frame
+		std::atomic<uint32> CurrentIndex = 0;				// The index to the next free sample region
+		LinearAllocator	Allocator;							// Scratch allocator storing all dynamic allocations of the frame
 	};
 
 	// Thread-local storage to keep track of current depth and region stack
@@ -801,13 +808,13 @@ private:
 		return m_pSampleHistory[m_FrameIndex % m_HistorySize];
 	}
 
-	std::mutex m_ThreadDataLock;
-	std::vector<ThreadData> m_ThreadData;
+	std::mutex m_ThreadDataLock;							// Mutex for accesing thread data
+	std::vector<ThreadData> m_ThreadData;					// Data describing each registered thread
 
-	bool m_Paused = false;
-	uint32 m_FrameIndex = 0;
-	uint32 m_HistorySize = 0;
-	SampleHistory* m_pSampleHistory = nullptr;
+	bool m_Paused = false;									// The current pause state
+	uint32 m_FrameIndex = 0;								// The current frame index
+	uint32 m_HistorySize = 0;								// The number of frame data's
+	SampleHistory* m_pSampleHistory = nullptr;				// Per-frame data
 };
 
 
