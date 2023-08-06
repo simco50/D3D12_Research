@@ -211,6 +211,8 @@ void DrawProfilerHUD()
 				float y = depth * style.BarHeight;
 				ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + style.BarHeight));
 
+				// Ensure a bar always has a width
+				itemRect.Max.x = ImMax(itemRect.Max.x, itemRect.Min.x + 1);
 				if (ImGui::ItemAdd(itemRect, id, 0))
 				{
 					ImColor color = barColor * style.BarColorMultiplier;
@@ -251,7 +253,10 @@ void DrawProfilerHUD()
 					}
 
 					// Draw the bar rect and outline if hovered
-					const ImVec2 padding(style.BarPadding, style.BarPadding);
+
+					// Only pad if bar is large enough
+					float maxPaddingX = ImMax(itemRect.GetWidth() * 0.5f - 1.0f, 0.0f);
+					const ImVec2 padding(ImMin(style.BarPadding, maxPaddingX), style.BarPadding);
 					pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
 					if (hovered)
 						pDraw->AddRect(itemRect.Min, itemRect.Max, ImColor(style.BarHighlightColor), 0.0f, ImDrawFlags_None, 3.0f);

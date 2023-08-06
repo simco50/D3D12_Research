@@ -228,7 +228,7 @@ void DemoApp::Update()
 	Profiler::Get()->Resolve(pContext);
 
 	{
-		GPU_PROFILE_SCOPE("Update", pContext);
+		PROFILE_SCOPE("Update");
 
 		constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
 		if (m_RenderPath == RenderPath::Visibility)

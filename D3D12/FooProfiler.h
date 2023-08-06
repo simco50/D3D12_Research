@@ -613,17 +613,6 @@ public:
 	static constexpr int MAX_DEPTH = 32;
 	static constexpr int MAX_NUM_REGIONS = 1024;
 
-	FooProfiler()
-		: m_HistorySize(REGION_HISTORY)
-	{
-		m_pSampleHistory = new SampleHistory[m_HistorySize];
-	}
-
-	~FooProfiler()
-	{
-		delete[] m_pSampleHistory;
-	}
-
 	// Start and push a region on the current thread
 	void PushRegion(const char* pName, const char* pFilePath = nullptr, uint16 lineNumber = 0)
 	{
@@ -662,6 +651,8 @@ public:
 	// Call at the START of the frame.
 	void Tick()
 	{
+		m_Paused = m_QueuedPaused;
+
 		if (m_FrameIndex)
 			PopRegion();
 
@@ -749,10 +740,10 @@ public:
 	template<typename Fn>
 	void ForEachRegion(Fn&& fn) const
 	{
-		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, m_HistorySize) + 1;
+		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, (uint32)m_SampleData.size()) + 1;
 		while (currentIndex < m_FrameIndex)
 		{
-			const SampleHistory& data = m_pSampleHistory[currentIndex % m_HistorySize];
+			const SampleHistory& data = m_SampleData[currentIndex % m_SampleData.size()];
 			uint32 numRegions = data.CurrentIndex;
 			for (uint32 i = 0; i < numRegions; ++i)
 				fn(currentIndex, data.Regions[i]);
@@ -764,10 +755,10 @@ public:
 	template<typename Fn>
 	void ForEachFrame(Fn&& fn) const
 	{
-		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, m_HistorySize) + 1;
+		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, (uint32)m_SampleData.size()) + 1;
 		while (currentIndex < m_FrameIndex)
 		{
-			const SampleHistory& data = m_pSampleHistory[currentIndex % m_HistorySize];
+			const SampleHistory& data = m_SampleData[currentIndex % m_SampleData.size()];
 			fn(currentIndex, data);
 			++currentIndex;
 		}
@@ -776,13 +767,13 @@ public:
 	// Returns the oldest resolved sample data
 	const SampleHistory& GetHistory() const
 	{
-		uint32 currentIndex = (m_FrameIndex + 1) % m_HistorySize;
-		return m_pSampleHistory[currentIndex];
+		uint32 currentIndex = (m_FrameIndex + 1) % m_SampleData.size();
+		return m_SampleData[currentIndex];
 	}
 
 	Span<ThreadData> GetThreads() const { return m_ThreadData; }
 
-	void SetPaused(bool paused) { m_Paused = paused; }
+	void SetPaused(bool paused) { m_QueuedPaused = paused; }
 	bool IsPaused() const { return m_Paused; }
 
 private:
@@ -805,16 +796,16 @@ private:
 	// Return the sample data of the current frame
 	SampleHistory& GetData()
 	{
-		return m_pSampleHistory[m_FrameIndex % m_HistorySize];
+		return m_SampleData[m_FrameIndex % m_SampleData.size()];
 	}
 
 	std::mutex m_ThreadDataLock;							// Mutex for accesing thread data
 	std::vector<ThreadData> m_ThreadData;					// Data describing each registered thread
 
-	bool m_Paused = false;									// The current pause state
+	std::array<SampleHistory, REGION_HISTORY> m_SampleData;	// Per-frame data
 	uint32 m_FrameIndex = 0;								// The current frame index
-	uint32 m_HistorySize = 0;								// The number of frame data's
-	SampleHistory* m_pSampleHistory = nullptr;				// Per-frame data
+	bool m_Paused = false;									// The current pause state
+	bool m_QueuedPaused = false;							// The queued pause state
 };
 
 
