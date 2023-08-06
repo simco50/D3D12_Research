@@ -322,38 +322,20 @@ void FooProfiler::DrawHUD()
 		{
 			pDraw->AddRectFilled(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y + gStyle.BarHeight), ImColor(0.0f, 0.0f, 0.0f, 0.3f));
 
-			ImVec2 trackTextCursor = ImVec2(timelineRect.Min.x, cursor.y);
-			ImVec2 circleCenter = trackTextCursor + ImVec2(gStyle.BarHeight, gStyle.BarHeight) * 0.5f;
-			float triSize = ImGui::GetTextLineHeight() * 0.2f;
-
 			bool isOpen = ImGui::GetCurrentWindow()->StateStorage.GetBool(id, true);
-			ImRect triRect = ImRect(trackTextCursor, trackTextCursor + ImVec2(triSize, triSize) * 5.0f);
-			ImGui::ItemAdd(triRect, id);
-			pDraw->AddCircle(circleCenter, triSize * 2, ImColor(gStyle.BGTextColor), 0, 1.0);
-			if (isOpen)
-			{
-				float r = triSize;
-				ImVec2 a = ImVec2(+0.000f, +0.750f) * r;
-				ImVec2 b = ImVec2(-0.866f, -0.750f) * r;
-				ImVec2 c = ImVec2(+0.866f, -0.750f) * r;
-				pDraw->AddTriangleFilled(circleCenter + a, circleCenter + b, circleCenter + c, ImColor(gStyle.BGTextColor));
-			}
-			else
-			{
-				float r = triSize;
-				ImVec2 a = ImVec2(+0.750f, +0.000f) * r;
-				ImVec2 b = ImVec2(-0.750f, +0.866f) * r;
-				ImVec2 c = ImVec2(-0.750f, -0.866f) * r;
-				pDraw->AddTriangleFilled(circleCenter + a, circleCenter + b, circleCenter + c, ImColor(gStyle.BGTextColor));
-			}
-			trackTextCursor.x += gStyle.BarHeight;
+			ImVec2 trackTextCursor = ImVec2(timelineRect.Min.x, cursor.y);
 
-			if (ImGui::ButtonBehavior(triRect, id, nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft))
+			float caretSize = ImGui::GetTextLineHeight();
+			if (ImGui::ItemAdd(ImRect(trackTextCursor, trackTextCursor + ImVec2(caretSize, caretSize)), id))
 			{
-				isOpen = !isOpen;
-				ImGui::GetCurrentWindow()->StateStorage.SetBool(id, isOpen);
+				pDraw->AddText(ImGui::GetItemRectMin() + ImVec2(2, 2), ImColor(gStyle.BGTextColor), isOpen ? ICON_FA_CARET_DOWN : ICON_FA_CARET_RIGHT);
+				if (ImGui::ButtonBehavior(ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()), id, nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft))
+				{
+					isOpen = !isOpen;
+					ImGui::GetCurrentWindow()->StateStorage.SetBool(id, isOpen);
+				}
 			}
-
+			trackTextCursor.x += caretSize;
 			pDraw->AddText(trackTextCursor, ImColor(gStyle.BGTextColor), pName);
 			return isOpen;
 		};
