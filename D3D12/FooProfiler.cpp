@@ -53,89 +53,41 @@ static void EditStyle()
 	ImGui::PopItemWidth();
 }
 
-/**
- * @brief Generate a color from a string. Used to color bars
- */
+// 32-bit FNV hash
+static uint32 HashString(const char* pStr)
+{
+	uint32 result = 0x811c9dc5;
+	while (*pStr)
+	{
+		result ^= *pStr++;
+		result *= 0x1000193;
+	}
+	return result;
+}
+
+// From https://github.com/stolk/hsvbench
+static ImVec4 HSVtoRGB(float h, float s, float v)
+{
+	const float h6 = 6.0f * h;
+	const float r = fabsf(h6 - 3.0f) - 1.0f;
+	const float g = 2.0f - fabsf(h6 - 2.0f);
+	const float b = 2.0f - fabsf(h6 - 4.0f);
+
+	const float is = 1.0f - s;
+	ImVec4 rgba;
+	rgba.x = v * (s * ImClamp(r, 0.0f, 1.0f) + is);
+	rgba.y = v * (s * ImClamp(g, 0.0f, 1.0f) + is);
+	rgba.z = v * (s * ImClamp(b, 0.0f, 1.0f) + is);
+	rgba.w = 1.0f;
+	return rgba;
+}
+
+// Generate a color from a string. Used to color bars
 static ImColor ColorFromString(const char* pName)
 {
-	/*
-	  Converts a given set of HSV values `h', `s', `v' into RGB
-	  coordinates. The output RGB values are in the range [0, 1], and
-	  the input HSV values are in the ranges h = [0, 360], and s, v =
-	  [0, 1], respectively.|
-	*/
-	auto HSVtoRGB = [](float h, float s, float v)
-	{
-		ImVec4 rgb;
-		float fC = v * s;
-		float fHPrime = fmodf(h / 60.0f, 6);
-		float fX = fC * (1 - fabs(fmodf(fHPrime, 2) - 1));
-		float fM = v - fC;
-
-		if (0 <= fHPrime && fHPrime < 1)
-		{
-			rgb.x = fC;
-			rgb.y = fX;
-			rgb.z = 0;
-		}
-		else if (1 <= fHPrime && fHPrime < 2)
-		{
-			rgb.x = fX;
-			rgb.y = fC;
-			rgb.z = 0;
-		}
-		else if (2 <= fHPrime && fHPrime < 3)
-		{
-			rgb.x = 0;
-			rgb.y = fC;
-			rgb.z = fX;
-		}
-		else if (3 <= fHPrime && fHPrime < 4)
-		{
-			rgb.x = 0;
-			rgb.y = fX;
-			rgb.z = fC;
-		}
-		else if (4 <= fHPrime && fHPrime < 5)
-		{
-			rgb.x = fX;
-			rgb.y = 0;
-			rgb.z = fC;
-		}
-		else if (5 <= fHPrime && fHPrime < 6)
-		{
-			rgb.x = fC;
-			rgb.y = 0;
-			rgb.z = fX;
-		}
-		else
-		{
-			rgb.x = 0;
-			rgb.y = 0;
-			rgb.z = 0;
-		}
-
-		rgb.x += fM;
-		rgb.y += fM;
-		rgb.z += fM;
-		rgb.w = 1.0f;
-		return rgb;
-	};
-
-
-	auto FNVHash = [](const char* pStr)
-	{
-		uint32 result = 0x811c9dc5;
-		while (*pStr)
-		{
-			result ^= *pStr++;
-			result *= 0x1000193;
-		}
-		return result;
-	};
-
-	uint32 hue = FNVHash(pName) % 360;
-	return ImColor(HSVtoRGB((float)hue, 0.5f, 0.6f));
+	uint32 hash = HashString(pName);
+	float hashF = (float)hash / UINT32_MAX;
+	return ImColor(HSVtoRGB(hashF, 0.5f, 0.6f));
 }
 
 void FooProfiler::DrawHUD()
@@ -374,7 +326,7 @@ void FooProfiler::DrawHUD()
 					if ((int)region.Depth >= maxDepth)
 						return;
 
-					trackDepth = Math::Max(trackDepth, (uint32)region.Depth + 1);
+					trackDepth = ImMax(trackDepth, (uint32)region.Depth + 1);
 
 					uint64 cpuBeginTicks = queue.GpuToCpuTicks(region.BeginTicks);
 					uint64 cpuEndTicks = queue.GpuToCpuTicks(region.EndTicks);
@@ -423,7 +375,7 @@ void FooProfiler::DrawHUD()
 					if (region.Depth >= maxDepth)
 						return;
 
-					trackDepth = Math::Max(trackDepth, (uint32)region.Depth + 1);
+					trackDepth = ImMax(trackDepth, (uint32)region.Depth + 1);
 
 					DrawBar(ImGui::GetID(&region), region.BeginTicks, region.EndTicks, region.Depth, region.pName, ColorFromString(region.pName), [&]()
 						{
@@ -509,7 +461,7 @@ void FooProfiler::DrawHUD()
 				// Logarithmic scale
 				float logScale = logf(gHUDContext.TimelineScale);
 				logScale += zoomDelta;
-				float newScale = Math::Clamp(expf(logScale), 1.0f, 100.0f);
+				float newScale = ImClamp(expf(logScale), 1.0f, 100.0f);
 
 				float scaleFactor = newScale / gHUDContext.TimelineScale;
 				gHUDContext.TimelineScale *= scaleFactor;
