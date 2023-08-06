@@ -445,9 +445,9 @@ public:
 			return (float)ticks / GPUFrequency * 1000.0f;
 		}
 
+		ID3D12CommandQueue* pQueue;
 		char Name[128];
 		bool IsCopyQueue;
-		ID3D12CommandQueue* pQueue;
 
 	private:
 		uint64 GPUCalibrationTicks;
@@ -536,11 +536,13 @@ private:
 
 	std::mutex m_ThreadDataMutex;
 	std::vector<const TLS*> m_ThreadData;
+
 	std::vector<QueueInfo> m_Queues;
 	GPUTimeQueryHeap m_MainQueryHeap;
 	uint32 m_ResolveMainQueueIndex = 0xFFFFFFFF;
 	GPUTimeQueryHeap m_CopyQueryHeap;
 	uint32 m_ResolveCopyQueueIndex = 0xFFFFFFFF;
+
 	std::array<SampleHistory, HISTORY_SIZE> m_SampleData;
 	uint32 m_FrameIndex = 0;
 	uint32 m_FrameToResolve = 0;

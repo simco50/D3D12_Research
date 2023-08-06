@@ -27,6 +27,7 @@ struct StyleOptions
 
 	float BarHeight = 25;
 	float BarPadding = 2;
+
 	ImVec4 BarColorMultiplier = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 	ImVec4 BGTextColor = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
 	ImVec4 FGTextColor = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
@@ -216,7 +217,9 @@ void FooProfiler::DrawHUD()
 			float msWidth = tickScale * MsToTicks(1);
 			ImVec2 tickPos = ImVec2(cursor.x + x0, timelineRect.Min.y);
 			pDraw->AddRectFilled(tickPos + ImVec2(0, gStyle.BarHeight), tickPos + ImVec2(msWidth, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.02f));
-			pDraw->AddText(tickPos + ImVec2(5, 0), ImColor(gStyle.BGTextColor), Sprintf("%d ms", i).c_str());
+			const char* pBarText;
+			ImFormatStringToTempBuffer(&pBarText, nullptr, "%d ms", i);
+			pDraw->AddText(tickPos + ImVec2(5, 0), ImColor(gStyle.BGTextColor), pBarText);
 			pDraw->AddLine(tickPos + ImVec2(0, gStyle.BarHeight * 0.5f), tickPos + ImVec2(0, gStyle.BarHeight), ImColor(gStyle.BGTextColor));
 			pDraw->AddLine(tickPos + ImVec2(msWidth, gStyle.BarHeight * 0.75f), tickPos + ImVec2(msWidth, gStyle.BarHeight), ImColor(gStyle.BGTextColor));
 		}
@@ -241,13 +244,16 @@ void FooProfiler::DrawHUD()
 				{
 					ImColor color = barColor * gStyle.BarColorMultiplier;
 					ImColor textColor = gStyle.FGTextColor;
+					// Fade out the bars that don't match the filter
 					if (gHUDContext.SearchString[0] != 0 && !strstr(pName, gHUDContext.SearchString))
 					{
 						color.Value.w *= 0.3f;
 						textColor.Value.w *= 0.5f;
 					}
+					// Darken the bottom
 					ImColor colorBottom = color.Value * ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
 
+					// Draw tooltip if hovered
 					bool hovered = ImGui::IsItemHovered();
 					if (hovered)
 					{
@@ -258,9 +264,10 @@ void FooProfiler::DrawHUD()
 						}
 					}
 
+					// If the bar is double-clicked, zoom in to make the bar fill the entire window
 					if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
 					{
-						// The zoom required to make the bar fit the entire window
+						// Zoom ration to make the bar fit the entire window
 						float zoom = timelineWidth / itemRect.GetWidth();
 						gHUDContext.TimelineScale = zoom;
 
@@ -272,28 +279,29 @@ void FooProfiler::DrawHUD()
 						gHUDContext.TimelineOffset.x = -newStartPos;
 					}
 
-					const float rounding = 0.0f;
+					// Draw the bar rect and outline if hovered
 					const ImVec2 padding(gStyle.BarPadding, gStyle.BarPadding);
-					if (hovered)
-						pDraw->AddRect(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), rounding, ImDrawFlags_None, 3.0f);
-
 					pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
+					if (hovered)
+						pDraw->AddRect(itemRect.Min, itemRect.Max, ImColor(gStyle.BarHighlightColor), 0.0f, ImDrawFlags_None, 3.0f);
 
-					if (itemRect.GetWidth() > 10)
+					// If the bar size is large enough, draw the name of the bar on top
+					if (itemRect.GetWidth() > 10.0f)
 					{
 						float ms = TicksToMs((float)(endTicks - beginTicks));
-						std::string text = Sprintf("%s (%.2f ms)", pName, ms);
+						const char* pBarText;
+						ImFormatStringToTempBuffer(&pBarText, nullptr, "%s (%.2f ms)", pName, ms);
 
-						ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
+						ImVec2 textSize = ImGui::CalcTextSize(pBarText);
 						const char* pEtc = "...";
 						float etcWidth = 20.0f;
 						if (textSize.x < itemRect.GetWidth() * 0.9f)
 						{
-							pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, textColor, text.c_str());
+							pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), gStyle.BarHeight) - textSize) * 0.5f, textColor, pBarText);
 						}
 						else if (itemRect.GetWidth() > etcWidth + 10)
 						{
-							const char* pChar = text.c_str();
+							const char* pChar = pBarText;
 							float currentOffset = 10;
 							while (*pChar++)
 							{
@@ -303,10 +311,10 @@ void FooProfiler::DrawHUD()
 								currentOffset += width;
 							}
 
-							float textWidth = ImGui::CalcTextSize(text.c_str(), pChar).x;
+							float textWidth = ImGui::CalcTextSize(pBarText, pChar).x;
 
 							ImVec2 textPos = itemRect.Min + ImVec2(4, (gStyle.BarHeight - textSize.y) * 0.5f);
-							pDraw->AddText(textPos, textColor, text.c_str(), pChar);
+							pDraw->AddText(textPos, textColor, pBarText, pChar);
 							pDraw->AddText(textPos + ImVec2(textWidth, 0), textColor, pEtc);
 						}
 					}
@@ -393,7 +401,9 @@ void FooProfiler::DrawHUD()
 		{
 			// Add thread name for track
 			const ThreadData& thread = m_ThreadData[threadIndex];
-			bool isOpen = TrackHeader(Sprintf("%s [%d]", thread.Name, thread.ThreadID).c_str(), ImGui::GetID(&thread));
+			const char* pHeaderText;
+			ImFormatStringToTempBuffer(&pHeaderText, nullptr, "%s [%d]", thread.Name, thread.ThreadID);
+			bool isOpen = TrackHeader(pHeaderText, ImGui::GetID(&thread));
 
 			uint32 maxDepth = isOpen ? gStyle.MaxDepth : 1;
 			uint32 trackDepth = 1;
@@ -432,10 +442,11 @@ void FooProfiler::DrawHUD()
 		// The final height of the timeline
 		float timelineHeight = cursor.y - cursorStart.y;
 
-		if (ImGui::IsWindowFocused() && ImGui::IsMouseHoveringRect(timelineRect.Min, timelineRect.Max))
+		if (ImGui::IsWindowFocused())
 		{
 			// Profile range
-			if (!gHUDContext.IsSelectingRange)
+			// If not currently in selection, start selection when left mouse button is pressed
+			if (!gHUDContext.IsSelectingRange && ImGui::IsMouseHoveringRect(timelineRect.Min, timelineRect.Max))
 			{
 				if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 				{
@@ -443,34 +454,48 @@ void FooProfiler::DrawHUD()
 					gHUDContext.IsSelectingRange = true;
 				}
 			}
-			else
+			else if(gHUDContext.IsSelectingRange)
 			{
+				// If mouse button is released, exit measuring mode
 				if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 				{
 					gHUDContext.IsSelectingRange = false;
 				}
-				else if (fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) > 1)
+				else
 				{
-					pDraw->AddRectFilled(ImVec2(gHUDContext.RangeSelectionStart, timelineRect.Min.y), ImVec2(ImGui::GetMousePos().x, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+					// Distance between mouse cursor and measuring start
+					float distance = fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart);
 
-					const ImColor measureColor(1.0f, 1.0f, 1.0f);
-					ImVec2 lineStart = ImVec2(gHUDContext.RangeSelectionStart, ImGui::GetMousePos().y);
-					ImVec2 lineEnd = ImGui::GetMousePos();
-					if (lineStart.x > lineEnd.x)
-						std::swap(lineStart.x, lineEnd.x);
+					// Fade in based on distance
+					float opacity = ImClamp(distance / 30.0f, 0.0f, 1.0f);
+					if (opacity > 0.0f)
+					{
+						float time = TicksToMs(distance / tickScale);
 
-					// Add line and arrows
-					pDraw->AddLine(lineStart, lineEnd, measureColor);
-					pDraw->AddLine(lineStart, lineStart + ImVec2(5, 5), measureColor);
-					pDraw->AddLine(lineStart, lineStart + ImVec2(5, -5), measureColor);
-					pDraw->AddLine(lineEnd, lineEnd + ImVec2(-5, 5), measureColor);
-					pDraw->AddLine(lineEnd, lineEnd + ImVec2(-5, -5), measureColor);
+						// Draw measure region
+						pDraw->AddRectFilled(ImVec2(gHUDContext.RangeSelectionStart, timelineRect.Min.y), ImVec2(ImGui::GetMousePos().x, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.1f));
+						pDraw->AddLine(ImVec2(gHUDContext.RangeSelectionStart, timelineRect.Min.y), ImVec2(gHUDContext.RangeSelectionStart, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.3f), 3.0f);
+						pDraw->AddLine(ImVec2(ImGui::GetMousePos().x, timelineRect.Min.y), ImVec2(ImGui::GetMousePos().x, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.3f), 3.0f);
 
-					// Add text in the middle
-					std::string text = Sprintf("Time: %.3f ms", TicksToMs(fabs(ImGui::GetMousePos().x - gHUDContext.RangeSelectionStart) / tickScale));
-					ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
-					pDraw->AddText((lineEnd + lineStart) / 2 - ImVec2(textSize.x * 0.5f, textSize.y), measureColor, text.c_str());
+						// Add line and arrows
+						ImColor measureColor = gStyle.FGTextColor;
+						measureColor.Value.w *= opacity;
+						ImVec2 lineStart = ImVec2(gHUDContext.RangeSelectionStart, ImGui::GetMousePos().y);
+						ImVec2 lineEnd = ImGui::GetMousePos();
+						if (lineStart.x > lineEnd.x)
+							std::swap(lineStart.x, lineEnd.x);
+						pDraw->AddLine(lineStart, lineEnd, measureColor);
+						pDraw->AddLine(lineStart, lineStart + ImVec2(5, 5), measureColor);
+						pDraw->AddLine(lineStart, lineStart + ImVec2(5, -5), measureColor);
+						pDraw->AddLine(lineEnd, lineEnd + ImVec2(-5, 5), measureColor);
+						pDraw->AddLine(lineEnd, lineEnd + ImVec2(-5, -5), measureColor);
 
+						// Add text in the middle
+						const char* pTimeText;
+						ImFormatStringToTempBuffer(&pTimeText, nullptr, "Time: %.3f ms", time);
+						ImVec2 textSize = ImGui::CalcTextSize(pTimeText);
+						pDraw->AddText((lineEnd + lineStart) / 2 - ImVec2(textSize.x * 0.5f, textSize.y), measureColor, pTimeText);
+					}
 				}
 			}
 
@@ -478,11 +503,10 @@ void FooProfiler::DrawHUD()
 			float zoomDelta = 0.0f;
 			if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) || ImGui::IsKeyDown(ImGuiKey_RightCtrl))
 				zoomDelta += ImGui::GetIO().MouseWheel / 5.0f;
-			// zoomDelta -= 0.3f * ImGui::IsKeyPressed(ImGuiKey_O);
-			// zoomDelta += 0.3f * ImGui::IsKeyPressed(ImGuiKey_P);
 
 			if (zoomDelta != 0)
 			{
+				// Logarithmic scale
 				float logScale = logf(gHUDContext.TimelineScale);
 				logScale += zoomDelta;
 				float newScale = Math::Clamp(expf(logScale), 1.0f, 100.0f);
@@ -516,10 +540,12 @@ void FooProfiler::DrawHUD()
 			pDraw->PopClipRect();
 		}
 
+		// Horizontal scroll bar
 		ImS64 scrollH = -(ImS64)gHUDContext.TimelineOffset.x;
 		ImGui::ScrollbarEx(ImRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionAvail()), ImGui::GetID("ScrollH"), ImGuiAxis_X, &scrollH, (ImS64)timelineRect.GetSize().x, (ImS64)timelineWidth, ImDrawFlags_None);
 		gHUDContext.TimelineOffset.x = -(float)scrollH;
 
+		// Vertical scroll bar
 		ImS64 scrollV = -(ImS64)gHUDContext.TimelineOffset.y;
 		ImGui::ScrollbarEx(ImRect(ImVec2(timelineRect.Max.x, timelineRect.Min.y), ImVec2(timelineRect.Max.x + 15, timelineRect.Max.y)), ImGui::GetID("ScrollV"), ImGuiAxis_Y, &scrollV, (ImS64)timelineRect.GetSize().y, (ImS64)timelineHeight, ImDrawFlags_None);
 		gHUDContext.TimelineOffset.y = -(float)scrollV;
