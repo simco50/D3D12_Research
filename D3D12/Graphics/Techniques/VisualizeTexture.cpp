@@ -268,7 +268,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 					ImGuiID minRangeHandleID = ImGui::GetID("##SliderMin");
 					ImRect minRangeHandleBB(ImVec2(minRangePosX - triangleSize, item_bb.Min.y), ImVec2(minRangePosX + triangleSize, item_bb.Min.y + triangleSize * 2));
 					ImGui::ItemAdd(minRangeHandleBB, minRangeHandleID);
-					const bool hovered = ImGui::ItemHoverable(minRangeHandleBB, minRangeHandleID);
+					const bool hovered = ImGui::ItemHoverable(minRangeHandleBB, minRangeHandleID, ImGuiItemFlags_None);
 					const bool clicked = hovered && ImGui::IsMouseClicked(0, minRangeHandleID);
 					if (clicked || g.NavActivateId == minRangeHandleID)
 					{
@@ -288,7 +288,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 					ImGuiID maxRangeHandleID = ImGui::GetID("##SliderMax");
 					ImRect maxRangeHandleBB(ImVec2(maxRangePosX - triangleSize, item_bb.Max.y - triangleSize * 2), ImVec2(maxRangePosX + triangleSize, item_bb.Max.y));
 					ImGui::ItemAdd(maxRangeHandleBB, maxRangeHandleID);
-					const bool hovered = ImGui::ItemHoverable(maxRangeHandleBB, maxRangeHandleID);
+					const bool hovered = ImGui::ItemHoverable(maxRangeHandleBB, maxRangeHandleID, ImGuiItemFlags_None);
 					const bool clicked = hovered && ImGui::IsMouseClicked(0, maxRangeHandleID);
 					if (clicked || g.NavActivateId == maxRangeHandleID)
 					{

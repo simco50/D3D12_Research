@@ -496,8 +496,7 @@ void FooProfiler::DrawHUD()
 
 		// Panning behavior
 		bool held;
-		ImGui::ButtonBehavior(timelineRect, timelineID, nullptr, &held, ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_AllowItemOverlap);
-		ImGui::SetItemAllowOverlap();
+		ImGui::ButtonBehavior(timelineRect, timelineID, nullptr, &held, ImGuiButtonFlags_MouseButtonRight);
 		if (held)
 			gHUDContext.TimelineOffset += ImGui::GetIO().MouseDelta;
 

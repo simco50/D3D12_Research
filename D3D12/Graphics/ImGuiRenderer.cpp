@@ -180,15 +180,16 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 		io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
 	}
 
+	ResourceFormat pixelFormat = ResourceFormat::RGBA8_UNORM;
 	unsigned char* pPixels;
 	int width, height;
-	io.Fonts->GetTexDataAsRGBA32(&pPixels, &height, &width);
+	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
 
 	D3D12_SUBRESOURCE_DATA data;
 	data.pData = pPixels;
-	data.RowPitch = RHI::GetRowPitch(ResourceFormat::RGBA8_UNORM, width);
-	data.SlicePitch = RHI::GetSlicePitch(ResourceFormat::RGBA8_UNORM, width, height);
-	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), "ImGui Font", data);
+	data.RowPitch = RHI::GetRowPitch(pixelFormat, width);
+	data.SlicePitch = RHI::GetSlicePitch(pixelFormat, width, height);
+	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, pixelFormat, 1, TextureFlag::ShaderResource), "ImGui Font", data);
 
 	gImGuiRS = new RootSignature(pDevice);
 	gImGuiRS->AddRootConstants<uint32>(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
