@@ -496,7 +496,11 @@ void GraphicsDevice::FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CP
 void GraphicsDevice::TickFrame()
 {
 	m_DeleteQueue.Clean();
-	m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
+	uint64 fenceValue = m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
+
+	m_FrameFenceValues[m_FrameIndex % NUM_BUFFERS] = fenceValue;
+	++m_FrameIndex;
+	m_pFrameFence->CpuWait(m_FrameFenceValues[m_FrameIndex % NUM_BUFFERS]);
 }
 
 void GraphicsDevice::IdleGPU()
@@ -1290,54 +1294,12 @@ ResourceFormat GetSwapchainFormat(DisplayMode displayMode)
 	}
 }
 
-SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHandle pNativeWindow)
-	: GraphicsObject(pDevice), m_DesiredDisplayMode(displayMode), m_Format(GetSwapchainFormat(displayMode)), m_CurrentImage(0)
+SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, uint32 numFrames, WindowHandle pNativeWindow)
+	: GraphicsObject(pDevice), m_Window(pNativeWindow), m_DesiredDisplayMode(displayMode), m_Format(GetSwapchainFormat(displayMode)), m_CurrentImage(0), m_NumFrames(numFrames)
 {
 	m_pPresentFence = new Fence(pDevice, "Present Fence");
 
-	DXGI_SWAP_CHAIN_DESC1 desc{};
-	BOOL allowTearing = FALSE;
-	if (SUCCEEDED(pDevice->GetFactory()->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
-	{
-		m_AllowTearing = allowTearing;
-		desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-	}
-	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-	desc.BufferCount = (uint32)m_Backbuffers.size();
-	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	desc.Format = D3D::ConvertFormat(m_Format);
-	desc.Width = 0;
-	desc.Height = 0;
-	desc.Scaling = DXGI_SCALING_NONE;
-	desc.Stereo = FALSE;
-	// The compositor can use DirectFlip, where it uses the application's back buffer as the entire display back buffer.
-	// With DXGI_SWAP_EFFECT_FLIP_DISCARD, the compositor can _could_ still perform this optimization, by drawing other content onto the application's back buffer.
-	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-
-	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
-	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-	fsDesc.Windowed = true;
-
-	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	RefCountPtr<IDXGISwapChain1> swapChain;
-
-	VERIFY_HR(pDevice->GetFactory()->CreateSwapChainForHwnd(
-		pPresentQueue->GetCommandQueue(),
-		(HWND)pNativeWindow,
-		&desc,
-		&fsDesc,
-		nullptr,
-		swapChain.GetAddressOf()));
-
-	m_pSwapchain.Reset();
-	swapChain.As(&m_pSwapchain);
-
-	DXGI_SWAP_CHAIN_DESC1 Desc = {};
-	swapChain->GetDesc1(&Desc);
-	OnResizeOrMove(Desc.Width, Desc.Height);
+	RecreateSwapChain();
 }
 
 SwapChain::~SwapChain()
@@ -1362,9 +1324,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 		m_pPresentFence->CpuWait();
 
 		for (size_t i = 0; i < m_Backbuffers.size(); ++i)
-		{
 			m_Backbuffers[i].Reset();
-		}
 
 		//Resize the buffers
 		DXGI_SWAP_CHAIN_DESC1 desc{};
@@ -1405,10 +1365,31 @@ void SwapChain::Present()
 
 	// Signal and store when the GPU work for the frame we just flipped is finished.
 	CommandQueue* pDirectQueue = GetParent()->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	uint64 fenceValue = m_pPresentFence->Signal(pDirectQueue);
+	m_pPresentFence->Signal(pDirectQueue);
 
-	m_pPresentFence->CpuWait(m_PresentFenceValue);
-	m_PresentFenceValue = fenceValue;
+	WaitForSingleObject(m_WaitableObject, INFINITE);
+}
+
+void SwapChain::SetNumFrames(uint32 numFrames)
+{
+	m_NumFrames = numFrames;
+	RecreateSwapChain();
+}
+
+void SwapChain::SetMaxFrameLatency(uint32 maxFrameLatency)
+{
+	m_MaxFrameLatency = maxFrameLatency;
+	if (m_UseWaitableObject)
+		m_pSwapchain->SetMaximumFrameLatency(maxFrameLatency);
+}
+
+void SwapChain::SetUseWaitableSwapChain(bool enabled)
+{
+	if (m_UseWaitableObject != enabled)
+	{
+		m_UseWaitableObject = enabled;
+		RecreateSwapChain();
+	}
 }
 
 bool SwapChain::DisplaySupportsHDR() const
@@ -1431,4 +1412,78 @@ Vector2i SwapChain::GetViewport() const
 {
 	Texture* pTexture = GetBackBuffer();
 	return Vector2i(pTexture->GetWidth(), pTexture->GetHeight());
+}
+
+void SwapChain::RecreateSwapChain()
+{
+	m_pPresentFence->CpuWait();
+
+	GraphicsDevice* pDevice = GetParent();
+
+	DXGI_SWAP_CHAIN_DESC1 desc{};
+	BOOL allowTearing = FALSE;
+	if (SUCCEEDED(pDevice->GetFactory()->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
+	{
+		m_AllowTearing = allowTearing;
+		desc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+	}
+
+	if (m_UseWaitableObject)
+		desc.Flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+
+	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+	desc.BufferCount = m_NumFrames;
+	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	desc.Format = D3D::ConvertFormat(m_Format);
+	desc.Width = 0;
+	desc.Height = 0;
+	desc.Scaling = DXGI_SCALING_NONE;
+	desc.Stereo = FALSE;
+	// The compositor can use DirectFlip, where it uses the application's back buffer as the entire display back buffer.
+	// With DXGI_SWAP_EFFECT_FLIP_DISCARD, the compositor can _could_ still perform this optimization, by drawing other content onto the application's back buffer.
+	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+
+	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
+	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+	fsDesc.Windowed = true;
+
+	m_Backbuffers.clear();
+	m_Backbuffers.resize(m_NumFrames);
+	m_pSwapchain.Reset();
+
+	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	RefCountPtr<IDXGISwapChain1> swapChain;
+
+	VERIFY_HR(pDevice->GetFactory()->CreateSwapChainForHwnd(
+		pPresentQueue->GetCommandQueue(),
+		(HWND)m_Window,
+		&desc,
+		&fsDesc,
+		nullptr,
+		swapChain.GetAddressOf()));
+
+	swapChain.As(&m_pSwapchain);
+	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
+
+	if (m_WaitableObject)
+	{
+		CloseHandle(m_WaitableObject);
+		m_WaitableObject = nullptr;
+	}
+
+	if (m_UseWaitableObject)
+	{
+		m_pSwapchain->SetMaximumFrameLatency(m_MaxFrameLatency);
+		m_WaitableObject = m_pSwapchain->GetFrameLatencyWaitableObject();
+	}
+
+	m_Width = 0;
+	m_Height = 0;
+
+	DXGI_SWAP_CHAIN_DESC1 descActual{};
+	m_pSwapchain->GetDesc1(&descActual);
+	OnResizeOrMove(descActual.Width, descActual.Height);
 }

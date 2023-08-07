@@ -107,7 +107,7 @@ void Profiler::Initialize(GraphicsDevice* pParent)
 	VERIFY_HR_EX(pParent->GetDevice()->CreateQueryHeap(&desc, IID_PPV_ARGS(m_pQueryHeap.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pQueryHeap.Get(), "Profiler Timestamp Query Heap");
 
-	m_pReadBackBuffer = pParent->CreateBuffer(BufferDesc::CreateReadback(sizeof(uint64) * SwapChain::NUM_FRAMES * HEAP_SIZE), "Profiling Readback Buffer");
+	m_pReadBackBuffer = pParent->CreateBuffer(BufferDesc::CreateReadback(sizeof(uint64) * GraphicsDevice::NUM_BUFFERS * HEAP_SIZE), "Profiling Readback Buffer");
 
 	m_pRootBlock = std::make_unique<ProfileNode>("Total", nullptr);
 	m_pRootBlock->StartTimer(nullptr);
@@ -173,7 +173,7 @@ void Profiler::Resolve(CommandContext* pContext)
 	pContext->GetCommandList()->ResolveQueryData(m_pQueryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, m_CurrentTimer * QUERY_PAIR_NUM, m_pReadBackBuffer->GetResource(), offset * sizeof(uint64));
 
 	m_CurrentTimer = 0;
-	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % SwapChain::NUM_FRAMES;
+	m_CurrentReadbackFrame = (m_CurrentReadbackFrame + 1) % GraphicsDevice::NUM_BUFFERS;
 	m_pCurrentBlock->StartTimer(nullptr);
 	++m_FrameIndex;
 	m_pPreviousBlock = nullptr;

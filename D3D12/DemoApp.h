@@ -125,7 +125,7 @@ private:
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO;
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
 	RefCountPtr<PipelineState> m_pReduceDepthPSO;
-	std::array<RefCountPtr<Buffer>, SwapChain::NUM_FRAMES> m_ReductionReadbackTargets;
+	std::array<RefCountPtr<Buffer>, GraphicsDevice::NUM_BUFFERS> m_ReductionReadbackTargets;
 
 	//Camera motion
 	RefCountPtr<PipelineState> m_pCameraMotionPSO;
