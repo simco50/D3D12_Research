@@ -5,7 +5,7 @@
 class LinearAllocator
 {
 public:
-	LinearAllocator(uint32 size)
+	explicit LinearAllocator(uint32 size)
 		: m_pData(new char[size]), m_Size(size), m_Offset(0)
 	{
 	}
@@ -14,6 +14,9 @@ public:
 	{
 		delete[] m_pData;
 	}
+
+	LinearAllocator(LinearAllocator&) = delete;
+	LinearAllocator& operator=(LinearAllocator&) = delete;
 
 	void Reset()
 	{
@@ -173,7 +176,7 @@ private:
 		// End a timestamp query of the provided index previously returned in QueryBegin()
 		void EndQuery(uint32 index, ID3D12GraphicsCommandList* pCommandList)
 		{
-			check(index >= 0 && index < MaxNumQueries);
+			check(index < MaxNumQueries);
 			pCommandList->EndQuery(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, index * 2 + 1);
 		}
 
@@ -190,6 +193,10 @@ private:
 				ID3D12CommandList* pResolveCommandLists[] = { pResolveCommandList };
 				pResolveQueue->ExecuteCommandLists(1, pResolveCommandLists);
 			}
+			else
+			{
+				pResolveCommandList->Close();
+			}
 			frame.ReadbackQueries = Span<uint64>(m_pReadbackData + frame.QueryStartOffset, frame.QueryIndex * 2);
 			// Increment fence value, signal queue and store FenceValue in frame.
 			++FenceValue;
@@ -203,7 +210,7 @@ private:
 			pResolveCommandList->Reset(newFrame.pAllocator, nullptr);
 
 			// Don't allow the next frame to start until its resolve is finished.
-			if (newFrame.FenceValue > pFence->GetCompletedValue())
+			if (!IsFenceComplete(newFrame.FenceValue))
 			{
 				checkf(false, "Resolve() should not have to wait for the resolve of the upcoming frame to finish. Increase NumFrames.");
 				pFence->SetEventOnCompletion(newFrame.FenceValue, FenceEvent);
@@ -215,13 +222,19 @@ private:
 		bool GetResolvedQueries(uint32 frameIndex, Span<uint64>& outData)
 		{
 			const FrameData& data = pFrameData[frameIndex % NumFrames];
-			if (data.FenceValue > pFence->GetCompletedValue())
+			if (!IsFenceComplete(data.FenceValue))
 				return false;
 			outData = data.ReadbackQueries;
 			return true;
 		}
 
-		ID3D12GraphicsCommandList* GetCommandList() const { return pResolveCommandList; }
+		bool IsFenceComplete(uint64 fenceValue)
+		{
+			if (fenceValue <= LastCompletedFence)
+				return true;
+			LastCompletedFence = Math::Max(LastCompletedFence, pFence->GetCompletedValue());
+			return fenceValue <= LastCompletedFence;
+		}
 
 	private:
 		struct FrameData
@@ -249,6 +262,7 @@ private:
 		const uint64* m_pReadbackData = nullptr;
 
 		ID3D12Fence* pFence = nullptr;
+		uint64 LastCompletedFence = 0;
 		uint64 FenceValue = 0;
 		HANDLE FenceEvent = nullptr;
 	};
@@ -303,7 +317,6 @@ public:
 		region.LineNumber = lineNr;
 
 		TLS& tls = GetTLS();
-		check(tls.RegionDepth >= 0);
 		TLS::StackData& stackData = tls.RegionStack[tls.RegionDepth];
 		stackData.pCommandList = pCmd;
 		stackData.RegionIndex = index;
@@ -453,15 +466,15 @@ public:
 			return (float)ticks / GPUFrequency * 1000.0f;
 		}
 
-		ID3D12CommandQueue* pQueue;							// The D3D queue object
+		ID3D12CommandQueue* pQueue = nullptr;				// The D3D queue object
 		char Name[128];										// Name of the queue
-		bool IsCopyQueue;									// Whether this queue is a copy queue
+		bool IsCopyQueue = false;							// Whether this queue is a copy queue
 
 	private:
-		uint64 GPUCalibrationTicks;							// The number of GPU ticks when the calibration was done
-		uint64 CPUCalibrationTicks;							// The number of CPU ticks when the calibration was done
-		uint64 GPUFrequency;								// The GPU tick frequency
-		uint64 CPUFrequency;								// The CPU tick frequency
+		uint64 GPUCalibrationTicks = 0;						// The number of GPU ticks when the calibration was done
+		uint64 CPUCalibrationTicks = 0;						// The number of CPU ticks when the calibration was done
+		uint64 GPUFrequency = 0;							// The GPU tick frequency
+		uint64 CPUFrequency = 0;							// The CPU tick frequency
 	};
 
 	// Structure representating a single sample region
@@ -490,17 +503,17 @@ public:
 		LinearAllocator Allocator;							// Scratch allocator storing all dynamic allocations of the frame
 	};
 
-	const Span<QueueInfo> GetQueueInfo() const { return m_Queues; }
+	Span<QueueInfo> GetQueueInfo() const { return m_Queues; }
 
 	// Iterate over all sample regions
 	template<typename Fn>
-	void ForEachRegion(Fn&& fn)
+	void ForEachRegion(Fn&& fn) const
 	{
 		uint32 leadingFrames = m_FrameIndex - m_FrameToResolve - 1;
 		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, (uint32)m_SampleData.size()) - leadingFrames;
 		while (currentIndex < m_FrameToResolve)
 		{
-			SampleHistory& data = m_SampleData[currentIndex % m_SampleData.size()];
+			const SampleHistory& data = m_SampleData[currentIndex % m_SampleData.size()];
 			for (uint32 i = 0; i < data.NumRegions; ++i)
 				fn(currentIndex, data.Regions[i]);
 			++currentIndex;
@@ -578,6 +591,9 @@ struct FooGPUProfileScope
 	{
 		gGPUProfiler.PopRegion();
 	}
+
+	FooGPUProfileScope(const FooGPUProfileScope&) = delete;
+	FooGPUProfileScope& operator=(const FooGPUProfileScope&) = delete;
 };
 
 
@@ -687,9 +703,9 @@ public:
 		else
 		{
 			PWSTR pDescription = nullptr;
-			::GetThreadDescription(GetCurrentThread(), &pDescription);
+			VERIFY_HR(::GetThreadDescription(GetCurrentThread(), &pDescription));
 			size_t converted = 0;
-			wcstombs_s(&converted, data.Name, ARRAYSIZE(data.Name), pDescription, ARRAYSIZE(data.Name));
+			check(wcstombs_s(&converted, data.Name, ARRAYSIZE(data.Name), pDescription, ARRAYSIZE(data.Name)) == 0);
 		}
 		data.ThreadID = GetCurrentThreadId();
 		data.pTLS = &tls;
@@ -778,7 +794,7 @@ public:
 
 private:
 	// Retrieve thread-local storage without initialization
-	TLS& GetTLSUnsafe()
+	static TLS& GetTLSUnsafe()
 	{
 		static thread_local TLS tls;
 		return tls;
@@ -826,4 +842,7 @@ struct FooProfileScope
 	{
 		gProfiler.PopRegion();
 	}
+
+	FooProfileScope(const FooProfileScope&) = delete;
+	FooProfileScope& operator=(const FooProfileScope&) = delete;
 };

@@ -34,6 +34,8 @@ struct HUDContext
 	bool IsSelectingRange = false;
 	float RangeSelectionStart = 0.0f;
 	char SearchString[128]{};
+	bool PauseThreshold = false;
+	float PauseThresholdTime = 100.0f;
 };
 
 static HUDContext gHUDContext;
@@ -53,6 +55,7 @@ static void EditStyle(StyleOptions& style)
 	ImGui::ColorEdit4("Background Text Color", &style.BGTextColor.x);
 	ImGui::ColorEdit4("Foreground Text Color", &style.FGTextColor.x);
 	ImGui::ColorEdit4("Bar Highlight Color", &style.BarHighlightColor.x);
+	ImGui::Separator();
 	ImGui::Checkbox("Debug Mode", &style.DebugMode);
 	ImGui::PopItemWidth();
 }
@@ -110,8 +113,7 @@ void DrawProfilerHUD()
 	// How many ticks are in the timeline
 	float ticksInTimeline = ticksPerMs * style.MaxTime;
 
-	const FooProfiler::SampleHistory& data = gProfiler.GetHistory();
-	const FooProfiler::SampleRegion& frameSample = data.Regions[0];
+	const FooProfiler::SampleRegion& frameSample = gProfiler.GetHistory().Regions.front();
 	const uint64 beginAnchor = frameSample.BeginTicks;
 
 	if (gProfiler.IsPaused())
@@ -119,8 +121,18 @@ void DrawProfilerHUD()
 	else
 		ImGui::Text("Press Space to pause");
 
-	ImGui::SameLine(ImGui::GetWindowWidth() - 260);
-	ImGui::Text("Search");
+	ImGui::SameLine(ImGui::GetWindowWidth() - 620);
+
+	ImGui::Checkbox("Pause threshold", &Context().PauseThreshold);
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(150);
+	ImGui::SliderFloat("##Treshold", &context.PauseThresholdTime, 0.0f, 16.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+	ImGui::SameLine();
+
+	ImGui::Dummy(ImVec2(30, 0));
+	ImGui::SameLine();
+	
+	ImGui::Text("Filter");
 	ImGui::SetNextItemWidth(150);
 	ImGui::SameLine();
 	ImGui::InputText("##Search", context.SearchString, ARRAYSIZE(context.SearchString));
@@ -215,6 +227,8 @@ void DrawProfilerHUD()
 				itemRect.Max.x = ImMax(itemRect.Max.x, itemRect.Min.x + 1);
 				if (ImGui::ItemAdd(itemRect, id, 0))
 				{
+					float ms = TicksToMs((float)(endTicks - beginTicks));
+
 					ImColor color = barColor * style.BarColorMultiplier;
 					ImColor textColor = style.FGTextColor;
 					// Fade out the bars that don't match the filter
@@ -223,6 +237,12 @@ void DrawProfilerHUD()
 						color.Value.w *= 0.3f;
 						textColor.Value.w *= 0.5f;
 					}
+					else if (context.PauseThreshold && ms >= context.PauseThresholdTime)
+					{
+						gProfiler.SetPaused(true);
+						gGPUProfiler.SetPaused(true);
+					}
+
 					// Darken the bottom
 					ImColor colorBottom = color.Value * ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
 
@@ -264,7 +284,6 @@ void DrawProfilerHUD()
 					// If the bar size is large enough, draw the name of the bar on top
 					if (itemRect.GetWidth() > 10.0f)
 					{
-						float ms = TicksToMs((float)(endTicks - beginTicks));
 						const char* pBarText;
 						ImFormatStringToTempBuffer(&pBarText, nullptr, "%s (%.2f ms)", pName, ms);
 
@@ -344,7 +363,7 @@ void DrawProfilerHUD()
 				|[=============]			|
 				|	[======]				|
 			*/
-			gGPUProfiler.ForEachRegion([&](uint32 frameIndex, GPUProfiler::SampleRegion& region)
+			gGPUProfiler.ForEachRegion([&](uint32 frameIndex, const GPUProfiler::SampleRegion& region)
 				{
 					// Only process regions for the current queue
 					if (queueIndex != region.QueueIndex)
