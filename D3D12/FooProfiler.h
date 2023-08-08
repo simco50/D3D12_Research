@@ -52,6 +52,37 @@ private:
 	std::atomic<uint32> m_Offset;
 };
 
+template<typename T, uint32 N>
+struct FixedStack
+{
+public:
+	T& Pop()
+	{
+		check(Depth > 0);
+		--Depth;
+		return StackData[Depth];
+	}
+
+	T& Push()
+	{
+		Depth++;
+		check(Depth < ARRAYSIZE(StackData));
+		return StackData[Depth - 1];
+	}
+
+	T& Top()
+	{
+		check(Depth > 0);
+		return StackData[Depth - 1];
+	}
+
+	uint32 GetSize() const { return Depth; }
+
+private:
+	uint32 Depth = 0;
+	T StackData[N]{};
+};
+
 void DrawProfilerHUD();
 
 //-----------------------------------------------------------------------------
@@ -183,6 +214,9 @@ private:
 		// Queues a ResolveQueryData of the last frame and advances to the next frame
 		void Resolve()
 		{
+			if (!IsInitialized())
+				return;
+
 			// Queue a resolve for the current frame
 			FrameData& frame = GetData();
 			if (frame.QueryIndex > 0)
@@ -221,6 +255,9 @@ private:
 		// Return the view to the resolved queries and returns true if it's valid to read from
 		bool GetResolvedQueries(uint32 frameIndex, Span<uint64>& outData)
 		{
+			if (!IsInitialized())
+				return true;
+
 			const FrameData& data = pFrameData[frameIndex % NumFrames];
 			if (!IsFenceComplete(data.FenceValue))
 				return false;
@@ -235,6 +272,8 @@ private:
 			LastCompletedFence = Math::Max(LastCompletedFence, pFence->GetCompletedValue());
 			return fenceValue <= LastCompletedFence;
 		}
+
+		bool IsInitialized() const { return pFrameData != nullptr; }
 
 	private:
 		struct FrameData
@@ -317,11 +356,9 @@ public:
 		region.LineNumber = lineNr;
 
 		TLS& tls = GetTLS();
-		TLS::StackData& stackData = tls.RegionStack[tls.RegionDepth];
+		TLS::StackData& stackData = tls.RegionStack.Push();
 		stackData.pCommandList = pCmd;
 		stackData.RegionIndex = index;
-		++tls.RegionDepth;
-		check(tls.RegionDepth < ARRAYSIZE(tls.RegionStack))
 	}
 
 	// End and pop the region on the top of the stack
@@ -331,10 +368,8 @@ public:
 			return;
 
 		TLS& tls = GetTLS();
-		check(tls.RegionDepth > 0);
-		--tls.RegionDepth;
 		SampleHistory& data = m_SampleData[m_FrameIndex % m_SampleData.size()];
-		const TLS::StackData& stackData = tls.RegionStack[tls.RegionDepth];
+		const TLS::StackData& stackData = tls.RegionStack.Pop();
 		const SampleRegion& region = data.Regions[stackData.RegionIndex];
 		bool isCopyQueue = m_Queues[region.QueueIndex].IsCopyQueue;
 		GetHeap(isCopyQueue).EndQuery(region.TimerIndex, stackData.pCommandList);
@@ -343,7 +378,9 @@ public:
 	// Returns the appropriate query heap
 	GPUTimeQueryHeap& GetHeap(bool isCopy)
 	{
-		return isCopy ? m_CopyQueryHeap : m_MainQueryHeap;
+		GPUTimeQueryHeap& heap = isCopy ? m_CopyQueryHeap : m_MainQueryHeap;
+		check(heap.IsInitialized());
+		return heap;
 	}
 
 	void Tick()
@@ -358,15 +395,17 @@ public:
 			// #todo: One readback may be finished while the other is not. Could maybe cause problems?
 			Span<uint64> copyQueries, mainQueries;
 
-			bool copiesValid = m_ResolveCopyQueueIndex == INVALID_QUEUE || m_CopyQueryHeap.GetResolvedQueries(m_FrameToResolve, copyQueries);
-			bool mainValid = m_ResolveMainQueueIndex == INVALID_QUEUE || m_MainQueryHeap.GetResolvedQueries(m_FrameToResolve, mainQueries);
-			if (!copiesValid || !mainValid)
+			bool copiesValid = m_CopyQueryHeap.GetResolvedQueries(m_FrameToResolve, copyQueries);
+			bool mainValid = m_MainQueryHeap.GetResolvedQueries(m_FrameToResolve, mainQueries);
+			if (!(copiesValid && mainValid))
 				break;
 
 			// Copy the timing data
 			SampleHistory& data = m_SampleData[m_FrameToResolve % m_SampleData.size()];
-			check(copyQueries.GetSize() + mainQueries.GetSize() == data.CurrentIndex * 2);
-			for (uint32 i = 0; i < data.CurrentIndex; ++i)
+			data.NumRegions = data.CurrentIndex;
+
+			check(copyQueries.GetSize() + mainQueries.GetSize() == data.NumRegions * 2);
+			for (uint32 i = 0; i < data.NumRegions; ++i)
 			{
 				SampleRegion& region = data.Regions[i];
 				const QueueInfo& queue = m_Queues[region.QueueIndex];
@@ -374,30 +413,25 @@ public:
 				region.BeginTicks = queries[region.TimerIndex * 2 + 0];
 				region.EndTicks = queries[region.TimerIndex * 2 + 1];
 			}
-			data.NumRegions = data.CurrentIndex;
 
 			// Sort the regions and resolve the stack depth
 			std::sort(data.Regions.begin(), data.Regions.begin() + data.NumRegions, [](const SampleRegion& a, const SampleRegion& b) { return a.BeginTicks < b.BeginTicks; });
 
-			struct QueueStack
-			{
-				uint16 Depth = 0;
-				uint32 Stack[MAX_DEPTH]{};
-			};
-			std::vector<QueueStack> queueStacks(m_Queues.size());
+			using DepthStack = FixedStack<uint32, MAX_DEPTH>;
+			std::vector<DepthStack> queueStacks(m_Queues.size());
 
 			for (uint32 i = 0; i < data.NumRegions; ++i)
 			{
 				SampleRegion& region = data.Regions[i];
-				QueueStack& stack = queueStacks[region.QueueIndex];
+				DepthStack& stack = queueStacks[region.QueueIndex];
 
 				// While there is a parent and the current region starts after the parent ends, pop it off the stack
-				while (stack.Depth > 0)
+				while (stack.GetSize() > 0)
 				{
-					const SampleRegion* pParent = &data.Regions[stack.Stack[stack.Depth - 1]];
+					const SampleRegion* pParent = &data.Regions[stack.Top()];
 					if (region.BeginTicks >= pParent->EndTicks)
 					{
-						--stack.Depth;
+						stack.Pop();
 					}
 					else
 					{
@@ -406,12 +440,9 @@ public:
 					}
 				}
 
-				stack.Stack[stack.Depth] = i;
-
 				// Set the region's depth
-				region.Depth = stack.Depth;
-				++stack.Depth;
-				check(stack.Depth < ARRAYSIZE(stack.Stack));
+				region.Depth = (uint16)stack.GetSize();
+				stack.Push() = i;
 			}
 
 			++m_FrameToResolve;
@@ -422,13 +453,11 @@ public:
 
 		// Make sure all last frame's regions have ended
 		for (const TLS* pTLS : m_ThreadData)
-			check(pTLS->RegionDepth == 0);
+			check(pTLS->RegionStack.GetSize() == 0);
 
 		// Schedule a resolve for last frame
-		if (m_ResolveCopyQueueIndex != INVALID_QUEUE)
-			m_CopyQueryHeap.Resolve();
-		if (m_ResolveMainQueueIndex != INVALID_QUEUE)
-			m_MainQueryHeap.Resolve();
+		m_CopyQueryHeap.Resolve();
+		m_MainQueryHeap.Resolve();
 
 		// Advance frame and clear data
 		++m_FrameIndex;
@@ -539,8 +568,8 @@ private:
 			uint32 RegionIndex;
 			ID3D12GraphicsCommandList* pCommandList;
 		};
-		StackData RegionStack[MAX_DEPTH]{};
-		uint32 RegionDepth = 0;
+
+		FixedStack<StackData, MAX_DEPTH> RegionStack;
 		bool IsInitialized = false;
 	};
 
@@ -637,18 +666,16 @@ public:
 		check(newIndex < data.Regions.size());
 
 		TLS& tls = GetTLS();
-		check(tls.Depth < ARRAYSIZE(tls.RegionStack));
 
 		SampleRegion& newRegion = data.Regions[newIndex];
-		newRegion.Depth = tls.Depth;
+		newRegion.Depth = (uint16)tls.RegionStack.GetSize();
 		newRegion.ThreadIndex = tls.ThreadIndex;
 		newRegion.pName = data.Allocator.String(pName);
 		newRegion.pFilePath = pFilePath;
 		newRegion.LineNumber = lineNumber;
 		QueryPerformanceCounter((LARGE_INTEGER*)(&newRegion.BeginTicks));
 
-		tls.RegionStack[tls.Depth] = newIndex;
-		tls.Depth++;
+		tls.RegionStack.Push() = newIndex;
 	}
 
 	// End and pop the last pushed region on the current thread
@@ -657,9 +684,7 @@ public:
 		SampleHistory& data = GetData();
 		TLS& tls = GetTLS();
 
-		check(tls.Depth > 0);
-		--tls.Depth;
-		SampleRegion& region = data.Regions[tls.RegionStack[tls.Depth]];
+		SampleRegion& region = data.Regions[tls.RegionStack.Pop()];
 		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTicks));
 	}
 
@@ -673,7 +698,7 @@ public:
 			PopRegion();
 
 		for (auto& threadData : m_ThreadData)
-			check(threadData.pTLS->Depth == 0);
+			check(threadData.pTLS->RegionStack.GetSize() == 0);
 
 		if (!m_Paused)
 			++m_FrameIndex;
@@ -739,9 +764,8 @@ public:
 	struct TLS
 	{
 		uint32 ThreadIndex = 0;
-		uint32 RegionStack[MAX_DEPTH]{};
+		FixedStack<uint32, MAX_DEPTH> RegionStack;
 		bool IsInitialized = false;
-		uint16 Depth = 0;
 	};
 
 	// Structure describing a registered thread

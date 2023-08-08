@@ -198,9 +198,10 @@ void DrawProfilerHUD()
 		cursor.y += style.BarHeight;
 
 		// Add dark shade background for every even frame
+		int frameNr = 0;
 		gProfiler.ForEachFrame([&](uint32 frameIndex, const FooProfiler::SampleHistory& data)
 			{
-				if (frameIndex % 2 == 0)
+				if (frameNr++ % 2 == 0)
 				{
 					float beginOffset = (data.Regions[0].BeginTicks - beginAnchor) * tickScale;
 					float endOffset = (data.Regions[0].EndTicks - beginAnchor) * tickScale;
