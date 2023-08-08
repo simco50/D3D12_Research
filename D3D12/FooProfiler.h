@@ -324,12 +324,12 @@ public:
 			queueInfo.InitCalibration();
 
 			// If the query heap is not yet initialized and there is an appropriate queue, initialize it
-			if (m_ResolveCopyQueueIndex == INVALID_QUEUE && isCopyQueue)
+			if (!m_CopyQueryHeap.IsInitialized() && isCopyQueue)
 			{
 				m_CopyQueryHeap.Initialize(pDevice, pQueue, MAX_NUM_MAIN_REGIONS, NUM_GPU_FRAMES);
 				m_ResolveCopyQueueIndex = queueIndex;
 			}
-			else if (m_ResolveMainQueueIndex == INVALID_QUEUE && !isCopyQueue)
+			else if (!m_MainQueryHeap.IsInitialized() && !isCopyQueue)
 			{
 				m_MainQueryHeap.Initialize(pDevice, pQueue, MAX_NUM_MAIN_REGIONS, NUM_GPU_FRAMES);
 				m_ResolveMainQueueIndex = queueIndex;
@@ -343,7 +343,11 @@ public:
 		if (m_IsPaused)
 			return;
 
+		// #todo: Find a way so that queueIndex doesn't need to be specified. Can only be resolved during ExecuteCommandLists?
+		D3D12_COMMAND_LIST_TYPE commandListType = pCmd->GetType();
+		bool isCopyCommandlist = commandListType == D3D12_COMMAND_LIST_TYPE_COPY;
 		bool isCopyQueue = m_Queues[queueIndex].IsCopyQueue;
+		check(isCopyCommandlist == isCopyQueue);
 
 		SampleHistory& data = m_SampleData[m_FrameIndex % m_SampleData.size()];
 		uint32 index = data.CurrentIndex.fetch_add(1);
@@ -392,9 +396,7 @@ public:
 		// While the next frame to resolve is not the last one, attempt access the readback data and advance.
 		while (m_FrameToResolve < m_FrameIndex)
 		{
-			// #todo: One readback may be finished while the other is not. Could maybe cause problems?
 			Span<uint64> copyQueries, mainQueries;
-
 			bool copiesValid = m_CopyQueryHeap.GetResolvedQueries(m_FrameToResolve, copyQueries);
 			bool mainValid = m_MainQueryHeap.GetResolvedQueries(m_FrameToResolve, mainQueries);
 			if (!(copiesValid && mainValid))
@@ -461,6 +463,10 @@ public:
 
 		// Advance frame and clear data
 		++m_FrameIndex;
+
+		// Check if we're not advancing to a frame that hasn't been resolved yet.
+		check(m_FrameIndex % m_SampleData.size() != m_FrameToResolve % m_SampleData.size());
+
 		SampleHistory& newFrameData = GetData();
 		newFrameData.CurrentIndex = 0;
 		newFrameData.NumRegions = 0;
