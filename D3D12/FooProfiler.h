@@ -544,8 +544,8 @@ public:
 	template<typename Fn>
 	void ForEachRegion(Fn&& fn) const
 	{
-		uint32 leadingFrames = m_FrameIndex - m_FrameToResolve - 1;
-		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, (uint32)m_SampleData.size()) - leadingFrames;
+		// Get the last N history frames before the last resolved frame
+		uint32 currentIndex = m_FrameToResolve < m_SampleData.size() ? 0 : m_FrameToResolve - (uint32)m_SampleData.size() + 1;
 		while (currentIndex < m_FrameToResolve)
 		{
 			const SampleHistory& data = m_SampleData[currentIndex % m_SampleData.size()];
@@ -786,22 +786,19 @@ public:
 	template<typename Fn>
 	void ForEachRegion(Fn&& fn) const
 	{
-		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, (uint32)m_SampleData.size()) + 1;
-		while (currentIndex < m_FrameIndex)
-		{
-			const SampleHistory& data = m_SampleData[currentIndex % m_SampleData.size()];
-			uint32 numRegions = data.CurrentIndex;
-			for (uint32 i = 0; i < numRegions; ++i)
-				fn(currentIndex, data.Regions[i]);
-			++currentIndex;
-		}
+		ForEachFrame([&](uint32 frameIndex, const SampleHistory& data) {
+				uint32 numRegions = data.CurrentIndex;
+				for (uint32 i = 0; i < numRegions; ++i)
+					fn(frameIndex, data.Regions[i]);
+			});
 	}
 
 	// Iterate over all frames
 	template<typename Fn>
 	void ForEachFrame(Fn&& fn) const
 	{
-		uint32 currentIndex = m_FrameIndex - Math::Min(m_FrameIndex, (uint32)m_SampleData.size()) + 1;
+		// Start from the oldest history frame
+		uint32 currentIndex = m_FrameIndex < m_SampleData.size() ? 0 : m_FrameIndex - (uint32)m_SampleData.size() + 1;
 		while (currentIndex < m_FrameIndex)
 		{
 			const SampleHistory& data = m_SampleData[currentIndex % m_SampleData.size()];
@@ -810,11 +807,13 @@ public:
 		}
 	}
 
-	// Returns the oldest resolved sample data
-	const SampleHistory& GetHistory() const
+	// Get the ticks range of the history
+	void GetHistoryRange(uint64& ticksMin, uint64& ticksMax) const
 	{
-		uint32 currentIndex = (m_FrameIndex + 1) % m_SampleData.size();
-		return m_SampleData[currentIndex];
+		uint32 oldestFrameIndex = (m_FrameIndex + 1) % m_SampleData.size();
+		ticksMin = m_SampleData[oldestFrameIndex].Regions[0].BeginTicks;
+		uint32 youngestFrameIndex = (m_FrameIndex + (uint32)m_SampleData.size() - 1) % m_SampleData.size();
+		ticksMax = m_SampleData[youngestFrameIndex].Regions[0].EndTicks;
 	}
 
 	Span<ThreadData> GetThreads() const { return m_ThreadData; }

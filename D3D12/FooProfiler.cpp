@@ -102,20 +102,6 @@ void DrawProfilerHUD()
 	HUDContext& context = Context();
 	StyleOptions& style = context.Style;
 
-	// How many ticks per ms
-	uint64 frequency = 0;
-	QueryPerformanceFrequency((LARGE_INTEGER*)&frequency);
-	float ticksPerMs = (float)frequency / 1000.0f;
-
-	auto TicksToMs = [&](float ticks) { return (float)ticks / ticksPerMs; };
-	auto MsToTicks = [&](float ms) { return ms * ticksPerMs; };
-
-	// How many ticks are in the timeline
-	float ticksInTimeline = ticksPerMs * style.MaxTime;
-
-	const FooProfiler::SampleRegion& frameSample = gProfiler.GetHistory().Regions.front();
-	const uint64 beginAnchor = frameSample.BeginTicks;
-
 	if (gProfiler.IsPaused())
 		ImGui::Text("Paused");
 	else
@@ -170,8 +156,21 @@ void DrawProfilerHUD()
 	{
 		ImGui::PushClipRect(timelineRect.Min, timelineRect.Max, true);
 
+		// How many ticks per ms
+		uint64 frequency = 0;
+		QueryPerformanceFrequency((LARGE_INTEGER*)&frequency);
+		const float MsToTicks = (float)frequency / 1000.0f;
+		const float TicksToMs = 1000.0f / frequency;
+
+		// How many ticks are in the timeline
+		float ticksInTimeline = MsToTicks * style.MaxTime;
+
+		uint64 timelineTicksBegin, timelineTicksEnd;
+		gProfiler.GetHistoryRange(timelineTicksBegin, timelineTicksEnd);
+		uint64 beginAnchor = timelineTicksBegin;
+
 		// How many pixels is one tick
-		float tickScale = timelineWidth / ticksInTimeline;
+		const float TicksToPixels = timelineWidth / ticksInTimeline;
 
 		// Add vertical bars for each ms interval
 		/*
@@ -184,8 +183,8 @@ void DrawProfilerHUD()
 		pDraw->AddRect(timelineRect.Min - ImVec2(10, 0), ImVec2(timelineRect.Max.x + 10, timelineRect.Min.y + style.BarHeight), ImColor(1.0f, 1.0f, 1.0f, 0.4f));
 		for (int i = 0; i < style.MaxTime; i += 2)
 		{
-			float x0 = tickScale * MsToTicks((float)i);
-			float msWidth = tickScale * MsToTicks(1);
+			float x0 = (float) i * MsToTicks * TicksToPixels;
+			float msWidth = 1.0f * MsToTicks * TicksToPixels;
 			ImVec2 tickPos = ImVec2(cursor.x + x0, timelineRect.Min.y);
 			pDraw->AddRectFilled(tickPos + ImVec2(0, style.BarHeight), tickPos + ImVec2(msWidth, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.02f));
 			const char* pBarText;
@@ -203,8 +202,8 @@ void DrawProfilerHUD()
 			{
 				if (frameNr++ % 2 == 0)
 				{
-					float beginOffset = (data.Regions[0].BeginTicks - beginAnchor) * tickScale;
-					float endOffset = (data.Regions[0].EndTicks - beginAnchor) * tickScale;
+					float beginOffset = (data.Regions[0].BeginTicks - beginAnchor) * TicksToPixels;
+					float endOffset = (data.Regions[0].EndTicks - beginAnchor) * TicksToPixels;
 					pDraw->AddRectFilled(ImVec2(cursor.x + beginOffset, timelineRect.Min.y), ImVec2(cursor.x + endOffset, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.05f));
 				}
 			});
@@ -219,8 +218,8 @@ void DrawProfilerHUD()
 		{
 			if (endTicks > beginAnchor)
 			{
-				float startPos = tickScale * (beginTicks < beginAnchor ? 0 : beginTicks - beginAnchor);
-				float endPos = tickScale * (endTicks - beginAnchor);
+				float startPos = (beginTicks < beginAnchor ? 0 : beginTicks - beginAnchor) * TicksToPixels;
+				float endPos = (endTicks - beginAnchor) * TicksToPixels;
 				float y = depth * style.BarHeight;
 				ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + style.BarHeight));
 
@@ -228,7 +227,7 @@ void DrawProfilerHUD()
 				itemRect.Max.x = ImMax(itemRect.Max.x, itemRect.Min.x + 1);
 				if (ImGui::ItemAdd(itemRect, id, 0))
 				{
-					float ms = TicksToMs((float)(endTicks - beginTicks));
+					float ms = TicksToMs * (float)(endTicks - beginTicks);
 
 					ImColor color = barColor * style.BarColorMultiplier;
 					ImColor textColor = style.FGTextColor;
@@ -380,7 +379,7 @@ void DrawProfilerHUD()
 
 					DrawBar(ImGui::GetID(&region), cpuBeginTicks, cpuEndTicks, region.Depth, region.pName, ColorFromString(region.pName), [&]()
 						{
-							ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(cpuEndTicks - cpuBeginTicks)));
+							ImGui::Text("%s | %.3f ms", region.pName, TicksToMs * (float)(cpuEndTicks - cpuBeginTicks));
 							ImGui::Text("Frame %d", frameIndex);
 							if (region.pFilePath)
 								ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
@@ -427,7 +426,7 @@ void DrawProfilerHUD()
 
 					DrawBar(ImGui::GetID(&region), region.BeginTicks, region.EndTicks, region.Depth, region.pName, ColorFromString(region.pName), [&]()
 						{
-							ImGui::Text("%s | %.3f ms", region.pName, TicksToMs((float)(region.EndTicks - region.BeginTicks)));
+							ImGui::Text("%s | %.3f ms", region.pName, TicksToMs * (float)(region.EndTicks - region.BeginTicks));
 							ImGui::Text("Frame %d", frameIndex);
 							if (region.pFilePath)
 								ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
@@ -470,7 +469,7 @@ void DrawProfilerHUD()
 					float opacity = ImClamp(distance / 30.0f, 0.0f, 1.0f);
 					if (opacity > 0.0f)
 					{
-						float time = TicksToMs(distance / tickScale);
+						float time = (distance / TicksToPixels) * TicksToMs;
 
 						// Draw measure region
 						pDraw->AddRectFilled(ImVec2(context.RangeSelectionStart, timelineRect.Min.y), ImVec2(ImGui::GetMousePos().x, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.1f));
