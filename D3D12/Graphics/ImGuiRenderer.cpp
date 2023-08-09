@@ -174,21 +174,20 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 		ImFontConfig fontConfig;
 		fontConfig.MergeMode = true;
 		fontConfig.GlyphMinAdvanceX = 15.0f; // Use if you want to make the icon monospaced
-		fontConfig.PixelSnapH = true;
-		fontConfig.GlyphOffset.y -= 2.5f;
 		static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
 		io.Fonts->AddFontFromFileTTF("Resources/Fonts/" FONT_ICON_FILE_NAME_FA, 15.0f, &fontConfig, icon_ranges);
 	}
 
+	ResourceFormat pixelFormat = ResourceFormat::RGBA8_UNORM;
 	unsigned char* pPixels;
 	int width, height;
-	io.Fonts->GetTexDataAsRGBA32(&pPixels, &height, &width);
+	io.Fonts->GetTexDataAsRGBA32(&pPixels, &width, &height);
 
 	D3D12_SUBRESOURCE_DATA data;
 	data.pData = pPixels;
-	data.RowPitch = RHI::GetRowPitch(ResourceFormat::RGBA8_UNORM, width);
-	data.SlicePitch = RHI::GetSlicePitch(ResourceFormat::RGBA8_UNORM, width, height);
-	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), "ImGui Font", data);
+	data.RowPitch = RHI::GetRowPitch(pixelFormat, width);
+	data.SlicePitch = RHI::GetSlicePitch(pixelFormat, width, height);
+	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, pixelFormat, 1, TextureFlag::ShaderResource), "ImGui Font", data);
 
 	gImGuiRS = new RootSignature(pDevice);
 	gImGuiRS->AddRootConstants<uint32>(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
@@ -303,6 +302,9 @@ void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
 							ImVec2 clip_min(pCmd->ClipRect.x - clipOff.x, pCmd->ClipRect.y - clipOff.y);
 							ImVec2 clip_max(pCmd->ClipRect.z - clipOff.x, pCmd->ClipRect.w - clipOff.y);
 							if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
+								continue;
+
+							if ((int)pCmd->ClipRect.x >= (int)pCmd->ClipRect.z || (int)pCmd->ClipRect.y >= (int)pCmd->ClipRect.w)
 								continue;
 
 							Texture* pTexture = (Texture*)pCmd->GetTexID();

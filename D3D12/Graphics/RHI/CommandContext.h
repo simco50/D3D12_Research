@@ -21,7 +21,7 @@ enum class RenderTargetLoadAction : uint8
 	Clear,
 	NoAccess
 };
-DEFINE_ENUM_FLAG_OPERATORS(RenderTargetLoadAction)
+DECLARE_BITMASK_TYPE(RenderTargetLoadAction)
 
 enum class RenderTargetStoreAction : uint8
 {
@@ -30,7 +30,7 @@ enum class RenderTargetStoreAction : uint8
 	Resolve,
 	NoAccess,
 };
-DEFINE_ENUM_FLAG_OPERATORS(RenderTargetStoreAction)
+DECLARE_BITMASK_TYPE(RenderTargetStoreAction)
 
 constexpr uint8 CombineRenderTargetAction(RenderTargetLoadAction loadAction, RenderTargetStoreAction storeAction)
 {

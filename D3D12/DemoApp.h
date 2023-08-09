@@ -4,7 +4,6 @@
 #include "Graphics/Light.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
-#include "Graphics/Profiler.h"
 #include "Graphics/Techniques/VolumetricFog.h"
 
 class Mesh;
@@ -65,7 +64,6 @@ private:
 	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
 
 	uint32 m_Frame = 0;
-	TimeHistory<float, 180> m_FrameHistory;
 
 	RefCountPtr<Texture> m_pColorHistory;
 	RefCountPtr<Texture> m_pHZB;
@@ -125,7 +123,7 @@ private:
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO;
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
 	RefCountPtr<PipelineState> m_pReduceDepthPSO;
-	std::array<RefCountPtr<Buffer>, SwapChain::NUM_FRAMES> m_ReductionReadbackTargets;
+	std::array<RefCountPtr<Buffer>, GraphicsDevice::NUM_BUFFERS> m_ReductionReadbackTargets;
 
 	//Camera motion
 	RefCountPtr<PipelineState> m_pCameraMotionPSO;

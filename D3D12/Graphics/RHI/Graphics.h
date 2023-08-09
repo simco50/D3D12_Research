@@ -51,12 +51,17 @@ enum class DisplayMode
 class SwapChain : public GraphicsObject
 {
 public:
-	static constexpr uint32 NUM_FRAMES = 3;
-
-	SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHandle pNativeWindow);
+	SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, uint32 numFrames, WindowHandle pNativeWindow);
 	~SwapChain();
 	void OnResizeOrMove(uint32 width, uint32 height);
 	void Present();
+
+	void SetNumFrames(uint32 numFrames);
+	uint32 GetNumFrames() const { return m_NumFrames; }
+	void SetMaxFrameLatency(uint32 maxFrameLatency);
+	uint32 GetMaxFrameLatency() const { return m_MaxFrameLatency; }
+	void SetUseWaitableSwapChain(bool enabled);
+	bool GetUseWaitableSwapChain() { return m_UseWaitableObject; }
 
 	void SetDisplayMode(DisplayMode displayMode) { m_DesiredDisplayMode = displayMode; }
 	void SetVSync(bool enabled) { m_Vsync = enabled; }
@@ -71,16 +76,21 @@ public:
 	bool GetVSync() const { return m_Vsync; }
 
 private:
+	void RecreateSwapChain();
+
 	WindowHandle m_Window;
 	DisplayMode m_DesiredDisplayMode;
-	uint64 m_PresentFenceValue = 0;
 	RefCountPtr<Fence> m_pPresentFence;
-	std::array<RefCountPtr<Texture>, NUM_FRAMES> m_Backbuffers;
+	std::vector<RefCountPtr<Texture>> m_Backbuffers;
 	RefCountPtr<IDXGISwapChain4> m_pSwapchain;
 	ResourceFormat m_Format;
 	uint32 m_CurrentImage;
 	uint32 m_Width = 0;
 	uint32 m_Height = 0;
+	uint32 m_NumFrames;
+	uint32 m_MaxFrameLatency = 2;
+	HANDLE m_WaitableObject = nullptr;
+	bool m_UseWaitableObject = true;
 	bool m_Vsync = true;
 	bool m_AllowTearing = false;
 };
@@ -123,6 +133,8 @@ private:
 class GraphicsDevice : public GraphicsObject
 {
 public:
+	static const uint32 NUM_BUFFERS = 2;
+
 	GraphicsDevice(GraphicsDeviceOptions options);
 	~GraphicsDevice();
 
@@ -194,6 +206,8 @@ private:
 	std::unique_ptr<DRED> m_pDRED;
 
 	RefCountPtr<Fence> m_pFrameFence;
+	std::array<uint64, NUM_BUFFERS> m_FrameFenceValues{};
+	uint32 m_FrameIndex = 0;
 
 	RefCountPtr<GPUDescriptorHeap> m_pGlobalViewHeap;
 	RefCountPtr<GPUDescriptorHeap> m_pGlobalSamplerHeap;
