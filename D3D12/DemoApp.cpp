@@ -4,7 +4,6 @@
 #include "ImGuizmo.h"
 #include "Content/Image.h"
 #include "Graphics/DebugRenderer.h"
-#include "Graphics/Profiler.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/RHI/Texture.h"
@@ -36,7 +35,7 @@
 #include "Core/Utils.h"
 #include "imgui_internal.h"
 #include "IconsFontAwesome4.h"
-#include "FooProfiler.h"
+#include "Core/Profiler.h"
 
 #define ENABLE_STUFF 1
 
@@ -103,6 +102,41 @@ namespace Tweakables
 	float g_SunIntensity = 5.0f;
 }
 
+static void InitializeProfiler(GraphicsDevice* pDevice)
+{
+	ID3D12CommandQueue* pQueues[] =
+	{
+			pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
+			pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
+			pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
+	};
+	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, ARRAYSIZE(pQueues));
+
+	GPUProfilerCallbacks gpuCallbacks;
+	gpuCallbacks.OnEventBegin = [](const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex)
+	{
+		gProfiler.PushRegion(pName);
+#if ENABLE_PIX
+		::PIXBeginEvent(pCmd, 0, MULTIBYTE_TO_UNICODE(pName));
+#endif
+	};
+	gpuCallbacks.OnEventEnd = [](const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex)
+	{
+		gProfiler.PopRegion();
+#if ENABLE_PIX
+		::PIXEndEvent(pCmd);
+#endif
+	};
+	gGPUProfiler.RegisterEventCallback(gpuCallbacks);
+
+#if ENABLE_PIX
+	CPUProfilerCallbacks cpuCallbacks;
+	cpuCallbacks.OnEventBegin = [](const char* pName, uint32 threadIndex) { ::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName)); };
+	cpuCallbacks.OnEventEnd = [](const char* pName, uint32 threadIndex) { ::PIXEndEvent(); };
+	gProfiler.RegisterEventCallbacks(cpuCallbacks);
+#endif
+}
+
 DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	: m_Window(window)
 {
@@ -117,13 +151,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	options.UseStablePowerState =	CommandLine::GetBool("stablepowerstate");
 	m_pDevice = new GraphicsDevice(options);
 
-	ID3D12CommandQueue* pQueues[] = {
-			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
-			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
-			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
-	};
-
-	gGPUProfiler.Initialize(m_pDevice->GetDevice(), pQueues, ARRAYSIZE(pQueues));
+	InitializeProfiler(m_pDevice);
 
 	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, 3, window);
 
@@ -131,7 +159,6 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
 
-	Profiler::Get()->Initialize(m_pDevice);
 	DebugRenderer::Get()->Initialize(m_pDevice);
 
 	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice);
@@ -172,7 +199,6 @@ DemoApp::~DemoApp()
 	ImGuiRenderer::Shutdown();
 	GraphicsCommon::Destroy();
 	DebugRenderer::Get()->Shutdown();
-	Profiler::Get()->Shutdown();
 }
 
 void DemoApp::SetupScene()
@@ -220,10 +246,9 @@ void DemoApp::SetupScene()
 
 void DemoApp::Update()
 {
-	FOO_FRAME();
+	PROFILE_FRAME();
 
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
-	Profiler::Get()->Resolve(pContext);
 
 	{
 		PROFILE_SCOPE("Update");
@@ -1373,8 +1398,6 @@ void DemoApp::UpdateImGui()
 	PROFILE_SCOPE("ImGui Update");
 	ImGuiRenderer::NewFrame();
 
-	m_FrameHistory.AddTime(Time::DeltaTime());
-
 	static ImGuiConsole console;
 	static bool showProfiler = false;
 	static bool showImguiDemo = false;
@@ -1533,20 +1556,10 @@ void DemoApp::UpdateImGui()
 
 	if (showProfiler)
 	{
+		PROFILE_SCOPE("Profiler");
 		if (ImGui::Begin("Profiler", &showProfiler))
 		{
-			ImGui::Text("MS: %4.2f | FPS: %4.2f | %d x %d", Time::DeltaTime() * 1000.0f, 1.0f / Time::DeltaTime(), m_SceneData.GetDimensions().x, m_SceneData.GetDimensions().y);
-
-			const float* pHistoryData;
-			uint32 historySize, historyOffset;
-			m_FrameHistory.GetHistory(&pHistoryData, &historySize, &historyOffset);
-			ImGui::PlotLines("", pHistoryData, (int)historySize, historyOffset, 0, 0.0f, 0.03f, ImVec2(ImGui::GetContentRegionAvail().x, 100));
-
-			if (ImGui::TreeNodeEx("Profiler", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				Profiler::Get()->DrawImGui();
-				ImGui::TreePop();
-			}
+			DrawProfilerHUD();
 		}
 		ImGui::End();
 	}
@@ -1685,14 +1698,6 @@ void DemoApp::UpdateImGui()
 		}
 	}
 	ImGui::End();
-
-	{
-		PROFILE_SCOPE("Profiler");
-
-		if (ImGui::Begin("Timings"))
-			DrawProfilerHUD();
-		ImGui::End();
-	}
 }
 
 void DemoApp::LoadMesh(const std::string& filePath, World& world)

@@ -1,6 +1,6 @@
 
 #include "stdafx.h"
-#include "FooProfiler.h"
+#include "Profiler.h"
 #include "imgui_internal.h"
 #include "Core/Paths.h"
 #include "IconsFontAwesome4.h"

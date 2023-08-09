@@ -1,6 +1,51 @@
 #pragma once
 #include "Graphics/RHI/D3D.h"
 
+#define WITH_PROFILING 1
+
+#if WITH_PROFILING
+#define PROFILE_FRAME()							FOO_FRAME()
+
+#define PROFILE_BEGIN(name)						gProfiler.PushRegion(name)
+#define PROFILE_END()							gProfiler.PopRegion()
+#define PROFILE_SCOPE(name)						FOO_SCOPE(name)
+
+#define GPU_PROFILE_BEGIN(name, cmdlist)		gGPUProfiler.PushRegion(name, (cmdlist)->GetCommandList(), 0);
+#define GPU_PROFILE_END()						gGPUProfiler.PopRegion();
+#define GPU_PROFILE_SCOPE(name, cmdlist)		FOO_GPU_SCOPE(name, (cmdlist)->GetCommandList(), 0)
+#else
+#define PROFILE_FRAME()
+#define PROFILE_BEGIN(name)
+#define PROFILE_END()
+#define PROFILE_SCOPE(name)
+
+#define GPU_PROFILE_BEGIN(name, cmdlist)
+#define GPU_PROFILE_END()
+#define GPU_PROFILE_SCOPE(name, cmdlist)
+#endif
+
+
+// Usage:
+//		FOO_SCOPE(const char* pNamer)
+//		FOO_SCOPE(const char* pName)
+//		FOO_SCOPE()
+#define FOO_SCOPE(...) FooProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+
+// Usage:
+//		FOO_REGISTER_THREAD(const char* pName)
+//		FOO_REGISTER_THREAD()
+#define FOO_REGISTER_THREAD(...) gProfiler.RegisterThread(__VA_ARGS__)
+
+/// Usage:
+//		FOO_FRAME()
+#define FOO_FRAME() gProfiler.Tick(); gGPUProfiler.Tick()
+
+// Usage:
+//		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
+//		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList)
+#define FOO_GPU_SCOPE(...) FooGPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+
+
 // Simple Linear Allocator
 class LinearAllocator
 {
@@ -91,10 +136,11 @@ void DrawProfilerHUD();
 
 extern class GPUProfiler gGPUProfiler;
 
-// Usage:
-//		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
-//		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList)
-#define FOO_GPU_SCOPE(...) FooGPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+struct GPUProfilerCallbacks
+{
+	void(*OnEventBegin)(const char* /*pName*/, ID3D12GraphicsCommandList* /*CommandList*/, uint16 /*queueIndex*/);
+	void(*OnEventEnd)(const char* /*pName*/, ID3D12GraphicsCommandList* /*CommandList*/, uint16 /*queueIndex*/);
+};
 
 class GPUProfiler
 {
@@ -363,6 +409,9 @@ public:
 		TLS::StackData& stackData = tls.RegionStack.Push();
 		stackData.pCommandList = pCmd;
 		stackData.RegionIndex = index;
+
+		for (GPUProfilerCallbacks& callback : m_EventCallbacks)
+			callback.OnEventBegin(pName, pCmd, queueIndex);
 	}
 
 	// End and pop the region on the top of the stack
@@ -377,6 +426,9 @@ public:
 		const SampleRegion& region = data.Regions[stackData.RegionIndex];
 		bool isCopyQueue = m_Queues[region.QueueIndex].IsCopyQueue;
 		GetHeap(isCopyQueue).EndQuery(region.TimerIndex, stackData.pCommandList);
+
+		for (GPUProfilerCallbacks& callback : m_EventCallbacks)
+			callback.OnEventEnd(region.pName, stackData.pCommandList, region.QueueIndex);
 	}
 
 	// Returns the appropriate query heap
@@ -553,6 +605,11 @@ public:
 		}
 	}
 
+	void RegisterEventCallback(GPUProfilerCallbacks inCallbacks)
+	{
+		m_EventCallbacks.push_back(inCallbacks);
+	}
+
 	void SetPaused(bool paused) { m_QueuedPause = paused; }
 	bool IsPaused() const { return m_IsPaused; }
 
@@ -589,6 +646,8 @@ private:
 		}
 		return tls;
 	}
+
+	std::vector<GPUProfilerCallbacks> m_EventCallbacks;
 
 	std::mutex m_ThreadDataMutex;
 	std::vector<const TLS*> m_ThreadData;
@@ -634,23 +693,14 @@ struct FooGPUProfileScope
 // [SECTION] CPU Profiler
 //-----------------------------------------------------------------------------
 
-// Usage:
-//		FOO_SCOPE(const char* pNamer)
-//		FOO_SCOPE(const char* pName)
-//		FOO_SCOPE()
-#define FOO_SCOPE(...) FooProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
-
-// Usage:
-//		FOO_REGISTER_THREAD(const char* pName)
-//		FOO_REGISTER_THREAD()
-#define FOO_REGISTER_THREAD(...) gProfiler.RegisterThread(__VA_ARGS__)
-
-/// Usage:
-//		FOO_FRAME()
-#define FOO_FRAME() gProfiler.Tick(); gGPUProfiler.Tick()
-
 // Global CPU Profiler
 extern class FooProfiler gProfiler;
+
+struct CPUProfilerCallbacks
+{
+	void(*OnEventBegin)(const char* /*pName*/, uint32 /*threadIndex*/);
+	void(*OnEventEnd)(const char* /*pName*/, uint32 /*threadIndex*/);
+};
 
 // CPU Profiler
 // Also responsible for updating GPU profiler
@@ -680,6 +730,9 @@ public:
 		QueryPerformanceCounter((LARGE_INTEGER*)(&newRegion.BeginTicks));
 
 		tls.RegionStack.Push() = newIndex;
+
+		for (CPUProfilerCallbacks& callback : m_EventCallbacks)
+			callback.OnEventBegin(newRegion.pName, newRegion.ThreadIndex);
 	}
 
 	// End and pop the last pushed region on the current thread
@@ -690,6 +743,9 @@ public:
 
 		SampleRegion& region = data.Regions[tls.RegionStack.Pop()];
 		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTicks));
+
+		for (CPUProfilerCallbacks& callback : m_EventCallbacks)
+			callback.OnEventEnd(region.pName, region.ThreadIndex);
 	}
 
 	// Resolve the last frame and advance to the next frame.
@@ -802,6 +858,11 @@ public:
 		ticksMax = m_SampleData[youngestFrameIndex].Regions[0].EndTicks;
 	}
 
+	void RegisterEventCallbacks(CPUProfilerCallbacks inCallbacks)
+	{
+		m_EventCallbacks.push_back(inCallbacks);
+	}
+
 	Span<ThreadData> GetThreads() const { return m_ThreadData; }
 
 	void SetPaused(bool paused) { m_QueuedPaused = paused; }
@@ -829,6 +890,8 @@ private:
 	{
 		return m_SampleData[m_FrameIndex % m_SampleData.size()];
 	}
+
+	std::vector<CPUProfilerCallbacks> m_EventCallbacks;
 
 	std::mutex m_ThreadDataLock;							// Mutex for accesing thread data
 	std::vector<ThreadData> m_ThreadData;					// Data describing each registered thread

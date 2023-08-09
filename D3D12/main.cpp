@@ -7,7 +7,7 @@
 #include "Core/ConsoleVariables.h"
 #include "Core/Window.h"
 #include "DemoApp.h"
-#include "FooProfiler.h"
+#include "Core/Profiler.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
