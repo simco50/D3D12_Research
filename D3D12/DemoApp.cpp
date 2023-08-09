@@ -37,8 +37,6 @@
 #include "IconsFontAwesome4.h"
 #include "Core/Profiler.h"
 
-#define ENABLE_STUFF 1
-
 namespace Tweakables
 {
 	// Post processing
@@ -166,7 +164,6 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	ImGuiRenderer::Initialize(m_pDevice, window);
 
-#if ENABLE_STUFF
 	m_pMeshletRasterizer	= std::make_unique<MeshletRasterizer>(m_pDevice);
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
 	m_pClouds				= std::make_unique<Clouds>(m_pDevice);
@@ -184,7 +181,6 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	InitializePipelines();
 
 	SetupScene();
-#endif
 
 	OnResizeOrMove(windowRect.x, windowRect.y);
 	OnResizeViewport(windowRect.x, windowRect.y);
@@ -265,7 +261,6 @@ void DemoApp::Update()
 
 		m_RenderGraphPool->Tick();
 
-#if ENABLE_STUFF
 		RenderPath newRenderPath = m_RenderPath;
 		if (!ImGui::IsAnyItemActive())
 		{
@@ -323,12 +318,10 @@ void DemoApp::Update()
 		m_SceneData.MainView = m_pCamera->GetViewTransform();
 		m_SceneData.FrameIndex = m_Frame;
 		m_SceneData.pWorld = &m_World;
-#endif
 	}
 	{
 		RGGraph graph(*m_RenderGraphPool);
 
-#if ENABLE_STUFF
 		GPU_PROFILE_SCOPE("Render", pContext);
 
 		if (Tweakables::g_Screenshot)
@@ -1219,7 +1212,6 @@ void DemoApp::Update()
 
 			graph.Export(sceneTextures.pColorTarget, &m_pColorOutput, TextureFlag::ShaderResource);
 
-#endif
 
 			/*
 				UI & Present
