@@ -219,99 +219,104 @@ void DrawProfilerHUD()
 		/*
 			[=== SomeFunction (1.2 ms) ===]
 		*/
-		auto DrawBar = [&](uint32 id, uint64 beginTicks, uint64 endTicks, uint32 depth, const char* pName)
-		{
-			if (endTicks > beginAnchor)
+		bool anyHovered = false;
+		auto DrawBar = [&](uint32 id, uint64 beginTicks, uint64 endTicks, uint32 depth, const char* pName, bool* pOutHovered = nullptr)
 			{
-				float startPos = (beginTicks < beginAnchor ? 0 : beginTicks - beginAnchor) * TicksToPixels;
-				float endPos = (endTicks - beginAnchor) * TicksToPixels;
-				float y = depth * style.BarHeight;
-				ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + style.BarHeight));
-
-				// Ensure a bar always has a width
-				itemRect.Max.x = ImMax(itemRect.Max.x, itemRect.Min.x + 1);
-				if (ImGui::ItemAdd(itemRect, id, 0))
+				bool hovered = false;
+				if (endTicks > beginAnchor)
 				{
-					float ms = TicksToMs * (float)(endTicks - beginTicks);
+					float startPos = (beginTicks < beginAnchor ? 0 : beginTicks - beginAnchor) * TicksToPixels;
+					float endPos = (endTicks - beginAnchor) * TicksToPixels;
+					float y = depth * style.BarHeight;
+					ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + style.BarHeight));
 
-					ImColor color = ColorFromString(pName) * style.BarColorMultiplier;
-					ImColor textColor = style.FGTextColor;
-					// Fade out the bars that don't match the filter
-					if (context.SearchString[0] != 0 && !strstr(pName, context.SearchString))
+					// Ensure a bar always has a width
+					itemRect.Max.x = ImMax(itemRect.Max.x, itemRect.Min.x + 1);
+					if (ImGui::ItemAdd(itemRect, id, 0))
 					{
-						color.Value.w *= 0.3f;
-						textColor.Value.w *= 0.5f;
-					}
-					else if (context.PauseThreshold && ms >= context.PauseThresholdTime)
-					{
-						gProfiler.SetPaused(true);
-						gGPUProfiler.SetPaused(true);
-					}
+						float ms = TicksToMs * (float)(endTicks - beginTicks);
 
-					// Darken the bottom
-					ImColor colorBottom = color.Value * ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
-
-					bool hovered = ImGui::IsItemHovered();
-
-					// If the bar is double-clicked, zoom in to make the bar fill the entire window
-					if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
-					{
-						// Zoom ration to make the bar fit the entire window
-						float zoom = timelineWidth / itemRect.GetWidth();
-						context.TimelineScale = zoom;
-
-						// Recompute the timeline size with new zoom
-						float newTimelineWidth = timelineRect.GetWidth() * context.TimelineScale;
-						float newTickScale = newTimelineWidth / ticksInTimeline;
-						float newStartPos = newTickScale * (beginTicks - beginAnchor);
-
-						context.TimelineOffset.x = -newStartPos;
-					}
-
-					// Draw the bar rect and outline if hovered
-
-					// Only pad if bar is large enough
-					float maxPaddingX = ImMax(itemRect.GetWidth() * 0.5f - 1.0f, 0.0f);
-					const ImVec2 padding(ImMin(style.BarPadding, maxPaddingX), style.BarPadding);
-					pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
-					if (hovered)
-						pDraw->AddRect(itemRect.Min, itemRect.Max, ImColor(style.BarHighlightColor), 0.0f, ImDrawFlags_None, 3.0f);
-
-					// If the bar size is large enough, draw the name of the bar on top
-					if (itemRect.GetWidth() > 10.0f)
-					{
-						const char* pBarText;
-						ImFormatStringToTempBuffer(&pBarText, nullptr, "%s (%.2f ms)", pName, ms);
-
-						ImVec2 textSize = ImGui::CalcTextSize(pBarText);
-						const char* pEtc = "...";
-						float etcWidth = 20.0f;
-						if (textSize.x < itemRect.GetWidth() * 0.9f)
+						ImColor color = ColorFromString(pName) * style.BarColorMultiplier;
+						ImColor textColor = style.FGTextColor;
+						// Fade out the bars that don't match the filter
+						if (context.SearchString[0] != 0 && !strstr(pName, context.SearchString))
 						{
-							pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), style.BarHeight) - textSize) * 0.5f, textColor, pBarText);
+							color.Value.w *= 0.3f;
+							textColor.Value.w *= 0.5f;
 						}
-						else if (itemRect.GetWidth() > etcWidth + 10)
+						else if (context.PauseThreshold && ms >= context.PauseThresholdTime)
 						{
-							const char* pChar = pBarText;
-							float currentOffset = 10;
-							while (*pChar++)
+							gProfiler.SetPaused(true);
+							gGPUProfiler.SetPaused(true);
+						}
+
+						// Darken the bottom
+						ImColor colorBottom = color.Value * ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+
+						hovered = ImGui::IsItemHovered() && !anyHovered;
+						anyHovered |= hovered;
+
+						// If the bar is double-clicked, zoom in to make the bar fill the entire window
+						if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
+						{
+							// Zoom ration to make the bar fit the entire window
+							float zoom = timelineWidth / itemRect.GetWidth();
+							context.TimelineScale = zoom;
+
+							// Recompute the timeline size with new zoom
+							float newTimelineWidth = timelineRect.GetWidth() * context.TimelineScale;
+							float newTickScale = newTimelineWidth / ticksInTimeline;
+							float newStartPos = newTickScale * (beginTicks - beginAnchor);
+
+							context.TimelineOffset.x = -newStartPos;
+						}
+
+						// Draw the bar rect and outline if hovered
+
+						// Only pad if bar is large enough
+						float maxPaddingX = ImMax(itemRect.GetWidth() * 0.5f - 1.0f, 0.0f);
+						const ImVec2 padding(ImMin(style.BarPadding, maxPaddingX), style.BarPadding);
+						pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
+						if (hovered)
+							pDraw->AddRect(itemRect.Min, itemRect.Max, ImColor(style.BarHighlightColor), 0.0f, ImDrawFlags_None, 3.0f);
+
+						// If the bar size is large enough, draw the name of the bar on top
+						if (itemRect.GetWidth() > 10.0f)
+						{
+							const char* pBarText;
+							ImFormatStringToTempBuffer(&pBarText, nullptr, "%s (%.2f ms)", pName, ms);
+
+							ImVec2 textSize = ImGui::CalcTextSize(pBarText);
+							const char* pEtc = "...";
+							float etcWidth = 20.0f;
+							if (textSize.x < itemRect.GetWidth() * 0.9f)
 							{
-								float width = ImGui::CalcTextSize(pChar, pChar + 1).x;
-								if (currentOffset + width + etcWidth > itemRect.GetWidth())
-									break;
-								currentOffset += width;
+								pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), style.BarHeight) - textSize) * 0.5f, textColor, pBarText);
 							}
+							else if (itemRect.GetWidth() > etcWidth + 10)
+							{
+								const char* pChar = pBarText;
+								float currentOffset = 10;
+								while (*pChar++)
+								{
+									float width = ImGui::CalcTextSize(pChar, pChar + 1).x;
+									if (currentOffset + width + etcWidth > itemRect.GetWidth())
+										break;
+									currentOffset += width;
+								}
 
-							float textWidth = ImGui::CalcTextSize(pBarText, pChar).x;
+								float textWidth = ImGui::CalcTextSize(pBarText, pChar).x;
 
-							ImVec2 textPos = itemRect.Min + ImVec2(4, (style.BarHeight - textSize.y) * 0.5f);
-							pDraw->AddText(textPos, textColor, pBarText, pChar);
-							pDraw->AddText(textPos + ImVec2(textWidth, 0), textColor, pEtc);
+								ImVec2 textPos = itemRect.Min + ImVec2(4, (style.BarHeight - textSize.y) * 0.5f);
+								pDraw->AddText(textPos, textColor, pBarText, pChar);
+								pDraw->AddText(textPos + ImVec2(textWidth, 0), textColor, pEtc);
+							}
 						}
 					}
 				}
-			}
-		};
+				if (pOutHovered)
+					*pOutHovered = hovered;
+			};
 
 		// Add track name and expander
 		/*
@@ -377,8 +382,9 @@ void DrawProfilerHUD()
 						uint64 cpuBeginTicks = queue.GpuToCpuTicks(region.BeginTicks);
 						uint64 cpuEndTicks = queue.GpuToCpuTicks(region.EndTicks);
 
-						DrawBar(ImGui::GetID(&region), cpuBeginTicks, cpuEndTicks, region.Depth, region.pName);
-						if (ImGui::IsItemHovered())
+						bool hovered;
+						DrawBar(ImGui::GetID(&region), cpuBeginTicks, cpuEndTicks, region.Depth, region.pName, &hovered);
+						if (hovered)
 						{
 							if (ImGui::BeginTooltip())
 							{
@@ -436,8 +442,9 @@ void DrawProfilerHUD()
 
 						trackDepth = ImMax(trackDepth, (uint32)region.Depth + 1);
 
-						DrawBar(ImGui::GetID(&region), region.BeginTicks, region.EndTicks, region.Depth, region.pName);
-						if (ImGui::IsItemHovered())
+						bool hovered;
+						DrawBar(ImGui::GetID(&region), region.BeginTicks, region.EndTicks, region.Depth, region.pName, &hovered);
+						if (hovered)
 						{
 							if (ImGui::BeginTooltip())
 							{

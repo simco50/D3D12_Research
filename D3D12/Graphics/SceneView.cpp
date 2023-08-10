@@ -10,7 +10,7 @@
 #include "Light.h"
 #include "Core/ConsoleVariables.h"
 #include "Content/Image.h"
-#include "Profiler.h"
+#include "Core/Profiler.h"
 
 namespace Tweakables
 {

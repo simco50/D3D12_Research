@@ -8,7 +8,7 @@
 #include "Graphics/RHI/Texture.h"
 #include "Graphics/RHI/ResourceViews.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
-#include "Graphics/Profiler.h"
+#include "Core/Profiler.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/Light.h"
 #include "Graphics/Techniques/LightCulling.h"

@@ -8,7 +8,7 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/SceneView.h"
-#include "Graphics/Profiler.h"
+#include "Core/Profiler.h"
 #include "Core/Input.h"
 #include "CBT.h"
 

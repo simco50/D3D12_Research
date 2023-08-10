@@ -2,7 +2,7 @@
 #include "RenderGraph.h"
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/RHI/CommandContext.h"
-#include "Graphics/Profiler.h"
+#include "Core/Profiler.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
