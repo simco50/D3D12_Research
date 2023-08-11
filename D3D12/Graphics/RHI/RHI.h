@@ -97,10 +97,6 @@ enum class FormatType
 
 struct FormatInfo
 {
-	FormatInfo() = default;
-	FormatInfo(const FormatInfo&) = delete;
-	FormatInfo& operator=(const FormatInfo&) = delete;
-
 	ResourceFormat Format;
 	const char* pName;
 	uint8 BytesPerBlock;
@@ -136,7 +132,7 @@ public:
 
 	~FreeList()
 	{
-		checkf(m_NumAllocations == 0, "Free list not fully released");
+		check(m_NumAllocations == 0, "Free list not fully released");
 	}
 
 	uint32 Allocate()

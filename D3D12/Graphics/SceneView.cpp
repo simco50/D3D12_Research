@@ -364,10 +364,10 @@ namespace GraphicsCommon
 		desc.Height = image.GetHeight();
 		desc.Format = image.GetFormat();
 		desc.Mips = image.GetMipLevels();
-		desc.Usage = TextureFlag::ShaderResource;
+		desc.Flags = TextureFlag::ShaderResource;
 		if (sRGB)
 		{
-			desc.Usage |= TextureFlag::sRGB;
+			desc.Flags |= TextureFlag::sRGB;
 		}
 		desc.Type = image.IsCubemap() ? TextureType::TextureCube : TextureType::Texture2D;
 		if (RHI::GetFormatInfo(desc.Format).IsBC)

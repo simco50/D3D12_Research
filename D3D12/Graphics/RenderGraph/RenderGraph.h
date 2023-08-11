@@ -184,7 +184,7 @@ public:
 	RGPass& Bind(ExecuteFn&& callback)
 	{
 		static_assert(sizeof(ExecuteFn) < 1024, "The Execute callback exceeds the maximum size");
-		checkf(!pExecuteCallback, "Pass is already bound! This may be unintentional");
+		check(!pExecuteCallback, "Pass is already bound! This may be unintentional");
 		pExecuteCallback = Allocator.AllocateObject<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
 		if constexpr (RGPassCallback<ExecuteFn>::HasPassResources)
 			Flags |= RGPassFlag::NoRenderPass;

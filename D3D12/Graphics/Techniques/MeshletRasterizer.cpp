@@ -495,7 +495,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 void MeshletRasterizer::Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, const RasterContext& rasterContext, RasterResult& outResult)
 {
-	checkf(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB")
+	check(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB");
 
 	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
 

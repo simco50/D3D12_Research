@@ -14,7 +14,7 @@ RGPass& RGPass::Read(Span<RGResource*> resources)
 	{
 		if (pResource)
 		{
-			bool isIndirectArgs = pResource->Type == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Usage, BufferFlag::IndirectArguments);
+			bool isIndirectArgs = pResource->Type == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Flags, BufferFlag::IndirectArguments);
 			AddAccess(pResource, isIndirectArgs ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : state);
 		}
 	}
@@ -50,7 +50,7 @@ RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAc
 RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool writeDepth, RenderTargetLoadAction stencilAccess)
 {
 	check(EnumHasAllFlags(Flags, RGPassFlag::Raster));
-	checkf(!DepthStencilTarget.pResource, "Depth Target already assigned");
+	check(!DepthStencilTarget.pResource, "Depth Target already assigned");
 	AddAccess(pResource, writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ);
 	DepthStencilTarget = { pResource, depthAccess, stencilAccess, writeDepth };
 	return *this;
@@ -62,8 +62,8 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	auto it = std::find_if(Accesses.begin(), Accesses.end(), [=](const ResourceAccess& access) { return pResource == access.pResource; });
 	if (it != Accesses.end())
 	{
-		checkf(!EnumHasAllFlags(it->Access, state), "Redundant state set on resource '%s'", pResource->GetName());
-		checkf(!ResourceState::HasWriteResourceState(it->Access) || !ResourceState::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->GetName());
+		check(!EnumHasAllFlags(it->Access, state), "Redundant state set on resource '%s'", pResource->GetName());
+		check(!ResourceState::HasWriteResourceState(it->Access) || !ResourceState::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->GetName());
 		it->Access |= state;
 	}
 	else
@@ -166,21 +166,21 @@ void RGGraph::Compile()
 			{
 				BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
 				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
-					desc.Usage |= BufferFlag::UnorderedAccess;
+					desc.Flags |= BufferFlag::UnorderedAccess;
 				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
-					desc.Usage |= BufferFlag::ShaderResource;
+					desc.Flags |= BufferFlag::ShaderResource;
 			}
 			else if (pResource->Type == RGResourceType::Texture)
 			{
 				TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
 				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
-					desc.Usage |= TextureFlag::UnorderedAccess;
+					desc.Flags |= TextureFlag::UnorderedAccess;
 				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
-					desc.Usage |= TextureFlag::ShaderResource;
+					desc.Flags |= TextureFlag::ShaderResource;
 				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_DEPTH_WRITE))
-					desc.Usage |= TextureFlag::DepthStencil;
+					desc.Flags |= TextureFlag::DepthStencil;
 				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_RENDER_TARGET))
-					desc.Usage |= TextureFlag::RenderTarget;
+					desc.Flags |= TextureFlag::RenderTarget;
 			}
 		}
 	}
@@ -252,18 +252,18 @@ void RGGraph::Compile()
 void RGGraph::Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget, TextureFlag additionalFlags)
 {
 	auto it = std::find_if(m_ExportTextures.begin(), m_ExportTextures.end(), [&](const ExportedTexture& tex) { return tex.pTarget == pTarget; });
-	checkf(it == m_ExportTextures.end(), "Texture '%s' is exported to a target that has already been exported to by another texture ('%s').", pTexture->GetName(), it->pTexture->GetName());
+	check(it == m_ExportTextures.end(), "Texture '%s' is exported to a target that has already been exported to by another texture ('%s').", pTexture->GetName(), it->pTexture->GetName());
 	pTexture->IsExported = true;
-	pTexture->Desc.Usage |= additionalFlags;
+	pTexture->Desc.Flags |= additionalFlags;
 	m_ExportTextures.push_back({ pTexture, pTarget });
 }
 
 void RGGraph::Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget, BufferFlag additionalFlags)
 {
 	auto it = std::find_if(m_ExportBuffers.begin(), m_ExportBuffers.end(), [&](const ExportedBuffer& buff) { return buff.pTarget == pTarget; });
-	checkf(it == m_ExportBuffers.end(), "Buffer '%s' is exported to a target that has already been exported to by another texture ('%s').", pBuffer->GetName(), it->pBuffer->GetName());
+	check(it == m_ExportBuffers.end(), "Buffer '%s' is exported to a target that has already been exported to by another texture ('%s').", pBuffer->GetName(), it->pBuffer->GetName());
 	pBuffer->IsExported = true;
-	pBuffer->Desc.Usage |= additionalFlags;
+	pBuffer->Desc.Flags |= additionalFlags;
 	m_ExportBuffers.push_back({ pBuffer, pTarget });
 }
 
@@ -341,8 +341,8 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 	for (const RGPass::ResourceAccess& access : pPass->Accesses)
 	{
 		RGResource* pResource = access.pResource;
-		checkf(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
-		checkf(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
+		check(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
+		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
 		if(pResource->GetPhysical()->UseStateTracking())
 			context.InsertResourceBarrier(pResource->pPhysicalResource, access.Access);
 	}

@@ -29,7 +29,7 @@ public:
 	static void Log(const char* message, LogType type = LogType::Info);
 
 	template<typename... Args>
-	static void LogFormat(LogType type, const char* format, Args&&... args)
+	static void LogFormat(LogType type, const char* format = "", Args&&... args)
 	{
 		FormatString(sConvertBuffer.data(), (int)sConvertBuffer.size(), format, GetFormatArgument(std::forward<Args&&>(args))...);
 		Log(sConvertBuffer.data(), type);

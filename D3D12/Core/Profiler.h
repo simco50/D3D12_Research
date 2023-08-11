@@ -292,7 +292,7 @@ private:
 			// Don't allow the next frame to start until its resolve is finished.
 			if (!IsFenceComplete(newFrame.FenceValue))
 			{
-				checkf(false, "Resolve() should not have to wait for the resolve of the upcoming frame to finish. Increase NumFrames.");
+				check(false, "Resolve() should not have to wait for the resolve of the upcoming frame to finish. Increase NumFrames.");
 				pFence->SetEventOnCompletion(newFrame.FenceValue, FenceEvent);
 				WaitForSingleObject(FenceEvent, INFINITE);
 			}

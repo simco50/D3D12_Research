@@ -61,7 +61,7 @@ SyncPoint CommandContext::Execute(const Span<CommandContext* const>& contexts)
 	CommandQueue* pQueue = contexts[0]->GetParent()->GetCommandQueue(contexts[0]->GetType());
 	for(CommandContext* pContext : contexts)
 	{
-		checkf(pContext->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
+		check(pContext->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
 			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContext->GetType()));
 		pContext->FlushResourceBarriers();
 	}
@@ -114,7 +114,7 @@ bool NeedsTransition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES& after,
 void CommandContext::InsertResourceBarrier(GraphicsResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
 	check(pResource && pResource->GetResource());
-	checkf(IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
+	check(IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 	check(pResource->UseStateTracking());
 
 	ResourceState& resourceState = m_ResourceStates[pResource];
@@ -132,7 +132,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pResource, D3D12_RE
 	{
 		if (NeedsTransition(beforeState, state, true))
 		{
-			checkf(IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
+			check(IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 			
 			if (m_NumBatchedBarriers > 0)
 			{
@@ -180,8 +180,8 @@ void CommandContext::FlushResourceBarriers()
 
 void CommandContext::CopyResource(const GraphicsResource* pSource, const GraphicsResource* pTarget)
 {
-	checkf(pSource && pSource->GetResource(), "Source is invalid");
-	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
+	check(pSource && pSource->GetResource(), "Source is invalid");
+	check(pTarget && pTarget->GetResource(), "Target is invalid");
 
 	FlushResourceBarriers();
 	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
@@ -189,8 +189,8 @@ void CommandContext::CopyResource(const GraphicsResource* pSource, const Graphic
 
 void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pTarget, const D3D12_BOX& sourceRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationOffset /*= 0*/)
 {
-	checkf(pSource && pSource->GetResource(), "Source is invalid");
-	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
+	check(pSource && pSource->GetResource(), "Source is invalid");
+	check(pTarget && pTarget->GetResource(), "Target is invalid");
 
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint;
 	textureFootprint.Offset = 0;
@@ -208,8 +208,8 @@ void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pTarget, 
 
 void CommandContext::CopyTexture(const Texture* pSource, const Texture* pTarget, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationSubregion /*= 0*/)
 {
-	checkf(pSource && pSource->GetResource(), "Source is invalid");
-	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
+	check(pSource && pSource->GetResource(), "Source is invalid");
+	check(pTarget && pTarget->GetResource(), "Target is invalid");
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pTarget->GetResource(), destinationSubregion);
@@ -219,8 +219,8 @@ void CommandContext::CopyTexture(const Texture* pSource, const Texture* pTarget,
 
 void CommandContext::CopyBuffer(const Buffer* pSource, const Buffer* pTarget, uint64 size, uint64 sourceOffset, uint64 destinationOffset)
 {
-	checkf(pSource && pSource->GetResource(), "Source is invalid");
-	checkf(pTarget && pTarget->GetResource(), "Target is invalid");
+	check(pSource && pSource->GetResource(), "Source is invalid");
+	check(pTarget && pTarget->GetResource(), "Target is invalid");
 
 	FlushResourceBarriers();
 	m_pCommandList->CopyBufferRegion(pTarget->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
@@ -245,7 +245,7 @@ void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 gro
 {
 	check(m_pCurrentPSO);
 	check(m_CurrentCommandContext == CommandListContext::Compute);
-	checkf(
+	check(
 		groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
 		groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
 		groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
@@ -427,7 +427,7 @@ void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 
 		// Retrieve the last known resource state
 		D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
-		checkf(CommandContext::IsTransitionAllowed(m_Type, beforeState),
+		check(CommandContext::IsTransitionAllowed(m_Type, beforeState),
 			"Resource (%s) can not be transitioned from this state (%s) on this queue (%s). Insert a barrier on another queue before executing this one.",
 			pResource->GetName(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
 
@@ -446,8 +446,8 @@ void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
-	checkf(!m_InRenderPass, "Already in RenderPass");
-	checkf(renderPassInfo.DepthStencilTarget.Target
+	check(!m_InRenderPass, "Already in RenderPass");
+	check(renderPassInfo.DepthStencilTarget.Target
 		|| (renderPassInfo.DepthStencilTarget.Access == RenderPassAccess::NoAccess && renderPassInfo.DepthStencilTarget.StencilAccess == RenderPassAccess::NoAccess),
 		"Either a depth texture must be assigned or the access should be 'NoAccess'");
 	auto ExtractBeginAccess = [](RenderPassAccess access)
@@ -527,7 +527,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		D3D12_RENDER_PASS_ENDING_ACCESS_TYPE endingAccess = ExtractEndingAccess(data.Access);
 		if (data.Target->GetDesc().SampleCount <= 1 && endingAccess == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 		{
-			validateOncef(data.Target == data.ResolveTarget, "RenderTarget %d is set to resolve but has a sample count of 1. This will just do a CopyTexture instead which is wasteful.", i);
+			validateOnce(data.Target == data.ResolveTarget, "RenderTarget %d is set to resolve but has a sample count of 1. This will just do a CopyTexture instead which is wasteful.", i);
 			endingAccess = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
 		}
 		renderTargetDescs[i].EndingAccess.Type = endingAccess;
@@ -536,7 +536,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 
 		if (renderTargetDescs[i].EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_RESOLVE)
 		{
-			checkf(data.ResolveTarget, "Expected ResolveTarget because ending access is 'Resolve'");
+			check(data.ResolveTarget, "Expected ResolveTarget because ending access is 'Resolve'");
 			InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 			renderTargetDescs[i].EndingAccess.Resolve.Format = D3D::ConvertFormat(data.Target->GetFormat());
 			renderTargetDescs[i].EndingAccess.Resolve.pDstResource = data.ResolveTarget->GetResource();
@@ -682,7 +682,7 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 void CommandContext::SetVertexBuffers(const Span<VertexBufferView>& buffers)
 {
 	constexpr uint32 MAX_VERTEX_BUFFERS = 4;
-	checkf(buffers.GetSize() < MAX_VERTEX_BUFFERS, "VertexBuffer count (%d) exceeds the maximum (%d)", buffers.GetSize(), MAX_VERTEX_BUFFERS);
+	check(buffers.GetSize() < MAX_VERTEX_BUFFERS, "VertexBuffer count (%d) exceeds the maximum (%d)", buffers.GetSize(), MAX_VERTEX_BUFFERS);
 	D3D12_VERTEX_BUFFER_VIEW views[MAX_VERTEX_BUFFERS];
 
 	uint32 numViews = 0;
