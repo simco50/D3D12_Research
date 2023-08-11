@@ -10,6 +10,7 @@
 #include "RenderGraph/RenderGraph.h"
 #include "ImGuizmo.h"
 #include "Core/Paths.h"
+#include "Core/Profiler.h"
 #include "IconsFontAwesome4.h"
 #include "imgui_impl_win32.h"
 #include "imgui_internal.h"
@@ -149,6 +150,145 @@ GlobalResource<PipelineState> gImGuiPSO;
 GlobalResource<RootSignature> gImGuiRS;
 GlobalResource<Texture> gFontTexture;
 
+static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
+{
+	context.SetGraphicsRootSignature(gImGuiRS);
+	context.SetPipelineState(gImGuiPSO);
+	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	context.SetViewport(FloatRect(0.0f, 0.0f, pDrawData->DisplaySize.x, pDrawData->DisplaySize.y));
+
+	Matrix projection = Math::CreateOrthographicOffCenterMatrix(pDrawData->DisplayPos.x, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, pDrawData->DisplayPos.y, 0.0f, 1.0f);
+	context.BindRootCBV(1, projection);
+
+	uint32 vertexOffset = 0;
+	ScratchAllocation vertexData = context.AllocateScratch(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
+	context.SetVertexBuffers(VertexBufferView(vertexData.GpuHandle, pDrawData->TotalVtxCount, sizeof(ImDrawVert), 0));
+
+	uint32 indexOffset = 0;
+	ScratchAllocation indexData = context.AllocateScratch(sizeof(ImDrawIdx) * pDrawData->TotalIdxCount);
+	context.SetIndexBuffer(IndexBufferView(indexData.GpuHandle, pDrawData->TotalIdxCount, ResourceFormat::R16_UINT, 0));
+
+	ImVec2 clipOff = pDrawData->DisplayPos;
+	for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
+	{
+		const ImDrawList* pList = pDrawData->CmdLists[cmdList];
+
+		memcpy((char*)vertexData.pMappedMemory + vertexOffset * sizeof(ImDrawVert), pList->VtxBuffer.Data, pList->VtxBuffer.Size * sizeof(ImDrawVert));
+		memcpy((char*)indexData.pMappedMemory + indexOffset * sizeof(ImDrawIdx), pList->IdxBuffer.Data, pList->IdxBuffer.Size * sizeof(ImDrawIdx));
+
+		for (int cmd = 0; cmd < pList->CmdBuffer.Size; ++cmd)
+		{
+			const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
+			if (pCmd->UserCallback)
+			{
+				pCmd->UserCallback(pList, pCmd);
+			}
+			else
+			{
+				ImVec2 clip_min(pCmd->ClipRect.x - clipOff.x, pCmd->ClipRect.y - clipOff.y);
+				ImVec2 clip_max(pCmd->ClipRect.z - clipOff.x, pCmd->ClipRect.w - clipOff.y);
+				if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
+					continue;
+
+				if ((int)pCmd->ClipRect.x >= (int)pCmd->ClipRect.z || (int)pCmd->ClipRect.y >= (int)pCmd->ClipRect.w)
+					continue;
+
+				Texture* pTexture = (Texture*)pCmd->GetTexID();
+				if (!pTexture)
+					pTexture = gFontTexture;
+
+				check(pTexture->GetSRV());
+
+				context.BindRootCBV(0, pTexture->GetSRVIndex());
+				context.SetScissorRect(FloatRect(clip_min.x, clip_min.y, clip_max.x, clip_max.y));
+				context.DrawIndexedInstanced(pCmd->ElemCount, pCmd->IdxOffset + indexOffset, 1, pCmd->VtxOffset + vertexOffset, 0);
+			}
+		}
+
+		vertexOffset += pList->VtxBuffer.Size;
+		indexOffset += pList->IdxBuffer.Size;
+	}
+}
+
+namespace ViewportImpl
+{
+	struct ViewportData
+	{
+		SwapChain* pSwapChain = nullptr;
+	};
+
+	static void Viewport_CreateWindow(ImGuiViewport* viewport)
+	{
+		GraphicsDevice* pDevice = static_cast<GraphicsDevice*>(ImGui::GetIO().BackendRendererUserData);
+		ViewportData* pViewportData = IM_NEW(ViewportData);
+		viewport->RendererUserData = pViewportData;
+
+		HWND hwnd = viewport->PlatformHandleRaw ? (HWND)viewport->PlatformHandleRaw : (HWND)viewport->PlatformHandle;
+		IM_ASSERT(hwnd != 0);
+		pViewportData->pSwapChain = new SwapChain(pDevice, DisplayMode::SDR, 3, hwnd);
+	}
+
+	static void Viewport_DestroyWindow(ImGuiViewport* viewport)
+	{
+		// The main viewport (owned by the application) will always have RendererUserData == 0 since we didn't create the data for it.
+		if (ViewportData* pViewportData = (ViewportData*)viewport->RendererUserData)
+		{
+			delete pViewportData->pSwapChain;
+			IM_FREE(pViewportData);
+		}
+		viewport->RendererUserData = nullptr;
+	}
+
+	static void Viewport_Resize(ImGuiViewport* viewport, ImVec2 size)
+	{
+		ViewportData* pViewportData = (ViewportData*)viewport->RendererUserData;
+		pViewportData->pSwapChain->OnResizeOrMove((uint32)size.x, (uint32)size.y);
+	}
+
+	static void Viewport_RenderWindow(ImGuiViewport* viewport, void* pCmd)
+	{
+		ViewportData* pViewportData = (ViewportData*)viewport->RendererUserData;
+		Texture* pBackBuffer = pViewportData->pSwapChain->GetBackBuffer();
+
+		{
+			CommandContext* pContext = static_cast<CommandContext*>(pCmd);
+			GPU_PROFILE_SCOPE("Render ImGui Viewport", pContext);
+
+			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			pContext->BeginRenderPass(RenderPassInfo(pBackBuffer, RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
+
+			RenderDrawData(viewport->DrawData, *pContext);
+
+			pContext->EndRenderPass();
+			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_PRESENT);
+			pContext->FlushResourceBarriers();
+		}
+	}
+
+
+	static void Viewport_Present(ImGuiViewport* viewport, void*)
+	{
+		PROFILE_SCOPE("Present ImGui Viewport");
+		ViewportData* pViewportData = (ViewportData*)viewport->RendererUserData;
+		pViewportData->pSwapChain->Present();
+	}
+
+	static void Setup(GraphicsDevice* pDevice)
+	{
+		ImGuiIO& io = ImGui::GetIO();
+		io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;
+		io.BackendRendererUserData = pDevice;
+
+		ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+		platform_io.Renderer_CreateWindow = Viewport_CreateWindow;
+		platform_io.Renderer_DestroyWindow = Viewport_DestroyWindow;
+		platform_io.Renderer_SetWindowSize = Viewport_Resize;
+		platform_io.Renderer_RenderWindow = Viewport_RenderWindow;
+		platform_io.Renderer_SwapBuffers = Viewport_Present;
+	}
+}
+
 void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 {
 	IMGUI_CHECKVERSION();
@@ -156,8 +296,14 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-	//io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+	io.ConfigViewportsNoDefaultParent = true;
+	io.ConfigDockingTransparentPayload = true;
+	
+	ImGui_ImplWin32_Init(window);
+
+	ViewportImpl::Setup(pDevice);
 
 	Paths::CreateDirectoryTree(Paths::SavedDir());
 	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
@@ -212,12 +358,11 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	gImGuiPSO = pDevice->CreatePipeline(psoDesc);
 
 	ApplyImGuiStyle();
-
-	ImGui_ImplWin32_Init(window);
 }
 
 void ImGuiRenderer::Shutdown()
 {
+	ImGui::DestroyPlatformWindows();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 }
@@ -229,100 +374,78 @@ void ImGuiRenderer::NewFrame()
 	ImGuizmo::BeginFrame();
 }
 
-void ImGuiRenderer::Render(RGGraph& graph, RGTexture* pRenderTarget)
+void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 {
-	RG_GRAPH_SCOPE("ImGui", graph);
+	GPU_PROFILE_SCOPE("ImGui", &context);
 
-	graph.AddPass("Submit", RGPassFlag::NeverCull)
-		.Bind([=](CommandContext& context)
+	{
+		GPU_PROFILE_SCOPE("ImGui::Render()", &context);
+		ImGui::Render();
+	}
+
+	{
+		GPU_PROFILE_SCOPE("Transitions", &context);
+		ImDrawData* pDrawData = ImGui::GetDrawData();
+		ImVec2 clip_off = pDrawData->DisplayPos;
+		for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
+		{
+			const ImDrawList* pList = pDrawData->CmdLists[cmdList];
+			for (int cmd = 0; cmd < pList->CmdBuffer.Size; ++cmd)
 			{
-				ImGui::Render();
+				const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
+				Texture* pTexture = (Texture*)pCmd->GetTexID();
+				if (pTexture && pTexture->UseStateTracking())
+					context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+			}
+		}
+	}
 
-				ImDrawData* pDrawData = ImGui::GetDrawData();
-				ImVec2 clip_off = pDrawData->DisplayPos;
-				for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
-				{
-					const ImDrawList* pList = pDrawData->CmdLists[cmdList];
-					for (int cmd = 0; cmd < pList->CmdBuffer.Size; ++cmd)
-					{
-						const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
-						Texture* pTexture = (Texture*)pCmd->GetTexID();
-						if (pTexture && pTexture->UseStateTracking())
-							context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-					}
-				}
-			});
+	{
+		GPU_PROFILE_SCOPE("Render", &context);
+		ImDrawData* pDrawData = ImGui::GetDrawData();
 
-	graph.AddPass("Render", RGPassFlag::Raster)
-		.RenderTarget(pRenderTarget, RenderTargetLoadAction::Load)
-		.Bind([=](CommandContext& context)
+		context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
+		RenderDrawData(pDrawData, context);
+		context.EndRenderPass();
+	}
+
+	{
+		GPU_PROFILE_SCOPE("Render Viewports", &context);
+
+		// Update and Render additional Platform Windows
+		if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+		{
+			ImGui::UpdatePlatformWindows();
+
+			// Skip the main viewport (index 0), which is always fully handled by the application!
+			ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+			for (int i = 1; i < platform_io.Viewports.Size; i++)
 			{
-				context.SetGraphicsRootSignature(gImGuiRS);
-				context.SetPipelineState(gImGuiPSO);
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-				ImDrawData* pDrawData = ImGui::GetDrawData();
-
-				const FloatRect vp(
-					pDrawData->DisplayPos.x,
-					pDrawData->DisplayPos.y,
-					pDrawData->DisplayPos.x + pDrawData->DisplaySize.x,
-					pDrawData->DisplayPos.y + pDrawData->DisplaySize.y);
-
-				context.SetViewport(vp);
-
-				Matrix projection = Math::CreateOrthographicOffCenterMatrix(vp.Left, vp.Right, vp.Bottom, vp.Top, 0, 1);
-				context.BindRootCBV(1, projection);
-
-				uint32 vertexOffset = 0;
-				ScratchAllocation vertexData = context.AllocateScratch(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
-				context.SetVertexBuffers(VertexBufferView(vertexData.GpuHandle, pDrawData->TotalVtxCount, sizeof(ImDrawVert), 0));
-
-				uint32 indexOffset = 0;
-				ScratchAllocation indexData = context.AllocateScratch(sizeof(ImDrawIdx) * pDrawData->TotalIdxCount);
-				context.SetIndexBuffer(IndexBufferView(indexData.GpuHandle, pDrawData->TotalIdxCount, ResourceFormat::R16_UINT, 0));
-
-				ImVec2 clipOff = pDrawData->DisplayPos;
-				for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
-				{
-					const ImDrawList* pList = pDrawData->CmdLists[cmdList];
-
-					memcpy((char*)vertexData.pMappedMemory + vertexOffset * sizeof(ImDrawVert), pList->VtxBuffer.Data, pList->VtxBuffer.Size * sizeof(ImDrawVert));
-					memcpy((char*)indexData.pMappedMemory + indexOffset * sizeof(ImDrawIdx), pList->IdxBuffer.Data, pList->IdxBuffer.Size * sizeof(ImDrawIdx));
-
-					for (int cmd = 0; cmd < pList->CmdBuffer.Size; ++cmd)
-					{
-						const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
-						if (pCmd->UserCallback)
-						{
-							pCmd->UserCallback(pList, pCmd);
-						}
-						else
-						{
-							ImVec2 clip_min(pCmd->ClipRect.x - clipOff.x, pCmd->ClipRect.y - clipOff.y);
-							ImVec2 clip_max(pCmd->ClipRect.z - clipOff.x, pCmd->ClipRect.w - clipOff.y);
-							if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
-								continue;
-
-							if ((int)pCmd->ClipRect.x >= (int)pCmd->ClipRect.z || (int)pCmd->ClipRect.y >= (int)pCmd->ClipRect.w)
-								continue;
-
-							Texture* pTexture = (Texture*)pCmd->GetTexID();
-							if (!pTexture)
-								pTexture = gFontTexture;
-
-							check(pTexture->GetSRV());
-
-							context.BindRootCBV(0, pTexture->GetSRVIndex());
-							context.SetScissorRect(FloatRect(clip_min.x, clip_min.y, clip_max.x, clip_max.y));
-							context.DrawIndexedInstanced(pCmd->ElemCount, pCmd->IdxOffset + indexOffset, 1, pCmd->VtxOffset + vertexOffset, 0);
-						}
-					}
-
-					vertexOffset += pList->VtxBuffer.Size;
-					indexOffset += pList->IdxBuffer.Size;
-				}
-			});
-
+				ImGuiViewport* viewport = platform_io.Viewports[i];
+				if (viewport->Flags & ImGuiViewportFlags_IsMinimized)
+					continue;
+				if (platform_io.Platform_RenderWindow) platform_io.Platform_RenderWindow(viewport, nullptr);
+				if (platform_io.Renderer_RenderWindow) platform_io.Renderer_RenderWindow(viewport, &context);
+			}
+		}
+	}
 }
 
+void ImGuiRenderer::PresentViewports()
+{
+	// Update and Render additional Platform Windows
+	if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+	{
+		// Skip the main viewport (index 0), which is always fully handled by the application!
+		ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+		for (int i = 1; i < platform_io.Viewports.Size; i++)
+		{
+			ImGuiViewport* viewport = platform_io.Viewports[i];
+			if (viewport->Flags & ImGuiViewportFlags_IsMinimized)
+				continue;
+			if (platform_io.Platform_SwapBuffers) platform_io.Platform_SwapBuffers(viewport, nullptr);
+			if (platform_io.Renderer_SwapBuffers) platform_io.Renderer_SwapBuffers(viewport, nullptr);
+		}
+	}
+}

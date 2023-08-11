@@ -1211,13 +1211,6 @@ void DemoApp::Update()
 			}
 
 			graph.Export(sceneTextures.pColorTarget, &m_pColorOutput, TextureFlag::ShaderResource);
-
-
-			/*
-				UI & Present
-			*/
-
-			ImGuiRenderer::Render(graph, graph.Import(m_pSwapchain->GetBackBuffer()));
 		}
 
 		if (Tweakables::g_DumpRenderGraph)
@@ -1235,6 +1228,8 @@ void DemoApp::Update()
 		
 	}
 
+	ImGuiRenderer::Render(*pContext, m_pSwapchain->GetBackBuffer());
+
 	{
 		PROFILE_SCOPE("Execute Commandlist");
 		pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
@@ -1245,6 +1240,7 @@ void DemoApp::Update()
 		{
 			PROFILE_SCOPE("Present");
 			m_pSwapchain->Present();
+			ImGuiRenderer::PresentViewports();
 		}
 		{
 			PROFILE_SCOPE("Wait for GPU frame");
@@ -1371,18 +1367,6 @@ void DemoApp::InitializePipelines()
 		m_pVisibilityShadingComputePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "ShadeCS");
 	}
 	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
-}
-
-
-
-volatile float a = 0;
-
-void sleep(int u)
-{
-	for (int i = 0; i < u * 100; ++i)
-	{
-		a += sqrtf(a);
-	}
 }
 
 void DemoApp::UpdateImGui()

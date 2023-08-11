@@ -18,6 +18,7 @@ namespace ImGuiRenderer
 	void Shutdown();
 
 	void NewFrame();
-	void Render(RGGraph& graph, RGTexture* pRenderTarget);
+	void Render(CommandContext& context, Texture* pRenderTarget);
+	void PresentViewports();
 };
 

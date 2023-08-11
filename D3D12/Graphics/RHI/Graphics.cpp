@@ -745,7 +745,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D
 	return pTexture;
 }
 
-RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource)
+RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index)
 {
 	D3D12_RESOURCE_DESC resourceDesc = pSwapchainResource->GetDesc();
 	TextureDesc desc;
@@ -759,7 +759,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 
 	Texture* pTexture = new Texture(this, desc, pSwapchainResource);
 	pTexture->SetImmediateDelete(true);
-	pTexture->SetName("Backbuffer");
+	pTexture->SetName(Sprintf("Backbuffer %d", index).c_str());
 	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
 	pTexture->m_NeedsStateTracking = true;
 
@@ -1351,7 +1351,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 		{
 			ID3D12Resource* pResource = nullptr;
 			VERIFY_HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-			m_Backbuffers[i] = GetParent()->CreateTextureForSwapchain(pResource);
+			m_Backbuffers[i] = GetParent()->CreateTextureForSwapchain(pResource, i);
 		}
 
 		m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
@@ -1466,7 +1466,6 @@ void SwapChain::RecreateSwapChain()
 		swapChain.GetAddressOf()));
 
 	swapChain.As(&m_pSwapchain);
-	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 
 	if (m_WaitableObject)
 	{
