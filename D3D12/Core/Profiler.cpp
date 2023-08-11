@@ -240,9 +240,18 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					// Only pad if bar is large enough
 					float maxPaddingX = ImMax(itemRect.GetWidth() * 0.5f - 1.0f, 0.0f);
 					const ImVec2 padding(ImMin(style.BarPadding, maxPaddingX), style.BarPadding);
-					pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
 					if (hovered)
-						pDraw->AddRect(itemRect.Min, itemRect.Max, ImColor(style.BarHighlightColor), 0.0f, ImDrawFlags_None, 3.0f);
+					{
+						ImColor highlightColor = color.Value * ImVec4(1.5f, 1.5f, 1.5f, 1.0f);
+						color.Value = color.Value * ImVec4(1.2f, 1.2f, 1.2f, 1.0f);
+						colorBottom.Value = colorBottom.Value * ImVec4(1.2f, 1.2f, 1.2f, 1.0f);
+						pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
+						pDraw->AddRect(itemRect.Min, itemRect.Max, highlightColor, 0.0f, ImDrawFlags_None, 3.0f);
+					}
+					else
+					{
+						pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
+					}
 
 					// If the bar size is large enough, draw the name of the bar on top
 					if (itemRect.GetWidth() > 10.0f)
@@ -312,7 +321,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		};
 
 		// Draw each GPU thread track
-		Span<GPUProfiler::QueueInfo> queues = gGPUProfiler.GetQueueInfo();
+		Span<const GPUProfiler::QueueInfo> queues = gGPUProfiler.GetQueueInfo();
 		for (uint32 queueIndex = 0; queueIndex < queues.GetSize(); ++queueIndex)
 		{
 			const GPUProfiler::QueueInfo& queue = queues[queueIndex];
@@ -372,7 +381,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor), 4);
 
 		// Draw each CPU thread track
-		Span<CPUProfiler::ThreadData> threads = gCPUProfiler.GetThreads();
+		Span<const CPUProfiler::ThreadData> threads = gCPUProfiler.GetThreads();
 		for (uint32 threadIndex = 0; threadIndex < (uint32)threads.GetSize(); ++threadIndex)
 		{
 			// Add thread name for track

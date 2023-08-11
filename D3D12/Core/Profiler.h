@@ -303,7 +303,7 @@ private:
 			{
 				pResolveCommandList->Close();
 			}
-			frame.ReadbackQueries = Span<uint64>(m_pReadbackData + frame.QueryStartOffset, frame.QueryIndex * 2);
+			frame.ReadbackQueries = Span<const uint64>(m_pReadbackData + frame.QueryStartOffset, frame.QueryIndex * 2);
 			// Increment fence value, signal queue and store FenceValue in frame.
 			++FenceValue;
 			pResolveQueue->Signal(pFence, FenceValue);
@@ -325,7 +325,7 @@ private:
 		}
 
 		// Return the view to the resolved queries and returns true if it's valid to read from
-		bool GetResolvedQueries(uint32 frameIndex, Span<uint64>& outData)
+		bool GetResolvedQueries(uint32 frameIndex, Span<const uint64>& outData)
 		{
 			if (!IsInitialized())
 				return true;
@@ -350,7 +350,7 @@ private:
 	private:
 		struct FrameData
 		{
-			Span<uint64> ReadbackQueries;						// View to resolved query data
+			Span<const uint64> ReadbackQueries;					// View to resolved query data
 			ID3D12CommandAllocator* pAllocator = nullptr;		// CommandAllocator for this frame
 			std::atomic<uint32> QueryIndex = 0;					// Current number of queries
 			uint64 FenceValue = 0;								// FenceValue indicating when Resolve is finished
@@ -474,7 +474,7 @@ public:
 		// While the next frame to resolve is not the last one, attempt access the readback data and advance.
 		while (m_FrameToResolve < m_FrameIndex)
 		{
-			Span<uint64> copyQueries, mainQueries;
+			Span<const uint64> copyQueries, mainQueries;
 			bool copiesValid = m_CopyQueryHeap.GetResolvedQueries(m_FrameToResolve, copyQueries);
 			bool mainValid = m_MainQueryHeap.GetResolvedQueries(m_FrameToResolve, mainQueries);
 			if (!(copiesValid && mainValid))
@@ -489,7 +489,7 @@ public:
 			{
 				SampleRegion& region = data.Regions[i];
 				const QueueInfo& queue = m_Queues[region.QueueIndex];
-				const Span<uint64>& queries = queue.IsCopyQueue ? copyQueries : mainQueries;
+				const Span<const uint64>& queries = queue.IsCopyQueue ? copyQueries : mainQueries;
 				region.BeginTicks = queries[region.TimerIndex * 2 + 0];
 				region.EndTicks = queries[region.TimerIndex * 2 + 1];
 			}
@@ -616,7 +616,7 @@ public:
 		LinearAllocator Allocator;							// Scratch allocator storing all dynamic allocations of the frame
 	};
 
-	Span<QueueInfo> GetQueueInfo() const { return m_Queues; }
+	Span<const QueueInfo> GetQueueInfo() const { return m_Queues; }
 
 	// Iterate over all sample regions
 	template<typename Fn>
@@ -889,7 +889,7 @@ public:
 		m_EventCallbacks.push_back(inCallbacks);
 	}
 
-	Span<ThreadData> GetThreads() const { return m_ThreadData; }
+	Span<const ThreadData> GetThreads() const { return m_ThreadData; }
 
 	void SetPaused(bool paused) { m_QueuedPaused = paused; }
 	bool IsPaused() const { return m_Paused; }
