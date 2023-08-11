@@ -1,50 +1,76 @@
 #pragma once
 #include "Graphics/RHI/D3D.h"
 
+#define GPU_PROFILE_SCOPE(name, commandlist)	PROFILE_GPU_SCOPE(name, (commandlist)->GetCommandList())
+#define GPU_PROFILE_BEGIN(name, commandlist)	PROFILE_GPU_BEGIN(name, (commandlist)->GetCommandList())
+#define GPU_PROFILE_END()						PROFILE_GPU_END()
+#define PROFILE_SCOPE(name)						PROFILE_CPU_SCOPE(name)
+
+#ifndef WITH_PROFILING
 #define WITH_PROFILING 1
-
-#if WITH_PROFILING
-#define PROFILE_FRAME()							FOO_FRAME()
-
-#define PROFILE_BEGIN(name)						gProfiler.PushRegion(name)
-#define PROFILE_END()							gProfiler.PopRegion()
-#define PROFILE_SCOPE(name)						FOO_SCOPE(name)
-
-#define GPU_PROFILE_BEGIN(name, cmdlist)		gGPUProfiler.PushRegion(name, (cmdlist)->GetCommandList(), 0);
-#define GPU_PROFILE_END()						gGPUProfiler.PopRegion();
-#define GPU_PROFILE_SCOPE(name, cmdlist)		FOO_GPU_SCOPE(name, (cmdlist)->GetCommandList(), 0)
-#else
-#define PROFILE_FRAME()
-#define PROFILE_BEGIN(name)
-#define PROFILE_END()
-#define PROFILE_SCOPE(name)
-
-#define GPU_PROFILE_BEGIN(name, cmdlist)
-#define GPU_PROFILE_END()
-#define GPU_PROFILE_SCOPE(name, cmdlist)
 #endif
 
+#if WITH_PROFILING
+
+/*
+	General
+*/
 
 // Usage:
-//		FOO_SCOPE(const char* pNamer)
-//		FOO_SCOPE(const char* pName)
-//		FOO_SCOPE()
-#define FOO_SCOPE(...) FooProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
-
-// Usage:
-//		FOO_REGISTER_THREAD(const char* pName)
-//		FOO_REGISTER_THREAD()
-#define FOO_REGISTER_THREAD(...) gProfiler.RegisterThread(__VA_ARGS__)
+//		PROFILE_REGISTER_THREAD(const char* pName)
+//		PROFILE_REGISTER_THREAD()
+#define PROFILE_REGISTER_THREAD(...) gCPUProfiler.RegisterThread(__VA_ARGS__)
 
 /// Usage:
-//		FOO_FRAME()
-#define FOO_FRAME() gProfiler.Tick(); gGPUProfiler.Tick()
+//		PROFILE_FRAME()
+#define PROFILE_FRAME() gCPUProfiler.Tick(); gGPUProfiler.Tick()
+
+/*
+	CPU Profiling
+*/
 
 // Usage:
-//		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
-//		FOO_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList)
-#define FOO_GPU_SCOPE(...) FooGPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+//		PROFILE_CPU_SCOPE(const char* pName)
+//		PROFILE_CPU_SCOPE()
+#define PROFILE_CPU_SCOPE(...)							CPUProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 
+// Usage:
+//		PROFILE_CPU_BEGIN(const char* pName)
+//		PROFILE_CPU_BEGIN()
+#define PROFILE_CPU_BEGIN(...)							gCPUProfiler.PushRegion(__VA_ARGS__)
+// Usage:
+//		PROFILE_CPU_END()
+#define PROFILE_CPU_END()								gCPUProfiler.PopRegion()
+
+/*
+	GPU Profiling
+*/
+
+// Usage:
+//		PROFILE_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
+//		PROFILE_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList)
+#define PROFILE_GPU_SCOPE(...)							GPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+
+// Usage:
+//		PROFILE_GPU_BEGIN(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
+//		PROFILE_GPU_BEGIN(const char* pName, ID3D12GraphicsCommandList* pCommandList)
+#define PROFILE_GPU_BEGIN(name, cmdlist, ...)			gGPUProfiler.PushRegion(name, cmdlist, __VA_ARGS__);
+// Usage:
+//		PROFILE_GPU_END()
+#define PROFILE_GPU_END()								gGPUProfiler.PopRegion();
+
+#else
+
+#define PROFILE_REGISTER_THREAD(...)
+#define PROFILE_FRAME()
+#define PROFILE_CPU_SCOPE(...)
+#define PROFILE_CPU_BEGIN(...)
+#define PROFILE_CPU_END()
+#define PROFILE_GPU_SCOPE(...)
+#define PROFILE_GPU_BEGIN(...)
+#define PROFILE_GPU_END()
+
+#endif
 
 // Simple Linear Allocator
 class LinearAllocator
@@ -667,25 +693,25 @@ private:
 
 
 // Helper RAII-style structure to push and pop a GPU sample region
-struct FooGPUProfileScope
+struct GPUProfileScope
 {
-	FooGPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0)
+	GPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0)
 	{
 		gGPUProfiler.PushRegion(pName, pCmd, queueIndex, pFilePath, lineNr);
 	}
 
-	FooGPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0)
+	GPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0)
 	{
 		gGPUProfiler.PushRegion(pFunction, pCmd, queueIndex, pFilePath, lineNr);
 	}
 
-	~FooGPUProfileScope()
+	~GPUProfileScope()
 	{
 		gGPUProfiler.PopRegion();
 	}
 
-	FooGPUProfileScope(const FooGPUProfileScope&) = delete;
-	FooGPUProfileScope& operator=(const FooGPUProfileScope&) = delete;
+	GPUProfileScope(const GPUProfileScope&) = delete;
+	GPUProfileScope& operator=(const GPUProfileScope&) = delete;
 };
 
 
@@ -694,7 +720,7 @@ struct FooGPUProfileScope
 //-----------------------------------------------------------------------------
 
 // Global CPU Profiler
-extern class FooProfiler gProfiler;
+extern class CPUProfiler gCPUProfiler;
 
 struct CPUProfilerCallbacks
 {
@@ -705,7 +731,7 @@ struct CPUProfilerCallbacks
 // CPU Profiler
 // Also responsible for updating GPU profiler
 // Also responsible for drawing HUD
-class FooProfiler
+class CPUProfiler
 {
 public:
 	static constexpr int REGION_HISTORY = 5;
@@ -904,23 +930,23 @@ private:
 
 
 // Helper RAII-style structure to push and pop a CPU sample region
-struct FooProfileScope
+struct CPUProfileScope
 {
-	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint16 lineNumber, const char* pName)
+	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint16 lineNumber, const char* pName)
 	{
-		gProfiler.PushRegion(pName, pFilePath, lineNumber);
+		gCPUProfiler.PushRegion(pName, pFilePath, lineNumber);
 	}
 
-	FooProfileScope(const char* pFunctionName, const char* pFilePath, uint16 lineNumber)
+	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint16 lineNumber)
 	{
-		gProfiler.PushRegion(pFunctionName, pFilePath, lineNumber);
+		gCPUProfiler.PushRegion(pFunctionName, pFilePath, lineNumber);
 	}
 
-	~FooProfileScope()
+	~CPUProfileScope()
 	{
-		gProfiler.PopRegion();
+		gCPUProfiler.PopRegion();
 	}
 
-	FooProfileScope(const FooProfileScope&) = delete;
-	FooProfileScope& operator=(const FooProfileScope&) = delete;
+	CPUProfileScope(const CPUProfileScope&) = delete;
+	CPUProfileScope& operator=(const CPUProfileScope&) = delete;
 };

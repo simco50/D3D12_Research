@@ -74,7 +74,7 @@ int WINAPI WinMain(_In_ HINSTANCE /*hInstance*/, _In_opt_ HINSTANCE /*hPrevInsta
 	Console::Initialize();
 	ConsoleManager::Initialize();
 
-	FOO_REGISTER_THREAD("Main Thread");
+	PROFILE_REGISTER_THREAD("Main Thread");
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 	Vector2i displayDimensions = Window::GetDisplaySize();

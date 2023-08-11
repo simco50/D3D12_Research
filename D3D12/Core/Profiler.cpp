@@ -5,7 +5,7 @@
 #include "Core/Paths.h"
 #include "IconsFontAwesome4.h"
 
-FooProfiler gProfiler;
+CPUProfiler gCPUProfiler;
 GPUProfiler gGPUProfiler;
 
 struct StyleOptions
@@ -99,52 +99,15 @@ static ImColor ColorFromString(const char* pName)
 	return ImColor(HSVtoRGB(hashF, 0.5f, 0.6f));
 }
 
-void DrawProfilerHUD()
+static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 {
-	HUDContext& context = Context();
+	HUDContext& context = gHUDContext;
 	StyleOptions& style = context.Style;
 
-	if (gProfiler.IsPaused())
-		ImGui::Text("Paused");
-	else
-		ImGui::Text("Press Space to pause");
+	ImVec2 sizeActual = ImGui::CalcItemSize(size, ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 
-	ImGui::SameLine(ImGui::GetWindowWidth() - 620);
-
-	ImGui::Checkbox("Pause threshold", &Context().PauseThreshold);
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth(150);
-	ImGui::SliderFloat("##Treshold", &context.PauseThresholdTime, 0.0f, 16.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
-	ImGui::SameLine();
-
-	ImGui::Dummy(ImVec2(30, 0));
-	ImGui::SameLine();
-	
-	ImGui::Text("Filter");
-	ImGui::SetNextItemWidth(150);
-	ImGui::SameLine();
-	ImGui::InputText("##Search", context.SearchString, ARRAYSIZE(context.SearchString));
-	ImGui::SameLine();
-	if (ImGui::Button(ICON_FA_TIMES "##clearfilter"))
-		context.SearchString[0] = 0;
-	ImGui::SameLine();
-	if (ImGui::Button(ICON_FA_PAINT_BRUSH "##styleeditor"))
-		ImGui::OpenPopup("Style Editor");
-
-	if (ImGui::BeginPopup("Style Editor"))
-	{
-		EditStyle(style);
-		ImGui::EndPopup();
-	}
-
-	if (ImGui::IsKeyPressed(ImGuiKey_Space))
-	{
-		gProfiler.SetPaused(!gProfiler.IsPaused());
-		gGPUProfiler.SetPaused(!gGPUProfiler.IsPaused());
-	}
-
-	ImRect timelineRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionAvail() - ImVec2(style.ScrollBarSize, style.ScrollBarSize));
-	ImGui::ItemSize(timelineRect);
+	ImRect timelineRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + sizeActual);
+	ImGui::ItemSize(timelineRect.GetSize());
 
 	// The current (scaled) size of the timeline
 	float timelineWidth = timelineRect.GetWidth() * context.TimelineScale;
@@ -154,6 +117,7 @@ void DrawProfilerHUD()
 	ImDrawList* pDraw = ImGui::GetWindowDrawList();
 
 	ImGuiID timelineID = ImGui::GetID("Timeline");
+	timelineRect.Max -= ImVec2(style.ScrollBarSize, style.ScrollBarSize);
 	if (ImGui::ItemAdd(timelineRect, timelineID))
 	{
 		ImGui::PushClipRect(timelineRect.Min, timelineRect.Max, true);
@@ -168,7 +132,7 @@ void DrawProfilerHUD()
 		float ticksInTimeline = MsToTicks * style.MaxTime;
 
 		uint64 timelineTicksBegin, timelineTicksEnd;
-		gProfiler.GetHistoryRange(timelineTicksBegin, timelineTicksEnd);
+		gCPUProfiler.GetHistoryRange(timelineTicksBegin, timelineTicksEnd);
 		uint64 beginAnchor = timelineTicksBegin;
 
 		// How many pixels is one tick
@@ -185,7 +149,7 @@ void DrawProfilerHUD()
 		pDraw->AddRect(timelineRect.Min - ImVec2(10, 0), ImVec2(timelineRect.Max.x + 10, timelineRect.Min.y + style.BarHeight), ImColor(1.0f, 1.0f, 1.0f, 0.4f));
 		for (int i = 0; i < style.MaxTime; ++i)
 		{
-			float x0 = (float) i * MsToTicks * TicksToPixels;
+			float x0 = (float)i * MsToTicks * TicksToPixels;
 			float msWidth = 1.0f * MsToTicks * TicksToPixels;
 			ImVec2 tickPos = ImVec2(cursor.x + x0, timelineRect.Min.y);
 			pDraw->AddLine(tickPos + ImVec2(0, style.BarHeight * 0.5f), tickPos + ImVec2(0, style.BarHeight), ImColor(style.BGTextColor));
@@ -203,7 +167,7 @@ void DrawProfilerHUD()
 
 		// Add dark shade background for every even frame
 		int frameNr = 0;
-		gProfiler.ForEachFrame([&](uint32 frameIndex, const FooProfiler::SampleHistory& data)
+		gCPUProfiler.ForEachFrame([&](uint32 frameIndex, const CPUProfiler::SampleHistory& data)
 			{
 				if (frameNr++ % 2 == 0)
 				{
@@ -221,102 +185,102 @@ void DrawProfilerHUD()
 		*/
 		bool anyHovered = false;
 		auto DrawBar = [&](uint32 id, uint64 beginTicks, uint64 endTicks, uint32 depth, const char* pName, bool* pOutHovered = nullptr)
+		{
+			bool hovered = false;
+			if (endTicks > beginAnchor)
 			{
-				bool hovered = false;
-				if (endTicks > beginAnchor)
+				float startPos = (beginTicks < beginAnchor ? 0 : beginTicks - beginAnchor) * TicksToPixels;
+				float endPos = (endTicks - beginAnchor) * TicksToPixels;
+				float y = depth * style.BarHeight;
+				ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + style.BarHeight));
+
+				// Ensure a bar always has a width
+				itemRect.Max.x = ImMax(itemRect.Max.x, itemRect.Min.x + 1);
+				if (ImGui::ItemAdd(itemRect, id, 0))
 				{
-					float startPos = (beginTicks < beginAnchor ? 0 : beginTicks - beginAnchor) * TicksToPixels;
-					float endPos = (endTicks - beginAnchor) * TicksToPixels;
-					float y = depth * style.BarHeight;
-					ImRect itemRect = ImRect(cursor + ImVec2(startPos, y), cursor + ImVec2(endPos, y + style.BarHeight));
+					float ms = TicksToMs * (float)(endTicks - beginTicks);
 
-					// Ensure a bar always has a width
-					itemRect.Max.x = ImMax(itemRect.Max.x, itemRect.Min.x + 1);
-					if (ImGui::ItemAdd(itemRect, id, 0))
+					ImColor color = ColorFromString(pName) * style.BarColorMultiplier;
+					ImColor textColor = style.FGTextColor;
+					// Fade out the bars that don't match the filter
+					if (context.SearchString[0] != 0 && !strstr(pName, context.SearchString))
 					{
-						float ms = TicksToMs * (float)(endTicks - beginTicks);
+						color.Value.w *= 0.3f;
+						textColor.Value.w *= 0.5f;
+					}
+					else if (context.PauseThreshold && ms >= context.PauseThresholdTime)
+					{
+						gCPUProfiler.SetPaused(true);
+						gGPUProfiler.SetPaused(true);
+					}
 
-						ImColor color = ColorFromString(pName) * style.BarColorMultiplier;
-						ImColor textColor = style.FGTextColor;
-						// Fade out the bars that don't match the filter
-						if (context.SearchString[0] != 0 && !strstr(pName, context.SearchString))
+					// Darken the bottom
+					ImColor colorBottom = color.Value * ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+
+					hovered = ImGui::IsItemHovered() && !anyHovered;
+					anyHovered |= hovered;
+
+					// If the bar is double-clicked, zoom in to make the bar fill the entire window
+					if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
+					{
+						// Zoom ration to make the bar fit the entire window
+						float zoom = timelineWidth / itemRect.GetWidth();
+						context.TimelineScale = zoom;
+
+						// Recompute the timeline size with new zoom
+						float newTimelineWidth = timelineRect.GetWidth() * context.TimelineScale;
+						float newTickScale = newTimelineWidth / ticksInTimeline;
+						float newStartPos = newTickScale * (beginTicks - beginAnchor);
+
+						context.TimelineOffset.x = -newStartPos;
+					}
+
+					// Draw the bar rect and outline if hovered
+
+					// Only pad if bar is large enough
+					float maxPaddingX = ImMax(itemRect.GetWidth() * 0.5f - 1.0f, 0.0f);
+					const ImVec2 padding(ImMin(style.BarPadding, maxPaddingX), style.BarPadding);
+					pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
+					if (hovered)
+						pDraw->AddRect(itemRect.Min, itemRect.Max, ImColor(style.BarHighlightColor), 0.0f, ImDrawFlags_None, 3.0f);
+
+					// If the bar size is large enough, draw the name of the bar on top
+					if (itemRect.GetWidth() > 10.0f)
+					{
+						const char* pBarText;
+						ImFormatStringToTempBuffer(&pBarText, nullptr, "%s (%.2f ms)", pName, ms);
+
+						ImVec2 textSize = ImGui::CalcTextSize(pBarText);
+						const char* pEtc = "...";
+						float etcWidth = 20.0f;
+						if (textSize.x < itemRect.GetWidth() * 0.9f)
 						{
-							color.Value.w *= 0.3f;
-							textColor.Value.w *= 0.5f;
+							pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), style.BarHeight) - textSize) * 0.5f, textColor, pBarText);
 						}
-						else if (context.PauseThreshold && ms >= context.PauseThresholdTime)
+						else if (itemRect.GetWidth() > etcWidth + 10)
 						{
-							gProfiler.SetPaused(true);
-							gGPUProfiler.SetPaused(true);
-						}
-
-						// Darken the bottom
-						ImColor colorBottom = color.Value * ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
-
-						hovered = ImGui::IsItemHovered() && !anyHovered;
-						anyHovered |= hovered;
-
-						// If the bar is double-clicked, zoom in to make the bar fill the entire window
-						if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
-						{
-							// Zoom ration to make the bar fit the entire window
-							float zoom = timelineWidth / itemRect.GetWidth();
-							context.TimelineScale = zoom;
-
-							// Recompute the timeline size with new zoom
-							float newTimelineWidth = timelineRect.GetWidth() * context.TimelineScale;
-							float newTickScale = newTimelineWidth / ticksInTimeline;
-							float newStartPos = newTickScale * (beginTicks - beginAnchor);
-
-							context.TimelineOffset.x = -newStartPos;
-						}
-
-						// Draw the bar rect and outline if hovered
-
-						// Only pad if bar is large enough
-						float maxPaddingX = ImMax(itemRect.GetWidth() * 0.5f - 1.0f, 0.0f);
-						const ImVec2 padding(ImMin(style.BarPadding, maxPaddingX), style.BarPadding);
-						pDraw->AddRectFilledMultiColor(itemRect.Min + padding, itemRect.Max - padding, color, color, colorBottom, colorBottom);
-						if (hovered)
-							pDraw->AddRect(itemRect.Min, itemRect.Max, ImColor(style.BarHighlightColor), 0.0f, ImDrawFlags_None, 3.0f);
-
-						// If the bar size is large enough, draw the name of the bar on top
-						if (itemRect.GetWidth() > 10.0f)
-						{
-							const char* pBarText;
-							ImFormatStringToTempBuffer(&pBarText, nullptr, "%s (%.2f ms)", pName, ms);
-
-							ImVec2 textSize = ImGui::CalcTextSize(pBarText);
-							const char* pEtc = "...";
-							float etcWidth = 20.0f;
-							if (textSize.x < itemRect.GetWidth() * 0.9f)
+							const char* pChar = pBarText;
+							float currentOffset = 10;
+							while (*pChar++)
 							{
-								pDraw->AddText(itemRect.Min + (ImVec2(itemRect.GetWidth(), style.BarHeight) - textSize) * 0.5f, textColor, pBarText);
+								float width = ImGui::CalcTextSize(pChar, pChar + 1).x;
+								if (currentOffset + width + etcWidth > itemRect.GetWidth())
+									break;
+								currentOffset += width;
 							}
-							else if (itemRect.GetWidth() > etcWidth + 10)
-							{
-								const char* pChar = pBarText;
-								float currentOffset = 10;
-								while (*pChar++)
-								{
-									float width = ImGui::CalcTextSize(pChar, pChar + 1).x;
-									if (currentOffset + width + etcWidth > itemRect.GetWidth())
-										break;
-									currentOffset += width;
-								}
 
-								float textWidth = ImGui::CalcTextSize(pBarText, pChar).x;
+							float textWidth = ImGui::CalcTextSize(pBarText, pChar).x;
 
-								ImVec2 textPos = itemRect.Min + ImVec2(4, (style.BarHeight - textSize.y) * 0.5f);
-								pDraw->AddText(textPos, textColor, pBarText, pChar);
-								pDraw->AddText(textPos + ImVec2(textWidth, 0), textColor, pEtc);
-							}
+							ImVec2 textPos = itemRect.Min + ImVec2(4, (style.BarHeight - textSize.y) * 0.5f);
+							pDraw->AddText(textPos, textColor, pBarText, pChar);
+							pDraw->AddText(textPos + ImVec2(textWidth, 0), textColor, pEtc);
 						}
 					}
 				}
-				if (pOutHovered)
-					*pOutHovered = hovered;
-			};
+			}
+			if (pOutHovered)
+				*pOutHovered = hovered;
+		};
 
 		// Add track name and expander
 		/*
@@ -408,11 +372,11 @@ void DrawProfilerHUD()
 		pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor), 4);
 
 		// Draw each CPU thread track
-		Span<FooProfiler::ThreadData> threads = gProfiler.GetThreads();
+		Span<CPUProfiler::ThreadData> threads = gCPUProfiler.GetThreads();
 		for (uint32 threadIndex = 0; threadIndex < (uint32)threads.GetSize(); ++threadIndex)
 		{
 			// Add thread name for track
-			const FooProfiler::ThreadData& thread = threads[threadIndex];
+			const CPUProfiler::ThreadData& thread = threads[threadIndex];
 			const char* pHeaderText;
 			ImFormatStringToTempBuffer(&pHeaderText, nullptr, "%s [%d]", thread.Name, thread.ThreadID);
 			bool isOpen = TrackHeader(pHeaderText, ImGui::GetID(&thread));
@@ -426,12 +390,12 @@ void DrawProfilerHUD()
 				|[=============]			|
 				|	[======]				|
 			*/
-			gProfiler.ForEachFrame([&](uint32 frameIndex, const FooProfiler::SampleHistory& data)
+			gCPUProfiler.ForEachFrame([&](uint32 frameIndex, const CPUProfiler::SampleHistory& data)
 				{
 					uint32 numRegions = data.CurrentIndex;
 					for (uint32 regionIndex = 0; regionIndex < numRegions; ++regionIndex)
 					{
-						const FooProfiler::SampleRegion& region = data.Regions[regionIndex];
+						const CPUProfiler::SampleRegion& region = data.Regions[regionIndex];
 
 						// Only process regions for the current thread
 						if (region.ThreadIndex != threadIndex)
@@ -566,7 +530,7 @@ void DrawProfilerHUD()
 
 		// Horizontal scroll bar
 		ImS64 scrollH = -(ImS64)context.TimelineOffset.x;
-		ImGui::ScrollbarEx(ImRect(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImGui::GetContentRegionAvail()), ImGui::GetID("ScrollH"), ImGuiAxis_X, &scrollH, (ImS64)timelineRect.GetSize().x, (ImS64)timelineWidth, ImDrawFlags_None);
+		ImGui::ScrollbarEx(ImRect(ImVec2(timelineRect.Min.x, timelineRect.Max.y), ImVec2(timelineRect.Max.x + style.ScrollBarSize, timelineRect.Max.y + style.ScrollBarSize)), ImGui::GetID("ScrollH"), ImGuiAxis_X, &scrollH, (ImS64)timelineRect.GetSize().x, (ImS64)timelineWidth, ImDrawFlags_None);
 		context.TimelineOffset.x = -(float)scrollH;
 
 		// Vertical scroll bar
@@ -574,4 +538,51 @@ void DrawProfilerHUD()
 		ImGui::ScrollbarEx(ImRect(ImVec2(timelineRect.Max.x, timelineRect.Min.y), ImVec2(timelineRect.Max.x + style.ScrollBarSize, timelineRect.Max.y)), ImGui::GetID("ScrollV"), ImGuiAxis_Y, &scrollV, (ImS64)timelineRect.GetSize().y, (ImS64)timelineHeight, ImDrawFlags_None);
 		context.TimelineOffset.y = -(float)scrollV;
 	}
+}
+
+void DrawProfilerHUD()
+{
+	HUDContext& context = Context();
+	StyleOptions& style = context.Style;
+
+	if (gCPUProfiler.IsPaused())
+		ImGui::Text("Paused");
+	else
+		ImGui::Text("Press Space to pause");
+
+	ImGui::SameLine(ImGui::GetWindowWidth() - 620);
+
+	ImGui::Checkbox("Pause threshold", &Context().PauseThreshold);
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(150);
+	ImGui::SliderFloat("##Treshold", &context.PauseThresholdTime, 0.0f, 16.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+	ImGui::SameLine();
+
+	ImGui::Dummy(ImVec2(30, 0));
+	ImGui::SameLine();
+	
+	ImGui::Text("Filter");
+	ImGui::SetNextItemWidth(150);
+	ImGui::SameLine();
+	ImGui::InputText("##Search", context.SearchString, ARRAYSIZE(context.SearchString));
+	ImGui::SameLine();
+	if (ImGui::Button(ICON_FA_TIMES "##clearfilter"))
+		context.SearchString[0] = 0;
+	ImGui::SameLine();
+	if (ImGui::Button(ICON_FA_PAINT_BRUSH "##styleeditor"))
+		ImGui::OpenPopup("Style Editor");
+
+	if (ImGui::BeginPopup("Style Editor"))
+	{
+		EditStyle(style);
+		ImGui::EndPopup();
+	}
+
+	if (ImGui::IsKeyPressed(ImGuiKey_Space))
+	{
+		gCPUProfiler.SetPaused(!gCPUProfiler.IsPaused());
+		gGPUProfiler.SetPaused(!gGPUProfiler.IsPaused());
+	}
+
+	DrawProfilerTimeline(ImVec2(0, 0));
 }

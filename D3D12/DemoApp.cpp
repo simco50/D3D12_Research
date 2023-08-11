@@ -113,14 +113,14 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 	GPUProfilerCallbacks gpuCallbacks;
 	gpuCallbacks.OnEventBegin = [](const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex)
 	{
-		gProfiler.PushRegion(pName);
+		gCPUProfiler.PushRegion(pName);
 #if ENABLE_PIX
 		::PIXBeginEvent(pCmd, 0, MULTIBYTE_TO_UNICODE(pName));
 #endif
 	};
 	gpuCallbacks.OnEventEnd = [](const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex)
 	{
-		gProfiler.PopRegion();
+		gCPUProfiler.PopRegion();
 #if ENABLE_PIX
 		::PIXEndEvent(pCmd);
 #endif
@@ -131,7 +131,7 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 	CPUProfilerCallbacks cpuCallbacks;
 	cpuCallbacks.OnEventBegin = [](const char* pName, uint32 threadIndex) { ::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName)); };
 	cpuCallbacks.OnEventEnd = [](const char* pName, uint32 threadIndex) { ::PIXEndEvent(); };
-	gProfiler.RegisterEventCallbacks(cpuCallbacks);
+	gCPUProfiler.RegisterEventCallbacks(cpuCallbacks);
 #endif
 }
 
@@ -416,7 +416,7 @@ void DemoApp::Update()
 			{
 				TaskQueue::Execute([&](int)
 					{
-						FOO_SCOPE("Frustum Cull Main");
+						PROFILE_SCOPE("Frustum Cull Main");
 						m_SceneData.VisibilityMask.SetAll();
 						BoundingFrustum frustum = m_pCamera->GetViewTransform().PerspectiveFrustum;
 						for (const Batch& b : m_SceneData.Batches)
@@ -429,7 +429,7 @@ void DemoApp::Update()
 			{
 				TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
 					{
-						FOO_SCOPE("Frustum Cull Shadows");
+						PROFILE_SCOPE("Frustum Cull Shadows");
 						ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
 						shadowView.Visibility.SetAll();
 						for (const Batch& b : m_SceneData.Batches)
@@ -441,7 +441,7 @@ void DemoApp::Update()
 
 			TaskQueue::Execute([&](int)
 				{
-					FOO_SCOPE("Compute Bounds");
+					PROFILE_SCOPE("Compute Bounds");
 					bool boundsSet = false;
 					for (const Batch& b : m_SceneData.Batches)
 					{
