@@ -146,9 +146,9 @@ void ApplyImGuiStyle()
 	colors[ImGuiCol_ModalWindowDimBg] =				ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 }
 
-GlobalResource<PipelineState> gImGuiPSO;
-GlobalResource<RootSignature> gImGuiRS;
-GlobalResource<Texture> gFontTexture;
+static GlobalResource<PipelineState> gImGuiPSO;
+static GlobalResource<RootSignature> gImGuiRS;
+static GlobalResource<Texture> gFontTexture;
 
 static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 {
@@ -158,8 +158,12 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 
 	context.SetViewport(FloatRect(0.0f, 0.0f, pDrawData->DisplaySize.x, pDrawData->DisplaySize.y));
 
-	Matrix projection = Math::CreateOrthographicOffCenterMatrix(pDrawData->DisplayPos.x, pDrawData->DisplayPos.x + pDrawData->DisplaySize.x, pDrawData->DisplayPos.y + pDrawData->DisplaySize.y, pDrawData->DisplayPos.y, 0.0f, 1.0f);
-	context.BindRootCBV(1, projection);
+	Vector4 scaleOffset = Vector4(
+		2.0f / pDrawData->DisplaySize.x,
+		-2.0f / pDrawData->DisplaySize.y,
+		-(pDrawData->DisplayPos.x + pDrawData->DisplayPos.x + pDrawData->DisplaySize.x) / pDrawData->DisplaySize.x,
+		(pDrawData->DisplayPos.y + pDrawData->DisplayPos.y + pDrawData->DisplaySize.y) / pDrawData->DisplaySize.y);
+	context.BindRootCBV(1, scaleOffset);
 
 	uint32 vertexOffset = 0;
 	ScratchAllocation vertexData = context.AllocateScratch(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
@@ -299,7 +303,6 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 	io.ConfigViewportsNoDefaultParent = true;
-	io.ConfigDockingTransparentPayload = true;
 	
 	ImGui_ImplWin32_Init(window);
 
@@ -337,7 +340,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 
 	gImGuiRS = new RootSignature(pDevice);
 	gImGuiRS->AddRootConstants<uint32>(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
-	gImGuiRS->AddRootCBV(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+	gImGuiRS->AddRootConstants<Vector4>(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 	gImGuiRS->Finalize("ImGui RS", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	PipelineStateInitializer psoDesc;
