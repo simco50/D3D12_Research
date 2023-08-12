@@ -312,9 +312,7 @@ private:
 			// Advance to next frame and reset
 			++FrameIndex;
 			FrameData& newFrame = GetData();
-			newFrame.QueryIndex = 0;
-			pResolveCommandList->Reset(newFrame.pAllocator, nullptr);
-
+			
 			// Don't allow the next frame to start until its resolve is finished.
 			if (!IsFenceComplete(newFrame.FenceValue))
 			{
@@ -322,6 +320,10 @@ private:
 				pFence->SetEventOnCompletion(newFrame.FenceValue, FenceEvent);
 				WaitForSingleObject(FenceEvent, INFINITE);
 			}
+
+			newFrame.QueryIndex = 0;
+			newFrame.pAllocator->Reset();
+			pResolveCommandList->Reset(newFrame.pAllocator, nullptr);
 		}
 
 		// Return the view to the resolved queries and returns true if it's valid to read from
@@ -418,8 +420,7 @@ public:
 		// #todo: Find a way so that queueIndex doesn't need to be specified. Can only be resolved during ExecuteCommandLists?
 		D3D12_COMMAND_LIST_TYPE commandListType = pCmd->GetType();
 		bool isCopyCommandlist = commandListType == D3D12_COMMAND_LIST_TYPE_COPY;
-		bool isCopyQueue = m_Queues[queueIndex].IsCopyQueue;
-		check(isCopyCommandlist == isCopyQueue);
+		check(isCopyCommandlist == m_Queues[queueIndex].IsCopyQueue);
 
 		SampleHistory& data = m_SampleData[m_FrameIndex % m_SampleData.size()];
 		uint32 index = data.CurrentIndex.fetch_add(1);
@@ -427,7 +428,7 @@ public:
 		SampleRegion& region = data.Regions[index];
 		region.pName = data.Allocator.String(pName);
 		region.QueueIndex = queueIndex;
-		region.TimerIndex = GetHeap(isCopyQueue).QueryBegin(pCmd);
+		region.TimerIndex = GetHeap(isCopyCommandlist).QueryBegin(pCmd);
 		region.pFilePath = pFilePath;
 		region.LineNumber = lineNr;
 
