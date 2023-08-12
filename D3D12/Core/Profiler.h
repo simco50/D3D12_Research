@@ -742,6 +742,9 @@ public:
 	// Start and push a region on the current thread
 	void PushRegion(const char* pName, const char* pFilePath = nullptr, uint16 lineNumber = 0)
 	{
+		if (m_Paused)
+			return;
+
 		SampleHistory& data = GetData();
 		uint32 newIndex = data.CurrentIndex.fetch_add(1);
 		check(newIndex < data.Regions.size());
@@ -765,6 +768,9 @@ public:
 	// End and pop the last pushed region on the current thread
 	void PopRegion()
 	{
+		if (m_Paused)
+			return;
+
 		SampleHistory& data = GetData();
 		TLS& tls = GetTLS();
 
@@ -781,15 +787,16 @@ public:
 	{
 		m_Paused = m_QueuedPaused;
 
+		if (m_Paused)
+			return;
+
 		if (m_FrameIndex)
 			PopRegion();
 
 		for (auto& threadData : m_ThreadData)
 			check(threadData.pTLS->RegionStack.GetSize() == 0);
 
-		if (!m_Paused)
-			++m_FrameIndex;
-
+		++m_FrameIndex;
 		SampleHistory& data = GetData();
 		data.CurrentIndex = 0;
 		data.Allocator.Reset();
