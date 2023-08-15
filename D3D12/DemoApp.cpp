@@ -1425,12 +1425,12 @@ void DemoApp::UpdateImGui()
 		}
 		if (ImGui::BeginMenu(ICON_FA_WINDOW_MAXIMIZE " Windows"))
 		{
-			if (ImGui::MenuItem(ICON_FA_CLOCK_O " Profiler", 0, showProfiler))
+			if (ImGui::MenuItem(ICON_FA_CLOCK_O " Profiler", "Ctrl + P", showProfiler))
 			{
 				showProfiler = !showProfiler;
 			}
 			bool& showConsole = console.IsVisible();
-			if (ImGui::MenuItem("Output Log", 0, showConsole))
+			if (ImGui::MenuItem("Output Log", "~", showConsole))
 			{
 				showConsole = !showConsole;
 			}
@@ -1530,6 +1530,9 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
+	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_P))
+		showProfiler = !showProfiler;
+
 	if (showProfiler)
 	{
 		PROFILE_SCOPE("Profiler");
@@ -1538,6 +1541,11 @@ void DemoApp::UpdateImGui()
 			DrawProfilerHUD();
 		}
 		ImGui::End();
+	}
+	else
+	{
+		gCPUProfiler.SetPaused(true);
+		gGPUProfiler.SetPaused(true);
 	}
 
 	if (ImGui::Begin("Parameters"))

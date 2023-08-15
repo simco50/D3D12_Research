@@ -37,6 +37,7 @@ struct HUDContext
 	char SearchString[128]{};
 	bool PauseThreshold = false;
 	float PauseThresholdTime = 100.0f;
+	bool IsPaused = false;
 };
 
 static HUDContext gHUDContext;
@@ -589,9 +590,11 @@ void DrawProfilerHUD()
 
 	if (ImGui::IsKeyPressed(ImGuiKey_Space))
 	{
-		gCPUProfiler.SetPaused(!gCPUProfiler.IsPaused());
-		gGPUProfiler.SetPaused(!gGPUProfiler.IsPaused());
+		context.IsPaused = !context.IsPaused;
 	}
+
+	gCPUProfiler.SetPaused(context.IsPaused);
+	gGPUProfiler.SetPaused(context.IsPaused);
 
 	DrawProfilerTimeline(ImVec2(0, 0));
 }
