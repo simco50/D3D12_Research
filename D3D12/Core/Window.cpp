@@ -2,7 +2,18 @@
 #include "Window.h"
 #include "imgui_impl_win32.h"
 
-Window::Window(uint32 width, uint32 height)
+Window::Window()
+{
+	
+}
+
+Window::~Window()
+{
+	CloseWindow(m_Window);
+	UnregisterClassA(WINDOW_CLASS_NAME, GetModuleHandleA(nullptr));
+}
+
+void Window::Init(uint32 width, uint32 height)
 {
 	ImGui_ImplWin32_EnableDpiAwareness();
 
@@ -43,12 +54,6 @@ Window::Window(uint32 width, uint32 height)
 
 	ShowWindow(m_Window, SW_SHOWDEFAULT);
 	UpdateWindow(m_Window);
-}
-
-Window::~Window()
-{
-	CloseWindow(m_Window);
-	UnregisterClassA(WINDOW_CLASS_NAME, GetModuleHandleA(nullptr));
 }
 
 Vector2i Window::GetDisplaySize()

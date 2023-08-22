@@ -100,13 +100,27 @@ namespace Tweakables
 	float g_SunIntensity = 5.0f;
 }
 
+
+
+DemoApp::DemoApp()
+{
+
+}
+
+
+DemoApp::~DemoApp()
+{
+
+}
+
+
 static void InitializeProfiler(GraphicsDevice* pDevice)
 {
 	ID3D12CommandQueue* pQueues[] =
 	{
-			pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
-			pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
-			pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
+		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
+		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
+		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
 	};
 	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, ARRAYSIZE(pQueues));
 
@@ -135,8 +149,7 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 #endif
 }
 
-DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
-	: m_Window(window)
+void DemoApp::Init()
 {
 	E_LOG(Info, "Graphics::InitD3D()");
 
@@ -151,7 +164,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	InitializeProfiler(m_pDevice);
 
-	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, 3, window);
+	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, 3, GetWindow().GetNativeWindow());
 
 	GraphicsCommon::Create(m_pDevice);
 
@@ -162,7 +175,7 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice);
 	m_pShaderDebugRenderer->GetGPUData(&m_SceneData.DebugRenderData);
 
-	ImGuiRenderer::Initialize(m_pDevice, window);
+	ImGuiRenderer::Initialize(m_pDevice, GetWindow().GetNativeWindow());
 
 	m_pMeshletRasterizer	= std::make_unique<MeshletRasterizer>(m_pDevice);
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
@@ -182,11 +195,12 @@ DemoApp::DemoApp(WindowHandle window, const Vector2i& windowRect)
 
 	SetupScene();
 
-	OnResizeOrMove(windowRect.x, windowRect.y);
+	Vector2i windowRect = GetWindow().GetRect();
+	OnWindowResized(windowRect.x, windowRect.y);
 	OnResizeViewport(windowRect.x, windowRect.y);
 }
 
-DemoApp::~DemoApp()
+void DemoApp::Shutdown()
 {
 	m_pDevice->IdleGPU();
 
@@ -242,8 +256,6 @@ void DemoApp::SetupScene()
 
 void DemoApp::Update()
 {
-	PROFILE_FRAME();
-
 	CommandContext* pContext = m_pDevice->AllocateCommandContext();
 
 	{
@@ -1251,13 +1263,13 @@ void DemoApp::Update()
 	}
 }
 
-void DemoApp::OnResizeOrMove(int width, int height)
+void DemoApp::OnWindowResized(uint32 width, uint32 height)
 {
 	E_LOG(Info, "Window resized: %dx%d", width, height);
 	m_pSwapchain->OnResizeOrMove(width, height);
 }
 
-void DemoApp::OnResizeViewport(int width, int height)
+void DemoApp::OnResizeViewport(uint32 width, uint32 height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
 	if(m_pCamera)

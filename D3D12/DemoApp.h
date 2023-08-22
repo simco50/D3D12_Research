@@ -5,6 +5,7 @@
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
 #include "Graphics/Techniques/VolumetricFog.h"
+#include "App.h"
 
 class Mesh;
 class Camera;
@@ -39,17 +40,19 @@ enum class RenderPath
 	MAX
 };
 
-class DemoApp
+class DemoApp : public App
 {
 public:
-	DemoApp(WindowHandle window, const Vector2i& windowRect);
+	DemoApp();
 	~DemoApp();
 
-	void Update();
-	void OnResizeOrMove(int width, int height);
+	virtual void Init() override;
+	virtual void Update() override;
+	virtual void Shutdown() override;
+	virtual void OnWindowResized(uint32 width, uint32 height);
 
 private:
-	void OnResizeViewport(int width, int height);
+	void OnResizeViewport(uint32 width, uint32 height);
 
 	void InitializePipelines();
 	void SetupScene();
