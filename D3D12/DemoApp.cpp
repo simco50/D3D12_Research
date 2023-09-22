@@ -205,217 +205,6 @@ void DemoApp::SetupScene()
 }
 
 
-struct RangeAllocation
-{
-	uint64 Offset = 0xFFFFFFFF;
-	uint64 Size = 0;
-
-	bool IsValid() const { return Offset != 0xFFFFFFFF; }
-};
-
-struct RangeAllocator
-{
-	RangeAllocator(uint64 size)
-		: Size(size)
-	{
-		HeadRange = CreateRange();
-		InsertRange(HeadRange, 0, size);
-	}
-
-	~RangeAllocator()
-	{
-		const Range& firstRange = Ranges[FirstFreeRange()];
-		check(firstRange.NextFreeRange == InvalidRange && firstRange.Size == Size && firstRange.Offset == 0);
-	}
-
-	using RangeHandle = uint32;
-
-	struct Range
-	{
-		uint64 Offset = 0;
-		uint64 Size = 0;
-		RangeHandle NextFreeRange = InvalidRange;
-
-		uint64 End() const { return Offset + Size; }
-	};
-
-	RangeAllocation Allocate(uint64 size)
-	{
-		RangeAllocation allocation;
-		if (size > 0)
-		{
-			RangeHandle rangeHandle = FirstFreeRange();
-			RangeHandle previousRange = HeadRange;
-			while (rangeHandle != InvalidRange)
-			{
-				Range& range = Ranges[rangeHandle];
-				if (size <= range.Size)
-				{
-					uint64 offset = range.Offset;
-					range.Size -= size;
-					range.Offset += size;
-
-					if (range.Size == 0)
-						RemoveRange(previousRange, rangeHandle);
-
-					allocation.Size = size;
-					allocation.Offset = offset;
-					break;
-				}
-				previousRange = rangeHandle;
-				rangeHandle = range.NextFreeRange;
-			}
-		}
-		//PrintState();
-		return allocation;
-	}
-
-	void Free(RangeAllocation& allocation)
-	{
-		if (!allocation.IsValid())
-			return;
-
-		// Find a free range that fits the allocation.
-		RangeHandle rangeHandle = FirstFreeRange();
-		RangeHandle prevRange = HeadRange;
-		RangeHandle nextRange = InvalidRange;
-		while (rangeHandle != InvalidRange)
-		{
-			const Range& range = Ranges[rangeHandle];
-			if (allocation.Offset < range.Offset)
-			{
-				nextRange = rangeHandle;
-				break;
-			}
-			prevRange = rangeHandle;
-			rangeHandle = range.NextFreeRange;
-		}
-
-		// See if the allocation is against a previous free range.
-		// Grow the previous range if so.
-		bool grewPrev = false;
-		if (prevRange != HeadRange)
-		{
-			Range& prev = Ranges[prevRange];
-			if (prev.End() == allocation.Offset)
-			{
-				prev.Size += allocation.Size;
-				grewPrev = true;
-			}
-		}
-
-		// See if the allocation is against a next free range.
-		// Grow the next range if so.
-		bool grewNext = false;
-		if (nextRange != InvalidRange)
-		{
-			Range& next = Ranges[nextRange];
-			if (allocation.Offset + allocation.Size == next.Offset)
-			{
-				next.Offset = allocation.Offset;
-				next.Size += allocation.Size;
-				grewNext = true;
-			}
-		}
-
-		if (grewPrev && grewNext)
-		{
-			// If both the previous and next ranges have grown, the ranges can be merged.
-			Range& prev = Ranges[prevRange];
-			Range& next = Ranges[nextRange];
-			prev.Size = prev.Size + next.Size - allocation.Size;
-			RemoveRange(prevRange, nextRange);
-		}
-		else if (!grewPrev && !grewNext)
-		{
-			// If neither have grown, a new free range has to be inserted between them
-			InsertRange(prevRange, allocation.Offset, allocation.Size);
-		}
-
-		allocation.Offset = 0xFFFFFFFF;
-		allocation.Size = 0;
-
-		//PrintState();
-	}
-
-	uint64 GetSize() const { return Size; }
-
-private:
-	RangeHandle FirstFreeRange() const
-	{
-		return Ranges[HeadRange].NextFreeRange;
-	}
-
-	RangeHandle CreateRange()
-	{
-		if (!RangeFreeList.empty())
-		{
-			RangeHandle handle = RangeFreeList.back();
-			RangeFreeList.pop_back();
-			return handle;
-		}
-		Ranges.push_back({});
-		return (int)Ranges.size() - 1;
-	}
-
-	RangeHandle InsertRange(RangeHandle previousHandle, uint64 offset, uint64 size)
-	{
-		RangeHandle newRangeHandle = CreateRange();
-		Range& newRange = Ranges[newRangeHandle];
-		newRange.Offset = offset;
-		newRange.Size = size;
-
-		Range& prevRange = Ranges[previousHandle];
-		newRange.NextFreeRange = prevRange.NextFreeRange;
-		prevRange.NextFreeRange = newRangeHandle;
-		return newRangeHandle;
-	}
-
-	void RemoveRange(RangeHandle previousRange, RangeHandle rangeHandle)
-	{
-		Range& previous = Ranges[previousRange];
-		check(previous.NextFreeRange == rangeHandle);
-		Range& toRemove = Ranges[rangeHandle];
-		previous.NextFreeRange = toRemove.NextFreeRange;
-
-		toRemove.NextFreeRange = InvalidRange;
-		toRemove.Offset = 0xFFFFFFFF;
-		toRemove.Size = 0xFFFFFFFF;
-		RangeFreeList.push_back(rangeHandle);
-	}
-
-	void PrintState() const
-	{
-		std::string state;
-		state.reserve(Size);
-		RangeHandle rangeHandle = FirstFreeRange();
-		uint64 lastOffset = 0;
-		uint32 num = 0;
-		while (rangeHandle != InvalidRange)
-		{
-			const Range& range = Ranges[rangeHandle];
-			for (uint64 i = lastOffset; i < range.Offset; ++i)
-				state += '#';
-			lastOffset = range.Offset + range.Size;
-
-			for (uint64 i = 0; i < range.Size; ++i)
-				state += '.';
-			rangeHandle = range.NextFreeRange;
-			++num;
-		}
-		for (uint64 i = lastOffset; i < Size; ++i)
-			state += '#';
-		E_LOG(Info, "Range Allocator State: %s (Num Free Ranges: %d)", state.c_str(), num);
-	}
-
-	static constexpr RangeHandle InvalidRange = 0xFFFFFFFF;
-
-	uint64 Size;
-	std::vector<Range> Ranges;
-	std::vector<RangeHandle> RangeFreeList;
-	RangeHandle HeadRange;
-};
-
 void DemoApp::DrawTest(Span<RGResource*> graphResources)
 {
 	PROFILE_SCOPE("Aliasing Experiment");
@@ -441,6 +230,7 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 	};
 
 	static bool liveCapture = false;
+	static bool preferHeaps = true;
 	static std::vector<RenderResource> resourcesActual;
 	if (liveCapture)
 	{
@@ -477,8 +267,9 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 		uint64 Size;
 	};
 	std::vector<Heap> heaps;
+	if(!preferHeaps)
+		heaps.push_back({ {}, 0 });
 
-#if 0
 	// Sort resources largest to smallest, then largest alignment to smallest.
 	std::sort(resources.begin(), resources.end(), [](RenderResource* pA, RenderResource* pB)
 		{
@@ -493,13 +284,14 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 			break;
 
 		Heap* pHeap = nullptr;
-		for (Heap& heap : heaps)
+		for(auto it = heaps.rbegin(); it != heaps.rend(); ++it)
 		{
+			Heap& heap = *it;
 			if (pResource->Size <= heap.Size)
 			{
 				struct HeapOffset
 				{
-					int Offset;
+					uint64 Offset;
 					bool IsFreeBegin;
 				};
 				std::vector<HeapOffset> free_ranges;
@@ -508,20 +300,15 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 				{
 					if (existing->Lifetime.Overlaps(pResource->Lifetime))
 					{
-						free_ranges.push_back({ (int)existing->Offset, false });
-						free_ranges.push_back({ (int)existing->Offset + (int)existing->Size, true });
+						free_ranges.push_back({ existing->Offset, false });
+						free_ranges.push_back({ existing->Offset + existing->Size, true });
 					}
-
-					// Idea: Even if not overlapping, split it into a different range so that we can give each range a score.
 				}
-				free_ranges.push_back({ heap.Size, false });
+				free_ranges.push_back({ (uint64)heap.Size, false });
 				std::sort(free_ranges.begin(), free_ranges.end(), [](const HeapOffset& a, const HeapOffset& b) { return a.Offset < b.Offset; });
 
-				// Optimize by looking at all the gaps between resources of ANY lifetime.
-				// Pick an available gap with the least amount of occupancy AND a lifetime far away as possible.
-
-				int lastBeginOffset = 0;
-				int freeRangeCounter = 0;
+				uint64 lastBeginOffset = 0;
+				uint32 freeRangeCounter = 0;
 				for (int i = 0; i < free_ranges.size(); ++i)
 				{
 					if (free_ranges[i].IsFreeBegin)
@@ -534,7 +321,7 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 						--freeRangeCounter;
 						if (freeRangeCounter == 0)
 						{
-							int offset = Math::AlignUp(lastBeginOffset, pResource->Alignment);
+							uint64 offset = Math::AlignUp<uint64>(lastBeginOffset, pResource->Alignment);
 							if (offset + pResource->Size <= free_ranges[i].Offset)
 							{
 								pResource->Offset = offset;
@@ -549,140 +336,26 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 			}
 		}
 
-		// If no heap is found, allocate a new one and fit it in the start.
 		if (!pHeap)
 		{
-			bool needNewHeap = true;
-			if (!heaps.empty())
-			{
-				for (int i = (int)heaps.size() - 1; i >= 0; --i)
-				{
-					int newSize = Math::AlignUp(pResource->Size + heaps[i].Size, pResource->Alignment);
-					if (pResource->Size + heaps[i].Size < (2 << 20))
-					{
-						heaps[i].Size = newSize;
-						pResource->Offset = newSize - pResource->Size;
-						pHeap = &heaps[i];
-						needNewHeap = false;
-						break;
-					}
-				}
-			}
-
-			if (needNewHeap)
+			if (preferHeaps)
 			{
 				Heap& heap = heaps.emplace_back();
 				heap.Size = pResource->Size;
 				pResource->Offset = 0;
 				pHeap = &heap;
 			}
+			else
+			{
+				Heap& heap = heaps.back();
+				pResource->Offset = heap.Size;
+				heap.Size += pResource->Size;
+				pHeap = &heap;
+			}
 		}
+
 		pHeap->Allocations.push_back(pResource);
 	}
-#else
-
-	// Setup
-	struct Pass
-	{
-		std::vector<RenderResource*> Accesses;
-		uint32 ID = 0;
-	};
-	std::vector<Pass> passes;
-	std::unordered_map<int, int> passMap;
-
-	auto GetPass = [&](int ID) -> Pass&
-	{
-		auto it = passMap.find(ID);
-		if (it != passMap.end())
-			return passes[it->second];
-		Pass p;
-		p.ID = ID;
-		passMap[p.ID] = (int)passes.size();
-		passes.push_back(p);
-		return passes.back();
-	};
-
-	for (RenderResource* pResource : resources)
-	{
-		check(pResource->Lifetime.Begin <= pResource->Lifetime.End);
-		GetPass(pResource->Lifetime.Begin).Accesses.push_back(pResource);
-		if(pResource->Lifetime.Begin != pResource->Lifetime.End)
-			GetPass(pResource->Lifetime.End).Accesses.push_back(pResource);
-	}
-	std::sort(passes.begin(), passes.end(), [](Pass& a, Pass& b) {return a.ID < b.ID; });
-
-	struct HeapAllocation
-	{
-		RangeAllocator* pAllocator = nullptr;
-		RangeAllocation Allocation;
-	};
-
-	struct HeapCache
-	{
-		HeapAllocation Allocate(uint64 size)
-		{
-			HeapAllocation allocation;
-			for (std::unique_ptr<RangeAllocator>& allocator : Heaps)
-			{
-				allocation.Allocation = allocator->Allocate(size);
-				if (allocation.Allocation.IsValid())
-				{
-					allocation.pAllocator = allocator.get();
-					return allocation;
-				}
-			}
-			uint64 heapSize = Math::Max(16ull * Math::MegaBytesToBytes, Math::NextPowerOfTwo(size));
-			Heaps.emplace_back(std::make_unique<RangeAllocator>(heapSize));
-			allocation.pAllocator = Heaps.back().get();
-			allocation.Allocation = Heaps.back()->Allocate(size);
-			return allocation;
-		}
-
-		void Free(HeapAllocation& allocation)
-		{
-			allocation.pAllocator->Free(allocation.Allocation);
-		}
-
-		std::vector<std::unique_ptr<RangeAllocator>> Heaps;
-	};
-	HeapCache heapCache;
-	std::unordered_map<RenderResource*, HeapAllocation> allocations;
-
-	for (Pass& pass : passes)
-	{
-		for (RenderResource* pResource : pass.Accesses)
-		{
-			if (pResource->Lifetime.Begin == pass.ID)
-			{
-				HeapAllocation allocation = heapCache.Allocate(pResource->Size);
-				pResource->Offset = allocation.Allocation.Offset;
-				allocations[pResource] = allocation;
-			}
-		}
-
-		for (RenderResource* pResource : pass.Accesses)
-		{
-			if (pResource->Lifetime.End == pass.ID)
-			{
-				heapCache.Free(allocations[pResource]);
-			}
-		}
-	}
-
-	for (std::unique_ptr<RangeAllocator>& allocator : heapCache.Heaps)
-	{
-		Heap& heap = heaps.emplace_back();
-		for (RenderResource* pResource : resources)
-		{
-			if (allocations[pResource].pAllocator == allocator.get())
-			{
-				heap.Allocations.push_back(pResource);
-			}
-		}
-		heap.Size = allocator->GetSize();
-	}
-
-#endif
 
 	// Show allocation sizes and heap layout
 	if (ImGui::Begin("Heap Layout"))
@@ -694,17 +367,6 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 		uint64 totalHeapSize = 0;
 		for (Heap& heap : heaps)
 			totalHeapSize += heap.Size;
-
-		uint64 totalRenderGraphSize = 0;
-		std::unordered_set<GraphicsResource*> physical_resources;
-		for (RenderResource* resource : resources)
-		{
-			if (physical_resources.find(resource->pResource) == physical_resources.end())
-			{
-				physical_resources.insert(resource->pResource);
-				totalRenderGraphSize += resource->Size;
-			}
-		}
 
 		if (ImGui::TreeNodeEx("Stats", ImGuiTreeNodeFlags_DefaultOpen))
 		{
@@ -727,16 +389,7 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 				ImGui::Text(Math::PrettyPrintDataSize(0).c_str());
 
 				ImGui::TableNextColumn();
-				ImGui::Text("Per Resource Aliasing");
-				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
-				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(totalRenderGraphSize).c_str());
-				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize - totalRenderGraphSize).c_str());
-
-				ImGui::TableNextColumn();
-				ImGui::Text("Heap Resource Aliasing");
+				ImGui::Text("Aliasing");
 				ImGui::TableNextColumn();
 				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
 				ImGui::TableNextColumn();
@@ -751,45 +404,37 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 			ImGui::TreePop();
 		}
 
-		if (ImGui::TreeNodeEx("Resource Layouts", ImGuiTreeNodeFlags_DefaultOpen))
+		float width = ImGui::GetContentRegionAvail().x;
+		float widthScale = width / lastPassID;
+		for (Heap& heap : heaps)
 		{
-			for (Heap& heap : heaps)
+			ImGui::Text("Heap (Size: %s - Allocations: %d)", Math::PrettyPrintDataSize(heap.Size).c_str(), heap.Allocations.size());
+			ImDrawList* pDraw = ImGui::GetWindowDrawList();
+
+			ImVec2 cursor = ImGui::GetCursorScreenPos();
+
+			float heapHeight = preferHeaps ? log2f((float)heap.Size + 1) : ImGui::GetContentRegionAvail().y;
+			auto GetBarHeight = [&](uint64 size) { return (float)size / heap.Size * heapHeight; };
+
+			pDraw->AddRectFilled(cursor, cursor + ImVec2(widthScale * (lastPassID + 1), heapHeight), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+			for (RenderResource* resource : heap.Allocations)
 			{
-				ImGui::Text("Heap (Size: %s - Allocations: %d)", Math::PrettyPrintDataSize(heap.Size).c_str(), heap.Allocations.size());
-				ImGui::Text("            ---------------------------------- Lifetime ----------------------------------");
-				ImDrawList* pDraw = ImGui::GetWindowDrawList();
+				ImRect barRect(
+					cursor + ImVec2(widthScale * resource->Lifetime.Begin, GetBarHeight(resource->Offset)),
+					cursor + ImVec2(widthScale * (resource->Lifetime.End + 1), GetBarHeight(resource->Size + resource->Offset))
+					);
 
-				ImVec2 cursor = ImGui::GetCursorScreenPos();
-
-				ImVec2 cellDimensions(8, 0.00002f);
-				auto GetBarHeight = [](uint64 size)
+				pDraw->AddRectFilled(barRect.Min, barRect.Max, ImColor(0.5f, 0.5f, 0.5f));
+				pDraw->AddRectFilled(barRect.Min + ImVec2(1, 1), barRect.Max - ImVec2(1, 1), resource->GetColor());
+				ImGui::ItemAdd(barRect, resource->ID);
+				if (ImGui::IsItemHovered() && ImGui::BeginTooltip())
 				{
-					return (float)size;
-				};
-				float areaHeight = Math::Max(50.0f, cellDimensions.y * GetBarHeight(heap.Size));
-
-				ImGui::AddTextVertical(pDraw, "Size", cursor + ImVec2(0, areaHeight / 2), ImColor(1.0f, 1.0f, 1.0f));
-
-				cursor.x += 20;
-				pDraw->AddRectFilled(cursor, cursor + ImVec2((float)lastPassID + 1, GetBarHeight(heap.Size)) * cellDimensions, ImColor(1.0f, 1.0f, 1.0f, 0.2f));
-				for (RenderResource* resource : heap.Allocations)
-				{
-					ImVec2 startPos = cursor + ImVec2((float)resource->Lifetime.Begin, GetBarHeight(resource->Offset)) * cellDimensions;
-					ImVec2 endPos = cursor + ImVec2((float)(resource->Lifetime.End + 1), GetBarHeight((resource->Size + resource->Offset))) * cellDimensions;
-					pDraw->AddRectFilled(startPos, endPos, ImColor(1.0f, 1.0f, 1.0f));
-					pDraw->AddRectFilled(startPos + ImVec2(1, 1), endPos - ImVec2(1, 1), resource->GetColor());
-					ImGui::ItemAdd(ImRect(startPos, endPos), resource->ID);
-					if (ImGui::IsItemHovered() && ImGui::BeginTooltip())
-					{
-						ImGui::Text("Name: %s", resource->Name.c_str());
-						ImGui::Text("Size: %s", Math::PrettyPrintDataSize(resource->Size).c_str());
-						ImGui::EndTooltip();
-					}
+					ImGui::Text("Name: %s", resource->Name.c_str());
+					ImGui::Text("Size: %s", Math::PrettyPrintDataSize(resource->Size).c_str());
+					ImGui::EndTooltip();
 				}
-				ImGui::Dummy(ImVec2(100, areaHeight));
 			}
-
-			ImGui::TreePop();
+			ImGui::Dummy(ImVec2(0, heapHeight));
 		}
 	}
 
@@ -801,6 +446,8 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 		int remove = -1;
 		int duplicate = -1;
 		ImGui::Checkbox("Live Capture", &liveCapture);
+		ImGui::SameLine();
+		ImGui::Checkbox("Prefer heaps", &preferHeaps);
 		if (ImGui::Button("Clear All"))
 			resourcesActual.clear();
 
