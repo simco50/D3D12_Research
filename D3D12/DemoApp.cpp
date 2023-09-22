@@ -101,81 +101,23 @@ namespace Tweakables
 }
 
 
-
 DemoApp::DemoApp()
 {
-
 }
 
 
 DemoApp::~DemoApp()
 {
-
-}
-
-
-static void InitializeProfiler(GraphicsDevice* pDevice)
-{
-	ID3D12CommandQueue* pQueues[] =
-	{
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
-	};
-	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, ARRAYSIZE(pQueues));
-
-	GPUProfilerCallbacks gpuCallbacks;
-	gpuCallbacks.OnEventBegin = [](const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex)
-	{
-		gCPUProfiler.PushRegion(pName);
-#if ENABLE_PIX
-		::PIXBeginEvent(pCmd, 0, MULTIBYTE_TO_UNICODE(pName));
-#endif
-	};
-	gpuCallbacks.OnEventEnd = [](const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex)
-	{
-		gCPUProfiler.PopRegion();
-#if ENABLE_PIX
-		::PIXEndEvent(pCmd);
-#endif
-	};
-	gGPUProfiler.RegisterEventCallback(gpuCallbacks);
-
-#if ENABLE_PIX
-	CPUProfilerCallbacks cpuCallbacks;
-	cpuCallbacks.OnEventBegin = [](const char* pName, uint32 threadIndex) { ::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName)); };
-	cpuCallbacks.OnEventEnd = [](const char* pName, uint32 threadIndex) { ::PIXEndEvent(); };
-	gCPUProfiler.RegisterEventCallbacks(cpuCallbacks);
-#endif
 }
 
 void DemoApp::Init()
 {
-	E_LOG(Info, "Graphics::InitD3D()");
-
-	GraphicsDeviceOptions options;
-	options.UseDebugDevice =		CommandLine::GetBool("d3ddebug");
-	options.UseDRED =				CommandLine::GetBool("dred");
-	options.LoadPIX =				CommandLine::GetBool("pix");
-	options.UseGPUValidation =		CommandLine::GetBool("gpuvalidation");
-	options.UseWarp =				CommandLine::GetBool("warp");
-	options.UseStablePowerState =	CommandLine::GetBool("stablepowerstate");
-	m_pDevice = new GraphicsDevice(options);
-
-	InitializeProfiler(m_pDevice);
-
-	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, 3, GetWindow().GetNativeWindow());
-
-	GraphicsCommon::Create(m_pDevice);
-
 	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
 
 	DebugRenderer::Get()->Initialize(m_pDevice);
 
 	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice);
 	m_pShaderDebugRenderer->GetGPUData(&m_SceneData.DebugRenderData);
-
-	ImGuiRenderer::Initialize(m_pDevice, GetWindow().GetNativeWindow());
 
 	m_pMeshletRasterizer	= std::make_unique<MeshletRasterizer>(m_pDevice);
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
@@ -195,19 +137,11 @@ void DemoApp::Init()
 
 	SetupScene();
 
-	Vector2i windowRect = GetWindow().GetRect();
-	OnWindowResized(windowRect.x, windowRect.y);
-	OnResizeViewport(windowRect.x, windowRect.y);
+	OnResizeViewport(16, 16);
 }
 
 void DemoApp::Shutdown()
 {
-	m_pDevice->IdleGPU();
-
-	gGPUProfiler.Shutdown();
-
-	ImGuiRenderer::Shutdown();
-	GraphicsCommon::Destroy();
 	DebugRenderer::Get()->Shutdown();
 }
 
@@ -1240,24 +1174,9 @@ void DemoApp::Update()
 		
 	}
 
-	ImGuiRenderer::Render(*pContext, m_pSwapchain->GetBackBuffer());
+	pContext->Execute();
 
 	{
-		PROFILE_SCOPE("Execute Commandlist");
-		pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
-		pContext->Execute();
-	}
-
-	{
-		{
-			PROFILE_SCOPE("Present");
-			m_pSwapchain->Present();
-			ImGuiRenderer::PresentViewports();
-		}
-		{
-			PROFILE_SCOPE("Wait for GPU frame");
-			m_pDevice->TickFrame();
-		}
 		++m_Frame;
 		m_SceneData.CameraCut = false;
 	}
@@ -1265,8 +1184,6 @@ void DemoApp::Update()
 
 void DemoApp::OnWindowResized(uint32 width, uint32 height)
 {
-	E_LOG(Info, "Window resized: %dx%d", width, height);
-	m_pSwapchain->OnResizeOrMove(width, height);
 }
 
 void DemoApp::OnResizeViewport(uint32 width, uint32 height)
@@ -1384,7 +1301,6 @@ void DemoApp::InitializePipelines()
 void DemoApp::UpdateImGui()
 {
 	PROFILE_SCOPE("ImGui Update");
-	ImGuiRenderer::NewFrame();
 
 	static ImGuiConsole console;
 	static bool showProfiler = false;

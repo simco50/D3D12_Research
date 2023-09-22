@@ -1,5 +1,8 @@
 #pragma once
 #include "Core/Window.h"
+#include "Graphics/RHI/RHI.h"
+
+class SwapChain;
 
 class App
 {
@@ -12,14 +15,15 @@ protected:
 	virtual void Shutdown() {}
 	virtual void OnWindowResized(uint32 width, uint32 height) {}
 
-	Window GetWindow() const { return m_Window; }
-
-private:
-	virtual void Init_Internal();
-	virtual void Update_Internal();
-	virtual void Shutdown_Internal();
-
+protected:
+	RefCountPtr<GraphicsDevice> m_pDevice;
+	RefCountPtr<SwapChain> m_pSwapchain;
 	Window m_Window;
+
+	void Init_Internal();
+	void Update_Internal();
+	void Shutdown_Internal();
+	void OnWindowResized_Internal(uint32 width, uint32 height);
 };
 
 #define DECLARE_MAIN(app_class) \

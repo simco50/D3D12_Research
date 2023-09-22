@@ -7,6 +7,11 @@
 #include "Core/ConsoleVariables.h"
 #include "Core/Window.h"
 #include "Core/Profiler.h"
+#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/CommandQueue.h"
+#include "Graphics/RHI/CommandContext.h"
+#include "Graphics/SceneView.h"
+#include "Graphics/ImGuiRenderer.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
@@ -60,6 +65,41 @@ int App::Run()
 	return 0;
 }
 
+static void InitializeProfiler(GraphicsDevice* pDevice)
+{
+	ID3D12CommandQueue* pQueues[] =
+	{
+		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
+		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
+		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
+	};
+	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, ARRAYSIZE(pQueues));
+
+	GPUProfilerCallbacks gpuCallbacks;
+	gpuCallbacks.OnEventBegin = [](const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex)
+	{
+		gCPUProfiler.PushRegion(pName);
+#if ENABLE_PIX
+		::PIXBeginEvent(pCmd, 0, MULTIBYTE_TO_UNICODE(pName));
+#endif
+	};
+	gpuCallbacks.OnEventEnd = [](const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex)
+	{
+		gCPUProfiler.PopRegion();
+#if ENABLE_PIX
+		::PIXEndEvent(pCmd);
+#endif
+	};
+	gGPUProfiler.RegisterEventCallback(gpuCallbacks);
+
+#if ENABLE_PIX
+	CPUProfilerCallbacks cpuCallbacks;
+	cpuCallbacks.OnEventBegin = [](const char* pName, uint32 threadIndex) { ::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName)); };
+	cpuCallbacks.OnEventEnd = [](const char* pName, uint32 threadIndex) { ::PIXEndEvent(); };
+	gCPUProfiler.RegisterEventCallbacks(cpuCallbacks);
+#endif
+}
+
 void App::Init_Internal()
 {
 	LIVE_PP();
@@ -95,9 +135,28 @@ void App::Init_Internal()
 	m_Window.OnMouseInput += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
 	m_Window.OnMouseMove += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
 	m_Window.OnMouseScroll += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
-	m_Window.OnResizeOrMove += [this](uint32 width, uint32 height) { OnWindowResized(width, height); };
+	m_Window.OnResizeOrMove += [this](uint32 width, uint32 height) { OnWindowResized_Internal(width, height); };
 
 	Time::Reset();
+
+	E_LOG(Info, "Graphics::InitD3D()");
+
+	GraphicsDeviceOptions options;
+	options.UseDebugDevice = CommandLine::GetBool("d3ddebug");
+	options.UseDRED = CommandLine::GetBool("dred");
+	options.LoadPIX = CommandLine::GetBool("pix");
+	options.UseGPUValidation = CommandLine::GetBool("gpuvalidation");
+	options.UseWarp = CommandLine::GetBool("warp");
+	options.UseStablePowerState = CommandLine::GetBool("stablepowerstate");
+	m_pDevice = new GraphicsDevice(options);
+
+	InitializeProfiler(m_pDevice);
+
+	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, 3, m_Window.GetNativeWindow());
+
+	GraphicsCommon::Create(m_pDevice);
+
+	ImGuiRenderer::Initialize(m_pDevice, m_Window.GetNativeWindow());
 
 	Init();
 }
@@ -105,14 +164,46 @@ void App::Init_Internal()
 void App::Update_Internal()
 {
 	Time::Tick();
-	Update();
 	Input::Instance().Update();
+	ImGuiRenderer::NewFrame();
+
+	Update();
+
+	{
+		PROFILE_SCOPE("Execute Commandlist");
+		CommandContext* pContext = m_pDevice->AllocateCommandContext();
+		ImGuiRenderer::Render(*pContext, m_pSwapchain->GetBackBuffer());
+		pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
+		pContext->Execute();
+	}
+
+	{
+		PROFILE_SCOPE("Present");
+		m_pSwapchain->Present();
+		ImGuiRenderer::PresentViewports();
+	}
+	{
+		PROFILE_SCOPE("Wait for GPU frame");
+		m_pDevice->TickFrame();
+	}
 }
 
 void App::Shutdown_Internal()
 {
 	Shutdown();
 
+	m_pDevice->IdleGPU();
+	gGPUProfiler.Shutdown();
+
+	ImGuiRenderer::Shutdown();
+	GraphicsCommon::Destroy();
+
 	TaskQueue::Shutdown();
 	Console::Shutdown();
+}
+
+void App::OnWindowResized_Internal(uint32 width, uint32 height)
+{
+	E_LOG(Info, "Window resized: %dx%d", width, height);
+	m_pSwapchain->OnResizeOrMove(width, height);
 }

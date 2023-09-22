@@ -62,8 +62,6 @@ private:
 	void LoadMesh(const std::string& filePath, World& world);
 	void CreateShadowViews(SceneView& view, World& world);
 	
-	RefCountPtr<GraphicsDevice> m_pDevice;
-	RefCountPtr<SwapChain> m_pSwapchain;
 	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
 
 	uint32 m_Frame = 0;
