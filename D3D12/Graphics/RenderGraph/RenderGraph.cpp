@@ -357,7 +357,18 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 		if(pResource->GetPhysical()->UseStateTracking())
 			context.InsertResourceBarrier(pResource->pPhysicalResource, access.Access);
 
-		// #todo: if the resource is aliased, it may have to be discarded
+		// If resource is aliased, insert an aliasing barrier and discard if it's a RT/DS
+		if (pResource->GetLifetime().Begin == pPass->GetID() && pResource->IsAliased())
+		{
+			context.InsertAliasingBarrier(pResource->GetPhysical());
+			if (pResource->Type == RGResourceType::Texture)
+			{
+				RGTexture* pTexture = static_cast<RGTexture*>(pResource);
+				const TextureDesc& desc = pTexture->GetDesc();
+				if (EnumHasAnyFlags(desc.Flags, TextureFlag::RenderTarget | TextureFlag::DepthStencil))
+					context.GetCommandList()->DiscardResource(pResource->GetPhysical()->GetResource(), nullptr);
+			}
+		}
 	}
 
 	context.FlushResourceBarriers();
