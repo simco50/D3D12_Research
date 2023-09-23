@@ -499,7 +499,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, float uniformSca
 		bufferSize += Math::AlignUp<uint64>(meshData.MeshletBounds.size() * sizeof(ShaderInterop::Meshlet::Bounds), bufferAlignment);
 	}
 
-	checkf(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
+	check(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
 	m_pGeometryData = pDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Geometry Buffer");
 
 	RingBufferAllocation allocation;

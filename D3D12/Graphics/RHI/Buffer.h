@@ -19,27 +19,27 @@ DECLARE_BITMASK_TYPE(BufferFlag)
 struct BufferDesc
 {
 	BufferDesc() = default;
-	BufferDesc(uint32 elements, uint32 elementSize, BufferFlag usage = BufferFlag::None)
-		: Size((uint64)elements * elementSize), ElementSize(elementSize), Usage(usage)
+	BufferDesc(uint32 elements, uint32 elementSize, BufferFlag flags = BufferFlag::None)
+		: Size((uint64)elements * elementSize), ElementSize(elementSize), Flags(flags)
 	{}
 
-	static BufferDesc CreateBuffer(uint64 sizeInBytes, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateBuffer(uint64 sizeInBytes, BufferFlag flags = BufferFlag::None)
 	{
 		BufferDesc desc;
 		desc.Size = sizeInBytes;
 		desc.ElementSize = 1;
-		desc.Usage = usage;
+		desc.Flags = flags;
 		return desc;
 	}
 
-	static BufferDesc CreateIndexBuffer(uint32 elements, bool smallIndices, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateIndexBuffer(uint32 elements, bool smallIndices, BufferFlag flags = BufferFlag::None)
 	{
-		return BufferDesc(elements, smallIndices ? 2 : 4, usage);
+		return BufferDesc(elements, smallIndices ? 2 : 4, flags);
 	}
 
-	static BufferDesc CreateVertexBuffer(uint32 elements, uint32 vertexSize, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateVertexBuffer(uint32 elements, uint32 vertexSize, BufferFlag flags = BufferFlag::None)
 	{
-		return BufferDesc(elements, vertexSize, usage);
+		return BufferDesc(elements, vertexSize, flags);
 	}
 
 	static BufferDesc CreateReadback(uint64 size)
@@ -47,13 +47,13 @@ struct BufferDesc
 		return CreateBuffer(size, BufferFlag::Readback | BufferFlag::NoBindless);
 	}
 
-	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag flags = BufferFlag::None)
 	{
 		check(bytes % 4 == 0);
 		BufferDesc desc;
 		desc.Size = bytes;
 		desc.ElementSize = 4;
-		desc.Usage = usage | BufferFlag::ShaderResource | BufferFlag::ByteAddress;
+		desc.Flags = flags | BufferFlag::ShaderResource | BufferFlag::ByteAddress;
 		return desc;
 	}
 
@@ -63,7 +63,7 @@ struct BufferDesc
 		BufferDesc desc;
 		desc.Size = bytes;
 		desc.ElementSize = 4;
-		desc.Usage = desc.Usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess | BufferFlag::NoBindless;
+		desc.Flags = desc.Flags | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess | BufferFlag::NoBindless;
 		return desc;
 	}
 
@@ -73,20 +73,20 @@ struct BufferDesc
 		BufferDesc desc;
 		desc.Size = bytes;
 		desc.ElementSize = 4;
-		desc.Usage = desc.Usage | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
+		desc.Flags = desc.Flags | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
 		return desc;
 	}
 
-	static BufferDesc CreateStructured(uint32 elementCount, uint32 elementSize, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateStructured(uint32 elementCount, uint32 elementSize, BufferFlag flags = BufferFlag::None)
 	{
 		BufferDesc desc;
 		desc.ElementSize = elementSize;
 		desc.Size = (uint64)elementCount * desc.ElementSize;
-		desc.Usage = usage | BufferFlag::ShaderResource;
+		desc.Flags = flags | BufferFlag::ShaderResource;
 		return desc;
 	}
 
-	static BufferDesc CreateTyped(uint32 elementCount, ResourceFormat format, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateTyped(uint32 elementCount, ResourceFormat format, BufferFlag flags = BufferFlag::None)
 	{
 		const FormatInfo& info = RHI::GetFormatInfo(format);
 		check(!info.IsBC);
@@ -94,17 +94,17 @@ struct BufferDesc
 		desc.ElementSize = info.BytesPerBlock;
 		desc.Size = (uint64)elementCount * desc.ElementSize;
 		desc.Format = format;
-		desc.Usage = usage | BufferFlag::ShaderResource;
+		desc.Flags = flags | BufferFlag::ShaderResource;
 		return desc;
 	}
 
 	template<typename IndirectParameters>
-	static BufferDesc CreateIndirectArguments(uint32 elements = 1, BufferFlag usage = BufferFlag::None)
+	static BufferDesc CreateIndirectArguments(uint32 elements = 1, BufferFlag flags = BufferFlag::None)
 	{
 		BufferDesc desc;
 		desc.ElementSize = sizeof(IndirectParameters);
 		desc.Size = (uint64)elements * desc.ElementSize;
-		desc.Usage = usage | BufferFlag::ShaderResource | BufferFlag::IndirectArguments;
+		desc.Flags = flags | BufferFlag::ShaderResource | BufferFlag::IndirectArguments;
 		return desc;
 	}
 
@@ -114,7 +114,7 @@ struct BufferDesc
 	{
 		return Size == rhs.Size &&
 			ElementSize == rhs.ElementSize &&
-			Usage == rhs.Usage &&
+			Flags == rhs.Flags &&
 			Format == rhs.Format;
 	}
 
@@ -123,12 +123,12 @@ struct BufferDesc
 		return Size == rhs.Size &&
 			ElementSize == rhs.ElementSize &&
 			Format == rhs.Format &&
-			EnumHasAllFlags(Usage, rhs.Usage);
+			EnumHasAllFlags(Flags, rhs.Flags);
 	}
 
 	uint64 Size = 0;
 	uint32 ElementSize = 0;
-	BufferFlag Usage = BufferFlag::None;
+	BufferFlag Flags = BufferFlag::None;
 	ResourceFormat Format = ResourceFormat::Unknown;
 };
 
@@ -164,7 +164,7 @@ struct VertexBufferView
 	VertexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, uint32 stride, uint64 offsetFromStart)
 		: Location(location), Elements(elements), Stride(stride), OffsetFromStart((uint32)offsetFromStart)
 	{
-		checkf(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
+		check(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
 	}
 
 	VertexBufferView(Buffer* pBuffer)
@@ -186,7 +186,7 @@ struct IndexBufferView
 	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, ResourceFormat format, uint64 offsetFromStart)
 		: Location(location), Elements(elements), OffsetFromStart((uint32)offsetFromStart), Format(format)
 	{
-		checkf(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
+		check(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
 	}
 
 	uint32 Stride() const

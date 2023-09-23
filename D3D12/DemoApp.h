@@ -4,8 +4,8 @@
 #include "Graphics/Light.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
-#include "Graphics/Profiler.h"
 #include "Graphics/Techniques/VolumetricFog.h"
+#include "App.h"
 
 class Mesh;
 class Camera;
@@ -40,18 +40,20 @@ enum class RenderPath
 	MAX
 };
 
-class DemoApp
+class DemoApp : public App
 {
 public:
-	DemoApp(WindowHandle window, const Vector2i& windowRect);
+	DemoApp();
 	~DemoApp();
 
-	void Update();
-	void OnResizeOrMove(int width, int height);
+	virtual void Init() override;
+	virtual void Update() override;
+	virtual void Shutdown() override;
+	virtual void OnWindowResized(uint32 width, uint32 height);
 
 private:
 	void DrawTest(Span<RGResource*> resources);
-	void OnResizeViewport(int width, int height);;
+	void OnResizeViewport(uint32 width, uint32 height);;
 
 	void InitializePipelines();
 	void SetupScene();
@@ -61,12 +63,9 @@ private:
 	void LoadMesh(const std::string& filePath, World& world);
 	void CreateShadowViews(SceneView& view, World& world);
 	
-	RefCountPtr<GraphicsDevice> m_pDevice;
-	RefCountPtr<SwapChain> m_pSwapchain;
 	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
 
 	uint32 m_Frame = 0;
-	TimeHistory<float, 180> m_FrameHistory;
 
 	RefCountPtr<Texture> m_pColorHistory;
 	RefCountPtr<Texture> m_pHZB;
@@ -126,7 +125,7 @@ private:
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO;
 	RefCountPtr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
 	RefCountPtr<PipelineState> m_pReduceDepthPSO;
-	std::array<RefCountPtr<Buffer>, SwapChain::NUM_FRAMES> m_ReductionReadbackTargets;
+	std::array<RefCountPtr<Buffer>, GraphicsDevice::NUM_BUFFERS> m_ReductionReadbackTargets;
 
 	//Camera motion
 	RefCountPtr<PipelineState> m_pCameraMotionPSO;

@@ -5,7 +5,7 @@
 #include "RHI/Buffer.h"
 #include "SceneView.h"
 #include "Mesh.h"
-#include "Profiler.h"
+#include "Core/Profiler.h"
 #include "Core/ConsoleVariables.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"

@@ -37,7 +37,7 @@ public:
 	Span Subspan(uint32 from, uint32 count = 0xFFFFFFFF) const
 	{
 		uint32 num = count == 0xFFFFFFFF ? m_Count - from : count;
-		check(from < m_Count);
+		check(from <= m_Count);
 		check(from + count <= m_Count);
 		return Span(m_pValue + from, num);
 	}

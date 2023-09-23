@@ -7,7 +7,7 @@
 #include "dxc/d3d12shader.h"
 #include "D3D.h"
 #include "Core/Serializer.h"
-#include "Graphics/Profiler.h"
+#include "Core/Profiler.h"
 
 namespace ShaderCompiler
 {
@@ -42,7 +42,7 @@ namespace ShaderCompiler
 
 	struct CompileResult
 	{
-		static constexpr int Version = 7;
+		static constexpr int Version = 8;
 
 		std::string ErrorMessage;
 		ShaderBlob pBlob;
@@ -287,7 +287,7 @@ namespace ShaderCompiler
 			return result;
 		}
 
-		TimeScope timer;
+		Utils::TimeScope timer;
 		RefCountPtr<IDxcBlobEncoding> pSource;
 		std::string fullPath;
 		if (!ResolveFilePath(compileJob, fullPath))

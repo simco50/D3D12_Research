@@ -214,7 +214,13 @@ GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
 	RefCountPtr<IDXGIDebug1> pDXGIDebug;
 	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pDXGIDebug.GetAddressOf()))))
 	{
-		pDXGIDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
+		RefCountPtr<IDXGIInfoQueue> pInfoQueue;
+		VERIFY_HR(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pInfoQueue.GetAddressOf())));
+		pInfoQueue->ClearStoredMessages(DXGI_DEBUG_ALL);
+
+		VERIFY_HR(pDXGIDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_IGNORE_INTERNAL | DXGI_DEBUG_RLO_DETAIL)));
+
+		check(pInfoQueue->GetNumStoredMessages(DXGI_DEBUG_ALL) == 0);
 	}
 }
 
@@ -434,6 +440,13 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 GraphicsDevice::~GraphicsDevice()
 {
 	IdleGPU();
+
+	// Disable break on validation before destroying to not make live-leak detection break each time.
+	RefCountPtr<ID3D12InfoQueue> pInfoQueue;
+	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
+	{
+		pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, FALSE);
+	}
 }
 
 CommandQueue* GraphicsDevice::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
@@ -483,7 +496,11 @@ void GraphicsDevice::FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CP
 void GraphicsDevice::TickFrame()
 {
 	m_DeleteQueue.Clean();
-	m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
+	uint64 fenceValue = m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
+
+	m_FrameFenceValues[m_FrameIndex % NUM_BUFFERS] = fenceValue;
+	++m_FrameIndex;
+	m_pFrameFence->CpuWait(m_FrameFenceValues[m_FrameIndex % NUM_BUFFERS]);
 }
 
 void GraphicsDevice::IdleGPU()
@@ -550,18 +567,18 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D
 			break;
 		}
 
-		if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::UnorderedAccess))
+		if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::UnorderedAccess))
 		{
 			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 		}
-		if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::RenderTarget))
+		if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::RenderTarget))
 		{
 			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 		}
-		if (EnumHasAnyFlags(textureDesc.Usage, TextureFlag::DepthStencil))
+		if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::DepthStencil))
 		{
 			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-			if (!EnumHasAnyFlags(textureDesc.Usage, TextureFlag::ShaderResource))
+			if (!EnumHasAnyFlags(textureDesc.Flags, TextureFlag::ShaderResource))
 			{
 				//I think this can be a significant optimization on some devices because then the depth buffer can never be (de)compressed
 				desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
@@ -572,20 +589,20 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D
 
 	D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
 	TextureFlag depthAndRt = TextureFlag::RenderTarget | TextureFlag::DepthStencil;
-	check(EnumHasAllFlags(desc.Usage, depthAndRt) == false);
+	check(EnumHasAllFlags(desc.Flags, depthAndRt) == false);
 
 	D3D12_CLEAR_VALUE* pClearValue = nullptr;
 	D3D12_CLEAR_VALUE clearValue = {};
 	clearValue.Format = D3D::ConvertFormat(desc.Format);
 
-	if (EnumHasAnyFlags(desc.Usage, TextureFlag::RenderTarget))
+	if (EnumHasAnyFlags(desc.Flags, TextureFlag::RenderTarget))
 	{
 		check(desc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::Color);
 		memcpy(&clearValue.Color, &desc.ClearBindingValue.Color, sizeof(Color));
 		resourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		pClearValue = &clearValue;
 	}
-	if (EnumHasAnyFlags(desc.Usage, TextureFlag::DepthStencil))
+	if (EnumHasAnyFlags(desc.Flags, TextureFlag::DepthStencil))
 	{
 		check(desc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 		clearValue.DepthStencil.Depth = desc.ClearBindingValue.DepthStencil.Depth;
@@ -623,11 +640,11 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D
 		m_pRingBufferAllocator->Free(allocation);
 	}
 
-	if (EnumHasAnyFlags(desc.Usage, TextureFlag::ShaderResource))
+	if (EnumHasAnyFlags(desc.Flags, TextureFlag::ShaderResource))
 	{
 		pTexture->m_pSRV = CreateSRV(pTexture, TextureSRVDesc(0, (uint8)pTexture->GetMipLevels()));
 	}
-	if (EnumHasAnyFlags(desc.Usage, TextureFlag::UnorderedAccess))
+	if (EnumHasAnyFlags(desc.Flags, TextureFlag::UnorderedAccess))
 	{
 		pTexture->m_NeedsStateTracking = true;
 
@@ -635,7 +652,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D
 		for (uint8 mip = 0; mip < desc.Mips; ++mip)
 			pTexture->m_UAVs[mip] = CreateUAV(pTexture, TextureUAVDesc(mip));
 	}
-	if (EnumHasAnyFlags(desc.Usage, TextureFlag::RenderTarget))
+	if (EnumHasAnyFlags(desc.Flags, TextureFlag::RenderTarget))
 	{
 		pTexture->m_RTV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		pTexture->m_NeedsStateTracking = true;
@@ -679,7 +696,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D
 		}
 		GetParent()->GetDevice()->CreateRenderTargetView(pResource, &rtvDesc, pTexture->m_RTV);
 	}
-	else if (EnumHasAnyFlags(desc.Usage, TextureFlag::DepthStencil))
+	else if (EnumHasAnyFlags(desc.Flags, TextureFlag::DepthStencil))
 	{
 		pTexture->m_RTV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		pTexture->m_ReadOnlyDSV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
@@ -728,7 +745,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D
 	return pTexture;
 }
 
-RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource)
+RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index)
 {
 	D3D12_RESOURCE_DESC resourceDesc = pSwapchainResource->GetDesc();
 	TextureDesc desc;
@@ -738,11 +755,11 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	desc.ClearBindingValue = ClearBinding(Colors::Black);
 	desc.Mips = resourceDesc.MipLevels;
 	desc.SampleCount = resourceDesc.SampleDesc.Count;
-	desc.Usage = TextureFlag::RenderTarget;
+	desc.Flags = TextureFlag::RenderTarget;
 
 	Texture* pTexture = new Texture(this, desc, pSwapchainResource);
 	pTexture->SetImmediateDelete(true);
-	pTexture->SetName("Backbuffer");
+	pTexture->SetName(Sprintf("Backbuffer %d", index).c_str());
 	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
 	pTexture->m_NeedsStateTracking = true;
 
@@ -757,9 +774,9 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12H
 	auto GetResourceDesc = [](const BufferDesc& bufferDesc)
 	{
 		D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferDesc.Size, D3D12_RESOURCE_FLAG_NONE);
-		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::UnorderedAccess))
+		if (EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::UnorderedAccess))
 			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+		if (EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::AccelerationStructure))
 			desc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 		return desc;
 	};
@@ -768,19 +785,19 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12H
 	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
 	D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_UNKNOWN;
 
-	if (EnumHasAnyFlags(desc.Usage, BufferFlag::Readback))
+	if (EnumHasAnyFlags(desc.Flags, BufferFlag::Readback))
 	{
 		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
 		initialState = D3D12_RESOURCE_STATE_COPY_DEST;
 		heapType = D3D12_HEAP_TYPE_READBACK;
 	}
-	if (EnumHasAnyFlags(desc.Usage, BufferFlag::Upload))
+	if (EnumHasAnyFlags(desc.Flags, BufferFlag::Upload))
 	{
 		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
 		initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
 		heapType = D3D12_HEAP_TYPE_UPLOAD;
 	}
-	if (EnumHasAnyFlags(desc.Usage, BufferFlag::AccelerationStructure))
+	if (EnumHasAnyFlags(desc.Flags, BufferFlag::AccelerationStructure))
 	{
 		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
 		initialState = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
@@ -807,21 +824,21 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12H
 	pBuffer->SetResourceState(initialState);
 	pBuffer->SetName(pName);
 
-	if (EnumHasAnyFlags(desc.Usage, BufferFlag::Upload | BufferFlag::Readback))
+	if (EnumHasAnyFlags(desc.Flags, BufferFlag::Upload | BufferFlag::Readback))
 	{
 		VERIFY_HR(pResource->Map(0, nullptr, &pBuffer->m_pMappedData));
 		pBuffer->m_NeedsStateTracking = true;
 	}
 
-	bool isRaw = EnumHasAnyFlags(desc.Usage, BufferFlag::ByteAddress);
+	bool isRaw = EnumHasAnyFlags(desc.Flags, BufferFlag::ByteAddress);
 	bool withCounter = !isRaw && desc.Format == ResourceFormat::Unknown;
 
 	//#todo: Temp code. Pull out views from buffer
-	if (EnumHasAnyFlags(desc.Usage, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
+	if (EnumHasAnyFlags(desc.Flags, BufferFlag::ShaderResource | BufferFlag::AccelerationStructure))
 	{
 		pBuffer->m_pSRV = CreateSRV(pBuffer, BufferSRVDesc(desc.Format, isRaw));
 	}
-	if (EnumHasAnyFlags(desc.Usage, BufferFlag::UnorderedAccess))
+	if (EnumHasAnyFlags(desc.Flags, BufferFlag::UnorderedAccess))
 	{
 		pBuffer->m_pUAV = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, isRaw, withCounter));
 		pBuffer->m_NeedsStateTracking = true;
@@ -829,7 +846,7 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12H
 
 	if (pInitData)
 	{
-		if (EnumHasAllFlags(desc.Usage, BufferFlag::Upload))
+		if (EnumHasAllFlags(desc.Flags, BufferFlag::Upload))
 		{
 			memcpy((char*)pBuffer->GetMappedData(), pInitData, desc.Size);
 		}
@@ -888,7 +905,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-	if (EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::AccelerationStructure))
+	if (EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::AccelerationStructure))
 	{
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
 		srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -919,7 +936,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 	}
 
 	DescriptorHandle gpuDescriptor;
-	if(!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
+	if(!EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::NoBindless))
 		gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new ShaderResourceView(pBuffer, descriptor, gpuDescriptor);
 }
@@ -952,7 +969,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), nullptr, &uavDesc, descriptor);
 	DescriptorHandle gpuDescriptor;
-	if (!EnumHasAnyFlags(bufferDesc.Usage, BufferFlag::NoBindless))
+	if (!EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::NoBindless))
 		gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new UnorderedAccessView(pBuffer, descriptor, gpuDescriptor);
 }
@@ -995,7 +1012,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 		}
 	};
 
-	srvDesc.Format = AdjustFormatSRGB(SRVFormatFromDepth(textureDesc.Format), EnumHasAllFlags(textureDesc.Usage, TextureFlag::sRGB));
+	srvDesc.Format = AdjustFormatSRGB(SRVFormatFromDepth(textureDesc.Format), EnumHasAllFlags(textureDesc.Flags, TextureFlag::sRGB));
 
 	switch (textureDesc.Type)
 	{
@@ -1172,9 +1189,9 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	m_pDevice = pDevice;
 
 	VERIFY_HR(m_FeatureSupport.Init(pDevice->GetDevice()));
-	checkf(m_FeatureSupport.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
-	checkf(m_FeatureSupport.HighestShaderModel() >= D3D_SHADER_MODEL_6_6, "Device does not support SM 6.6 which is required for dynamic indexing");
-	checkf(m_FeatureSupport.WaveOps(), "Device does not support wave ops which is required.");
+	check(m_FeatureSupport.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
+	check(m_FeatureSupport.HighestShaderModel() >= D3D_SHADER_MODEL_6_6, "Device does not support SM 6.6 which is required for dynamic indexing");
+	check(m_FeatureSupport.WaveOps(), "Device does not support wave ops which is required.");
 
 	RenderPassTier = m_FeatureSupport.RenderPassesTier();
 	RayTracingTier = m_FeatureSupport.RaytracingTier();
@@ -1277,56 +1294,12 @@ ResourceFormat GetSwapchainFormat(DisplayMode displayMode)
 	}
 }
 
-SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHandle pNativeWindow)
-	: GraphicsObject(pDevice), m_DesiredDisplayMode(displayMode), m_Format(GetSwapchainFormat(displayMode)), m_CurrentImage(0)
+SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, uint32 numFrames, WindowHandle pNativeWindow)
+	: GraphicsObject(pDevice), m_Window(pNativeWindow), m_DesiredDisplayMode(displayMode), m_Format(GetSwapchainFormat(displayMode)), m_CurrentImage(0), m_NumFrames(numFrames)
 {
 	m_pPresentFence = new Fence(pDevice, "Present Fence");
 
-	DXGI_SWAP_CHAIN_DESC1 desc{};
-	BOOL allowTearing = FALSE;
-	if (SUCCEEDED(pDevice->GetFactory()->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
-	{
-		m_AllowTearing = allowTearing;
-		desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-	}
-	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
-	desc.BufferCount = (uint32)m_Backbuffers.size();
-	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	desc.Format = D3D::ConvertFormat(m_Format);
-	desc.Width = 0;
-	desc.Height = 0;
-	desc.Scaling = DXGI_SCALING_NONE;
-	desc.Stereo = FALSE;
-	// The compositor can use DirectFlip, where it uses the application's back buffer as the entire display back buffer.
-	// With DXGI_SWAP_EFFECT_FLIP_DISCARD, the compositor can _could_ still perform this optimization, by drawing other content onto the application's back buffer.
-	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	desc.SampleDesc.Count = 1;
-	desc.SampleDesc.Quality = 0;
-
-	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
-	fsDesc.RefreshRate.Denominator = 60;
-	fsDesc.RefreshRate.Numerator = 1;
-	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-	fsDesc.Windowed = true;
-
-	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	RefCountPtr<IDXGISwapChain1> swapChain;
-
-	VERIFY_HR(pDevice->GetFactory()->CreateSwapChainForHwnd(
-		pPresentQueue->GetCommandQueue(),
-		(HWND)pNativeWindow,
-		&desc,
-		&fsDesc,
-		nullptr,
-		swapChain.GetAddressOf()));
-
-	m_pSwapchain.Reset();
-	swapChain.As(&m_pSwapchain);
-
-	DXGI_SWAP_CHAIN_DESC1 Desc = {};
-	swapChain->GetDesc1(&Desc);
-	OnResizeOrMove(Desc.Width, Desc.Height);
+	RecreateSwapChain();
 }
 
 SwapChain::~SwapChain()
@@ -1351,9 +1324,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 		m_pPresentFence->CpuWait();
 
 		for (size_t i = 0; i < m_Backbuffers.size(); ++i)
-		{
 			m_Backbuffers[i].Reset();
-		}
 
 		//Resize the buffers
 		DXGI_SWAP_CHAIN_DESC1 desc{};
@@ -1380,7 +1351,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 		{
 			ID3D12Resource* pResource = nullptr;
 			VERIFY_HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
-			m_Backbuffers[i] = GetParent()->CreateTextureForSwapchain(pResource);
+			m_Backbuffers[i] = GetParent()->CreateTextureForSwapchain(pResource, i);
 		}
 
 		m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
@@ -1389,18 +1360,36 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 
 void SwapChain::Present()
 {
-	// Wait until the current backbuffer image is ready - Not doing this makes running under PIX crash
-	SyncPoint& presentSyncPoint = m_PresentSyncPoints[m_pSwapchain->GetCurrentBackBufferIndex()];
-	if (presentSyncPoint)
-		presentSyncPoint.Wait();
-
 	m_pSwapchain->Present(m_Vsync ? 1 : 0, !m_Vsync && m_AllowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
 	m_CurrentImage = m_pSwapchain->GetCurrentBackBufferIndex();
 
+	// Signal and store when the GPU work for the frame we just flipped is finished.
 	CommandQueue* pDirectQueue = GetParent()->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	uint64 fenceValue = m_pPresentFence->Signal(pDirectQueue);
+	m_pPresentFence->Signal(pDirectQueue);
 
-	presentSyncPoint = SyncPoint(m_pPresentFence, fenceValue);
+	WaitForSingleObject(m_WaitableObject, INFINITE);
+}
+
+void SwapChain::SetNumFrames(uint32 numFrames)
+{
+	m_NumFrames = numFrames;
+	RecreateSwapChain();
+}
+
+void SwapChain::SetMaxFrameLatency(uint32 maxFrameLatency)
+{
+	m_MaxFrameLatency = maxFrameLatency;
+	if (m_UseWaitableObject)
+		m_pSwapchain->SetMaximumFrameLatency(maxFrameLatency);
+}
+
+void SwapChain::SetUseWaitableSwapChain(bool enabled)
+{
+	if (m_UseWaitableObject != enabled)
+	{
+		m_UseWaitableObject = enabled;
+		RecreateSwapChain();
+	}
 }
 
 bool SwapChain::DisplaySupportsHDR() const
@@ -1423,4 +1412,77 @@ Vector2i SwapChain::GetViewport() const
 {
 	Texture* pTexture = GetBackBuffer();
 	return Vector2i(pTexture->GetWidth(), pTexture->GetHeight());
+}
+
+void SwapChain::RecreateSwapChain()
+{
+	m_pPresentFence->CpuWait();
+
+	GraphicsDevice* pDevice = GetParent();
+
+	DXGI_SWAP_CHAIN_DESC1 desc{};
+	BOOL allowTearing = FALSE;
+	if (SUCCEEDED(pDevice->GetFactory()->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(BOOL))))
+	{
+		m_AllowTearing = allowTearing;
+		desc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+	}
+
+	if (m_UseWaitableObject)
+		desc.Flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+
+	desc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+	desc.BufferCount = m_NumFrames;
+	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	desc.Format = D3D::ConvertFormat(m_Format);
+	desc.Width = 0;
+	desc.Height = 0;
+	desc.Scaling = DXGI_SCALING_NONE;
+	desc.Stereo = FALSE;
+	// The compositor can use DirectFlip, where it uses the application's back buffer as the entire display back buffer.
+	// With DXGI_SWAP_EFFECT_FLIP_DISCARD, the compositor can _could_ still perform this optimization, by drawing other content onto the application's back buffer.
+	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+
+	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDesc{};
+	fsDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+	fsDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+	fsDesc.Windowed = true;
+
+	m_Backbuffers.clear();
+	m_Backbuffers.resize(m_NumFrames);
+	m_pSwapchain.Reset();
+
+	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	RefCountPtr<IDXGISwapChain1> swapChain;
+
+	VERIFY_HR(pDevice->GetFactory()->CreateSwapChainForHwnd(
+		pPresentQueue->GetCommandQueue(),
+		(HWND)m_Window,
+		&desc,
+		&fsDesc,
+		nullptr,
+		swapChain.GetAddressOf()));
+
+	swapChain.As(&m_pSwapchain);
+
+	if (m_WaitableObject)
+	{
+		CloseHandle(m_WaitableObject);
+		m_WaitableObject = nullptr;
+	}
+
+	if (m_UseWaitableObject)
+	{
+		m_pSwapchain->SetMaximumFrameLatency(m_MaxFrameLatency);
+		m_WaitableObject = m_pSwapchain->GetFrameLatencyWaitableObject();
+	}
+
+	m_Width = 0;
+	m_Height = 0;
+
+	DXGI_SWAP_CHAIN_DESC1 descActual{};
+	m_pSwapchain->GetDesc1(&descActual);
+	OnResizeOrMove(descActual.Width, descActual.Height);
 }

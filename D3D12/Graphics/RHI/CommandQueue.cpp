@@ -87,7 +87,8 @@ void CommandQueue::FreeAllocator(const SyncPoint& syncPoint, RefCountPtr<ID3D12C
 
 void CommandQueue::InsertWait(const SyncPoint& syncPoint)
 {
-	m_pCommandQueue->Wait(syncPoint.GetFence()->GetFence(), syncPoint.GetFenceValue());
+	if(syncPoint.IsValid())
+		m_pCommandQueue->Wait(syncPoint.GetFence()->GetFence(), syncPoint.GetFenceValue());
 }
 
 void CommandQueue::InsertWait(CommandQueue* pQueue)

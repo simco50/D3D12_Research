@@ -20,7 +20,7 @@ workspace (ENGINE_NAME)
 	symbols "On"
 	architecture "x64"
 	characterset "MBCS"
-	flags {"MultiProcessorCompile", "ShadowedVariables", "FatalWarnings"}
+	flags {"MultiProcessorCompile", "ShadowedVariables"}
 	rtti "Off"
 	warnings "Extra"
 	system "windows"
@@ -112,6 +112,15 @@ workspace (ENGINE_NAME)
 		-- DirectXMath
 		includedirs "$(SolutionDir)Libraries/DirectXMath/include"
 
+		-- Live++
+		live_pp_path = "LivePP/API/LPP_API_Version_x64_CPP.h"
+		live_pp = os.pathsearch(live_pp_path, os.getenv("PATH"))
+		if live_pp then
+			includedirs (live_pp .. "/LivePP/API")
+			defines ("LIVE_PP_PATH=L\"" .. live_pp .. "/LivePP\"")
+			linkoptions { "/FUNCTIONPADMIN" }
+			editandcontinue "Off"
+		end
 
 newaction {
 	trigger     = "clean",

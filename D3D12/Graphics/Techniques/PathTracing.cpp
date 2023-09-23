@@ -51,7 +51,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 	}
 
 	TextureDesc desc = pTarget->GetDesc();
-	desc.Usage |= TextureFlag::ShaderResource;
+	desc.Flags |= TextureFlag::ShaderResource;
 	RGTexture* pAccumulationTexture = RGUtils::CreatePersistent(graph, "Accumulation Target", desc, &m_pAccumulationTexture, true);
 
 	static int32 numBounces = 3;

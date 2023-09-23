@@ -89,7 +89,7 @@ struct TextureDesc
 	TextureType Type					= TextureType::Texture2D;
 	uint32 SampleCount					= 1;
 	ResourceFormat Format				= ResourceFormat::Unknown;
-	TextureFlag Usage					= TextureFlag::None;
+	TextureFlag Flags					= TextureFlag::None;
 	ClearBinding ClearBindingValue		= ClearBinding(Colors::Black);
 
 	Vector3u Size() const { return Vector3u(Width, Height, DepthOrArraySize); }
@@ -106,7 +106,7 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags;
+		desc.Flags = flags;
 		desc.ClearBindingValue = clearBinding;
 		desc.Type = TextureType::TextureCube;
 		return desc;
@@ -123,7 +123,7 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags;
+		desc.Flags = flags;
 		desc.ClearBindingValue = clearBinding;
 		desc.Type = TextureType::Texture2D;
 		return desc;
@@ -140,7 +140,7 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags;
+		desc.Flags = flags;
 		desc.ClearBindingValue = clearBinding;
 		desc.Type = TextureType::Texture3D;
 		return desc;
@@ -154,7 +154,7 @@ struct TextureDesc
 			&& Mips == other.Mips
 			&& SampleCount == other.SampleCount
 			&& Format == other.Format
-			&& Usage == other.Usage
+			&& Flags == other.Flags
 			&& ClearBindingValue == other.ClearBindingValue
 			&& Type == other.Type;
 	}
@@ -169,7 +169,7 @@ struct TextureDesc
 			&& Format == other.Format
 			&& ClearBindingValue == other.ClearBindingValue
 			&& Type == other.Type
-			&& EnumHasAllFlags(Usage, other.Usage);
+			&& EnumHasAllFlags(Flags, other.Flags);
 	}
 
 	bool operator!=(const TextureDesc& other) const
