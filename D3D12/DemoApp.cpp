@@ -353,40 +353,36 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 		for (Heap& heap : heaps)
 			totalHeapSize += heap.Size;
 
-		if (ImGui::TreeNodeEx("Stats", ImGuiTreeNodeFlags_DefaultOpen))
+		if (ImGui::BeginTable("Size Stats", 4))
 		{
-			if (ImGui::BeginTable("Size Stats", 4))
-			{
-				ImGui::TableHeader("Header");
-				ImGui::TableSetupColumn("Mode");
-				ImGui::TableSetupColumn("Unaliased");
-				ImGui::TableSetupColumn("Aliased");
-				ImGui::TableSetupColumn("Difference");
-				ImGui::TableHeadersRow();
+			ImGui::TableHeader("Header");
+			ImGui::TableSetupColumn("Mode");
+			ImGui::TableSetupColumn("Unaliased");
+			ImGui::TableSetupColumn("Aliased");
+			ImGui::TableSetupColumn("Difference");
+			ImGui::TableHeadersRow();
 
-				ImGui::TableNextColumn();
-				ImGui::Text("No Aliasing");
-				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
-				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
-				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(0).c_str());
+			ImGui::TableNextColumn();
+			ImGui::Text("No Aliasing");
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(0).c_str());
 
-				ImGui::TableNextColumn();
-				ImGui::Text("Aliasing");
-				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
-				ImGui::TableNextColumn();
-				ImGui::Text(Math::PrettyPrintDataSize(totalHeapSize).c_str());
-				ImGui::TableNextColumn();
-				if(totalResourcesSize > totalHeapSize)
-					ImGui::Text("%s", Math::PrettyPrintDataSize(totalResourcesSize - totalHeapSize).c_str());
-				else
-					ImGui::Text("+%s", Math::PrettyPrintDataSize(totalHeapSize - totalResourcesSize).c_str());
-				ImGui::EndTable();
-			}
-			ImGui::TreePop();
+			ImGui::TableNextColumn();
+			ImGui::Text("Aliasing");
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(totalHeapSize).c_str());
+			ImGui::TableNextColumn();
+			if(totalResourcesSize > totalHeapSize)
+				ImGui::Text("%s", Math::PrettyPrintDataSize(totalResourcesSize - totalHeapSize).c_str());
+			else
+				ImGui::Text("+%s", Math::PrettyPrintDataSize(totalHeapSize - totalResourcesSize).c_str());
+			ImGui::EndTable();
 		}
 
 		float width = ImGui::GetContentRegionAvail().x;
@@ -409,15 +405,20 @@ void DemoApp::DrawTest(Span<RGResource*> graphResources)
 					cursor + ImVec2(widthScale * (resource->Lifetime.End + 1), GetBarHeight(resource->Size + resource->Offset))
 					);
 
-				pDraw->AddRectFilled(barRect.Min, barRect.Max, ImColor(0.5f, 0.5f, 0.5f));
-				pDraw->AddRectFilled(barRect.Min + ImVec2(1, 1), barRect.Max - ImVec2(1, 1), resource->GetColor());
 				ImGui::ItemAdd(barRect, resource->ID);
+				ImColor color = resource->GetColor();
 				if (ImGui::IsItemHovered() && ImGui::BeginTooltip())
 				{
+					color.Value.x *= 1.5f;
+					color.Value.y *= 1.5f;
+					color.Value.z *= 1.5f;
 					ImGui::Text("Name: %s", resource->Name.c_str());
 					ImGui::Text("Size: %s", Math::PrettyPrintDataSize(resource->Size).c_str());
 					ImGui::EndTooltip();
 				}
+
+				pDraw->AddRectFilled(barRect.Min, barRect.Max, ImColor(0.5f, 0.5f, 0.5f));
+				pDraw->AddRectFilled(barRect.Min + ImVec2(1, 1), barRect.Max - ImVec2(1, 1), color);
 			}
 			ImGui::Dummy(ImVec2(0, heapHeight));
 		}

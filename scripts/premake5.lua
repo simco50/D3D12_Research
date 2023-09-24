@@ -113,14 +113,14 @@ workspace (ENGINE_NAME)
 		includedirs "$(SolutionDir)Libraries/DirectXMath/include"
 
 		-- Live++
-		live_pp_path = "LivePP/API/LPP_API_Version_x64_CPP.h"
-		live_pp = os.pathsearch(live_pp_path, os.getenv("PATH"))
-		if live_pp then
-			includedirs (live_pp .. "/LivePP/API")
-			defines ("LIVE_PP_PATH=L\"" .. live_pp .. "/LivePP\"")
-			linkoptions { "/FUNCTIONPADMIN" }
-			editandcontinue "Off"
-		end
+		--live_pp_path = "LivePP/API/LPP_API_Version_x64_CPP.h"
+		--live_pp = os.pathsearch(live_pp_path, os.getenv("PATH"))
+		--if live_pp then
+		--	includedirs (live_pp .. "/LivePP/API")
+		--	defines ("LIVE_PP_PATH=L\"" .. live_pp .. "/LivePP\"")
+		--	linkoptions { "/FUNCTIONPADMIN" }
+		--	editandcontinue "Off"
+		--end
 
 newaction {
 	trigger     = "clean",

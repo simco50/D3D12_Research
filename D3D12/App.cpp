@@ -54,6 +54,8 @@ struct LivePPAgent
 
 int App::Run()
 {
+	LIVE_PP();
+
 	Init_Internal();
 	while (m_Window.PollMessages())
 	{
@@ -102,8 +104,6 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 
 void App::Init_Internal()
 {
-	LIVE_PP();
-
 #ifdef _DEBUG
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #if BREAK_ON_ALLOC > 0
