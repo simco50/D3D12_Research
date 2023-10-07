@@ -23,11 +23,13 @@ ConstantBuffer<PerViewData> cPass : register(b1);
 struct InterpolantsVSToPS
 {
 	float4 Position : SV_Position;
-	float3 PositionWS : POSITION_WS;
 	float2 UV : TEXCOORD;
+#ifndef DEPTH_ONLY
+	float3 PositionWS : POSITION_WS;
 	float3 Normal : NORMAL;
 	float4 Tangent : TANGENT;
 	uint Color : TEXCOORD1;
+#endif
 };
 
 Texture2D<float> tAO :	register(t0);
@@ -108,12 +110,13 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {
 	InterpolantsVSToPS result;
-	float3 Position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
-	result.PositionWS = mul(float4(Position, 1.0f), world).xyz;
-	result.Position = mul(float4(result.PositionWS, 1.0f), cView.ViewProjection);
-
+	float3 position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
+	float3 worldPos = mul(float4(position, 1.0f), world).xyz;
+	result.Position = mul(float4(worldPos, 1.0f), cView.ViewProjection);
 	result.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
+#ifndef DEPTH_ONLY
+	result.PositionWS = worldPos;
 	uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
 	result.Normal = normalize(mul(Unpack_RGB10A2_SNORM(normalData.x).xyz, (float3x3)world));
 	float4 tangent = Unpack_RGB10A2_SNORM(normalData.y);
@@ -122,17 +125,92 @@ InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint ver
 	result.Color = 0xFFFFFFFF;
 	if(mesh.ColorsOffset != ~0u)
 		result.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+#endif
 
 	return result;
 }
 
-InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
+struct PayloadData
+{
+	uint Indices[32];
+};
+
+groupshared PayloadData gsPayload;
+
+[numthreads(32, 1, 1)]
+void ASMain(uint threadId : SV_DispatchThreadID)
+{
+	bool visible = false;
+
+	InstanceData instance = GetInstance(cObject.ID);
+	MeshData mesh = GetMesh(instance.MeshIndex);;
+	if (threadId < mesh.MeshletCount)
+	{
+		Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, threadId, mesh.MeshletBoundsOffset);
+		FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.ViewProjection);
+		visible = cullData.IsVisible;
+	}
+
+	if (visible)
+	{
+		uint index = WavePrefixCountBits(visible);
+		gsPayload.Indices[index] = threadId;
+	}
+
+	// Dispatch the required number of MS threadgroups to render the visible meshlets
+	uint visibleCount = WaveActiveCountBits(visible);
+	DispatchMesh(visibleCount, 1, 1, gsPayload);
+}
+
+#define NUM_MESHLET_THREADS 32
+
+[outputtopology("triangle")]
+[numthreads(NUM_MESHLET_THREADS, 1, 1)]
+void MSMain(
+	in uint groupThreadID : SV_GroupIndex,
+	in payload PayloadData payload,
+	in uint groupID : SV_GroupID,
+	out vertices InterpolantsVSToPS verts[MESHLET_MAX_VERTICES],
+	out indices uint3 triangles[MESHLET_MAX_TRIANGLES])
 {
 	InstanceData instance = GetInstance(cObject.ID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
-	InterpolantsVSToPS result = FetchVertexAttributes(mesh, instance.LocalToWorld, vertexId);
-	return result;
+
+	uint meshletIndex = payload.Indices[groupID];
+	if(meshletIndex >= mesh.MeshletCount)
+		return;
+
+	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
+
+	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
+
+	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
+	{
+		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
+		InterpolantsVSToPS result = FetchVertexAttributes(mesh, instance.LocalToWorld, vertexId);
+		verts[i] = result;
+	}
+
+	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += NUM_MESHLET_THREADS)
+	{
+		Meshlet::Triangle tri = BufferLoad<Meshlet::Triangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
+	}
 }
+
+#ifdef DEPTH_ONLY
+
+void DepthOnlyPS(InterpolantsVSToPS input)
+{
+	InstanceData instance = GetInstance(cObject.ID);
+	MaterialData material = GetMaterial(instance.MaterialIndex);
+	if(Sample2D(material.Diffuse, sMaterialSampler, input.UV).a < material.AlphaCutoff)
+	{
+		discard;
+	}
+}
+
+#else
 
 MaterialProperties EvaluateMaterial(MaterialData material, InterpolantsVSToPS attributes)
 {
@@ -177,9 +255,7 @@ struct PSOut
 	float Roughness : SV_Target2;
 };
 
-void PSMain(InterpolantsVSToPS input,
-			float3 bary : SV_Barycentrics,
-			out PSOut output)
+void ShadePS(InterpolantsVSToPS input, out PSOut output)
 {
 	float2 screenUV = (float2)input.Position.xy * cView.TargetDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0);
@@ -214,3 +290,5 @@ void PSMain(InterpolantsVSToPS input,
 	output.Normal = EncodeNormalOctahedron(surface.Normal);
 	output.Roughness = saturate(reflectivity - ssrWeight);
 }
+
+#endif

@@ -130,6 +130,8 @@ public:
 	void ConditionallyReload();
 
 private:
+	friend class GraphicsDevice;
+
 	void CreateInternal();
 	void OnShaderReloaded(Shader* pShader);
 	RefCountPtr<ID3D12PipelineState> m_pPipelineState;

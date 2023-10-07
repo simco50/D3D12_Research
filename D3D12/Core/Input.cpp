@@ -13,7 +13,6 @@ void Input::Update()
 	m_CurrentMouseStates.ClearAll();
 
 	m_MouseWheel = 0;
-	m_MouseDelta = Vector2();
 }
 
 void Input::UpdateKey(uint32 keyCode, bool isDown)

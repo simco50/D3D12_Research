@@ -14,6 +14,7 @@
 #include "StateObject.h"
 #include "pix3.h"
 #include "dxgidebug.h"
+#include "Core/Commandline.h"
 
 // Setup the Agility D3D12 SDK
 extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
@@ -887,7 +888,10 @@ RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RootSignature* 
 
 RefCountPtr<PipelineState> GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
 {
-	return new PipelineState(this, psoDesc);
+	RefCountPtr<PipelineState> pPSO = new PipelineState(this, psoDesc);
+	if (CommandLine::GetBool("immediate_pso"))
+		pPSO->CreateInternal();
+	return pPSO;
 }
 
 RefCountPtr<StateObject> GraphicsDevice::CreateStateObject(const StateObjectInitializer& stateDesc)

@@ -48,8 +48,9 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pForwardRS);
 		psoDesc.SetBlendMode(BlendMode::Replace, false);
-		psoDesc.SetVertexShader("ForwardShading.hlsl", "VSMain", { "CLUSTERED_FORWARD" });
-		psoDesc.SetPixelShader("ForwardShading.hlsl", "PSMain", { "CLUSTERED_FORWARD" });
+		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "CLUSTERED_FORWARD" });
+		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "CLUSTERED_FORWARD" });
+		psoDesc.SetPixelShader("ForwardShading.hlsl", "ShadePS", { "CLUSTERED_FORWARD" });
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
 
@@ -74,8 +75,9 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 		//Opaque
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pForwardRS);
-		psoDesc.SetVertexShader("ForwardShading.hlsl", "VSMain", { "TILED_FORWARD" });
-		psoDesc.SetPixelShader("ForwardShading.hlsl", "PSMain", { "TILED_FORWARD" });
+		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "TILED_FORWARD" });
+		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "TILED_FORWARD" });
+		psoDesc.SetPixelShader("ForwardShading.hlsl", "ShadePS", { "TILED_FORWARD" });
 		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);

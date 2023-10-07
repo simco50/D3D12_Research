@@ -37,6 +37,10 @@
         {
           "Id": "2152451a-5cea-4170-b68e-d53827a75806",
           "Command": "-pix"
+        },
+        {
+          "Id": "fbcec7df-5d3f-4382-a66a-34bcdbe45a10",
+          "Command": "-immediate_pso"
         }
       ]
     },

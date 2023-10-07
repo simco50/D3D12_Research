@@ -266,8 +266,7 @@ namespace Renderer
 			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 			{
 				context.BindRootCBV(0, b.InstanceID);
-				context.SetIndexBuffer(b.pMesh->IndicesLocation);
-				context.DrawIndexedInstanced(b.pMesh->IndicesLocation.Elements, 0, 1, 0, 0);
+				context.DispatchMesh(Math::DivideAndRoundUp(b.pMesh->NumMeshlets, 32));
 			}
 		}
 	}

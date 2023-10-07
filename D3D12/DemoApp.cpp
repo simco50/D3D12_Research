@@ -1204,37 +1204,39 @@ void DemoApp::InitializePipelines()
 	m_pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pCommonRS->Finalize("Common");
 
-	//Shadow mapping - Vertex shader-only pass that writes to the depth buffer using the light matrix
+	// Depth-only raster PSOs
+
 	{
+		ShaderDefineHelper defines;
+		defines.Set("DEPTH_ONLY", true);
+
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCommonRS);
-		psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
-		psoDesc.SetDepthOnlyTarget(GraphicsCommon::ShadowFormat, 1);
+		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
+		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
+		psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetDepthBias(-10, 0, -4.0f);
-		psoDesc.SetName("Shadow Mapping Opaque");
-		m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
-		psoDesc.SetPixelShader("DepthOnly.hlsl", "PSMain");
-		psoDesc.SetName("Shadow Mapping Alpha Mask");
-		m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
-
-	//Depth prepass - Simple vertex shader to fill the depth buffer to optimize later passes
-	{
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCommonRS);
-		psoDesc.SetVertexShader("DepthOnly.hlsl", "VSMain");
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetName("Depth Prepass Opaque");
 		m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
-		psoDesc.SetPixelShader("DepthOnly.hlsl", "PSMain");
+		psoDesc.SetDepthOnlyTarget(GraphicsCommon::ShadowFormat, 1);
+		psoDesc.SetName("Shadow Mapping Opaque");
+		m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
+
+		psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
+
+		psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetName("Depth Prepass Alpha Mask");
-		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
+
+		psoDesc.SetDepthOnlyTarget(GraphicsCommon::ShadowFormat, 1);
+		psoDesc.SetName("Shadow Mapping Alpha Mask");
+		m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	ShaderDefineHelper tonemapperDefines;
