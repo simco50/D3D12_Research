@@ -59,19 +59,6 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 	if (!enabled)
 		return;
 
-	// Hacks to rotate text in ImGui. From https://github.com/ocornut/imgui/issues/1286#issue-251214314
-	int rotation_start_index;
-	auto ImRotateStart = [&]() {	rotation_start_index = ImGui::GetWindowDrawList()->VtxBuffer.Size; };
-	auto ImRotateEnd = [&](float rad, ImVec2 center)
-	{
-		float s = sin(rad), c = cos(rad);
-		center = ImRotate(center, s, c) - center;
-
-		auto& buf = ImGui::GetWindowDrawList()->VtxBuffer;
-		for (int i = rotation_start_index; i < buf.Size; i++)
-			buf[i].pos = ImRotate(buf[i].pos, s, c) - center;
-	};
-
 	if(ImGui::Begin("Resource usage", &enabled, ImGuiWindowFlags_HorizontalScrollbar))
 	{
 		int32 passIndex = 0;
@@ -94,10 +81,8 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 		{
 			ImRect itemRect(passNamePos + ImVec2(passIndex * boxSize.x, 0.0f), passNamePos + ImVec2((passIndex + 1) * boxSize.x, passNameHeight));
 			pCmd->AddLine(itemRect.Max, itemRect.Max + ImVec2(0, height), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
-			ImRotateStart();
-			ImVec2 size = ImGui::CalcTextSize(pPass->GetName());
-			pCmd->AddText(itemRect.Max - ImVec2(size.x, 0), ImColor(1.0f, 1.0f, 1.0f), pPass->GetName());
-			ImRotateEnd(Math::PI * 2.2f, itemRect.Max + ImVec2(boxSize.x, 0));
+			ImGui::AddText(pCmd, pPass->GetName(), itemRect.Max - ImVec2(0.0f, 12.0f), ImColor(1.0f, 1.0f, 1.0f), -Math::PI_DIV_4);
+
 			ImGui::ItemAdd(itemRect, passIndex);
 			bool passActive = ImGui::IsItemHovered();
 			if (passActive)

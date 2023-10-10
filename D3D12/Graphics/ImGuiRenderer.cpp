@@ -5,9 +5,7 @@
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Texture.h"
-#include "RHI/CPUDescriptorHeap.h"
 #include "SceneView.h"
-#include "RenderGraph/RenderGraph.h"
 #include "ImGuizmo.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
@@ -45,32 +43,19 @@ namespace ImGui
 		return clicked;
 	}
 
-	void AddTextVertical(ImDrawList* DrawList, const char* text, ImVec2 pos, ImU32 text_color)
+	void AddText(ImDrawList* pDrawList, const char* pText, ImVec2 pos, ImU32 inColor, float angleRadians)
 	{
-		pos.x = IM_ROUND(pos.x);
-		pos.y = IM_ROUND(pos.y);
-		ImFont* font = GImGui->Font;
-		const ImFontGlyph* glyph;
-		ImVec2 text_size = CalcTextSize(text);
-		while (*text)
+		int primitiveOffset = pDrawList->VtxBuffer.Size;
+		pDrawList->AddText(pos, inColor, pText);
+
+		// If the angle is not 0, rotate the last N submitted vertices
+		if (angleRadians != 0)
 		{
-			glyph = font->FindGlyph(*text++);
-			if (!glyph) continue;
+			float sinAngle = sin(angleRadians);
+			float cosAngle = cos(angleRadians);
 
-			DrawList->PrimReserve(6, 4);
-			DrawList->PrimQuadUV(
-				pos + ImVec2(glyph->Y0, -glyph->X0),
-				pos + ImVec2(glyph->Y0, -glyph->X1),
-				pos + ImVec2(glyph->Y1, -glyph->X1),
-				pos + ImVec2(glyph->Y1, -glyph->X0),
-
-				ImVec2(glyph->U0, glyph->V0),
-				ImVec2(glyph->U1, glyph->V0),
-				ImVec2(glyph->U1, glyph->V1),
-				ImVec2(glyph->U0, glyph->V1),
-				text_color);
-			pos.y -= glyph->AdvanceX;
-
+			for (int i = primitiveOffset; i < pDrawList->VtxBuffer.Size; ++i)
+				pDrawList->VtxBuffer[i].pos = ImRotate(pDrawList->VtxBuffer[i].pos - pos, cosAngle, sinAngle) + pos;
 		}
 	}
 }
@@ -222,37 +207,37 @@ namespace ViewportImpl
 		SwapChain* pSwapChain = nullptr;
 	};
 
-	static void Viewport_CreateWindow(ImGuiViewport* viewport)
+	static void Viewport_CreateWindow(ImGuiViewport* pViewport)
 	{
 		GraphicsDevice* pDevice = static_cast<GraphicsDevice*>(ImGui::GetIO().BackendRendererUserData);
 		ViewportData* pViewportData = IM_NEW(ViewportData);
-		viewport->RendererUserData = pViewportData;
+		pViewport->RendererUserData = pViewportData;
 
-		HWND hwnd = viewport->PlatformHandleRaw ? (HWND)viewport->PlatformHandleRaw : (HWND)viewport->PlatformHandle;
+		HWND hwnd = pViewport->PlatformHandleRaw ? (HWND)pViewport->PlatformHandleRaw : (HWND)pViewport->PlatformHandle;
 		IM_ASSERT(hwnd != 0);
 		pViewportData->pSwapChain = new SwapChain(pDevice, DisplayMode::SDR, 3, hwnd);
 	}
 
-	static void Viewport_DestroyWindow(ImGuiViewport* viewport)
+	static void Viewport_DestroyWindow(ImGuiViewport* pViewport)
 	{
 		// The main viewport (owned by the application) will always have RendererUserData == 0 since we didn't create the data for it.
-		if (ViewportData* pViewportData = (ViewportData*)viewport->RendererUserData)
+		if (ViewportData* pViewportData = static_cast<ViewportData*>(pViewport->RendererUserData))
 		{
 			delete pViewportData->pSwapChain;
 			IM_FREE(pViewportData);
 		}
-		viewport->RendererUserData = nullptr;
+		pViewport->RendererUserData = nullptr;
 	}
 
-	static void Viewport_Resize(ImGuiViewport* viewport, ImVec2 size)
+	static void Viewport_Resize(ImGuiViewport* pViewport, ImVec2 size)
 	{
-		ViewportData* pViewportData = (ViewportData*)viewport->RendererUserData;
+		ViewportData* pViewportData = static_cast<ViewportData*>(pViewport->RendererUserData);
 		pViewportData->pSwapChain->OnResizeOrMove((uint32)size.x, (uint32)size.y);
 	}
 
-	static void Viewport_RenderWindow(ImGuiViewport* viewport, void* pCmd)
+	static void Viewport_RenderWindow(ImGuiViewport* pViewport, void* pCmd)
 	{
-		ViewportData* pViewportData = (ViewportData*)viewport->RendererUserData;
+		ViewportData* pViewportData = static_cast<ViewportData*>(pViewport->RendererUserData);
 		Texture* pBackBuffer = pViewportData->pSwapChain->GetBackBuffer();
 
 		{
@@ -262,7 +247,7 @@ namespace ViewportImpl
 			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			pContext->BeginRenderPass(RenderPassInfo(pBackBuffer, RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
 
-			RenderDrawData(viewport->DrawData, *pContext);
+			RenderDrawData(pViewport->DrawData, *pContext);
 
 			pContext->EndRenderPass();
 			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_PRESENT);
@@ -271,10 +256,10 @@ namespace ViewportImpl
 	}
 
 
-	static void Viewport_Present(ImGuiViewport* viewport, void*)
+	static void Viewport_Present(ImGuiViewport* pViewport, void*)
 	{
 		PROFILE_SCOPE("Present ImGui Viewport");
-		ViewportData* pViewportData = (ViewportData*)viewport->RendererUserData;
+		ViewportData* pViewportData = static_cast<ViewportData*>(pViewport->RendererUserData);
 		pViewportData->pSwapChain->Present();
 	}
 
