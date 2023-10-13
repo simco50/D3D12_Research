@@ -1,5 +1,9 @@
 #include "Common.hlsli"
+#include "Lighting.hlsli"
 #include "Raytracing/DDGICommon.hlsli"
+#include "Primitives.hlsli"
+#include "Packing.hlsli"
+#include "Noise.hlsli"
 
 struct ParticleData
 {
@@ -16,48 +20,60 @@ struct InterpolantsVSToPS
 {
 	float4 Position : SV_Position;
 	float3 PositionWS : POSITION;
-	float2 UV : TEXCOORD;
-	float4 Color : COLOR;
+	float3 Normal : NORMAL;
 };
 
-static const float3 BILLBOARD[] = {
-	float3(-1, -1, 0),	// 0
-	float3(1, -1, 0),	// 1
-	float3(-1, 1, 0),	// 2
-	float3(-1, 1, 0),	// 3
-	float3(1, -1, 0),	// 4
-	float3(1, 1, 0),	// 5
-};
-
-InterpolantsVSToPS VSMain(uint vertexId : SV_VertexID)
+InterpolantsVSToPS VSMain(uint instanceId : SV_InstanceID, uint vertexId : SV_VertexID)
 {
 	InterpolantsVSToPS output;
 
-	uint vertexID = vertexId % 6;
-	uint instanceID = vertexId / 6;
-
-	uint particleIndex = tAliveList[instanceID];
+	uint particleIndex = tAliveList[instanceId];
 	ParticleData particle = tParticleData[particleIndex];
-	float3 q = particle.Size * BILLBOARD[vertexID];
 
-	output.Position = float4(mul(q, (float3x3)cView.ViewInverse), 1);
-	output.Position.xyz += particle.Position;
-	output.PositionWS = output.Position.xyz;
-	output.Position = mul(output.Position, cView.View);
-	output.Position = mul(output.Position, cView.Projection);
-	output.Color = float4(10000, 0, 1, 1);
-	output.UV = (BILLBOARD[vertexID].xy + 1) / 2.0f;
+	float3 p = particle.Size * SPHERE[vertexId].xyz;
+
+	output.PositionWS.xyz = p + particle.Position;
+	output.Position = mul(float4(output.PositionWS, 1.0f), cView.ViewProjection);
+	output.Normal = p;
 
 	return output;
 }
 
-float4 PSMain(InterpolantsVSToPS input) : SV_Target
+struct PSOut
 {
-	float alpha = saturate(2 * length(input.UV.xy - 0.5f)) < 1;
+ 	float4 Color : SV_Target0;
+	float2 Normal : SV_Target1;
+	float Roughness : SV_Target2;
+};
 
+LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
+{
+	LightResult totalResult = (LightResult)0;
+
+	for(uint i = 0; i < cView.LightCount; ++i)
+	{
+		Light light = GetLight(i);
+		LightResult result = DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+		totalResult.Diffuse += result.Diffuse;
+		totalResult.Specular += result.Specular;
+	}
+
+	return totalResult;
+}
+
+PSOut PSMain(InterpolantsVSToPS input)
+{
 	float3 radiance = 0;
 	float3 V = normalize(cView.ViewLocation - input.PositionWS);
-	radiance += SampleDDGIIrradiance(input.PositionWS, V, V) / PI;
+	radiance += SampleDDGIIrradiance(input.PositionWS, input.Normal, -V) / PI;
 
-	return float4(radiance, alpha);
+	float dither = InterleavedGradientNoise(input.Position.xy);
+	LightResult result = DoLight(1.0f, 0.3f, 0.2f, input.Normal, V, input.PositionWS, input.Position.xy, input.Position.w, dither);
+	//radiance += result.Diffuse + result.Specular;
+
+	PSOut output;
+	output.Color = float4(radiance, 1.0f);
+	output.Normal = EncodeNormalOctahedron(input.Normal);
+	output.Roughness = 0.3f;
+	return output;
 }

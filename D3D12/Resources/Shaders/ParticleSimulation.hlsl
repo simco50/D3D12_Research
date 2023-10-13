@@ -1,5 +1,8 @@
 #include "Random.hlsli"
 #include "Common.hlsli"
+#include "Primitives.hlsli"
+#include "Raytracing/RaytracingCommon.hlsli"
+#include "ShaderDebugRender.hlsli"
 
 struct ParticleData
 {
@@ -135,6 +138,33 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 
 		if(p.LifeTime < cSimulateParams.ParticleLifeTime)
 		{
+			uint seed = SeedThread(particleIndex * 3 + cView.FrameIndex * 5);
+
+			p.Velocity += float3(0, -9.81f * cSimulateParams.DeltaTime, 0);
+
+#define RAYTRACE_COLLISION 0
+#if RAYTRACE_COLLISION
+			float3 direction = p.Velocity * cSimulateParams.DeltaTime;
+			float len = length(direction);
+
+			RayDesc ray;
+			ray.Origin = p.Position + normalize(direction) * p.Size;
+			ray.Direction = normalize(direction);
+			ray.TMin = 0;
+			ray.TMax = max(1.0f, len * 2.0f);
+
+			DrawLine(ray.Origin, ray.Origin + ray.Direction * ray.TMax);
+
+			RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+			MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
+			float3 hitPos = ray.Origin + payload.HitT * ray.Direction;
+			if(payload.IsHit() && distance(hitPos, ray.Origin) < 0.1f)
+			{
+				InstanceData instance = GetInstance(payload.InstanceID);
+				VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID);
+				p.Velocity = reflect(p.Velocity, vertex.Normal) * lerp(0.5f, 0.8f, Random01(seed));
+			}
+#else
 			float4 screenPos = mul(float4(p.Position, 1), cView.ViewProjection);
 			screenPos.xyz /= screenPos.w;
 			if(screenPos.x > -1 && screenPos.y < 1 && screenPos.y > -1 && screenPos.y < 1)
@@ -155,8 +185,8 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 					}
 				}
 			}
+#endif
 
-			p.Velocity += float3(0, -9.81f * cSimulateParams.DeltaTime, 0);
 			p.Position += p.Velocity * cSimulateParams.DeltaTime;
 			p.LifeTime += cSimulateParams.DeltaTime;
 
@@ -179,5 +209,5 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 void SimulateEnd()
 {
 	uint particleCount = tCounters.Load(ALIVE_LIST_2_COUNTER);
-	uIndirectArguments.Store4(IndirectArgOffsets::DrawArgs, uint4(6 * particleCount, 1, 0, 0));
+	uIndirectArguments.Store4(IndirectArgOffsets::DrawArgs, uint4(ArraySize(SPHERE), particleCount, 0, 0));
 }

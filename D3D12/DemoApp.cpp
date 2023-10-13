@@ -751,10 +751,10 @@ void DemoApp::Update()
 					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, true);
 				}
 
-				m_pParticles->Render(graph, pView, sceneTextures);
-
 				if (Tweakables::g_RenderTerrain.GetBool())
 					m_pCBTTessellation->Shade(graph, pView, sceneTextures, pFog);
+
+				m_pParticles->Render(graph, pView, sceneTextures);
 
 				graph.AddPass("Render Sky", RGPassFlag::Raster)
 					.Read(pSky)
