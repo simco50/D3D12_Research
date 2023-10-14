@@ -36,12 +36,6 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	m_pForwardRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pForwardRS->Finalize("Forward");
 
-	constexpr ResourceFormat formats[] = {
-		ResourceFormat::RGBA16_FLOAT,
-		ResourceFormat::RG16_FLOAT,
-		ResourceFormat::R8_UNORM,
-	};
-
 	// Clustered
 	{
 		//Opaque
@@ -54,7 +48,7 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
 
-		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(GraphicsCommon::GBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetName("Forward - Opaque");
 		m_pClusteredForwardPSO = pDevice->CreatePipeline(psoDesc);
 
@@ -78,7 +72,7 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "TILED_FORWARD" });
 		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "TILED_FORWARD" });
 		psoDesc.SetPixelShader("ForwardShading.hlsl", "ShadePS", { "TILED_FORWARD" });
-		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(GraphicsCommon::GBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
 		psoDesc.SetDepthWrite(false);
 

@@ -79,8 +79,6 @@ namespace Tweakables
 	ConsoleVariable g_RenderTerrain("r.Terrain", true);
 	ConsoleVariable g_OcclusionCulling("r.OcclusionCulling", true);
 
-	ConsoleVariable g_VisibilityUseCompute("r.Visibilty.UseCompute", false);
-
 	// Misc
 	ConsoleVariable CullDebugStats("r.CullingStats", false);
 
@@ -314,32 +312,8 @@ void DemoApp::Update()
 		World* pWorldMut = &m_World;
 
 		{
-			// Other queues are super slow on CPU with debug layer for some reason
-			const bool asyncCompute = false;
-			if (asyncCompute)
-			{
-				CommandQueue* pDirectQueue = m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-				CommandQueue* pComputeQueue = m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-				CommandQueue* pCopyQueue = m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
-
-				pCopyQueue->InsertWait(pDirectQueue);
-
-				CommandContext* pCopyContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
-				Renderer::UploadSceneData(*pCopyContext, pViewMut, pWorldMut);
-
-				SyncPoint copySync = pCopyContext->Execute();
-				pComputeQueue->InsertWait(copySync);
-				CommandContext* pComputeContext = m_pDevice->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-				pViewMut->AccelerationStructure.Build(*pComputeContext, *pView);
-
-				SyncPoint computeSync = pComputeContext->Execute();
-				pDirectQueue->InsertWait(computeSync);
-			}
-			else
-			{
-				Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
-				pViewMut->AccelerationStructure.Build(*pContext, *pView);
-			}
+			Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
+			pViewMut->AccelerationStructure.Build(*pContext, *pView);
 		}
 
 		{
@@ -412,12 +386,12 @@ void DemoApp::Update()
 			const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
 			SceneTextures sceneTextures;
-			sceneTextures.pDepth = graph.Create("Depth Stencil", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
-			sceneTextures.pRoughness = graph.Create("Roughness", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
-			sceneTextures.pColorTarget = graph.Create("Color Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
-			sceneTextures.pNormals = graph.Create("Normals", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-			sceneTextures.pVelocity = graph.Create("Velocity", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-			sceneTextures.pPreviousColor = graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
+			sceneTextures.pDepth			= graph.Create("Depth Stencil", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
+			sceneTextures.pRoughness		= graph.Create("Roughness", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
+			sceneTextures.pColorTarget		= graph.Create("Color Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
+			sceneTextures.pNormals			= graph.Create("Normals", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+			sceneTextures.pVelocity			= graph.Create("Velocity", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+			sceneTextures.pPreviousColor	= graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
 			LightCull2DData lightCull2DData;
 			LightCull3DData lightCull3DData;
@@ -657,97 +631,49 @@ void DemoApp::Update()
 				}
 				else if (m_RenderPath == RenderPath::Visibility)
 				{
-					if (Tweakables::g_VisibilityUseCompute)
-					{
-						graph.AddPass("Visibility Shading", RGPassFlag::Compute)
-							.Read({ pFog, rasterResult.pVisibleMeshlets })
-							.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
-							.Read({ lightCull3DData.pLightGrid, lightCull3DData.pLightIndexGrid })
-							.Write({ sceneTextures.pColorTarget, sceneTextures.pNormals, sceneTextures.pRoughness })
-							.Bind([=](CommandContext& context)
+					graph.AddPass("Visibility Shading", RGPassFlag::Raster)
+						.Read({ pFog, rasterResult.pVisibleMeshlets })
+						.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
+						.Read({ lightCull3DData.pLightGrid, lightCull3DData.pLightIndexGrid })
+						.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::NoAccess, false, RenderTargetLoadAction::Load)
+						.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
+						.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
+						.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
+						.Bind([=](CommandContext& context)
+							{
+								Texture* pColorTarget = sceneTextures.pColorTarget->Get();
+
+								context.SetGraphicsRootSignature(m_pCommonRS);
+								context.SetPipelineState(m_pVisibilityShadingGraphicsPSO);
+								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
+								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+								struct
 								{
-									Texture* pColorTarget = sceneTextures.pColorTarget->Get();
+									Vector4u ClusterDimensions;
+									Vector2u ClusterSize;
+									Vector2 LightGridParams;
+								} parameters;
+								parameters.ClusterDimensions = Vector4u(lightCull3DData.ClusterCount.x, lightCull3DData.ClusterCount.y, lightCull3DData.ClusterCount.z, 0);
+								parameters.ClusterSize = lightCull3DData.ClusterSize;
+								parameters.LightGridParams = lightCull3DData.LightGridParams;
 
-									context.SetComputeRootSignature(m_pCommonRS);
-									context.SetPipelineState(m_pVisibilityShadingComputePSO);
+								context.BindRootCBV(0, parameters);
+								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
+								context.BindResources(3, {
+									rasterResult.pVisibilityBuffer->Get()->GetSRV(),
+									sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
+									sceneTextures.pDepth->Get()->GetSRV(),
+									sceneTextures.pPreviousColor->Get()->GetSRV(),
+									pFog->Get()->GetSRV(),
+									rasterResult.pVisibleMeshlets->Get()->GetSRV(),
+									lightCull3DData.pLightGrid->Get()->GetSRV(),
+									lightCull3DData.pLightIndexGrid->Get()->GetSRV(),
 
-									struct
-									{
-										Vector4u ClusterDimensions;
-										Vector2u ClusterSize;
-										Vector2 LightGridParams;
-									} parameters;
-									parameters.ClusterDimensions = Vector4u(lightCull3DData.ClusterCount.x, lightCull3DData.ClusterCount.y, lightCull3DData.ClusterCount.z, 0);
-									parameters.ClusterSize = lightCull3DData.ClusterSize;
-									parameters.LightGridParams = lightCull3DData.LightGridParams;
-
-									context.BindRootCBV(0, parameters);
-									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
-									context.BindResources(2, {
-										sceneTextures.pColorTarget->Get()->GetUAV(),
-										sceneTextures.pNormals->Get()->GetUAV(),
-										sceneTextures.pRoughness->Get()->GetUAV(),
-										});
-									context.BindResources(3, {
-										rasterResult.pVisibilityBuffer->Get()->GetSRV(),
-										sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
-										sceneTextures.pDepth->Get()->GetSRV(),
-										sceneTextures.pPreviousColor->Get()->GetSRV(),
-										pFog->Get()->GetSRV(),
-										rasterResult.pVisibleMeshlets->Get()->GetSRV(),
-										lightCull3DData.pLightGrid->Get()->GetSRV(),
-										lightCull3DData.pLightIndexGrid->Get()->GetSRV(),
-										});
-
-									context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
-								});
-					}
-					else
-					{
-						graph.AddPass("Visibility Shading", RGPassFlag::Raster)
-							.Read({ pFog, rasterResult.pVisibleMeshlets })
-							.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
-							.Read({ lightCull3DData.pLightGrid, lightCull3DData.pLightIndexGrid })
-							.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::NoAccess, false, RenderTargetLoadAction::Load)
-							.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
-							.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
-							.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
-							.Bind([=](CommandContext& context)
-								{
-									Texture* pColorTarget = sceneTextures.pColorTarget->Get();
-
-									context.SetGraphicsRootSignature(m_pCommonRS);
-									context.SetPipelineState(m_pVisibilityShadingGraphicsPSO);
-									context.SetStencilRef(0x1);
-									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-									struct
-									{
-										Vector4u ClusterDimensions;
-										Vector2u ClusterSize;
-										Vector2 LightGridParams;
-									} parameters;
-									parameters.ClusterDimensions = Vector4u(lightCull3DData.ClusterCount.x, lightCull3DData.ClusterCount.y, lightCull3DData.ClusterCount.z, 0);
-									parameters.ClusterSize = lightCull3DData.ClusterSize;
-									parameters.LightGridParams = lightCull3DData.LightGridParams;
-
-									context.BindRootCBV(0, parameters);
-									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
-									context.BindResources(3, {
-										rasterResult.pVisibilityBuffer->Get()->GetSRV(),
-										sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
-										sceneTextures.pDepth->Get()->GetSRV(),
-										sceneTextures.pPreviousColor->Get()->GetSRV(),
-										pFog->Get()->GetSRV(),
-										rasterResult.pVisibleMeshlets->Get()->GetSRV(),
-										lightCull3DData.pLightGrid->Get()->GetSRV(),
-										lightCull3DData.pLightIndexGrid->Get()->GetSRV(),
-
-										});
-									context.Draw(0, 3);
-								});
-					}
-
+									});
+								context.Draw(0, 3);
+							});
+					
 					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, true);
 				}
 
@@ -1277,25 +1203,17 @@ void DemoApp::InitializePipelines()
 
 	//Visibility Shading
 	{
-		constexpr ResourceFormat formats[] = {
-			ResourceFormat::RGBA16_FLOAT,
-			ResourceFormat::RG16_FLOAT,
-			ResourceFormat::R8_UNORM,
-		};
-
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(m_pCommonRS);
 		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
 		psoDesc.SetPixelShader("VisibilityShading.hlsl", "ShadePS");
-		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(GraphicsCommon::GBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetName("Visibility Shading");
 		m_pVisibilityShadingGraphicsPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		m_pVisibilityShadingComputePSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityShading.hlsl", "ShadeCS");
 	}
 	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
 }

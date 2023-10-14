@@ -168,6 +168,11 @@ namespace GraphicsCommon
 
 	constexpr static ResourceFormat ShadowFormat = ResourceFormat::D16_UNORM;
 	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D32S8;
+	constexpr static ResourceFormat GBufferFormat[] = {
+		ResourceFormat::RGBA16_FLOAT,
+		ResourceFormat::RG16_FLOAT,
+		ResourceFormat::R8_UNORM
+	};
 
 	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
 	extern RefCountPtr<CommandSignature> pIndirectDrawIndexedSignature;

@@ -52,12 +52,6 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 		m_pInitializeBuffersPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "InitializeDataCS");
 	}
 	{
-		constexpr ResourceFormat formats[] = {
-			ResourceFormat::RGBA16_FLOAT,
-			ResourceFormat::RG16_FLOAT,
-			ResourceFormat::R8_UNORM,
-		};
-
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetVertexShader("ParticleRendering.hlsl", "VSMain");
 		psoDesc.SetPixelShader("ParticleRendering.hlsl", "PSMain");
@@ -67,7 +61,7 @@ GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormats(formats, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(GraphicsCommon::GBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
 		psoDesc.SetName("Particle Rendering PS");
 		m_pRenderParticlesPS = pDevice->CreatePipeline(psoDesc);
 	}
