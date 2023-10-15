@@ -1129,33 +1129,42 @@ void DemoApp::InitializePipelines()
 		ShaderDefineHelper defines;
 		defines.Set("DEPTH_ONLY", true);
 
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCommonRS);
-		psoDesc.SetRootSignature(m_pCommonRS);
-		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
-		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
-		psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
-		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetDepthBias(-10, 0, -4.0f);
+		{
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pCommonRS);
+			psoDesc.SetRootSignature(m_pCommonRS);
+			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
+			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
+			psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
+			psoDesc.SetName("Depth Prepass Opaque");
+			m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
-		psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
-		psoDesc.SetName("Depth Prepass Opaque");
-		m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
+			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
+			psoDesc.SetName("Depth Prepass Alpha Mask");
+			m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
 
-		psoDesc.SetDepthOnlyTarget(GraphicsCommon::ShadowFormat, 1);
-		psoDesc.SetName("Shadow Mapping Opaque");
-		m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
+		{
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(m_pCommonRS);
+			psoDesc.SetRootSignature(m_pCommonRS);
+			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
+			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
+			psoDesc.SetDepthOnlyTarget(GraphicsCommon::ShadowFormat, 1);
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			psoDesc.SetDepthBias(-10, 0, -4.0f);
+			psoDesc.SetName("Shadow Mapping Opaque");
+			m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
-		psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
+			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
+			psoDesc.SetName("Shadow Mapping Alpha Mask");
+			m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
 
-		psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
-		psoDesc.SetName("Depth Prepass Alpha Mask");
-		m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		psoDesc.SetDepthOnlyTarget(GraphicsCommon::ShadowFormat, 1);
-		psoDesc.SetName("Shadow Mapping Alpha Mask");
-		m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
 	ShaderDefineHelper tonemapperDefines;
