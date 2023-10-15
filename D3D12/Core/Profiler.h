@@ -164,8 +164,8 @@ extern class GPUProfiler gGPUProfiler;
 
 struct GPUProfilerCallbacks
 {
-	void(*OnEventBegin)(const char* /*pName*/, ID3D12GraphicsCommandList* /*CommandList*/, uint16 /*queueIndex*/);
-	void(*OnEventEnd)(const char* /*pName*/, ID3D12GraphicsCommandList* /*CommandList*/, uint16 /*queueIndex*/);
+	void(*OnEventBegin)(const char* /*pName*/, ID3D12GraphicsCommandList* /*CommandList*/);
+	void(*OnEventEnd)(ID3D12GraphicsCommandList* /*CommandList*/);
 };
 
 class GPUProfiler
@@ -438,7 +438,7 @@ public:
 		stackData.RegionIndex = index;
 
 		for (GPUProfilerCallbacks& callback : m_EventCallbacks)
-			callback.OnEventBegin(pName, pCmd, queueIndex);
+			callback.OnEventBegin(pName, pCmd);
 	}
 
 	// End and pop the region on the top of the stack
@@ -455,7 +455,7 @@ public:
 		GetHeap(isCopyQueue).EndQuery(region.TimerIndex, stackData.pCommandList);
 
 		for (GPUProfilerCallbacks& callback : m_EventCallbacks)
-			callback.OnEventEnd(region.pName, stackData.pCommandList, region.QueueIndex);
+			callback.OnEventEnd(stackData.pCommandList);
 	}
 
 	// Returns the appropriate query heap
@@ -733,8 +733,8 @@ extern class CPUProfiler gCPUProfiler;
 
 struct CPUProfilerCallbacks
 {
-	void(*OnEventBegin)(const char* /*pName*/, uint32 /*threadIndex*/);
-	void(*OnEventEnd)(const char* /*pName*/, uint32 /*threadIndex*/);
+	void(*OnEventBegin)(const char* /*pName*/);
+	void(*OnEventEnd)();
 };
 
 // CPU Profiler
@@ -770,7 +770,7 @@ public:
 		tls.RegionStack.Push() = newIndex;
 
 		for (CPUProfilerCallbacks& callback : m_EventCallbacks)
-			callback.OnEventBegin(newRegion.pName, newRegion.ThreadIndex);
+			callback.OnEventBegin(newRegion.pName);
 	}
 
 	// End and pop the last pushed region on the current thread
@@ -779,14 +779,11 @@ public:
 		if (m_Paused)
 			return;
 
-		SampleHistory& data = GetData();
-		TLS& tls = GetTLS();
-
-		SampleRegion& region = data.Regions[tls.RegionStack.Pop()];
+		SampleRegion& region = GetData().Regions[GetTLS().RegionStack.Pop()];
 		QueryPerformanceCounter((LARGE_INTEGER*)(&region.EndTicks));
 
 		for (CPUProfilerCallbacks& callback : m_EventCallbacks)
-			callback.OnEventEnd(region.pName, region.ThreadIndex);
+			callback.OnEventEnd();
 	}
 
 	// Resolve the last frame and advance to the next frame.
