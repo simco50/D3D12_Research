@@ -32,7 +32,7 @@
 // Usage:
 //		PROFILE_CPU_SCOPE(const char* pName)
 //		PROFILE_CPU_SCOPE()
-#define PROFILE_CPU_SCOPE(...)							CPUProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define PROFILE_CPU_SCOPE(...)							CPUProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, (uint16)__LINE__, __VA_ARGS__)
 
 // Usage:
 //		PROFILE_CPU_BEGIN(const char* pName)
@@ -49,7 +49,7 @@
 // Usage:
 //		PROFILE_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
 //		PROFILE_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList)
-#define PROFILE_GPU_SCOPE(...)							GPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define PROFILE_GPU_SCOPE(...)							GPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, (uint16)__LINE__, __VA_ARGS__)
 
 // Usage:
 //		PROFILE_GPU_BEGIN(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
@@ -496,7 +496,15 @@ public:
 			}
 
 			// Sort the regions and resolve the stack depth
-			std::sort(data.Regions.begin(), data.Regions.begin() + data.NumRegions, [](const SampleRegion& a, const SampleRegion& b) { return a.BeginTicks < b.BeginTicks; });
+
+			std::stable_sort(data.Regions.begin(), data.Regions.begin() + data.NumRegions, [](const SampleRegion& a, const SampleRegion& b)
+				{
+					// If the start time is the same, the one that runs the longest comes first
+					// If both the start and end time is the same, the order is non-deterministic. This is a problem.
+					if (a.BeginTicks == b.BeginTicks)
+						return a.EndTicks > b.EndTicks;
+					return a.BeginTicks < b.BeginTicks;
+				});
 
 			using DepthStack = FixedStack<uint32, MAX_DEPTH>;
 			std::vector<DepthStack> queueStacks(m_Queues.size());
