@@ -91,6 +91,14 @@ public:
 		}
 	}
 
+	NO_DISCARD const char* AllocateString(const char* pStr)
+	{
+		uint32 len = CString::StrLen(pStr);
+		char* pAlloc = (char*)Allocate(len + 1);
+		strcpy_s(pAlloc, len + 1, pStr);
+		return pAlloc;
+	}
+
 	NO_DISCARD void* Allocate(uint64 size)
 	{
 		check(m_pCurrentOffset - m_pData + size < m_Size);
@@ -253,13 +261,13 @@ private:
 class RGGraph
 {
 public:
-	RGGraph(RGResourcePool& resourcePool, uint64 allocatorSize = 1024 * 128);
+	RGGraph(uint64 allocatorSize = 1024 * 128);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
-	void Execute(CommandContext* pContext);
+	void Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice);
 
 	template<typename T, typename... Args>
 	NO_DISCARD T* Allocate(Args&&... args)
@@ -269,9 +277,9 @@ public:
 
 	RGPass& AddPass(const char* pName, RGPassFlag flags)
 	{
-		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, CopyString(pName), flags, (int)m_RenderPasses.size());
+		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, m_Allocator.AllocateString(pName), flags, (int)m_RenderPasses.size());
 
-		for(const char* eventName : m_Events)
+		for (const char* eventName : m_Events)
 			pPass->m_EventsToStart.push_back(eventName);
 		m_Events.clear();
 
@@ -281,14 +289,14 @@ public:
 
 	NO_DISCARD RGTexture* Create(const char* pName, const TextureDesc& desc)
 	{
-		RGTexture* pResource = Allocate<RGTexture>(CopyString(pName), (int)m_Resources.size(), desc);
+		RGTexture* pResource = Allocate<RGTexture>(m_Allocator.AllocateString(pName), (int)m_Resources.size(), desc);
 		m_Resources.emplace_back(pResource);
 		return pResource;
 	}
 
 	RGBuffer* Create(const char* pName, const BufferDesc& desc)
 	{
-		RGBuffer* pResource = Allocate<RGBuffer>(CopyString(pName), (int)m_Resources.size(), desc);
+		RGBuffer* pResource = Allocate<RGBuffer>(m_Allocator.AllocateString(pName), (int)m_Resources.size(), desc);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
@@ -296,7 +304,7 @@ public:
 	NO_DISCARD RGTexture* Import(Texture* pTexture)
 	{
 		check(pTexture);
-		RGTexture* pResource = Allocate<RGTexture>(CopyString(pTexture->GetName()), (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
+		RGTexture* pResource = Allocate<RGTexture>(m_Allocator.AllocateString(pTexture->GetName()), (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
@@ -311,7 +319,7 @@ public:
 	NO_DISCARD RGBuffer* Import(Buffer* pBuffer)
 	{
 		check(pBuffer);
-		RGBuffer* pResource = Allocate<RGBuffer>(CopyString(pBuffer->GetName()), (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
+		RGBuffer* pResource = Allocate<RGBuffer>(m_Allocator.AllocateString(pBuffer->GetName()), (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
@@ -339,7 +347,7 @@ public:
 	}
 
 	void EnableResourceTrackerView() { m_EnableResourceTrackerView = true; }
-	void DumpGraph(const char* pPath) { m_pDumpGraphPath = CopyString(pPath); }
+	void DumpGraph(const char* pPath) { m_pDumpGraphPath = m_Allocator.AllocateString(pPath); }
 
 	void PushEvent(const char* pName);
 	void PopEvent();
@@ -347,15 +355,7 @@ public:
 	RGBlackboard Blackboard;
 
 private:
-	const char* CopyString(const char* pStr)
-	{
-		size_t len = strlen(pStr) + 1;
-		char* pNewStr = (char*)m_Allocator.Allocate(len);
-		strcpy_s(pNewStr, len * sizeof(char), pStr);
-		return pNewStr;
-	}
-
-	void Compile();
+	void Compile(RGResourcePool& resourcePool);
 
 	void ExecutePass(RGPass* pPass, CommandContext& context);
 	void PrepareResources(RGPass* pPass, CommandContext& context);
@@ -374,7 +374,6 @@ private:
 
 	std::vector<RGPass*> m_RenderPasses;
 	std::vector<RGResource*> m_Resources;
-	RGResourcePool& m_ResourcePool;
 
 	struct ExportedTexture
 	{

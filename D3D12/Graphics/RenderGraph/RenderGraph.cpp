@@ -3,6 +3,7 @@
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/RHI/CommandContext.h"
 #include "Core/Profiler.h"
+#include "Core/TaskQueue.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
@@ -72,8 +73,8 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	}
 }
 
-RGGraph::RGGraph(RGResourcePool& resourcePool, uint64 allocatorSize /*= 0xFFFF*/)
-	: m_Allocator(allocatorSize), m_ResourcePool(resourcePool)
+RGGraph::RGGraph(uint64 allocatorSize /*= 0xFFFF*/)
+	: m_Allocator(allocatorSize)
 {
 }
 
@@ -82,7 +83,7 @@ RGGraph::~RGGraph()
 	DestroyData();
 }
 
-void RGGraph::Compile()
+void RGGraph::Compile(RGResourcePool& resourcePool)
 {
 	constexpr bool PassCulling = false;
 
@@ -200,9 +201,9 @@ void RGGraph::Compile()
 			if (!pResource->pPhysicalResource)
 			{
 				if (pResource->Type == RGResourceType::Texture)
-					pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
+					pResource->SetResource(resourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
 				else if (pResource->Type == RGResourceType::Buffer)
-					pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
+					pResource->SetResource(resourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
 				else
 					noEntry();
 			}
@@ -226,9 +227,9 @@ void RGGraph::Compile()
 		if (pResource->IsExported && !pResource->pPhysicalResource)
 		{
 			if (pResource->Type == RGResourceType::Texture)
-				pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
+				pResource->SetResource(resourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
 			else if (pResource->Type == RGResourceType::Buffer)
-				pResource->SetResource(m_ResourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
+				pResource->SetResource(resourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
 			else
 				noEntry();
 		}
@@ -269,7 +270,7 @@ void RGGraph::Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget, BufferFlag
 
 void RGGraph::PushEvent(const char* pName)
 {
-	m_Events.push_back(CopyString(pName));
+	m_Events.push_back(m_Allocator.AllocateString(pName));
 }
 
 void RGGraph::PopEvent()
@@ -280,24 +281,90 @@ void RGGraph::PopEvent()
 		++m_RenderPasses.back()->m_NumEventsToEnd;
 }
 
-void RGGraph::Execute(CommandContext* pContext)
+void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 {
-	Compile();
+	Compile(resourcePool);
 
 	if (m_EnableResourceTrackerView)
 		DrawResourceTracker(m_EnableResourceTrackerView);
 	if (m_pDumpGraphPath)
 		DumpDebugGraph(m_pDumpGraphPath);
 
-	{
-		for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
-		{
-			RGPass* pPass = m_RenderPasses[passIndex];
+	std::vector<CommandContext*> contexts;
 
-			if (!pPass->IsCulled)
-				ExecutePass(pPass, *pContext);
+#if 0
+	std::vector<URange> passGroups;
+	URange currentRange(0, 0);
+	uint32 currentGroupSize = 0;
+
+	std::vector<const char*> eventsToStartNextJob;
+
+	for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
+	{
+		RGPass* pPass = m_RenderPasses[passIndex];
+
+		for (const char* pEvent : pPass->m_EventsToStart)
+			eventsToStartNextJob.push_back(pEvent);
+
+		if (!pPass->IsCulled)
+			++currentGroupSize;
+		++currentRange.End;
+
+		for(int i = 0; i < pPass->m_NumEventsToEnd; ++i)
+			eventsToStartNextJob.pop_back();
+
+
+		if (currentGroupSize > 20)
+		{
+			passGroups.push_back(currentRange);
+			currentRange.Begin = currentRange.End;
+
+			if (currentRange.Begin < (uint32)m_RenderPasses.size())
+			{
+				pPass->m_NumEventsToEnd += (uint32)eventsToStartNextJob.size();
+
+				//std::reverse(eventsToStartNextJob.begin(), eventsToStartNextJob.end());
+				m_RenderPasses[currentRange.Begin]->m_EventsToStart.insert(m_RenderPasses[currentRange.Begin]->m_EventsToStart.begin(), eventsToStartNextJob.begin(), eventsToStartNextJob.end());
+				eventsToStartNextJob.clear();
+				currentGroupSize = 0;
+			}
 		}
 	}
+	if (currentRange.Begin != currentRange.End)
+		passGroups.push_back(currentRange);
+
+
+	TaskContext context;
+	for (uint32 i = 0; i < (uint32)passGroups.size(); ++i)
+	{
+		CommandContext* pContext = pDevice->AllocateCommandContext();
+		TaskQueue::Execute([this, &passGroups, pContext, i](int)
+			{
+				URange range = passGroups[i];
+				for (uint32 passIndex = range.Begin; passIndex < range.End; ++passIndex)
+				{
+					RGPass* pPass = m_RenderPasses[passIndex];
+					if (!pPass->IsCulled)
+						ExecutePass(pPass, *pContext);
+				}
+			}, context);
+		contexts.push_back(pContext);
+	}
+
+	TaskQueue::Join(context);
+#else
+
+	CommandContext* pContext = pDevice->AllocateCommandContext();
+	for (RGPass* pPass : m_RenderPasses)
+	{
+		if (!pPass->IsCulled)
+			ExecutePass(pPass, *pContext);
+	}
+	contexts.push_back(pContext);
+
+#endif
+
+	CommandContext::Execute(contexts);
 
 	// Update exported resource names
 	for (ExportedTexture& exportResource : m_ExportTextures)

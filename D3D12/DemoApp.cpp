@@ -188,8 +188,6 @@ void DemoApp::SetupScene()
 
 void DemoApp::Update()
 {
-	CommandContext* pContext = m_pDevice->AllocateCommandContext();
-
 	{
 		PROFILE_SCOPE("Update");
 
@@ -264,9 +262,7 @@ void DemoApp::Update()
 		m_SceneData.pWorld = &m_World;
 	}
 	{
-		RGGraph graph(*m_RenderGraphPool);
-
-		GPU_PROFILE_SCOPE("Render", pContext);
+		RGGraph graph;
 
 		if (Tweakables::g_Screenshot)
 		{
@@ -312,8 +308,10 @@ void DemoApp::Update()
 		World* pWorldMut = &m_World;
 
 		{
+			CommandContext* pContext = m_pDevice->AllocateCommandContext();
 			Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
 			pViewMut->AccelerationStructure.Build(*pContext, *pView);
+			pContext->Execute();
 		}
 
 		{
@@ -1093,14 +1091,9 @@ void DemoApp::Update()
 		if(Tweakables::g_EnableRenderGraphResourceTracker)
 			graph.EnableResourceTrackerView();
 
-		{
-			GPU_PROFILE_SCOPE("Execute RenderGraph", pContext);
-			graph.Execute(pContext);
-		}
+		graph.Execute(*m_RenderGraphPool, m_pDevice);
 		
 	}
-
-	pContext->Execute();
 
 	{
 		++m_Frame;

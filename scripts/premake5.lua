@@ -40,6 +40,7 @@ workspace (ENGINE_NAME)
 		runtime "Debug"
 		defines { "_DEBUG" }
 		optimize "Off"
+		editandcontinue "On"
 		--inlining "Explicit"
 
 	filter "configurations:Release"
@@ -113,7 +114,7 @@ workspace (ENGINE_NAME)
 		includedirs "$(SolutionDir)Libraries/DirectXMath/include"
 
 		-- Live++
-		live_pp_path = "LivePP/API/LPP_API_Version_x64_CPP.h"
+		live_pp_path = "$" ---"LivePP/API/LPP_API_Version_x64_CPP.h"
 		live_pp = os.pathsearch(live_pp_path, os.getenv("PATH"))
 		if live_pp then
 			includedirs (live_pp .. "/LivePP/API")
