@@ -67,23 +67,31 @@ int App::Run()
 
 static void InitializeProfiler(GraphicsDevice* pDevice)
 {
+	gCPUProfiler.Initialize(5, 1024);
+#if ENABLE_PIX
+	CPUProfilerCallbacks cpuCallbacks;
+	cpuCallbacks.OnEventBegin = [](const char* pName, void*) { ::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName)); };
+	cpuCallbacks.OnEventEnd = [](void*) { ::PIXEndEvent(); };
+	gCPUProfiler.RegisterEventCallbacks(cpuCallbacks);
+#endif
+
 	ID3D12CommandQueue* pQueues[] =
 	{
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
 	};
-	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, ARRAYSIZE(pQueues));
+	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, ARRAYSIZE(pQueues), 3, 5, 1024, 512);
 
 	GPUProfilerCallbacks gpuCallbacks;
-	gpuCallbacks.OnEventBegin = [](const char* pName, ID3D12GraphicsCommandList* pCmd)
+	gpuCallbacks.OnEventBegin = [](const char* pName, ID3D12GraphicsCommandList* pCmd, void*)
 	{
 		gCPUProfiler.PushRegion(pName);
 #if ENABLE_PIX
 		::PIXBeginEvent(pCmd, 0, MULTIBYTE_TO_UNICODE(pName));
 #endif
 	};
-	gpuCallbacks.OnEventEnd = [](ID3D12GraphicsCommandList* pCmd)
+	gpuCallbacks.OnEventEnd = [](ID3D12GraphicsCommandList* pCmd, void*)
 	{
 		gCPUProfiler.PopRegion();
 #if ENABLE_PIX
@@ -91,13 +99,6 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 #endif
 	};
 	gGPUProfiler.RegisterEventCallback(gpuCallbacks);
-
-#if ENABLE_PIX
-	CPUProfilerCallbacks cpuCallbacks;
-	cpuCallbacks.OnEventBegin = [](const char* pName) { ::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName)); };
-	cpuCallbacks.OnEventEnd = []() { ::PIXEndEvent(); };
-	gCPUProfiler.RegisterEventCallbacks(cpuCallbacks);
-#endif
 }
 
 void App::Init_Internal()
@@ -194,6 +195,7 @@ void App::Shutdown_Internal()
 
 	m_pDevice->IdleGPU();
 	gGPUProfiler.Shutdown();
+	gCPUProfiler.Shutdown();
 
 	ImGuiRenderer::Shutdown();
 	GraphicsCommon::Destroy();
