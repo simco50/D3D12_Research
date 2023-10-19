@@ -4,7 +4,6 @@
 #include "Graphics/RHI/CommandContext.h"
 #include "Core/Profiler.h"
 #include "Core/TaskQueue.h"
-#include "ProfilerThing.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
@@ -284,8 +283,6 @@ void RGGraph::PopEvent()
 
 void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 {
-	gThing.Tick();
-
 	Compile(resourcePool);
 
 	if (m_EnableResourceTrackerView)
@@ -307,7 +304,6 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 		if (!pPass->IsCulled)
 			++currentGroupSize;
 		++currentRange.End;
-
 
 		if (currentGroupSize > 20)
 		{
@@ -366,12 +362,14 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
 	for (const char* pEvent : pPass->m_EventsToStart)
-		gThing.BeginEvent(context.GetCommandList(), pEvent);
+		gGPUProfiler.BeginEvent(context.GetCommandList(), pEvent);
 
 	{
-		GPU_SCOPE(pPass->GetName(), context.GetCommandList());
 		GPU_PROFILE_SCOPE(pPass->GetName(), &context);
+		PROFILE_SCOPE(pPass->GetName());
+
 		PrepareResources(pPass, context);
+
 		if (pPass->pExecuteCallback)
 		{
 			RGPassResources resources(*pPass);
@@ -389,7 +387,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 	}
 
 	while (pPass->m_NumEventsToEnd--)
-		gThing.EndEvent(context.GetCommandList());
+		gGPUProfiler.EndEvent(context.GetCommandList());
 }
 
 void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)

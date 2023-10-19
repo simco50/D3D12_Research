@@ -4,7 +4,6 @@
 #include "imgui_internal.h"
 #include "Core/Paths.h"
 #include "IconsFontAwesome4.h"
-#include "ProfilerThing.h"
 
 struct StyleOptions
 {
@@ -320,10 +319,10 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		};
 
 		{
-			Span<const ProfilerThing::QueueInfo> queues = gThing.GetQueues();
-			URange range = gThing.GetAvailableFrameRange();
+			Span<const GPUProfiler::QueueInfo> queues = gGPUProfiler.GetQueues();
+			URange range = gGPUProfiler.GetAvailableFrameRange();
 
-			for (const ProfilerThing::QueueInfo& queue : queues)
+			for (const GPUProfiler::QueueInfo& queue : queues)
 			{
 
 				// Add thread name for track
@@ -339,8 +338,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 						|[=============]			|
 						|	[======]				|
 					*/
-					Span<const ProfilerThing::EventFrame::Event> events = gThing.GetSamplesForQueue(queue, i);
-					for (const ProfilerThing::EventFrame::Event& event : events)
+					Span<const GPUProfiler::EventFrame::Event> events = gGPUProfiler.GetSamplesForQueue(queue, i);
+					for (const GPUProfiler::EventFrame::Event& event : events)
 					{
 						// Skip regions above the max depth
 						if ((int)event.Depth >= maxDepth)
@@ -372,61 +371,6 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 				pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor));
 			}
 		}
-
-		// Draw each GPU thread track
-		Span<const GPUProfiler::QueueInfo> queues = gGPUProfiler.GetQueueInfo();
-		for (uint32 queueIndex = 0; queueIndex < queues.GetSize(); ++queueIndex)
-		{
-			const GPUProfiler::QueueInfo& queue = queues[queueIndex];
-
-			// Add thread name for track
-			bool isOpen = TrackHeader(queue.Name, ImGui::GetID(&queue));
-			uint32 maxDepth = isOpen ? style.MaxDepth : 1;
-			uint32 trackDepth = 1;
-			cursor.y += style.BarHeight;
-
-			// Add a bar in the right place for each sample region
-			/*
-				|[=============]			|
-				|	[======]				|
-			*/
-			gGPUProfiler.ForEachFrame([&](uint32 frameIndex, Span<const GPUProfiler::SampleRegion> regions)
-				{
-					for (const GPUProfiler::SampleRegion& region : regions)
-					{
-						// Only process regions for the current queue
-						if (queueIndex != region.QueueIndex)
-							continue;
-						// Skip regions above the max depth
-						if ((int)region.Depth >= maxDepth)
-							continue;
-
-						trackDepth = ImMax(trackDepth, (uint32)region.Depth + 1);
-
-						uint64 cpuBeginTicks = queue.GpuToCpuTicks(region.BeginTicks);
-						uint64 cpuEndTicks = queue.GpuToCpuTicks(region.EndTicks);
-
-						bool hovered;
-						DrawBar(ImGui::GetID(&region), cpuBeginTicks, cpuEndTicks, region.Depth, region.pName, &hovered);
-						if (hovered)
-						{
-							if (ImGui::BeginTooltip())
-							{
-								ImGui::Text("%s | %.3f ms", region.pName, TicksToMs * (float)(cpuEndTicks - cpuBeginTicks));
-								ImGui::Text("Frame %d", frameIndex);
-								if (region.pFilePath)
-									ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
-								ImGui::EndTooltip();
-							}
-						}
-					}
-				});
-
-			// Add vertical line to end track
-			cursor.y += trackDepth * style.BarHeight;
-			pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor));
-		}
-
 
 		// Split between GPU and CPU tracks
 		pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor), 4);
@@ -642,7 +586,6 @@ void DrawProfilerHUD()
 
 	gCPUProfiler.SetPaused(context.IsPaused);
 	gGPUProfiler.SetPaused(context.IsPaused);
-	gThing.SetPaused(context.IsPaused);
 
 	DrawProfilerTimeline(ImVec2(0, 0));
 }

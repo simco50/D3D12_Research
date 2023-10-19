@@ -162,411 +162,323 @@ struct GPUProfilerCallbacks
 	void* pUserData				= nullptr;
 };
 
+
 class GPUProfiler
 {
-private:
-	// Query heap providing the mechanism to record timestamp events on the GPU and resolving them for readback
-	class GPUTimeQueryHeap
-	{
-	public:
-		// Initialize the query heap using the provided CommandQueue to resolve queries
-		void Initialize(ID3D12Device* pDevice, ID3D12CommandQueue* pQueue, uint32 numQueries, uint32 frameLatency)
-		{
-			pResolveQueue = pQueue;
-			MaxNumQueries = numQueries;
-
-			D3D12_COMMAND_LIST_TYPE commandListType = pQueue->GetDesc().Type;
-			uint32 numQueryEntries = numQueries * 2;
-
-			{
-				// Query heap that fits desired number of queries
-				D3D12_QUERY_HEAP_DESC queryHeapDesc{};
-				queryHeapDesc.Count = numQueryEntries;
-				queryHeapDesc.Type = commandListType == D3D12_COMMAND_LIST_TYPE_COPY ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-				queryHeapDesc.NodeMask = 0;
-				VERIFY_HR(pDevice->CreateQueryHeap(&queryHeapDesc, IID_PPV_ARGS(&pQueryHeap)));
-			}
-			{
-				// Readback resource that fits all frames
-				D3D12_RESOURCE_DESC resourceDesc{};
-				resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-				resourceDesc.Width = numQueryEntries * sizeof(uint64) * frameLatency;
-				resourceDesc.Height = 1;
-				resourceDesc.DepthOrArraySize = 1;
-				resourceDesc.MipLevels = 1;
-				resourceDesc.SampleDesc.Count = 1;
-				resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-				D3D12_HEAP_PROPERTIES heapProperties{};
-				heapProperties.Type = D3D12_HEAP_TYPE_READBACK;
-				VERIFY_HR(pDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&pReadbackResource)));
-				void* pMappedAddress = nullptr;
-				pReadbackResource->Map(0, nullptr, &pMappedAddress);
-				m_pReadbackData = static_cast<uint64*>(pMappedAddress);
-			}
-			{
-				// Allocate frame data for each frame
-				Frames.resize(frameLatency);
-
-				// Create CommandAllocator for each frame and store readback address
-				for (uint32 i = 0; i < frameLatency; ++i)
-				{
-					FrameData& frame = Frames[i];
-					VERIFY_HR(pDevice->CreateCommandAllocator(commandListType, IID_PPV_ARGS(&frame.pAllocator)));
-					frame.QueryStartOffset = numQueryEntries * i;
-				}
-			}
-			{
-				// Create CommandList for ResolveQueryData
-				VERIFY_HR(pDevice->CreateCommandList(0, commandListType, GetData().pAllocator, nullptr, IID_PPV_ARGS(&pResolveCommandList)));
-			}
-			{
-				// Create Fence to check readback status
-				VERIFY_HR(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&pFence)));
-				FenceEvent = CreateEventExA(nullptr, "Timestamp Query Fence", 0, EVENT_ALL_ACCESS);
-			}
-		}
-
-		void Shutdown()
-		{
-			if (pResolveCommandList)
-			{
-				// Wait for the resolve queue to finish.
-				pResolveQueue->Signal(pFence, ~0ull);
-				pFence->SetEventOnCompletion(~0ull, FenceEvent);
-				WaitForSingleObject(FenceEvent, INFINITE);
-
-				// Destroy resources
-				CloseHandle(FenceEvent);
-				pQueryHeap->Release();
-				pReadbackResource->Release();
-				pResolveCommandList->Release();
-				pFence->Release();
-
-				for (FrameData& frame : Frames)
-					frame.pAllocator->Release();
-			}
-		}
-
-		uint32 AllocateQuery()
-		{
-			return QueryIndex.fetch_add(1);
-		}
-
-		// Start a timestamp query and return the index of the query
-		void QueryBegin(uint32 index, ID3D12GraphicsCommandList* pCommandList)
-		{
-			if (index < MaxNumQueries)
-				pCommandList->EndQuery(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, index * 2);
-		}
-
-		// End a timestamp query of the provided index previously returned in QueryBegin()
-		void QueryEnd(uint32 index, ID3D12GraphicsCommandList* pCommandList)
-		{
-			if (index < MaxNumQueries)
-				pCommandList->EndQuery(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, index * 2 + 1);
-		}
-
-		// Queues a ResolveQueryData of the last frame and advances to the next frame
-		void Resolve()
-		{
-			if (!IsInitialized())
-				return;
-
-			// Queue a resolve for the current frame
-			FrameData& frame = GetData();
-
-			// Clamp number of queries
-			if(QueryIndex > MaxNumQueries)
-				 QueryIndex = MaxNumQueries;
-			frame.ReadbackQueries = Span<const uint64>(m_pReadbackData + frame.QueryStartOffset, QueryIndex * 2);
-			QueryIndex = 0;
-
-			if (frame.ReadbackQueries.GetSize() > 0)
-			{
-				pResolveCommandList->ResolveQueryData(pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, frame.ReadbackQueries.GetSize(), pReadbackResource, frame.QueryStartOffset * sizeof(uint64));
-				pResolveCommandList->Close();
-				ID3D12CommandList* pResolveCommandLists[] = { pResolveCommandList };
-				pResolveQueue->ExecuteCommandLists(1, pResolveCommandLists);
-			}
-			else
-			{
-				pResolveCommandList->Close();
-			}
-
-			// Increment fence value, signal queue and store FenceValue in frame.
-			++FenceValue;
-			pResolveQueue->Signal(pFence, FenceValue);
-			frame.FenceValue = FenceValue;
-
-			// Advance to next frame and reset
-			++FrameIndex;
-			FrameData& newFrame = GetData();
-			
-			// Don't allow the next frame to start until its resolve is finished.
-			if (!IsFenceComplete(newFrame.FenceValue))
-			{
-				check(false, "Resolve() should not have to wait for the resolve of the upcoming frame to finish. Increase NumFrames.");
-				pFence->SetEventOnCompletion(newFrame.FenceValue, FenceEvent);
-				WaitForSingleObject(FenceEvent, INFINITE);
-			}
-
-			newFrame.pAllocator->Reset();
-			pResolveCommandList->Reset(newFrame.pAllocator, nullptr);
-		}
-
-		// Return the view to the resolved queries and returns true if it's valid to read from
-		bool GetResolvedQueries(uint32 frameIndex, Span<const uint64>& outData)
-		{
-			if (!IsInitialized())
-				return true;
-
-			const FrameData& data = Frames[frameIndex % Frames.size()];
-			if (!IsFenceComplete(data.FenceValue))
-				return false;
-			outData = data.ReadbackQueries;
-			return true;
-		}
-
-		bool IsFenceComplete(uint64 fenceValue)
-		{
-			if (fenceValue <= LastCompletedFence)
-				return true;
-			LastCompletedFence = Math::Max(LastCompletedFence, pFence->GetCompletedValue());
-			return fenceValue <= LastCompletedFence;
-		}
-
-		bool IsInitialized() const { return !Frames.empty(); }
-
-	private:
-		struct FrameData
-		{
-			Span<const uint64> ReadbackQueries;					// View to resolved query data
-			ID3D12CommandAllocator* pAllocator = nullptr;		// CommandAllocator for this frame
-			uint64 FenceValue = 0;								// FenceValue indicating when Resolve is finished
-			uint32 QueryStartOffset = 0;						// Offset in readback buffer to where queries start
-		};
-
-		FrameData& GetData()
-		{
-			return Frames[FrameIndex % Frames.size()];
-		}
-
-		std::vector<FrameData> Frames;
-		std::atomic<uint32> QueryIndex						= 0;			// Current query offset
-		ID3D12CommandQueue* pResolveQueue					= nullptr;
-		ID3D12GraphicsCommandList* pResolveCommandList		= nullptr;
-		ID3D12QueryHeap* pQueryHeap							= nullptr;
-		ID3D12Resource* pReadbackResource					= nullptr;
-		uint32 FrameIndex									= 0;
-		uint32 MaxNumQueries								= 0;
-		const uint64* m_pReadbackData						= nullptr;
-
-		ID3D12Fence* pFence									= nullptr;
-		uint64 LastCompletedFence							= 0;
-		uint64 FenceValue									= 0;
-		HANDLE FenceEvent									= nullptr;
-	};
-
 public:
-	// Initialize the GPU profiler using the provided CommandQueues
-	void Initialize(ID3D12Device* pDevice, ID3D12CommandQueue** pQueues, uint16 numQueues, uint32 frameLatency, uint32 historySize, uint32 maxSamples, uint32 maxCopyQueueSamples)
+	void Initialize(ID3D12Device* pDevice, Span<ID3D12CommandQueue*> queues, uint32 sampleHistory, uint32 frameLatency, uint32 maxNumEvents, uint32 maxNumActiveCommandLists)
 	{
-		m_pSampleData = new SampleHistory[historySize];
-		m_HistorySize = historySize;
-		m_MaxSamples = maxSamples + maxCopyQueueSamples;
-		for (uint32 i = 0; i < historySize; ++i)
-			m_pSampleData[i].Regions.resize(maxSamples + maxCopyQueueSamples);
+		m_pResolveQueue = queues[0];
+		m_FrameLatency = frameLatency;
+		m_NumSampleHistory = sampleHistory;
 
-		for (uint16 queueIndex = 0; queueIndex < numQueues; ++queueIndex)
+		m_pSampleData = new EventFrame[sampleHistory];
+
+		for (uint32 i = 0; i < sampleHistory; ++i)
 		{
-			ID3D12CommandQueue* pQueue = pQueues[queueIndex];
-			D3D12_COMMAND_QUEUE_DESC queueDesc = pQueue->GetDesc();
-			bool isCopyQueue = queueDesc.Type == D3D12_COMMAND_LIST_TYPE_COPY;
+			EventFrame& frame = m_pSampleData[i];
+			frame.Events.resize(maxNumEvents);
+			frame.EventsPerQueue.resize(queues.GetSize());
+		}
 
+		m_CommandListData.Setup(maxNumActiveCommandLists);
+
+		D3D12_QUERY_HEAP_DESC heapDesc{};
+		heapDesc.Count = maxNumEvents * 2;
+		heapDesc.NodeMask = 0x1;
+		heapDesc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+		pDevice->CreateQueryHeap(&heapDesc, IID_PPV_ARGS(&m_pQueryHeap));
+
+		for (uint16 queueIndex = 0; queueIndex < queues.GetSize(); ++queueIndex)
+		{
+			ID3D12CommandQueue* pQueue = queues[queueIndex];
+			m_QueueIndexMap[pQueue] = (uint32)m_Queues.size();
 			QueueInfo& queueInfo = m_Queues.emplace_back();
-			queueInfo.IsCopyQueue = isCopyQueue;
 			uint32 size = ARRAYSIZE(queueInfo.Name);
 			pQueue->GetPrivateData(WKPDID_D3DDebugObjectName, &size, queueInfo.Name);
 			queueInfo.pQueue = pQueue;
 			queueInfo.InitCalibration();
-
-			// If the query heap is not yet initialized and there is an appropriate queue, initialize it
-			if (!m_CopyQueryHeap.IsInitialized() && isCopyQueue)
-				m_CopyQueryHeap.Initialize(pDevice, pQueue, maxCopyQueueSamples, frameLatency);
-			else if (!m_MainQueryHeap.IsInitialized() && !isCopyQueue)
-				m_MainQueryHeap.Initialize(pDevice, pQueue, maxSamples, frameLatency);
 		}
+
+		D3D12_COMMAND_QUEUE_DESC queueDesc = queues[0]->GetDesc();
+		m_pQueryFrames = new QueryFrame[frameLatency];
+		for (uint32 i = 0; i < frameLatency; ++i)
+		{
+			QueryFrame& frame = m_pQueryFrames[i];
+			frame.Events.resize(maxNumEvents);
+			pDevice->CreateCommandAllocator(queueDesc.Type, IID_PPV_ARGS(&frame.pCommandAllocator));
+		}
+		pDevice->CreateCommandList(0x1, queueDesc.Type, m_pQueryFrames[0].pCommandAllocator, nullptr, IID_PPV_ARGS(&m_pCommandList));
+
+		D3D12_RESOURCE_DESC readbackDesc = CD3DX12_RESOURCE_DESC::Buffer((uint64)maxNumEvents * 2 * sizeof(uint64) * frameLatency);
+		D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
+		pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &readbackDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_pReadbackResource));
+		void* pReadbackData = nullptr;
+		m_pReadbackResource->Map(0, nullptr, &pReadbackData);
+		m_pReadbackData = (uint64*)pReadbackData;
+
+		pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pResolveFence));
+		m_ResolveWaitHandle = CreateEventExA(nullptr, "Fence Event", 0, EVENT_ALL_ACCESS);
 	}
 
 	void Shutdown()
 	{
-		m_MainQueryHeap.Shutdown();
-		m_CopyQueryHeap.Shutdown();
-
 		delete[] m_pSampleData;
+
+		for (uint32 i = 0; i < m_FrameLatency; ++i)
+			m_pQueryFrames[i].pCommandAllocator->Release();
+		delete[] m_pQueryFrames;
+
+		m_pQueryHeap->Release();
+		m_pCommandList->Release();
+		m_pReadbackResource->Release();
+		m_pResolveFence->Release();
+		CloseHandle(m_ResolveWaitHandle);
 	}
 
-	// Allocate a sample
-	uint32 AllocateRegion(const char* pName, uint16 queueIndex = 0, const char* pFilePath = nullptr, uint16 lineNr = 0)
+	void BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName, const char* pFilePath = "", uint32 lineNumber = 0)
 	{
 		if (m_IsPaused)
-			return 0xFFFFFFFF;
-
-		SampleHistory& data = GetData();
-		uint32 index = data.CurrentIndex.fetch_add(1);
-		if (index < m_MaxSamples)
-		{
-			bool isCopyCommandlist = m_Queues[queueIndex].IsCopyQueue;
-			check(index < data.Regions.size());
-			SampleRegion& region = data.Regions[index];
-			region.pName = data.Allocator.String(pName);
-			region.QueueIndex = queueIndex;
-			region.QueryIndex = GetHeap(isCopyCommandlist).AllocateQuery();
-			region.pFilePath = pFilePath;
-			region.LineNumber = lineNr;
-		}
-
-		return index;
-	}
-
-	// Start and push a region on the provided commandlist to be executed on the given queue index
-	void BeginRegion(uint32 index, ID3D12GraphicsCommandList* pCmd)
-	{
-		if (index >= m_MaxSamples)
 			return;
 
-		D3D12_COMMAND_LIST_TYPE commandListType = pCmd->GetType();
-		bool isCopyCommandlist = commandListType == D3D12_COMMAND_LIST_TYPE_COPY;
+		QueryFrame& queryFrame = GetQueryFrame();
+		EventFrame& sampleData = GetSampleFrame();
+		CommandListData::Data* pCmdData = m_CommandListData.Get(pCmd, true);
 
-		SampleRegion& region = GetData().Regions[index];
-		check(isCopyCommandlist == m_Queues[region.QueueIndex].IsCopyQueue);
+		// Allocate an event
+		uint32 eventIndex = queryFrame.EventIndex.fetch_add(1);
 
-		GetHeap(isCopyCommandlist).QueryBegin(region.QueryIndex, pCmd);
+		// Allocate a query
+		uint32 queryIndex = queryFrame.QueryIndex.fetch_add(1);
 
-		for (GPUProfilerCallbacks& callback : m_EventCallbacks)
-			callback.OnEventBegin(region.pName, pCmd, callback.pUserData);
+		// Append a query to the commandlist
+		CommandListData::Data::Query& cmdListQuery = pCmdData->Queries.emplace_back();
+		cmdListQuery.EventIndex = eventIndex;
+		cmdListQuery.IsBegin = true;
+		cmdListQuery.QueryIndex = queryIndex;
+
+		// Append an event in the query frame
+		QueryFrame::Event& query = queryFrame.Events[eventIndex];
+		query.QueryIndexBegin = queryIndex;
+
+		// Append a event in the sample history 
+		EventFrame::Event& event = sampleData.Events[eventIndex];
+		event.Index = eventIndex;
+		event.pName = sampleData.Allocator.String(pName);
+		event.pFilePath = pFilePath;
+		event.LineNumber = lineNumber;
+
+		pCmd->EndQuery(m_pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, queryIndex);
 	}
 
-	// End and pop the region on the top of the stack
-	void EndRegion(uint32 index, ID3D12GraphicsCommandList* pCmd)
+	void EndEvent(ID3D12GraphicsCommandList* pCmd)
 	{
-		if (index >= m_MaxSamples)
+		if (m_IsPaused)
 			return;
 
-		D3D12_COMMAND_LIST_TYPE commandListType = pCmd->GetType();
-		bool isCopyCommandlist = commandListType == D3D12_COMMAND_LIST_TYPE_COPY;
+		QueryFrame& queryFrame = GetQueryFrame();
+		CommandListData::Data* pCmdData = m_CommandListData.Get(pCmd, true);
 
-		SampleRegion& region = GetData().Regions[index];
-		check(isCopyCommandlist == m_Queues[region.QueueIndex].IsCopyQueue);
+		// Allocate a query
+		uint32 queryIndex = queryFrame.QueryIndex.fetch_add(1);
 
-		GetHeap(isCopyCommandlist).QueryEnd(region.QueryIndex, pCmd);
+		// Append a query to the commandlist
+		CommandListData::Data::Query& query = pCmdData->Queries.emplace_back();
+		query.IsBegin = false;
+		query.QueryIndex = queryIndex;
 
-		for (GPUProfilerCallbacks& callback : m_EventCallbacks)
-			callback.OnEventEnd(pCmd, callback.pUserData);
-	}
-
-	// Returns the appropriate query heap
-	GPUTimeQueryHeap& GetHeap(bool isCopy)
-	{
-		GPUTimeQueryHeap& heap = isCopy ? m_CopyQueryHeap : m_MainQueryHeap;
-		check(heap.IsInitialized());
-		return heap;
+		pCmd->EndQuery(m_pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, queryIndex);
 	}
 
 	void Tick()
 	{
-		// Apply the pausing.
-		// Pausing is deferred because it may happen in the middle of the frame and that would cause remaining regions to not finish.
-		m_IsPaused = m_QueuedPause;
-
-		// While the next frame to resolve is not the last one, attempt access the readback data and advance.
-		while (m_FrameToResolve < m_FrameIndex)
+		// If the next frame is not finished resolving, wait for it here so the data can be read from before it's being reset
+		QueryFrame& nextFrame = GetQueryFrame(m_FrameIndex + 1);
+		if (!IsFenceComplete(nextFrame.FenceValue))
 		{
-			Span<const uint64> copyQueries, mainQueries;
-			bool copiesValid = m_CopyQueryHeap.GetResolvedQueries(m_FrameToResolve, copyQueries);
-			bool mainValid = m_MainQueryHeap.GetResolvedQueries(m_FrameToResolve, mainQueries);
-			if (!(copiesValid && mainValid))
-				break;
-
-			// Copy the timing data
-			SampleHistory& data = m_pSampleData[m_FrameToResolve % m_HistorySize];
-			data.NumRegions = data.CurrentIndex;
-
-			check(copyQueries.GetSize() + mainQueries.GetSize() == data.NumRegions * 2);
-			for (uint32 i = 0; i < data.NumRegions; ++i)
-			{
-				SampleRegion& region = data.Regions[i];
-				const QueueInfo& queue = m_Queues[region.QueueIndex];
-				const Span<const uint64>& queries = queue.IsCopyQueue ? copyQueries : mainQueries;
-				region.BeginTicks = queries[region.QueryIndex * 2 + 0];
-				region.EndTicks = queries[region.QueryIndex * 2 + 1];
-			}
-
-			// Sort the regions and resolve the stack depth
-			std::sort(data.Regions.begin(), data.Regions.begin() + data.NumRegions, [](const SampleRegion& a, const SampleRegion& b)
-				{
-					// If the start time is the same, the one that runs the longest comes first
-					if (a.BeginTicks == b.BeginTicks)
-					{
-						// If the end time is also the same, ensure the sort is stable by using the query index
-						if (a.EndTicks == b.EndTicks)
-							return a.QueryIndex < b.QueryIndex;
-
-						return a.EndTicks > b.EndTicks;
-					}
-					return a.BeginTicks < b.BeginTicks;
-				});
-
-			using DepthStack = FixedStack<uint32, 16>;
-			std::vector<DepthStack> queueStacks(m_Queues.size());
-
-			for (uint32 i = 0; i < data.NumRegions; ++i)
-			{
-				SampleRegion& region = data.Regions[i];
-				DepthStack& stack = queueStacks[region.QueueIndex];
-
-				// While there is a parent and the current region starts after the parent ends, pop it off the stack
-				while (stack.GetSize() > 0)
-				{
-					const SampleRegion* pParent = &data.Regions[stack.Top()];
-					if (region.BeginTicks >= pParent->EndTicks)
-					{
-						stack.Pop();
-					}
-					else
-					{
-						check(region.EndTicks <= pParent->EndTicks);
-						break;
-					}
-				}
-
-				// Set the region's depth
-				region.Depth = (uint16)stack.GetSize();
-				stack.Push() = i;
-			}
-
-			++m_FrameToResolve;
+			m_pResolveFence->SetEventOnCompletion(nextFrame.FenceValue, m_ResolveWaitHandle);
+			WaitForSingleObject(m_ResolveWaitHandle, INFINITE);
 		}
 
+		while (m_FrameToReadback < m_FrameIndex)
+		{
+			QueryFrame& queryFrame = GetQueryFrame(m_FrameToReadback);
+			EventFrame& sampleData = GetSampleFrame(m_FrameToReadback);
+			if (IsFenceComplete(queryFrame.FenceValue))
+			{
+				sampleData.NumEvents = queryFrame.EventIndex;
+
+				uint32 frameBit = m_FrameToReadback % m_FrameLatency;
+				uint32 queryStart = frameBit * (uint32)queryFrame.Events.size() * 2;
+				uint64* pQueries = m_pReadbackData + queryStart;
+				for (uint32 i = 0; i < sampleData.NumEvents; ++i)
+				{
+					QueryFrame::Event& queryEvent = queryFrame.Events[i];
+					EventFrame::Event& sampleRegion = sampleData.Events[i];
+					sampleRegion.TicksBegin = pQueries[queryEvent.QueryIndexBegin];
+					sampleRegion.TicksEnd = pQueries[queryEvent.QueryIndexEnd];
+				}
+
+				std::vector<EventFrame::Event>& events = sampleData.Events;
+				std::sort(events.begin(), events.begin() + sampleData.NumEvents, [](const EventFrame::Event& a, const EventFrame::Event& b)
+					{
+						if (a.QueueIndex == b.QueueIndex)
+						{
+							if (a.TicksBegin == b.TicksBegin)
+							{
+								if (a.TicksEnd == b.TicksEnd)
+									return a.Index < b.Index;
+								return a.TicksEnd > b.TicksEnd;
+							}
+							return a.TicksBegin < b.TicksBegin;
+						}
+						return a.QueueIndex < b.QueueIndex;
+					});
+
+				uint32 eventStart = 0;
+				for (uint32 queueIndex = 0; queueIndex < (uint32)m_Queues.size(); ++queueIndex)
+				{
+					uint32 eventEnd = eventStart;
+					while (events[eventEnd].QueueIndex == queueIndex && eventEnd < sampleData.NumEvents)
+						++eventEnd;
+
+					if (eventStart == eventEnd)
+						continue;
+
+					sampleData.EventsPerQueue[queueIndex] = Span<const EventFrame::Event>(&events[eventStart], eventEnd - eventStart);
+
+					FixedStack<uint32, 32> stack;
+					for (uint32 i = eventStart; i < eventEnd; ++i)
+					{
+						EventFrame::Event& event = events[i];
+
+						// While there is a parent and the current region starts after the parent ends, pop it off the stack
+						while (stack.GetSize() > 0)
+						{
+							const EventFrame::Event& parent = events[stack.Top()];
+							if (event.TicksBegin >= parent.TicksEnd || parent.TicksBegin == parent.TicksEnd)
+							{
+								stack.Pop();
+							}
+							else
+							{
+								check(event.TicksEnd <= parent.TicksEnd);
+								break;
+							}
+						}
+
+						// Set the region's depth
+						event.Depth = (uint16)stack.GetSize();
+						stack.Push() = i;
+					}
+
+					eventStart = eventEnd;
+				}
+			}
+			++m_FrameToReadback;
+		}
+
+		m_IsPaused = m_PauseQueued;
 		if (m_IsPaused)
 			return;
 
-		// Schedule a resolve for last frame
-		m_CopyQueryHeap.Resolve();
-		m_MainQueryHeap.Resolve();
+		m_CommandListData.Reset();
 
-		// Advance frame and clear data
+		{
+			QueryFrame& queryFrame = GetQueryFrame();
+			uint32 frameBit = m_FrameIndex % m_FrameLatency;
+			uint32 queryStart = frameBit * (uint32)queryFrame.Events.size() * 2;
+			uint32 numQueries = queryFrame.EventIndex * 2;
+			m_pCommandList->ResolveQueryData(m_pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, numQueries, m_pReadbackResource, queryStart * sizeof(uint64));
+			m_pCommandList->Close();
+			ID3D12CommandList* pCmdLists[] = { m_pCommandList };
+			m_pResolveQueue->ExecuteCommandLists(1, pCmdLists);
+			m_pResolveQueue->Signal(m_pResolveFence, m_FrameIndex + 1);
+			queryFrame.FenceValue = m_FrameIndex + 1;
+		}
+
 		++m_FrameIndex;
 
-		// Check if we're not advancing to a frame that hasn't been resolved yet.
-		check(m_FrameIndex % m_HistorySize != m_FrameToResolve % m_HistorySize);
+		{
+			QueryFrame& queryFrame = GetQueryFrame();
+			queryFrame.pCommandAllocator->Reset();
+			m_pCommandList->Reset(queryFrame.pCommandAllocator, nullptr);
+			queryFrame.EventIndex = 0;
+			queryFrame.QueryIndex = 0;
 
-		SampleHistory& newFrameData = GetData();
-		newFrameData.CurrentIndex = 0;
-		newFrameData.NumRegions = 0;
-		newFrameData.Allocator.Reset();
+			EventFrame& eventFrame = GetSampleFrame();
+			eventFrame.Allocator.Reset();
+			eventFrame.NumEvents = 0;
+			for (uint32 i = 0; i < (uint32)m_Queues.size(); ++i)
+				eventFrame.EventsPerQueue[i] = {};
+		}
 	}
+
+	void ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12CommandList*> commandLists)
+	{
+		if (m_IsPaused)
+			return;
+
+		QueryFrame& queryFrame = GetQueryFrame();
+		EventFrame& sampleFrame = GetSampleFrame();
+
+		std::vector<uint32> eventStack;
+		for (ID3D12CommandList* pCmd : commandLists)
+		{
+			CommandListData::Data* pEventData = m_CommandListData.Get(pCmd, false);
+			if (pEventData)
+			{
+				for (CommandListData::Data::Query& query : pEventData->Queries)
+				{
+					if (query.IsBegin)
+					{
+						eventStack.push_back(query.EventIndex);
+					}
+					else
+					{
+						check(!eventStack.empty(), "Event Begin/End mismatch");
+						uint32 eventIndex = eventStack.back();
+						eventStack.pop_back();
+
+						QueryFrame::Event& queryEvent = queryFrame.Events[eventIndex];
+						EventFrame::Event& sampleEvent = sampleFrame.Events[eventIndex];
+
+						queryEvent.QueryIndexEnd = query.QueryIndex;
+						sampleEvent.QueueIndex = m_QueueIndexMap[pQueue];
+					}
+				}
+				pEventData->Queries.clear();
+			}
+		}
+		check(eventStack.empty(), "Forgot to End %d Events", eventStack.size());
+	}
+
+	void SetPaused(bool paused) { m_PauseQueued = paused; }
+
+	// Data for a single frame of profiling events. On for each history frame
+	struct EventFrame
+	{
+		EventFrame()
+			: Allocator(1 << 14)
+		{}
+
+		struct Event
+		{
+			const char* pName = "";
+			const char* pFilePath = "";
+			uint64		TicksBegin = 0;
+			uint64		TicksEnd = 0;
+			uint32		LineNumber : 16;
+			uint32		Index : 16;
+			uint32		Depth : 8;
+			uint32		QueueIndex : 8;
+		};
+
+		LinearAllocator Allocator;
+		std::vector<Span<const Event>> EventsPerQueue;
+		std::vector<Event> Events;
+		uint32 NumEvents = 0;
+	};
 
 	// Data of a single GPU queue. Allows converting GPU timestamps to CPU timestamps
 	class QueueInfo
@@ -590,120 +502,165 @@ public:
 			return (float)ticks / GPUFrequency * 1000.0f;
 		}
 
-		ID3D12CommandQueue* pQueue = nullptr;		// The D3D queue object
-		char Name[128]{};							// Name of the queue
-		bool IsCopyQueue = false;					// Whether this queue is a copy queue
+		ID3D12CommandQueue* pQueue = nullptr;				// The D3D queue object
+		char Name[128];										// Name of the queue
 
 	private:
-		uint64 GPUCalibrationTicks = 0;				// The number of GPU ticks when the calibration was done
-		uint64 CPUCalibrationTicks = 0;				// The number of CPU ticks when the calibration was done
-		uint64 GPUFrequency = 0;					// The GPU tick frequency
-		uint64 CPUFrequency = 0;					// The CPU tick frequency
+		uint64 GPUCalibrationTicks = 0;						// The number of GPU ticks when the calibration was done
+		uint64 CPUCalibrationTicks = 0;						// The number of CPU ticks when the calibration was done
+		uint64 GPUFrequency = 0;							// The GPU tick frequency
+		uint64 CPUFrequency = 0;							// The CPU tick frequency
 	};
 
-	// Structure representating a single sample region
-	struct SampleRegion
+	Span<const QueueInfo> GetQueues() const { return m_Queues; }
+
+	URange GetAvailableFrameRange() const
 	{
-		const char* pName		= "";				// Name of the region
-		const char* pFilePath	= nullptr;			// File path of the sample region
-		uint64 BeginTicks		= 0;				// GPU ticks of start of the region
-		uint64 EndTicks			= 0;				// GPU ticks of end of the region
-		uint32 QueryIndex		: 16;				// The index in the query heap for the timer							
-		uint32 LineNumber		: 16;				// Line number of the sample region
-		uint32 QueueIndex		: 4;				// The index of the queue this region is executed on (QueueInfo)
-		uint32 Depth			: 5;				// Stack depth of the region
-		uint32 padding			: 23;
-	};
-
-	// Struct containing all sampling data of a single frame
-	struct SampleHistory
-	{
-		static constexpr uint32 ALLOCATOR_SIZE = 1 << 14;
-
-		SampleHistory()
-			: Allocator(ALLOCATOR_SIZE)
-		{}
-
-		std::vector<SampleRegion> Regions;			// All sample regions of the frame
-		uint32 NumRegions = 0;						// The number of resolved regions
-		std::atomic<uint32> CurrentIndex = 0;		// The index to the next free sample region
-		LinearAllocator Allocator;					// Scratch allocator storing all dynamic allocations of the frame
-	};
-
-	Span<const QueueInfo> GetQueueInfo() const { return m_Queues; }
-
-	// Iterate over all sample regions
-	template<typename Fn>
-	void ForEachFrame(Fn&& fn) const
-	{
-		// Get the last N history frames before the last resolved frame
-		uint32 currentIndex = m_FrameToResolve < m_HistorySize ? 0 : m_FrameToResolve - m_HistorySize + 1;
-		for (currentIndex; currentIndex < m_FrameToResolve; ++currentIndex)
-		{
-			const SampleHistory& data = m_pSampleData[currentIndex % m_HistorySize];
-			fn(currentIndex, Span<const SampleRegion>(data.Regions.data(), data.NumRegions));
-		}
+		uint32 endRange = m_FrameToReadback;
+		uint32 startRange = endRange - Math::Min(endRange, Math::Min((uint32)m_NumSampleHistory, m_FrameIndex));
+		return URange(startRange, endRange);
 	}
 
-	void RegisterEventCallback(GPUProfilerCallbacks inCallbacks)
+	Span<const EventFrame::Event> GetSamplesForQueue(const QueueInfo& queue, uint32 frame) const
 	{
-		m_EventCallbacks.push_back(inCallbacks);
+		uint32 queueIndex = m_QueueIndexMap.at(queue.pQueue);
+		const EventFrame& frameData = GetSampleFrame(frame);
+		return frameData.EventsPerQueue[queueIndex];
 	}
-
-	void SetPaused(bool paused) { m_QueuedPause = paused; }
-	bool IsPaused() const { return m_IsPaused; }
 
 private:
-
-	// Return the sample data of the current frame
-	SampleHistory& GetData()
+	bool IsFenceComplete(uint64 fenceValue)
 	{
-		return m_pSampleData[m_FrameIndex % m_HistorySize];
+		if (fenceValue <= m_LastCompletedFence)
+			return true;
+		m_LastCompletedFence = Math::Max(m_pResolveFence->GetCompletedValue(), m_LastCompletedFence);
+		return fenceValue <= m_LastCompletedFence;
 	}
 
-	std::vector<GPUProfilerCallbacks> m_EventCallbacks;
+	EventFrame* m_pSampleData = nullptr;
+	uint32 m_NumSampleHistory = 0;
+	const EventFrame& GetSampleFrame(uint32 frameIndex) const { return m_pSampleData[frameIndex % m_NumSampleHistory]; }
+	EventFrame& GetSampleFrame(uint32 frameIndex) { return m_pSampleData[frameIndex % m_NumSampleHistory]; }
+	EventFrame& GetSampleFrame() { return GetSampleFrame(m_FrameIndex); }
 
-	std::vector<QueueInfo> m_Queues;						// Data of all registered queues
-	GPUTimeQueryHeap m_MainQueryHeap;						// The main normal timestamp heap
-	GPUTimeQueryHeap m_CopyQueryHeap;						// The copy query timestamp heap
+	// Data for a single frame of GPU queries. One for each frame latency
+	struct QueryFrame
+	{
+		struct Event
+		{
+			uint32 QueryIndexBegin : 16;
+			uint32 QueryIndexEnd : 16;
+		};
 
-	SampleHistory* m_pSampleData = nullptr;					// Per-frame sample data
-	uint32 m_MaxSamples = 0;
-	uint32 m_HistorySize = 0;								// History size
-	uint32 m_FrameIndex = 0;								// The current frame index
-	uint32 m_FrameToResolve = 0;							// The frame index to resolve next
-	bool m_QueuedPause = false;								// The pause state to be queued next Tick
-	bool m_IsPaused = false;								// The current pause state
+		ID3D12CommandAllocator* pCommandAllocator = nullptr;
+		uint64						FenceValue = 0;
+		std::atomic<uint32>			EventIndex = 0;
+		std::atomic<uint32>			QueryIndex = 0;
+		std::vector<Event>			Events;
+	};
+	QueryFrame& GetQueryFrame(uint32 frameIndex) { return m_pQueryFrames[frameIndex % m_FrameLatency]; }
+	QueryFrame& GetQueryFrame() { return GetQueryFrame(m_FrameIndex); }
+	QueryFrame* m_pQueryFrames = nullptr;
+	uint32 m_FrameLatency = 0;
+
+	// Query data for each commandlist
+	class CommandListData
+	{
+	public:
+		struct Data
+		{
+			struct Query
+			{
+				uint32 QueryIndex : 16;
+				uint32 EventIndex : 15;
+				uint32 IsBegin : 1;
+			};
+			std::vector<Query> Queries;
+		};
+
+		void Setup(uint32 maxCommandLists)
+		{
+			InitializeSRWLock(&m_CommandListMapLock);
+			m_CommandListData.resize(maxCommandLists);
+		}
+
+		Data* Get(ID3D12CommandList* pCmd, bool createIfNotFound)
+		{
+			AcquireSRWLockShared(&m_CommandListMapLock);
+			auto it = m_CommandListMap.find(pCmd);
+			uint32 index = 0xFFFFFFFF;
+			if (it != m_CommandListMap.end())
+				index = it->second;
+			ReleaseSRWLockShared(&m_CommandListMapLock);
+			if (createIfNotFound && index == 0xFFFFFFFF)
+			{
+				AcquireSRWLockExclusive(&m_CommandListMapLock);
+				index = (uint32)m_CommandListMap.size();
+				m_CommandListMap[pCmd] = index;
+				ReleaseSRWLockExclusive(&m_CommandListMapLock);
+			}
+			if (index == 0xFFFFFFFF)
+				return nullptr;
+			check(index < m_CommandListData.size());
+			return &m_CommandListData[index];
+		}
+
+		void Reset()
+		{
+			for (Data& data : m_CommandListData)
+				check(data.Queries.empty(), "The Queries inside the commandlist is not empty. This is because ExecuteCommandLists was not called with this commandlist.");
+			m_CommandListMap.clear();
+		}
+
+	private:
+		SRWLOCK m_CommandListMapLock{};
+		std::unordered_map<ID3D12CommandList*, uint32> m_CommandListMap;
+		std::vector<Data> m_CommandListData;
+	} m_CommandListData{};
+
+	uint32 m_FrameToReadback = 0;
+	uint32 m_FrameIndex = 0;
+
+	std::vector<QueueInfo>							m_Queues;
+	std::unordered_map<ID3D12CommandQueue*, uint32> m_QueueIndexMap;
+
+	ID3D12GraphicsCommandList* m_pCommandList = nullptr;
+	ID3D12QueryHeap* m_pQueryHeap = nullptr;
+	ID3D12Resource* m_pReadbackResource = nullptr;
+	uint64* m_pReadbackData = nullptr;
+	ID3D12CommandQueue* m_pResolveQueue = nullptr;
+	ID3D12Fence* m_pResolveFence = nullptr;
+	HANDLE						m_ResolveWaitHandle = nullptr;
+	uint64						m_LastCompletedFence = 0;
+	bool						m_IsPaused = false;
+	bool						m_PauseQueued = false;
 };
 
 
 // Helper RAII-style structure to push and pop a GPU sample region
 struct GPUProfileScope
 {
-	GPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, const char* pName, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0)
+	GPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, const char* pName, ID3D12GraphicsCommandList* pCmd)
 		: pCmd(pCmd)
 	{
-		Index = gGPUProfiler.AllocateRegion(pName, queueIndex, pFilePath, lineNr);
-		gGPUProfiler.BeginRegion(Index, pCmd);
+		gGPUProfiler.BeginEvent(pCmd, pName, pFilePath, lineNr);
 	}
 
-	GPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, ID3D12GraphicsCommandList* pCmd, uint16 queueIndex = 0)
+	GPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, ID3D12GraphicsCommandList* pCmd)
 		: pCmd(pCmd)
 	{
-		Index = gGPUProfiler.AllocateRegion(pFunction, queueIndex, pFilePath, lineNr);
-		gGPUProfiler.BeginRegion(Index, pCmd);
+		gGPUProfiler.BeginEvent(pCmd, pFunction, pFilePath, lineNr);
 	}
 
 	~GPUProfileScope()
 	{
-		gGPUProfiler.EndRegion(Index, pCmd);
+		gGPUProfiler.EndEvent(pCmd);
 	}
 
 	GPUProfileScope(const GPUProfileScope&) = delete;
 	GPUProfileScope& operator=(const GPUProfileScope&) = delete;
 
 private:
-	uint32 Index;
 	ID3D12GraphicsCommandList* pCmd;
 };
 

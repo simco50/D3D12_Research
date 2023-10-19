@@ -12,7 +12,6 @@
 #include "Graphics/RHI/CommandContext.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/ImGuiRenderer.h"
-#include "ProfilerThing.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
@@ -66,7 +65,6 @@ int App::Run()
 	return 0;
 }
 
-ProfilerThing gThing;
 
 static void InitializeProfiler(GraphicsDevice* pDevice)
 {
@@ -82,18 +80,10 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 	{
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
 	};
-	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, ARRAYSIZE(pQueues), 3, 5, 1024, 512);
+	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, 5, 3, 1024, 64);
 
-
-	ID3D12CommandQueue* pQueues2[] =
-	{
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
-	};
-	gThing.Initialize(pDevice->GetDevice(), pQueues2, 5, 3, 1024, 64);
-
+#if 0
 	GPUProfilerCallbacks gpuCallbacks;
 	gpuCallbacks.OnEventBegin = [](const char* pName, ID3D12GraphicsCommandList* pCmd, void*)
 	{
@@ -110,6 +100,7 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 #endif
 	};
 	gGPUProfiler.RegisterEventCallback(gpuCallbacks);
+#endif
 }
 
 void App::Init_Internal()
@@ -207,7 +198,6 @@ void App::Shutdown_Internal()
 	m_pDevice->IdleGPU();
 	gGPUProfiler.Shutdown();
 	gCPUProfiler.Shutdown();
-	gThing.Shutdown();
 
 	ImGuiRenderer::Shutdown();
 	GraphicsCommon::Destroy();

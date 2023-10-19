@@ -3,7 +3,7 @@
 #include "Graphics.h"
 #include "CommandContext.h"
 #include "D3D.h"
-#include "ProfilerThing.h"
+#include "Core/Profiler.h"
 
 CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type)
 	: GraphicsObject(pParent),
@@ -58,7 +58,7 @@ SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& c
 	VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), GetParent()->GetDevice());
 	commandLists.push_back(pCurrentContext->GetCommandList());
 
-	gThing.ExecuteCommandLists(m_pCommandQueue, commandLists);
+	gGPUProfiler.ExecuteCommandLists(m_pCommandQueue, commandLists);
 	m_pCommandQueue->ExecuteCommandLists((uint32)commandLists.size(), commandLists.data());
 
 	uint64 fenceValue = m_pFence->Signal(this);
