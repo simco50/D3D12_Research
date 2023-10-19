@@ -68,7 +68,11 @@ int App::Run()
 
 static void InitializeProfiler(GraphicsDevice* pDevice)
 {
-	gCPUProfiler.Initialize(5, 1024);
+	const uint32 frameHistory = 5;
+	const uint32 maxEvents = 1024;
+	
+
+	gCPUProfiler.Initialize(frameHistory, maxEvents);
 
 #if ENABLE_PIX
 	CPUProfilerCallbacks cpuCallbacks;
@@ -82,7 +86,7 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
 	};
-	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, 5, 3, 1024, 64);
+	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, frameHistory, 3, maxEvents, 64);
 
 #if ENABLE_PIX
 	GPUProfilerCallbacks gpuCallbacks;
