@@ -69,6 +69,7 @@ int App::Run()
 static void InitializeProfiler(GraphicsDevice* pDevice)
 {
 	gCPUProfiler.Initialize(5, 1024);
+
 #if ENABLE_PIX
 	CPUProfilerCallbacks cpuCallbacks;
 	cpuCallbacks.OnEventBegin = [](const char* pName, void*) { ::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName)); };
@@ -83,23 +84,11 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 	};
 	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, 5, 3, 1024, 64);
 
-#if 0
+#if ENABLE_PIX
 	GPUProfilerCallbacks gpuCallbacks;
-	gpuCallbacks.OnEventBegin = [](const char* pName, ID3D12GraphicsCommandList* pCmd, void*)
-	{
-		gCPUProfiler.PushRegion(pName);
-#if ENABLE_PIX
-		::PIXBeginEvent(pCmd, 0, MULTIBYTE_TO_UNICODE(pName));
-#endif
-	};
-	gpuCallbacks.OnEventEnd = [](ID3D12GraphicsCommandList* pCmd, void*)
-	{
-		gCPUProfiler.PopRegion();
-#if ENABLE_PIX
-		::PIXEndEvent(pCmd);
-#endif
-	};
-	gGPUProfiler.RegisterEventCallback(gpuCallbacks);
+	gpuCallbacks.OnEventBegin = [](const char* pName, ID3D12GraphicsCommandList* pCmd, void*) {	::PIXBeginEvent(pCmd, 0, MULTIBYTE_TO_UNICODE(pName)); };
+	gpuCallbacks.OnEventEnd = [](ID3D12GraphicsCommandList* pCmd, void*) { ::PIXEndEvent(pCmd);	};
+	gGPUProfiler.SetEventCallback(gpuCallbacks);
 #endif
 }
 

@@ -238,6 +238,9 @@ public:
 
 	void BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName, const char* pFilePath = "", uint32 lineNumber = 0)
 	{
+		if (m_EventCallback.OnEventBegin)
+			m_EventCallback.OnEventBegin(pName, pCmd, m_EventCallback.pUserData);
+
 		if (m_IsPaused)
 			return;
 
@@ -273,6 +276,9 @@ public:
 
 	void EndEvent(ID3D12GraphicsCommandList* pCmd)
 	{
+		if (m_EventCallback.OnEventEnd)
+			m_EventCallback.OnEventEnd(pCmd, m_EventCallback.pUserData);
+
 		if (m_IsPaused)
 			return;
 
@@ -368,7 +374,7 @@ public:
 						}
 
 						// Set the region's depth
-						event.Depth = (uint16)stack.GetSize();
+						event.Depth = stack.GetSize();
 						stack.Push() = i;
 					}
 
@@ -528,6 +534,8 @@ public:
 		return frameData.EventsPerQueue[queueIndex];
 	}
 
+	void SetEventCallback(GPUProfilerCallbacks inCallbacks) { m_EventCallback = inCallbacks; }
+
 private:
 	bool IsFenceComplete(uint64 fenceValue)
 	{
@@ -623,6 +631,7 @@ private:
 
 	std::vector<QueueInfo>							m_Queues;
 	std::unordered_map<ID3D12CommandQueue*, uint32> m_QueueIndexMap;
+	GPUProfilerCallbacks							m_EventCallback;
 
 	ID3D12GraphicsCommandList* m_pCommandList = nullptr;
 	ID3D12QueryHeap* m_pQueryHeap = nullptr;
