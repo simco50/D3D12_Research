@@ -520,12 +520,7 @@ public:
 
 	Span<const QueueInfo> GetQueues() const { return m_Queues; }
 
-	URange GetAvailableFrameRange() const
-	{
-		uint32 endRange = m_FrameToReadback;
-		uint32 startRange = endRange - Math::Min(endRange, Math::Min((uint32)m_NumSampleHistory, m_FrameIndex));
-		return URange(startRange, endRange);
-	}
+	uint32 GetHistorySize() const { return m_NumSampleHistory; }
 
 	Span<const EventFrame::Event> GetSamplesForQueue(const QueueInfo& queue, uint32 frame) const
 	{

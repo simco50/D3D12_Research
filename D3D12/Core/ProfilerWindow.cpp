@@ -319,19 +319,15 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		};
 
 		{
-			Span<const GPUProfiler::QueueInfo> queues = gGPUProfiler.GetQueues();
-			URange range = gGPUProfiler.GetAvailableFrameRange();
-
-			for (const GPUProfiler::QueueInfo& queue : queues)
+			for (const GPUProfiler::QueueInfo& queue : gGPUProfiler.GetQueues())
 			{
-
 				// Add thread name for track
 				bool isOpen = TrackHeader(queue.Name, ImGui::GetID(&queue));
 				uint32 maxDepth = isOpen ? style.MaxDepth : 1;
 				uint32 trackDepth = 1;
 				cursor.y += style.BarHeight;
 
-				for (uint32 i = range.Begin; i < range.End; ++i)
+				for (uint32 i = 0; i < gGPUProfiler.GetHistorySize(); ++i)
 				{
 					// Add a bar in the right place for each sample region
 					/*
