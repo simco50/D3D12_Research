@@ -4,6 +4,7 @@
 #include "Graphics/RHI/CommandContext.h"
 #include "Core/Profiler.h"
 #include "Core/TaskQueue.h"
+#include "ProfilerThing.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
@@ -283,6 +284,8 @@ void RGGraph::PopEvent()
 
 void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 {
+	gThing.Tick();
+
 	Compile(resourcePool);
 
 	if (m_EnableResourceTrackerView)
@@ -292,26 +295,18 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 
 	std::vector<CommandContext*> contexts;
 
-#if 0
+#if 1
 	std::vector<URange> passGroups;
 	URange currentRange(0, 0);
 	uint32 currentGroupSize = 0;
-
-	std::vector<const char*> eventsToStartNextJob;
 
 	for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 	{
 		RGPass* pPass = m_RenderPasses[passIndex];
 
-		for (const char* pEvent : pPass->m_EventsToStart)
-			eventsToStartNextJob.push_back(pEvent);
-
 		if (!pPass->IsCulled)
 			++currentGroupSize;
 		++currentRange.End;
-
-		for(int i = 0; i < pPass->m_NumEventsToEnd; ++i)
-			eventsToStartNextJob.pop_back();
 
 
 		if (currentGroupSize > 20)
@@ -320,14 +315,7 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 			currentRange.Begin = currentRange.End;
 
 			if (currentRange.Begin < (uint32)m_RenderPasses.size())
-			{
-				pPass->m_NumEventsToEnd += (uint32)eventsToStartNextJob.size();
-
-				//std::reverse(eventsToStartNextJob.begin(), eventsToStartNextJob.end());
-				m_RenderPasses[currentRange.Begin]->m_EventsToStart.insert(m_RenderPasses[currentRange.Begin]->m_EventsToStart.begin(), eventsToStartNextJob.begin(), eventsToStartNextJob.end());
-				eventsToStartNextJob.clear();
 				currentGroupSize = 0;
-			}
 		}
 	}
 	if (currentRange.Begin != currentRange.End)
@@ -378,9 +366,10 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
 	for (const char* pEvent : pPass->m_EventsToStart)
-		GPU_PROFILE_BEGIN(pEvent, &context);
+		gThing.BeginEvent(context.GetCommandList(), pEvent);
 
 	{
+		GPU_SCOPE(pPass->GetName(), context.GetCommandList());
 		GPU_PROFILE_SCOPE(pPass->GetName(), &context);
 		PrepareResources(pPass, context);
 		if (pPass->pExecuteCallback)
@@ -400,7 +389,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 	}
 
 	while (pPass->m_NumEventsToEnd--)
-		GPU_PROFILE_END();
+		gThing.EndEvent(context.GetCommandList());
 }
 
 void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)

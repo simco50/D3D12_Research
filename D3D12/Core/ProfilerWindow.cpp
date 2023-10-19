@@ -4,6 +4,7 @@
 #include "imgui_internal.h"
 #include "Core/Paths.h"
 #include "IconsFontAwesome4.h"
+#include "ProfilerThing.h"
 
 struct StyleOptions
 {
@@ -318,6 +319,60 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			return isOpen;
 		};
 
+		{
+			Span<const ProfilerThing::QueueInfo> queues = gThing.GetQueues();
+			URange range = gThing.GetAvailableFrameRange();
+
+			for (const ProfilerThing::QueueInfo& queue : queues)
+			{
+
+				// Add thread name for track
+				bool isOpen = TrackHeader(queue.Name, ImGui::GetID(&queue));
+				uint32 maxDepth = isOpen ? style.MaxDepth : 1;
+				uint32 trackDepth = 1;
+				cursor.y += style.BarHeight;
+
+				for (uint32 i = range.Begin; i < range.End; ++i)
+				{
+					// Add a bar in the right place for each sample region
+					/*
+						|[=============]			|
+						|	[======]				|
+					*/
+					Span<const ProfilerThing::EventFrame::Event> events = gThing.GetSamplesForQueue(queue, i);
+					for (const ProfilerThing::EventFrame::Event& event : events)
+					{
+						// Skip regions above the max depth
+						if ((int)event.Depth >= maxDepth)
+							continue;
+
+						trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
+
+						uint64 cpuBeginTicks = queue.GpuToCpuTicks(event.TicksBegin);
+						uint64 cpuEndTicks = queue.GpuToCpuTicks(event.TicksEnd);
+
+						bool hovered;
+						DrawBar(ImGui::GetID(&event), cpuBeginTicks, cpuEndTicks, event.Depth, event.pName, &hovered);
+						if (hovered)
+						{
+							if (ImGui::BeginTooltip())
+							{
+								ImGui::Text("%s | %.3f ms", event.pName, TicksToMs * (float)(cpuEndTicks - cpuBeginTicks));
+								ImGui::Text("Frame %d", i);
+								if (event.pFilePath)
+									ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
+								ImGui::EndTooltip();
+							}
+						}
+					}
+				}
+
+				// Add vertical line to end track
+				cursor.y += trackDepth * style.BarHeight;
+				pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor));
+			}
+		}
+
 		// Draw each GPU thread track
 		Span<const GPUProfiler::QueueInfo> queues = gGPUProfiler.GetQueueInfo();
 		for (uint32 queueIndex = 0; queueIndex < queues.GetSize(); ++queueIndex)
@@ -587,6 +642,7 @@ void DrawProfilerHUD()
 
 	gCPUProfiler.SetPaused(context.IsPaused);
 	gGPUProfiler.SetPaused(context.IsPaused);
+	gThing.SetPaused(context.IsPaused);
 
 	DrawProfilerTimeline(ImVec2(0, 0));
 }
