@@ -328,7 +328,7 @@ void CPUProfiler::Shutdown()
 }
 
 
-void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint16 lineNumber)
+void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint32 lineNumber)
 {
 	if(m_EventCallback.OnEventBegin)
 		m_EventCallback.OnEventBegin(pName, m_EventCallback.pUserData);
@@ -343,7 +343,7 @@ void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint16 li
 	TLS& tls = GetTLS();
 
 	EventFrame::Event& newEvent = data.Events[newIndex];
-	newEvent.Depth = (uint16)tls.EventStack.GetSize();
+	newEvent.Depth = tls.EventStack.GetSize();
 	newEvent.ThreadIndex = tls.ThreadIndex;
 	newEvent.pName = data.Allocator.String(pName);
 	newEvent.pFilePath = pFilePath;

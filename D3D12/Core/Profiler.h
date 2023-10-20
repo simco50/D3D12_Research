@@ -1,8 +1,8 @@
 #pragma once
 #include "Graphics/RHI/D3D.h"
 
-#define GPU_PROFILE_SCOPE(name, commandlist)	PROFILE_GPU_SCOPE(name, (commandlist)->GetCommandList())
-#define PROFILE_SCOPE(name)						PROFILE_CPU_SCOPE(name)
+#define GPU_PROFILE_SCOPE(commandlist, ...)		PROFILE_GPU_SCOPE((commandlist).GetCommandList(), __VA_ARGS__)
+#define PROFILE_SCOPE(...)						PROFILE_CPU_SCOPE(__VA_ARGS__)
 
 #ifndef WITH_PROFILING
 #define WITH_PROFILING 1
@@ -34,7 +34,7 @@
 // Usage:
 //		PROFILE_CPU_SCOPE(const char* pName)
 //		PROFILE_CPU_SCOPE()
-#define PROFILE_CPU_SCOPE(...)							CPUProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, (uint16)__LINE__, __VA_ARGS__)
+#define PROFILE_CPU_SCOPE(...)							CPUProfileScope MACRO_CONCAT(profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 
 // Usage:
 //		PROFILE_CPU_BEGIN(const char* pName)
@@ -49,9 +49,9 @@
 */
 
 // Usage:
-//		PROFILE_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList, uint32 queueIndex)
-//		PROFILE_GPU_SCOPE(const char* pName, ID3D12GraphicsCommandList* pCommandList)
-#define PROFILE_GPU_SCOPE(...)							GPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, (uint16)__LINE__, __VA_ARGS__)
+//		PROFILE_GPU_SCOPE(ID3D12GraphicsCommandList* pCommandList, const char* pName)
+//		PROFILE_GPU_SCOPE(ID3D12GraphicsCommandList* pCommandList)
+#define PROFILE_GPU_SCOPE(...)							GPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
 
 // Usage:
 //		PROFILE_GPU_BEGIN(const char* pName, ID3D12GraphicsCommandList* pCommandList)
@@ -386,13 +386,13 @@ private:
 // Helper RAII-style structure to push and pop a GPU sample event
 struct GPUProfileScope
 {
-	GPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, const char* pName, ID3D12GraphicsCommandList* pCmd)
+	GPUProfileScope(const char* pFunction, const char* pFilePath, uint32 lineNr, ID3D12GraphicsCommandList* pCmd, const char* pName)
 		: pCmd(pCmd)
 	{
 		gGPUProfiler.BeginEvent(pCmd, pName, pFilePath, lineNr);
 	}
 
-	GPUProfileScope(const char* pFunction, const char* pFilePath, uint16 lineNr, ID3D12GraphicsCommandList* pCmd)
+	GPUProfileScope(const char* pFunction, const char* pFilePath, uint32 lineNr, ID3D12GraphicsCommandList* pCmd)
 		: pCmd(pCmd)
 	{
 		gGPUProfiler.BeginEvent(pCmd, pFunction, pFilePath, lineNr);
@@ -438,7 +438,7 @@ public:
 	void Shutdown();
 
 	// Start and push an event on the current thread
-	void BeginEvent(const char* pName, const char* pFilePath = nullptr, uint16 lineNumber = 0);
+	void BeginEvent(const char* pName, const char* pFilePath = nullptr, uint32 lineNumber = 0);
 
 	// End and pop the last pushed event on the current thread
 	void EndEvent();
@@ -569,12 +569,12 @@ private:
 // Helper RAII-style structure to push and pop a CPU sample region
 struct CPUProfileScope
 {
-	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint16 lineNumber, const char* pName)
+	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName)
 	{
 		gCPUProfiler.BeginEvent(pName, pFilePath, lineNumber);
 	}
 
-	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint16 lineNumber)
+	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber)
 	{
 		gCPUProfiler.BeginEvent(pFunctionName, pFilePath, lineNumber);
 	}

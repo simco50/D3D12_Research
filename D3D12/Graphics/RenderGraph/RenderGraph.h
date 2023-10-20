@@ -4,7 +4,7 @@
 #include "Graphics/RHI/CommandContext.h"
 #include "Blackboard.h"
 
-#define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_,__COUNTER__)(name, graph)
+#define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_,__COUNTER__)(name, graph, __FILE__, __LINE__)
 
 class RGGraph;
 class RGPass;
@@ -215,21 +215,22 @@ private:
 
 	void AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state);
 
-	RGGraph& Graph;
-	RGGraphAllocator& Allocator;
-	const char* pName;
+	RGGraph&			Graph;
+	RGGraphAllocator&	Allocator;
+	const char*			pName;
+	uint32				ID;
+	RGPassFlag			Flags;
+	std::vector<uint32> EventsToStart;
+	std::vector<uint32> CPUEventsToStart;
+	bool				IsCulled			= true;
+	uint32				NumEventsToEnd		= 0;
+	uint32				NumCPUEventsToEnd	= 0;
 
-	uint32 ID;
-	RGPassFlag Flags;
-	bool IsCulled = true;
-	uint32 m_NumEventsToEnd = 0;
-	std::vector<const char*> m_EventsToStart;
-
-	std::vector<ResourceAccess> Accesses;
-	std::vector<RGPass*> PassDependencies;
+	std::vector<ResourceAccess>		Accesses;
+	std::vector<RGPass*>			PassDependencies;
 	std::vector<RenderTargetAccess> RenderTargets;
-	DepthStencilAccess DepthStencilTarget{};
-	IRGPassCallback* pExecuteCallback = nullptr;
+	DepthStencilAccess				DepthStencilTarget{};
+	IRGPassCallback*				pExecuteCallback = nullptr;
 };
 
 class RGResourcePool : public GraphicsObject
@@ -257,6 +258,12 @@ private:
 	uint32 m_FrameIndex = 0;
 };
 
+struct RGEvent
+{
+	const char* pName = "";
+	const char* pFilePath = nullptr;
+	uint32 LineNumber = 0;
+};
 
 class RGGraph
 {
@@ -279,9 +286,9 @@ public:
 	{
 		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, m_Allocator.AllocateString(pName), flags, (int)m_RenderPasses.size());
 
-		for (const char* eventName : m_Events)
-			pPass->m_EventsToStart.push_back(eventName);
-		m_Events.clear();
+		for (uint32 eventIndex : m_PendingEvents)
+			pPass->EventsToStart.push_back(eventIndex);
+		m_PendingEvents.clear();
 
 		m_RenderPasses.push_back(pPass);
 		return *m_RenderPasses.back();
@@ -349,12 +356,18 @@ public:
 	void EnableResourceTrackerView() { m_EnableResourceTrackerView = true; }
 	void DumpGraph(const char* pPath) { m_pDumpGraphPath = m_Allocator.AllocateString(pPath); }
 
-	void PushEvent(const char* pName);
+	void PushEvent(const char* pName, const char* pFilePath = "", uint32 lineNumber = 0);
 	void PopEvent();
 
 	RGBlackboard Blackboard;
 
 private:
+	uint32 AddEvent(const char* pName, const char* pFilePath, uint32 lineNumber)
+	{
+		m_Events.push_back(RGEvent{ m_Allocator.AllocateString(pName), pFilePath, lineNumber });
+		return (uint32)m_Events.size() - 1;
+	}
+
 	void Compile(RGResourcePool& resourcePool);
 
 	void ExecutePass(RGPass* pPass, CommandContext& context);
@@ -367,7 +380,8 @@ private:
 	bool m_EnableResourceTrackerView = false;
 	const char* m_pDumpGraphPath = nullptr;
 
-	std::vector<const char*> m_Events;
+	std::vector<uint32> m_PendingEvents;
+	std::vector<RGEvent> m_Events;
 
 	RGGraphAllocator m_Allocator;
 	SyncPoint m_LastSyncPoint;
@@ -393,10 +407,10 @@ private:
 class RGGraphScope
 {
 public:
-	RGGraphScope(const char* pName, RGGraph& graph)
+	RGGraphScope(const char* pName, RGGraph& graph, const char* pFilePath = "", uint32 lineNumber = 0)
 		: m_Graph(graph)
 	{
-		graph.PushEvent(pName);
+		graph.PushEvent(pName, pFilePath, lineNumber);
 	}
 	~RGGraphScope()
 	{

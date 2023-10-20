@@ -463,12 +463,12 @@ void DemoApp::Update()
 										context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &view.View, pShadowmap->Get()));
 
 										{
-											GPU_PROFILE_SCOPE("Opaque", &context);
+											GPU_PROFILE_SCOPE(context, "Opaque");
 											context.SetPipelineState(m_pShadowsOpaquePSO);
 											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::Opaque);
 										}
 										{
-											GPU_PROFILE_SCOPE("Masked", &context);
+											GPU_PROFILE_SCOPE(context, "Masked");
 											context.SetPipelineState(m_pShadowsAlphaMaskPSO);
 											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 										}
@@ -502,12 +502,12 @@ void DemoApp::Update()
 
 									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pDepth->Get()));
 									{
-										GPU_PROFILE_SCOPE("Opaque", &context);
+										GPU_PROFILE_SCOPE(context, "Opaque");
 										context.SetPipelineState(m_pDepthPrepassOpaquePSO);
 										Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
 									}
 									{
-										GPU_PROFILE_SCOPE("Masked", &context);
+										GPU_PROFILE_SCOPE(context, "Masked");
 										context.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
 										Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 									}

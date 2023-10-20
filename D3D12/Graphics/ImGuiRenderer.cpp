@@ -242,7 +242,7 @@ namespace ViewportImpl
 
 		{
 			CommandContext* pContext = static_cast<CommandContext*>(pCmd);
-			GPU_PROFILE_SCOPE("Render ImGui Viewport", pContext);
+			GPU_PROFILE_SCOPE(*pContext, "Render ImGui Viewport");
 
 			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			pContext->BeginRenderPass(RenderPassInfo(pBackBuffer, RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
@@ -364,15 +364,15 @@ void ImGuiRenderer::NewFrame()
 
 void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 {
-	GPU_PROFILE_SCOPE("ImGui", &context);
+	GPU_PROFILE_SCOPE(context, "ImGui");
 
 	{
-		GPU_PROFILE_SCOPE("ImGui::Render()", &context);
+		GPU_PROFILE_SCOPE(context, "ImGui::Render()");
 		ImGui::Render();
 	}
 
 	{
-		GPU_PROFILE_SCOPE("Transitions", &context);
+		GPU_PROFILE_SCOPE(context, "Transitions");
 		ImDrawData* pDrawData = ImGui::GetDrawData();
 		ImVec2 clip_off = pDrawData->DisplayPos;
 		for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
@@ -389,7 +389,7 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 	}
 
 	{
-		GPU_PROFILE_SCOPE("Render", &context);
+		GPU_PROFILE_SCOPE(context, "Render");
 		ImDrawData* pDrawData = ImGui::GetDrawData();
 
 		context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -399,7 +399,7 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 	}
 
 	{
-		GPU_PROFILE_SCOPE("Render Viewports", &context);
+		GPU_PROFILE_SCOPE(context, "Render Viewports");
 
 		// Update and Render additional Platform Windows
 		if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)

@@ -85,6 +85,7 @@ RGGraph::~RGGraph()
 
 void RGGraph::Compile(RGResourcePool& resourcePool)
 {
+	PROFILE_SCOPE();
 	constexpr bool PassCulling = false;
 
 	if (PassCulling)
@@ -248,6 +249,36 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
 		*exportResource.pTarget = pBuffer;
 	}
+
+	// Move events from passes that are culled
+	std::vector<uint32> eventsToStart;
+	uint32 eventsToEnd = 0;
+	RGPass* pLastActivePass = nullptr;
+	for (RGPass* pPass : m_RenderPasses)
+	{
+		if (pPass->IsCulled)
+		{
+			while (pPass->NumEventsToEnd > 0 && pPass->EventsToStart.size() > 0)
+			{
+				--pPass->NumEventsToEnd;
+				pPass->EventsToStart.pop_back();
+			}
+			for (uint32 eventIndex : pPass->EventsToStart)
+				eventsToStart.push_back(eventIndex);
+			eventsToEnd += pPass->NumEventsToEnd;
+		}
+		else
+		{
+			for (uint32 eventIndex : eventsToStart)
+				pPass->EventsToStart.push_back(eventIndex);
+			pPass->NumEventsToEnd += eventsToEnd;
+			eventsToStart.clear();
+			eventsToEnd = 0;
+			pLastActivePass = pPass;
+		}
+	}
+	pLastActivePass->NumEventsToEnd += eventsToEnd;
+	check(eventsToStart.empty());
 }
 
 void RGGraph::Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget, TextureFlag additionalFlags)
@@ -268,21 +299,23 @@ void RGGraph::Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget, BufferFlag
 	m_ExportBuffers.push_back({ pBuffer, pTarget });
 }
 
-void RGGraph::PushEvent(const char* pName)
+void RGGraph::PushEvent(const char* pName, const char* pFilePath, uint32 lineNumber)
 {
-	m_Events.push_back(m_Allocator.AllocateString(pName));
+	m_PendingEvents.push_back(AddEvent(pName, pFilePath, lineNumber));
 }
 
 void RGGraph::PopEvent()
 {
-	if (!m_Events.empty())
-		m_Events.pop_back();
+	if (!m_PendingEvents.empty())
+		m_PendingEvents.pop_back();
 	else
-		++m_RenderPasses.back()->m_NumEventsToEnd;
+		++m_RenderPasses.back()->NumEventsToEnd;
 }
 
 void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 {
+	PROFILE_SCOPE();
+
 	Compile(resourcePool);
 
 	if (m_EnableResourceTrackerView)
@@ -290,65 +323,81 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 	if (m_pDumpGraphPath)
 		DumpDebugGraph(m_pDumpGraphPath);
 
-	std::vector<CommandContext*> contexts;
+	// Group passes in jobs
+	const uint32 maxPassesPerJob = 15;
+	std::vector<Span<RGPass*>> passGroups;
 
-#if 1
-	std::vector<URange> passGroups;
-	URange currentRange(0, 0);
+	// Duplicate profile events that cross the border of jobs to retain event hierarchy
+	uint32 firstPass = 0;
 	uint32 currentGroupSize = 0;
+	std::vector<uint32> activeEvents;
+	RGPass* pLastPass = nullptr;
 
 	for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 	{
 		RGPass* pPass = m_RenderPasses[passIndex];
-
 		if (!pPass->IsCulled)
-			++currentGroupSize;
-		++currentRange.End;
-
-		if (currentGroupSize > 20)
 		{
-			passGroups.push_back(currentRange);
-			currentRange.Begin = currentRange.End;
+			pPass->CPUEventsToStart = pPass->EventsToStart;
+			pPass->NumCPUEventsToEnd = pPass->NumEventsToEnd;
 
-			if (currentRange.Begin < (uint32)m_RenderPasses.size())
+			for (uint32 event : pPass->CPUEventsToStart)
+				activeEvents.push_back(event);
+
+			if (currentGroupSize == 0)
+			{
+				firstPass = pPass->ID;
+				pPass->CPUEventsToStart = activeEvents;
+			}
+
+			for (uint32 i = 0; i < pPass->NumCPUEventsToEnd; ++i)
+				activeEvents.pop_back();
+
+			++currentGroupSize;
+			if (currentGroupSize >= maxPassesPerJob)
+			{
+				pPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
+				passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], passIndex - firstPass + 1));
 				currentGroupSize = 0;
+			}
+			pLastPass = pPass;
 		}
 	}
-	if (currentRange.Begin != currentRange.End)
-		passGroups.push_back(currentRange);
+	if (pLastPass->ID != firstPass)
+	{
+		passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], pLastPass->ID - firstPass + 1));
+		pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
+	}
 
-
+	std::vector<CommandContext*> contexts;
 	TaskContext context;
-	for (uint32 i = 0; i < (uint32)passGroups.size(); ++i)
+
 	{
-		CommandContext* pContext = pDevice->AllocateCommandContext();
-		TaskQueue::Execute([this, &passGroups, pContext, i](int)
-			{
-				URange range = passGroups[i];
-				for (uint32 passIndex = range.Begin; passIndex < range.End; ++passIndex)
+		PROFILE_SCOPE("Schedule Render Jobs");
+		for (Span<RGPass*> passGroup : passGroups)
+		{
+			CommandContext* pContext = pDevice->AllocateCommandContext();
+			TaskQueue::Execute([this, passGroup, pContext](int)
 				{
-					RGPass* pPass = m_RenderPasses[passIndex];
-					if (!pPass->IsCulled)
-						ExecutePass(pPass, *pContext);
-				}
-			}, context);
-		contexts.push_back(pContext);
+					for (RGPass* pPass : passGroup)
+					{
+						if (!pPass->IsCulled)
+							ExecutePass(pPass, *pContext);
+					}
+				}, context);
+			contexts.push_back(pContext);
+		}
 	}
 
-	TaskQueue::Join(context);
-#else
-
-	CommandContext* pContext = pDevice->AllocateCommandContext();
-	for (RGPass* pPass : m_RenderPasses)
 	{
-		if (!pPass->IsCulled)
-			ExecutePass(pPass, *pContext);
+		PROFILE_SCOPE("Wait Render Jobs");
+		TaskQueue::Join(context);
 	}
-	contexts.push_back(pContext);
 
-#endif
-
-	CommandContext::Execute(contexts);
+	{
+		PROFILE_SCOPE("ExecuteCommandLists");
+		CommandContext::Execute(contexts);
+	}
 
 	// Update exported resource names
 	for (ExportedTexture& exportResource : m_ExportTextures)
@@ -361,11 +410,19 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 
 void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 {
-	for (const char* pEvent : pPass->m_EventsToStart)
-		gGPUProfiler.BeginEvent(context.GetCommandList(), pEvent);
+	for (uint32 eventIndex : pPass->EventsToStart)
+	{
+		const RGEvent& event = m_Events[eventIndex];
+		gGPUProfiler.BeginEvent(context.GetCommandList(), event.pName, event.pFilePath, event.LineNumber);
+	}
+	for (uint32 eventIndex : pPass->CPUEventsToStart)
+	{
+		const RGEvent& event = m_Events[eventIndex];
+		gCPUProfiler.BeginEvent(event.pName, event.pFilePath, event.LineNumber);
+	}
 
 	{
-		GPU_PROFILE_SCOPE(pPass->GetName(), &context);
+		GPU_PROFILE_SCOPE(context, pPass->GetName());
 		PROFILE_SCOPE(pPass->GetName());
 
 		PrepareResources(pPass, context);
@@ -386,8 +443,10 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 		}
 	}
 
-	while (pPass->m_NumEventsToEnd--)
+	for(uint32 i = 0; i < pPass->NumEventsToEnd; ++i)
 		gGPUProfiler.EndEvent(context.GetCommandList());
+	for (uint32 i = 0; i < pPass->NumCPUEventsToEnd; ++i)
+		gCPUProfiler.EndEvent();
 }
 
 void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
