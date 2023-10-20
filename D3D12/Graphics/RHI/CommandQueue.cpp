@@ -58,7 +58,7 @@ SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& c
 	VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), GetParent()->GetDevice());
 	commandLists.push_back(pCurrentContext->GetCommandList());
 
-	gGPUProfiler.ExecuteCommandLists(m_pCommandQueue, commandLists);
+	PROFILE_EXECUTE_COMMANDLISTS(m_pCommandQueue, commandLists);
 	m_pCommandQueue->ExecuteCommandLists((uint32)commandLists.size(), commandLists.data());
 
 	uint64 fenceValue = m_pFence->Signal(this);

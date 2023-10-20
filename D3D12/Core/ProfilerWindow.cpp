@@ -165,15 +165,17 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 		// Add dark shade background for every even frame
 		int frameNr = 0;
-		gCPUProfiler.ForEachFrame([&](uint32 frameIndex, Span<const CPUProfiler::SampleRegion> regions)
+		URange cpuRange = gCPUProfiler.GetFrameRange();
+		for(uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
+		{
+			Span<const CPUProfiler::EventFrame::Event> events = gCPUProfiler.GetEventsForThread(gCPUProfiler.GetThreads()[0], i);
+			if (events.GetSize() > 0 && frameNr++ % 2 == 0)
 			{
-				if (regions.GetSize() > 0 && frameNr++ % 2 == 0)
-				{
-					float beginOffset = (regions[0].BeginTicks - beginAnchor) * TicksToPixels;
-					float endOffset = (regions[0].EndTicks - beginAnchor) * TicksToPixels;
-					pDraw->AddRectFilled(ImVec2(cursor.x + beginOffset, timelineRect.Min.y), ImVec2(cursor.x + endOffset, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.05f));
-				}
-			});
+				float beginOffset = (events[0].TicksBegin - beginAnchor) * TicksToPixels;
+				float endOffset = (events[0].TicksEnd - beginAnchor) * TicksToPixels;
+				pDraw->AddRectFilled(ImVec2(cursor.x + beginOffset, timelineRect.Min.y), ImVec2(cursor.x + endOffset, timelineRect.Max.y), ImColor(1.0f, 1.0f, 1.0f, 0.05f));
+			}
+		}
 
 		ImGui::PushClipRect(timelineRect.Min + ImVec2(0, style.BarHeight), timelineRect.Max, true);
 
@@ -329,15 +331,15 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 				for (uint32 i = 0; i < gGPUProfiler.GetHistorySize(); ++i)
 				{
-					// Add a bar in the right place for each sample region
+					// Add a bar in the right place for each event
 					/*
 						|[=============]			|
 						|	[======]				|
 					*/
-					Span<const GPUProfiler::EventFrame::Event> events = gGPUProfiler.GetSamplesForQueue(queue, i);
+					Span<const GPUProfiler::EventFrame::Event> events = gGPUProfiler.GetEventsForQueue(queue, i);
 					for (const GPUProfiler::EventFrame::Event& event : events)
 					{
-						// Skip regions above the max depth
+						// Skip events above the max depth
 						if ((int)event.Depth >= maxDepth)
 							continue;
 
@@ -385,39 +387,37 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			uint32 trackDepth = 1;
 			cursor.y += style.BarHeight;
 
-			// Add a bar in the right place for each sample region
+			// Add a bar in the right place for each event
 			/*
 				|[=============]			|
 				|	[======]				|
 			*/
-			gCPUProfiler.ForEachFrame([&](uint32 frameIndex, Span<const CPUProfiler::SampleRegion> regions)
+			for (uint32 frameIndex = cpuRange.Begin; frameIndex < cpuRange.End; ++frameIndex)
+			{
+				Span<const CPUProfiler::EventFrame::Event> events = gCPUProfiler.GetEventsForThread(thread, frameIndex);
+				for (const CPUProfiler::EventFrame::Event& event : events)
 				{
-					for (const CPUProfiler::SampleRegion& region : regions)
+					// Skip events above the max depth
+					if (event.Depth >= maxDepth)
+						continue;
+
+					trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
+
+					bool hovered;
+					DrawBar(ImGui::GetID(&event), event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered);
+					if (hovered)
 					{
-						// Only process regions for the current thread
-						if (region.ThreadIndex != threadIndex)
-							continue;
-						// Skip regions above the max depth
-						if (region.Depth >= maxDepth)
-							continue;
-
-						trackDepth = ImMax(trackDepth, (uint32)region.Depth + 1);
-
-						bool hovered;
-						DrawBar(ImGui::GetID(&region), region.BeginTicks, region.EndTicks, region.Depth, region.pName, &hovered);
-						if (hovered)
+						if (ImGui::BeginTooltip())
 						{
-							if (ImGui::BeginTooltip())
-							{
-								ImGui::Text("%s | %.3f ms", region.pName, TicksToMs * (float)(region.EndTicks - region.BeginTicks));
-								ImGui::Text("Frame %d", frameIndex);
-								if (region.pFilePath)
-									ImGui::Text("%s:%d", Paths::GetFileName(region.pFilePath).c_str(), region.LineNumber);
-								ImGui::EndTooltip();
-							}
+							ImGui::Text("%s | %.3f ms", event.pName, TicksToMs * (float)(event.TicksEnd - event.TicksBegin));
+							ImGui::Text("Frame %d", frameIndex);
+							if (event.pFilePath)
+								ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
+							ImGui::EndTooltip();
 						}
 					}
-				});
+				}
+			}
 
 			// Add vertical line to end track
 			cursor.y += trackDepth * style.BarHeight;

@@ -78,7 +78,7 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 	CPUProfilerCallbacks cpuCallbacks;
 	cpuCallbacks.OnEventBegin = [](const char* pName, void*) { ::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName)); };
 	cpuCallbacks.OnEventEnd = [](void*) { ::PIXEndEvent(); };
-	gCPUProfiler.RegisterEventCallbacks(cpuCallbacks);
+	gCPUProfiler.SetEventCallback(cpuCallbacks);
 #endif
 
 	ID3D12CommandQueue* pQueues[] =
@@ -132,6 +132,7 @@ void App::Init_Internal()
 	m_Window.OnMouseMove += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
 	m_Window.OnMouseScroll += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
 	m_Window.OnResizeOrMove += [this](uint32 width, uint32 height) { OnWindowResized_Internal(width, height); };
+	m_Window.SetTitle("App");
 
 	Time::Reset();
 
