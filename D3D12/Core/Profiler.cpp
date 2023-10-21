@@ -2,6 +2,8 @@
 #include "stdafx.h"
 #include "Profiler.h"
 
+#if WITH_PROFILING
+
 CPUProfiler gCPUProfiler;
 GPUProfiler gGPUProfiler;
 
@@ -161,12 +163,11 @@ void GPUProfiler::Tick()
 		if (!IsFenceComplete(queryFrame.FenceValue))
 			break;
 
-		sampleData.NumEvents = queryFrame.EventIndex;
-
+		uint32 numEvents = queryFrame.EventIndex;
 		uint32 frameBit = m_FrameToReadback % m_FrameLatency;
 		uint32 queryStart = frameBit * (uint32)queryFrame.Events.size() * 2;
 		uint64* pQueries = m_pReadbackData + queryStart;
-		for (uint32 i = 0; i < sampleData.NumEvents; ++i)
+		for (uint32 i = 0; i < numEvents; ++i)
 		{
 			QueryFrame::Event& queryEvent = queryFrame.Events[i];
 			EventFrame::Event& event = sampleData.Events[i];
@@ -175,7 +176,7 @@ void GPUProfiler::Tick()
 		}
 
 		std::vector<EventFrame::Event>& events = sampleData.Events;
-		std::sort(events.begin(), events.begin() + sampleData.NumEvents, [](const EventFrame::Event& a, const EventFrame::Event& b)
+		std::sort(events.begin(), events.begin() + numEvents, [](const EventFrame::Event& a, const EventFrame::Event& b)
 			{
 				if (a.QueueIndex == b.QueueIndex)
 				{
@@ -203,7 +204,7 @@ void GPUProfiler::Tick()
 		for (uint32 queueIndex = 0; queueIndex < (uint32)m_Queues.size(); ++queueIndex)
 		{
 			uint32 eventEnd = eventStart;
-			while (events[eventEnd].QueueIndex == queueIndex && eventEnd < sampleData.NumEvents)
+			while (events[eventEnd].QueueIndex == queueIndex && eventEnd < numEvents)
 				++eventEnd;
 
 			if (eventStart == eventEnd)
@@ -272,7 +273,6 @@ void GPUProfiler::Tick()
 
 		EventFrame& eventFrame = GetSampleFrame();
 		eventFrame.Allocator.Reset();
-		eventFrame.NumEvents = 0;
 		for (uint32 i = 0; i < (uint32)m_Queues.size(); ++i)
 			eventFrame.EventsPerQueue[i] = {};
 	}
@@ -452,3 +452,5 @@ void CPUProfiler::RegisterThread(const char* pName)
 	for (uint32 i = 0; i < m_HistorySize; ++i)
 		m_pSampleData[i].EventsPerThread.resize(m_ThreadData.size());
 }
+
+#endif

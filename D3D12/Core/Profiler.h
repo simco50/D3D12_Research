@@ -208,22 +208,21 @@ public:
 
 		struct Event
 		{
-			const char* pName		= "";
-			const char* pFilePath	= "";
-			uint64		TicksBegin	= 0;
-			uint64		TicksEnd	= 0;
-			uint32		LineNumber	: 16;
-			uint32		Index		: 16;
-			uint32		Depth		: 8;
-			uint32		QueueIndex	: 8;
+			const char* pName		= "";	// Name of event
+			const char* pFilePath	= "";	// File path of location where event was started
+			uint64		TicksBegin	= 0;	// Begin GPU ticks
+			uint64		TicksEnd	= 0;	// End GPU ticks
+			uint32		LineNumber	: 16;	// Line number of file where event was started
+			uint32		Index		: 16;	// Index of event, to ensure stable sort when ordering
+			uint32		Depth		: 8;	// Stack depth of event
+			uint32		QueueIndex	: 8;	// Index of QueueInfo
 			uint32		padding		: 16;
 		};
 		static_assert(sizeof(Event) == sizeof(uint32) * 10);
 
-		LinearAllocator					Allocator;
-		std::vector<Span<const Event>>	EventsPerQueue;
-		std::vector<Event>				Events;
-		uint32 NumEvents				= 0;
+		LinearAllocator					Allocator;			// Scratch allocator for frame
+		std::vector<Span<const Event>>	EventsPerQueue;		// Span of events for each queue
+		std::vector<Event>				Events;				// Event storage for frame
 	};
 
 	// Data of a single GPU queue. Allows converting GPU timestamps to CPU timestamps

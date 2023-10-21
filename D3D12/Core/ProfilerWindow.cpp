@@ -1,6 +1,9 @@
 
 #include "stdafx.h"
 #include "Profiler.h"
+
+#if WITH_PROFILING
+
 #include "imgui_internal.h"
 #include "Core/Paths.h"
 #include "IconsFontAwesome4.h"
@@ -586,3 +589,5 @@ void DrawProfilerHUD()
 
 	DrawProfilerTimeline(ImVec2(0, 0));
 }
+
+#endif
