@@ -321,6 +321,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		};
 
 		{
+			URange gpuRange = gGPUProfiler.GetFrameRange();
 			for (const GPUProfiler::QueueInfo& queue : gGPUProfiler.GetQueues())
 			{
 				// Add thread name for track
@@ -329,7 +330,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 				uint32 trackDepth = 1;
 				cursor.y += style.BarHeight;
 
-				for (uint32 i = 0; i < gGPUProfiler.GetHistorySize(); ++i)
+				for (uint32 i = gpuRange.Begin; i < gpuRange.End; ++i)
 				{
 					// Add a bar in the right place for each event
 					/*
