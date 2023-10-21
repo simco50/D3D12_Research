@@ -94,9 +94,11 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 
 	// Allocate an event
 	uint32 eventIndex = queryFrame.EventIndex.fetch_add(1);
+	check(eventIndex < queryFrame.Events.size());
 
 	// Allocate a query
 	uint32 queryIndex = queryFrame.QueryIndex.fetch_add(1);
+	check(queryIndex < queryFrame.Events.size() * 2);
 
 	// Append a query to the commandlist
 	CommandListData::Data::Query& cmdListQuery = pCmdData->Queries.emplace_back();
@@ -132,6 +134,7 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 
 	// Allocate a query
 	uint32 queryIndex = queryFrame.QueryIndex.fetch_add(1);
+	check(queryIndex < queryFrame.Events.size() * 2);
 
 	// Append a query to the commandlist
 	CommandListData::Data::Query& query = pCmdData->Queries.emplace_back();

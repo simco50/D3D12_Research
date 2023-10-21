@@ -269,6 +269,7 @@ public:
 
 	Span<const EventFrame::Event> GetEventsForQueue(const QueueInfo& queue, uint32 frame) const
 	{
+		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
 		uint32 queueIndex = m_QueueIndexMap.at(queue.pQueue);
 		const EventFrame& frameData = GetSampleFrame(frame);
 		return frameData.EventsPerQueue[queueIndex];
