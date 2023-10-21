@@ -17,13 +17,13 @@ void GPUProfiler::Initialize(ID3D12Device* pDevice, Span<ID3D12CommandQueue*> qu
 	m_FrameLatency = frameLatency;
 	m_NumSampleHistory = sampleHistory;
 
-	m_pSampleData = new EventFrame[sampleHistory];
+	m_pEventData = new EventData[sampleHistory];
 
 	for (uint32 i = 0; i < sampleHistory; ++i)
 	{
-		EventFrame& frame = m_pSampleData[i];
-		frame.Events.resize(maxNumEvents);
-		frame.EventsPerQueue.resize(queues.GetSize());
+		EventData& eventData = m_pEventData[i];
+		eventData.Events.resize(maxNumEvents);
+		eventData.EventsPerQueue.resize(queues.GetSize());
 	}
 
 	m_CommandListData.Setup(maxNumActiveCommandLists);
@@ -46,14 +46,14 @@ void GPUProfiler::Initialize(ID3D12Device* pDevice, Span<ID3D12CommandQueue*> qu
 	}
 
 	D3D12_COMMAND_QUEUE_DESC queueDesc = queues[0]->GetDesc();
-	m_pQueryFrames = new QueryFrame[frameLatency];
+	m_pQueryData = new QueryData[frameLatency];
 	for (uint32 i = 0; i < frameLatency; ++i)
 	{
-		QueryFrame& frame = m_pQueryFrames[i];
-		frame.Events.resize(maxNumEvents);
-		pDevice->CreateCommandAllocator(queueDesc.Type, IID_PPV_ARGS(&frame.pCommandAllocator));
+		QueryData& queryData = m_pQueryData[i];
+		queryData.Ranges.resize(maxNumEvents);
+		pDevice->CreateCommandAllocator(queueDesc.Type, IID_PPV_ARGS(&queryData.pCommandAllocator));
 	}
-	pDevice->CreateCommandList(0x1, queueDesc.Type, m_pQueryFrames[0].pCommandAllocator, nullptr, IID_PPV_ARGS(&m_pCommandList));
+	pDevice->CreateCommandList(0x1, queueDesc.Type, m_pQueryData[0].pCommandAllocator, nullptr, IID_PPV_ARGS(&m_pCommandList));
 
 	D3D12_RESOURCE_DESC readbackDesc = CD3DX12_RESOURCE_DESC::Buffer((uint64)maxNumEvents * 2 * sizeof(uint64) * frameLatency);
 	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
@@ -68,11 +68,11 @@ void GPUProfiler::Initialize(ID3D12Device* pDevice, Span<ID3D12CommandQueue*> qu
 
 void GPUProfiler::Shutdown()
 {
-	delete[] m_pSampleData;
+	delete[] m_pEventData;
 
 	for (uint32 i = 0; i < m_FrameLatency; ++i)
-		m_pQueryFrames[i].pCommandAllocator->Release();
-	delete[] m_pQueryFrames;
+		m_pQueryData[i].pCommandAllocator->Release();
+	delete[] m_pQueryData;
 
 	m_pQueryHeap->Release();
 	m_pCommandList->Release();
@@ -90,34 +90,34 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 	if (m_IsPaused)
 		return;
 
-	QueryFrame& queryFrame = GetQueryFrame();
-	EventFrame& sampleData = GetSampleFrame();
+	QueryData& queryData			= GetQueryData();
+	EventData& eventData			= GetSampleFrame();
 	CommandListData::Data* pCmdData = m_CommandListData.Get(pCmd, true);
 
-	// Allocate an event
-	uint32 eventIndex = queryFrame.EventIndex.fetch_add(1);
-	check(eventIndex < queryFrame.Events.size());
+	// Allocate a query range. This stores a begin/end query index pair. (Also event index)
+	uint32 rangeIndex = queryData.RangeIndex.fetch_add(1);
+	check(rangeIndex < queryData.Ranges.size());
 
-	// Allocate a query
-	uint32 queryIndex = queryFrame.QueryIndex.fetch_add(1);
-	check(queryIndex < queryFrame.Events.size() * 2);
+	// Allocate a timestamp query
+	uint32 queryIndex = queryData.QueryIndex.fetch_add(1);
+	check(queryIndex < queryData.Ranges.size() * 2);
 
-	// Append a query to the commandlist
-	CommandListData::Data::Query& cmdListQuery = pCmdData->Queries.emplace_back();
-	cmdListQuery.EventIndex = eventIndex;
-	cmdListQuery.IsBegin = true;
-	cmdListQuery.QueryIndex = queryIndex;
+	// Record a query in the commandlist
+	CommandListData::Data::Query& cmdListQuery	= pCmdData->Queries.emplace_back();
+	cmdListQuery.QueryIndex						= queryIndex;
+	cmdListQuery.RangeIndex						= rangeIndex;
+	cmdListQuery.IsBegin						= true;
 
-	// Append an event in the query frame
-	QueryFrame::Event& query = queryFrame.Events[eventIndex];
-	query.QueryIndexBegin = queryIndex;
+	// Allocate a query range in the query frame
+	QueryData::QueryRange& range	= queryData.Ranges[rangeIndex];
+	range.QueryIndexBegin			= queryIndex;
 
-	// Append a event in the sample history 
-	EventFrame::Event& event = sampleData.Events[eventIndex];
-	event.Index = eventIndex;
-	event.pName = sampleData.Allocator.String(pName);
-	event.pFilePath = pFilePath;
-	event.LineNumber = lineNumber;
+	// Allocate an event in the sample history
+	EventData::Event& event = eventData.Events[rangeIndex];
+	event.Index			= rangeIndex;
+	event.pName			= eventData.Allocator.String(pName);
+	event.pFilePath		= pFilePath;
+	event.LineNumber	= lineNumber;
 
 	pCmd->EndQuery(m_pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, queryIndex);
 }
@@ -131,17 +131,18 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 	if (m_IsPaused)
 		return;
 
-	QueryFrame& queryFrame = GetQueryFrame();
+	QueryData& queryData = GetQueryData();
 	CommandListData::Data* pCmdData = m_CommandListData.Get(pCmd, true);
 
-	// Allocate a query
-	uint32 queryIndex = queryFrame.QueryIndex.fetch_add(1);
-	check(queryIndex < queryFrame.Events.size() * 2);
+	// Allocate a timestamp query
+	uint32 queryIndex = queryData.QueryIndex.fetch_add(1);
+	check(queryIndex < queryData.Ranges.size() * 2);
 
-	// Append a query to the commandlist
+	// Record a query in the commandlist
 	CommandListData::Data::Query& query = pCmdData->Queries.emplace_back();
-	query.IsBegin = false;
 	query.QueryIndex = queryIndex;
+	query.RangeIndex = 0x7FFF;		// Range index is only required for 'Begin' events
+	query.IsBegin = false;
 
 	pCmd->EndQuery(m_pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, queryIndex);
 }
@@ -149,7 +150,7 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 void GPUProfiler::Tick()
 {
 	// If the next frame is not finished resolving, wait for it here so the data can be read from before it's being reset
-	QueryFrame& nextFrame = GetQueryFrame(m_FrameIndex + 1);
+	QueryData& nextFrame = GetQueryData(m_FrameIndex + 1);
 	if (!IsFenceComplete(nextFrame.FenceValue))
 	{
 		m_pResolveFence->SetEventOnCompletion(nextFrame.FenceValue, m_ResolveWaitHandle);
@@ -158,25 +159,25 @@ void GPUProfiler::Tick()
 
 	while (m_FrameToReadback < m_FrameIndex)
 	{
-		QueryFrame& queryFrame = GetQueryFrame(m_FrameToReadback);
-		EventFrame& sampleData = GetSampleFrame(m_FrameToReadback);
-		if (!IsFenceComplete(queryFrame.FenceValue))
+		QueryData& queryData = GetQueryData(m_FrameToReadback);
+		EventData& eventData = GetSampleFrame(m_FrameToReadback);
+		if (!IsFenceComplete(queryData.FenceValue))
 			break;
 
-		uint32 numEvents = queryFrame.EventIndex;
+		uint32 numEvents = queryData.RangeIndex;
 		uint32 frameBit = m_FrameToReadback % m_FrameLatency;
-		uint32 queryStart = frameBit * (uint32)queryFrame.Events.size() * 2;
-		uint64* pQueries = m_pReadbackData + queryStart;
+		uint32 queryStart = frameBit * (uint32)queryData.Ranges.size() * 2;
+		const uint64* pQueries = m_pReadbackData + queryStart;
 		for (uint32 i = 0; i < numEvents; ++i)
 		{
-			QueryFrame::Event& queryEvent = queryFrame.Events[i];
-			EventFrame::Event& event = sampleData.Events[i];
-			event.TicksBegin = pQueries[queryEvent.QueryIndexBegin];
-			event.TicksEnd = pQueries[queryEvent.QueryIndexEnd];
+			QueryData::QueryRange& queryRange	= queryData.Ranges[i];
+			EventData::Event& event				= eventData.Events[i];
+			event.TicksBegin					= pQueries[queryRange.QueryIndexBegin];
+			event.TicksEnd						= pQueries[queryRange.QueryIndexEnd];
 		}
 
-		std::vector<EventFrame::Event>& events = sampleData.Events;
-		std::sort(events.begin(), events.begin() + numEvents, [](const EventFrame::Event& a, const EventFrame::Event& b)
+		std::vector<EventData::Event>& events = eventData.Events;
+		std::sort(events.begin(), events.begin() + numEvents, [](const EventData::Event& a, const EventData::Event& b)
 			{
 				if (a.QueueIndex == b.QueueIndex)
 				{
@@ -210,17 +211,17 @@ void GPUProfiler::Tick()
 			if (eventStart == eventEnd)
 				continue;
 
-			sampleData.EventsPerQueue[queueIndex] = Span<const EventFrame::Event>(&events[eventStart], eventEnd - eventStart);
+			eventData.EventsPerQueue[queueIndex] = Span<const EventData::Event>(&events[eventStart], eventEnd - eventStart);
 
 			FixedStack<uint32, 32> stack;
 			for (uint32 i = eventStart; i < eventEnd; ++i)
 			{
-				EventFrame::Event& event = events[i];
+				EventData::Event& event = events[i];
 
 				// While there is a parent and the current event starts after the parent ends, pop it off the stack
 				while (stack.GetSize() > 0)
 				{
-					const EventFrame::Event& parent = events[stack.Top()];
+					const EventData::Event& parent = events[stack.Top()];
 					if (event.TicksBegin >= parent.TicksEnd)
 					{
 						stack.Pop();
@@ -250,28 +251,28 @@ void GPUProfiler::Tick()
 	m_CommandListData.Reset();
 
 	{
-		QueryFrame& queryFrame = GetQueryFrame();
+		QueryData& queryData = GetQueryData();
 		uint32 frameBit = m_FrameIndex % m_FrameLatency;
-		uint32 queryStart = frameBit * (uint32)queryFrame.Events.size() * 2;
-		uint32 numQueries = queryFrame.EventIndex * 2;
+		uint32 queryStart = frameBit * (uint32)queryData.Ranges.size() * 2;
+		uint32 numQueries = queryData.RangeIndex * 2;
 		m_pCommandList->ResolveQueryData(m_pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, numQueries, m_pReadbackResource, queryStart * sizeof(uint64));
 		m_pCommandList->Close();
 		ID3D12CommandList* pCmdLists[] = { m_pCommandList };
 		m_pResolveQueue->ExecuteCommandLists(1, pCmdLists);
 		m_pResolveQueue->Signal(m_pResolveFence, m_FrameIndex + 1);
-		queryFrame.FenceValue = m_FrameIndex + 1;
+		queryData.FenceValue = m_FrameIndex + 1;
 	}
 
 	++m_FrameIndex;
 
 	{
-		QueryFrame& queryFrame = GetQueryFrame();
-		queryFrame.pCommandAllocator->Reset();
-		m_pCommandList->Reset(queryFrame.pCommandAllocator, nullptr);
-		queryFrame.EventIndex = 0;
-		queryFrame.QueryIndex = 0;
+		QueryData& queryData = GetQueryData();
+		queryData.pCommandAllocator->Reset();
+		m_pCommandList->Reset(queryData.pCommandAllocator, nullptr);
+		queryData.RangeIndex = 0;
+		queryData.QueryIndex = 0;
 
-		EventFrame& eventFrame = GetSampleFrame();
+		EventData& eventFrame = GetSampleFrame();
 		eventFrame.Allocator.Reset();
 		for (uint32 i = 0; i < (uint32)m_Queues.size(); ++i)
 			eventFrame.EventsPerQueue[i] = {};
@@ -283,10 +284,10 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 	if (m_IsPaused)
 		return;
 
-	QueryFrame& queryFrame = GetQueryFrame();
-	EventFrame& sampleFrame = GetSampleFrame();
+	QueryData& queryData = GetQueryData();
+	EventData& sampleFrame = GetSampleFrame();
 
-	std::vector<uint32> eventStack;
+	std::vector<uint32> queryRangeStack;
 	for (ID3D12CommandList* pCmd : commandLists)
 	{
 		CommandListData::Data* pEventData = m_CommandListData.Get(pCmd, false);
@@ -296,25 +297,26 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 			{
 				if (query.IsBegin)
 				{
-					eventStack.push_back(query.EventIndex);
+					queryRangeStack.push_back(query.RangeIndex);
 				}
 				else
 				{
-					check(!eventStack.empty(), "Event Begin/End mismatch");
-					uint32 eventIndex = eventStack.back();
-					eventStack.pop_back();
+					check(!queryRangeStack.empty(), "Event Begin/End mismatch");
+					check(query.RangeIndex == 0x7FFF);
+					uint32 queryRangeIndex = queryRangeStack.back();
+					queryRangeStack.pop_back();
 
-					QueryFrame::Event& queryEvent = queryFrame.Events[eventIndex];
-					EventFrame::Event& sampleEvent = sampleFrame.Events[eventIndex];
+					QueryData::QueryRange& queryRange	= queryData.Ranges[queryRangeIndex];
+					EventData::Event& sampleEvent		= sampleFrame.Events[queryRangeIndex];
 
-					queryEvent.QueryIndexEnd = query.QueryIndex;
-					sampleEvent.QueueIndex = m_QueueIndexMap[pQueue];
+					queryRange.QueryIndexEnd	= query.QueryIndex;
+					sampleEvent.QueueIndex		= m_QueueIndexMap[pQueue];
 				}
 			}
 			pEventData->Queries.clear();
 		}
 	}
-	check(eventStack.empty(), "Forgot to End %d Events", eventStack.size());
+	check(queryRangeStack.empty(), "Forgot to End %d Events", queryRangeStack.size());
 }
 
 
@@ -327,17 +329,17 @@ void CPUProfiler::Initialize(uint32 historySize, uint32 maxSamples)
 {
 	Shutdown();
 
-	m_pSampleData = new EventFrame[historySize];
+	m_pEventData = new EventData[historySize];
 	m_HistorySize = historySize;
 
 	for (uint32 i = 0; i < historySize; ++i)
-		m_pSampleData[i].Events.resize(maxSamples);
+		m_pEventData[i].Events.resize(maxSamples);
 }
 
 
 void CPUProfiler::Shutdown()
 {
-	delete[] m_pSampleData;
+	delete[] m_pEventData;
 }
 
 
@@ -349,13 +351,13 @@ void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint32 li
 	if (m_Paused)
 		return;
 
-	EventFrame& data = GetData();
+	EventData& data = GetData();
 	uint32 newIndex = data.NumEvents.fetch_add(1);
 	check(newIndex < data.Events.size());
 
 	TLS& tls = GetTLS();
 
-	EventFrame::Event& newEvent = data.Events[newIndex];
+	EventData::Event& newEvent = data.Events[newIndex];
 	newEvent.Depth = tls.EventStack.GetSize();
 	newEvent.ThreadIndex = tls.ThreadIndex;
 	newEvent.pName = data.Allocator.String(pName);
@@ -376,7 +378,7 @@ void CPUProfiler::EndEvent()
 	if (m_Paused)
 		return;
 
-	EventFrame::Event& event = GetData().Events[GetTLS().EventStack.Pop()];
+	EventData::Event& event = GetData().Events[GetTLS().EventStack.Pop()];
 	QueryPerformanceCounter((LARGE_INTEGER*)(&event.TicksEnd));
 }
 
@@ -395,9 +397,9 @@ void CPUProfiler::Tick()
 		check(threadData.pTLS->EventStack.GetSize() == 0);
 
 	// Sort the events by thread and group by thread
-	EventFrame& frame = GetData();
-	std::vector<EventFrame::Event>& events = frame.Events;
-	std::sort(events.begin(), events.begin() + frame.NumEvents, [](const EventFrame::Event& a, const EventFrame::Event& b)
+	EventData& frame = GetData();
+	std::vector<EventData::Event>& events = frame.Events;
+	std::sort(events.begin(), events.begin() + frame.NumEvents, [](const EventData::Event& a, const EventData::Event& b)
 		{
 			return a.ThreadIndex < b.ThreadIndex;
 		});
@@ -410,13 +412,13 @@ void CPUProfiler::Tick()
 			++eventEnd;
 
 		if(threadIndex < (uint32)frame.EventsPerThread.size())
-			frame.EventsPerThread[threadIndex] = Span<const EventFrame::Event>(&events[eventStart], eventEnd - eventStart);
+			frame.EventsPerThread[threadIndex] = Span<const EventData::Event>(&events[eventStart], eventEnd - eventStart);
 		eventStart = eventEnd;
 	}
 
 	++m_FrameIndex;
 
-	EventFrame& newData = GetData();
+	EventData& newData = GetData();
 	newData.Allocator.Reset();
 	newData.NumEvents = 0;
 
@@ -450,7 +452,7 @@ void CPUProfiler::RegisterThread(const char* pName)
 	data.Index = (uint32)m_ThreadData.size() - 1;
 
 	for (uint32 i = 0; i < m_HistorySize; ++i)
-		m_pSampleData[i].EventsPerThread.resize(m_ThreadData.size());
+		m_pEventData[i].EventsPerThread.resize(m_ThreadData.size());
 }
 
 #endif

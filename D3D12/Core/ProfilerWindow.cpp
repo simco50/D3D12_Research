@@ -171,7 +171,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		URange cpuRange = gCPUProfiler.GetFrameRange();
 		for(uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
 		{
-			Span<const CPUProfiler::EventFrame::Event> events = gCPUProfiler.GetEventsForThread(gCPUProfiler.GetThreads()[0], i);
+			Span<const CPUProfiler::EventData::Event> events = gCPUProfiler.GetEventsForThread(gCPUProfiler.GetThreads()[0], i);
 			if (events.GetSize() > 0 && frameNr++ % 2 == 0)
 			{
 				float beginOffset = (events[0].TicksBegin - beginAnchor) * TicksToPixels;
@@ -340,8 +340,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 						|[=============]			|
 						|	[======]				|
 					*/
-					Span<const GPUProfiler::EventFrame::Event> events = gGPUProfiler.GetEventsForQueue(queue, i);
-					for (const GPUProfiler::EventFrame::Event& event : events)
+					Span<const GPUProfiler::EventData::Event> events = gGPUProfiler.GetEventsForQueue(queue, i);
+					for (const GPUProfiler::EventData::Event& event : events)
 					{
 						// Skip events above the max depth
 						if ((int)event.Depth >= maxDepth)
@@ -398,8 +398,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			*/
 			for (uint32 frameIndex = cpuRange.Begin; frameIndex < cpuRange.End; ++frameIndex)
 			{
-				Span<const CPUProfiler::EventFrame::Event> events = gCPUProfiler.GetEventsForThread(thread, frameIndex);
-				for (const CPUProfiler::EventFrame::Event& event : events)
+				Span<const CPUProfiler::EventData::Event> events = gCPUProfiler.GetEventsForThread(thread, frameIndex);
+				for (const CPUProfiler::EventData::Event& event : events)
 				{
 					// Skip events above the max depth
 					if (event.Depth >= maxDepth)

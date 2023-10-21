@@ -200,9 +200,9 @@ public:
 	void SetPaused(bool paused) { m_PauseQueued = paused; }
 
 	// Data for a single frame of profiling events. On for each history frame
-	struct EventFrame
+	struct EventData
 	{
-		EventFrame()
+		EventData()
 			: Allocator(1 << 14)
 		{}
 
@@ -266,12 +266,12 @@ public:
 		return URange(begin, end);
 	}
 
-	Span<const EventFrame::Event> GetEventsForQueue(const QueueInfo& queue, uint32 frame) const
+	Span<const EventData::Event> GetEventsForQueue(const QueueInfo& queue, uint32 frame) const
 	{
 		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
 		uint32 queueIndex = m_QueueIndexMap.at(queue.pQueue);
-		const EventFrame& frameData = GetSampleFrame(frame);
-		return frameData.EventsPerQueue[queueIndex];
+		const EventData& eventData = GetSampleFrame(frame);
+		return eventData.EventsPerQueue[queueIndex];
 	}
 
 	void SetEventCallback(const GPUProfilerCallbacks& inCallbacks) { m_EventCallback = inCallbacks; }
@@ -285,31 +285,31 @@ private:
 		return fenceValue <= m_LastCompletedFence;
 	}
 
-	EventFrame* m_pSampleData = nullptr;
+	EventData* m_pEventData = nullptr;
 	uint32 m_NumSampleHistory = 0;
-	const EventFrame& GetSampleFrame(uint32 frameIndex) const { return m_pSampleData[frameIndex % m_NumSampleHistory]; }
-	EventFrame& GetSampleFrame(uint32 frameIndex) { return m_pSampleData[frameIndex % m_NumSampleHistory]; }
-	EventFrame& GetSampleFrame() { return GetSampleFrame(m_FrameIndex); }
+	const EventData& GetSampleFrame(uint32 frameIndex) const { return m_pEventData[frameIndex % m_NumSampleHistory]; }
+	EventData& GetSampleFrame(uint32 frameIndex) { return m_pEventData[frameIndex % m_NumSampleHistory]; }
+	EventData& GetSampleFrame() { return GetSampleFrame(m_FrameIndex); }
 
 	// Data for a single frame of GPU queries. One for each frame latency
-	struct QueryFrame
+	struct QueryData
 	{
-		struct Event
+		struct QueryRange
 		{
 			uint32 QueryIndexBegin	: 16;
 			uint32 QueryIndexEnd	: 16;
 		};
-		static_assert(sizeof(Event) == sizeof(uint32));
+		static_assert(sizeof(QueryRange) == sizeof(uint32));
 
 		ID3D12CommandAllocator*		pCommandAllocator = nullptr;
 		uint64						FenceValue = 0;
-		std::atomic<uint32>			EventIndex = 0;
+		std::atomic<uint32>			RangeIndex = 0;
 		std::atomic<uint32>			QueryIndex = 0;
-		std::vector<Event>			Events;
+		std::vector<QueryRange>		Ranges;
 	};
-	QueryFrame& GetQueryFrame(uint32 frameIndex) { return m_pQueryFrames[frameIndex % m_FrameLatency]; }
-	QueryFrame& GetQueryFrame() { return GetQueryFrame(m_FrameIndex); }
-	QueryFrame* m_pQueryFrames = nullptr;
+	QueryData& GetQueryData(uint32 frameIndex) { return m_pQueryData[frameIndex % m_FrameLatency]; }
+	QueryData& GetQueryData() { return GetQueryData(m_FrameIndex); }
+	QueryData* m_pQueryData = nullptr;
 	uint32 m_FrameLatency = 0;
 
 	// Query data for each commandlist
@@ -321,7 +321,7 @@ private:
 			struct Query
 			{
 				uint32 QueryIndex	: 16;
-				uint32 EventIndex	: 15;
+				uint32 RangeIndex	: 15;
 				uint32 IsBegin		: 1;
 			};
 			static_assert(sizeof(Query) == sizeof(uint32));
@@ -336,20 +336,21 @@ private:
 
 		Data* Get(ID3D12CommandList* pCmd, bool createIfNotFound)
 		{
+			static constexpr uint32 InvalidIndex = 0xFFFFFFFF;
 			AcquireSRWLockShared(&m_CommandListMapLock);
 			auto it = m_CommandListMap.find(pCmd);
-			uint32 index = 0xFFFFFFFF;
+			uint32 index = InvalidIndex;
 			if (it != m_CommandListMap.end())
 				index = it->second;
 			ReleaseSRWLockShared(&m_CommandListMapLock);
-			if (createIfNotFound && index == 0xFFFFFFFF)
+			if (createIfNotFound && index == InvalidIndex)
 			{
 				AcquireSRWLockExclusive(&m_CommandListMapLock);
 				index = (uint32)m_CommandListMap.size();
 				m_CommandListMap[pCmd] = index;
 				ReleaseSRWLockExclusive(&m_CommandListMapLock);
 			}
-			if (index == 0xFFFFFFFF)
+			if (index == InvalidIndex)
 				return nullptr;
 			check(index < m_CommandListData.size());
 			return &m_CommandListData[index];
@@ -368,8 +369,8 @@ private:
 		std::vector<Data>								m_CommandListData;
 	} m_CommandListData{};
 
-	uint32						m_FrameToReadback = 0;
-	uint32						m_FrameIndex	 = 0;
+	uint32						m_FrameToReadback		= 0;
+	uint32						m_FrameIndex			= 0;
 
 	std::vector<QueueInfo>								m_Queues;
 	std::unordered_map<ID3D12CommandQueue*, uint32>		m_QueueIndexMap;
@@ -378,7 +379,7 @@ private:
 	ID3D12GraphicsCommandList*	m_pCommandList			= nullptr;
 	ID3D12QueryHeap*			m_pQueryHeap			= nullptr;
 	ID3D12Resource*				m_pReadbackResource		= nullptr;
-	uint64*						m_pReadbackData			= nullptr;
+	const uint64*				m_pReadbackData			= nullptr;
 	ID3D12CommandQueue*			m_pResolveQueue			= nullptr;
 	ID3D12Fence*				m_pResolveFence			= nullptr;
 	HANDLE						m_ResolveWaitHandle		= nullptr;
@@ -456,11 +457,11 @@ public:
 	void RegisterThread(const char* pName = nullptr);
 
 	// Struct containing all sampling data of a single frame
-	struct EventFrame
+	struct EventData
 	{
 		static constexpr uint32 ALLOCATOR_SIZE = 1 << 14;
 
-		EventFrame()
+		EventData()
 			: Allocator(ALLOCATOR_SIZE)
 		{}
 
@@ -508,9 +509,9 @@ public:
 		return URange(begin, end);
 	}
 
-	Span<const EventFrame::Event> GetEventsForThread(const ThreadData& thread, uint32 frame) const
+	Span<const EventData::Event> GetEventsForThread(const ThreadData& thread, uint32 frame) const
 	{
-		const EventFrame& data = m_pSampleData[frame % m_HistorySize];
+		const EventData& data = m_pEventData[frame % m_HistorySize];
 		if (thread.Index < data.EventsPerThread.size())
 			return data.EventsPerThread[thread.Index];
 		return {};
@@ -520,9 +521,9 @@ public:
 	void GetHistoryRange(uint64& ticksMin, uint64& ticksMax) const
 	{
 		uint32 oldestFrameIndex = (m_FrameIndex + 1) % m_HistorySize;
-		ticksMin = m_pSampleData[oldestFrameIndex].Events[0].TicksBegin;
+		ticksMin = m_pEventData[oldestFrameIndex].Events[0].TicksBegin;
 		uint32 youngestFrameIndex = (m_FrameIndex + (uint32)m_HistorySize - 1) % m_HistorySize;
-		ticksMax = m_pSampleData[youngestFrameIndex].Events[0].TicksEnd;
+		ticksMax = m_pEventData[youngestFrameIndex].Events[0].TicksEnd;
 	}
 
 	void SetEventCallback(const CPUProfilerCallbacks& inCallbacks)
@@ -553,9 +554,9 @@ private:
 	}
 
 	// Return the sample data of the current frame
-	EventFrame& GetData()
+	EventData& GetData()
 	{
-		return m_pSampleData[m_FrameIndex % m_HistorySize];
+		return m_pEventData[m_FrameIndex % m_HistorySize];
 	}
 
 	CPUProfilerCallbacks m_EventCallback;
@@ -563,7 +564,7 @@ private:
 	std::mutex				m_ThreadDataLock;				// Mutex for accesing thread data
 	std::vector<ThreadData> m_ThreadData;					// Data describing each registered thread
 
-	EventFrame*				m_pSampleData		= nullptr;	// Per-frame data
+	EventData*				m_pEventData		= nullptr;	// Per-frame data
 	uint32					m_HistorySize		= 0;		// History size
 	uint32					m_FrameIndex		= 0;		// The current frame index
 	bool					m_Paused			= false;	// The current pause state
