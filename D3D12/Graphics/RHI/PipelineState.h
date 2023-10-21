@@ -139,5 +139,6 @@ private:
 	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
 	PipelineStateInitializer m_Desc;
 	DelegateHandle m_ReloadHandle;
-	bool m_NeedsReload = false;
+	std::mutex m_BuildLock;
+	bool m_NeedsReload = true;
 };

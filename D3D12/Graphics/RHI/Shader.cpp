@@ -637,6 +637,8 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 
 Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
+	std::lock_guard lock(m_CompileMutex);
+
 	// Libs have no entry point
 	if (!pEntryPoint)
 		pEntryPoint = "";
@@ -647,7 +649,6 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	Shader* pShader = nullptr;
 
 	{
-		std::lock_guard lock(m_CompileMutex);
 		auto& shaderMap = m_FilepathToObjectMap[pathHash].Shaders;
 		auto it = shaderMap.find(hash);
 		if (it != shaderMap.end())
@@ -676,8 +677,6 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	}
 
 	{
-		std::lock_guard lock(m_CompileMutex);
-
 		if (!pShader)
 			pShader = m_Shaders.emplace_back(new Shader());
 

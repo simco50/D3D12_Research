@@ -260,6 +260,10 @@ PipelineState::~PipelineState()
 
 void PipelineState::CreateInternal()
 {
+	std::lock_guard lock(m_BuildLock);
+	if (!m_NeedsReload)
+		return;
+
 	if (m_Desc.m_IlDesc.size() > 0)
 	{
 		D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.m_Stream.InputLayout;
@@ -320,6 +324,7 @@ void PipelineState::CreateInternal()
 	}
 	check(m_pPipelineState);
 	E_LOG(Info, "Compiled Pipeline: %s", m_Desc.m_Name.c_str());
+	m_NeedsReload = false;
 }
 
 void PipelineState::ConditionallyReload()
@@ -327,7 +332,6 @@ void PipelineState::ConditionallyReload()
 	if (m_NeedsReload || !m_pPipelineState)
 	{
 		CreateInternal();
-		m_NeedsReload = false;
 	}
 }
 
