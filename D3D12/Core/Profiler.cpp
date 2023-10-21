@@ -158,86 +158,87 @@ void GPUProfiler::Tick()
 	{
 		QueryFrame& queryFrame = GetQueryFrame(m_FrameToReadback);
 		EventFrame& sampleData = GetSampleFrame(m_FrameToReadback);
-		if (IsFenceComplete(queryFrame.FenceValue))
+		if (!IsFenceComplete(queryFrame.FenceValue))
+			break;
+
+		sampleData.NumEvents = queryFrame.EventIndex;
+
+		uint32 frameBit = m_FrameToReadback % m_FrameLatency;
+		uint32 queryStart = frameBit * (uint32)queryFrame.Events.size() * 2;
+		uint64* pQueries = m_pReadbackData + queryStart;
+		for (uint32 i = 0; i < sampleData.NumEvents; ++i)
 		{
-			sampleData.NumEvents = queryFrame.EventIndex;
+			QueryFrame::Event& queryEvent = queryFrame.Events[i];
+			EventFrame::Event& event = sampleData.Events[i];
+			event.TicksBegin = pQueries[queryEvent.QueryIndexBegin];
+			event.TicksEnd = pQueries[queryEvent.QueryIndexEnd];
+		}
 
-			uint32 frameBit = m_FrameToReadback % m_FrameLatency;
-			uint32 queryStart = frameBit * (uint32)queryFrame.Events.size() * 2;
-			uint64* pQueries = m_pReadbackData + queryStart;
-			for (uint32 i = 0; i < sampleData.NumEvents; ++i)
+		std::vector<EventFrame::Event>& events = sampleData.Events;
+		std::sort(events.begin(), events.begin() + sampleData.NumEvents, [](const EventFrame::Event& a, const EventFrame::Event& b)
 			{
-				QueryFrame::Event& queryEvent = queryFrame.Events[i];
-				EventFrame::Event& event = sampleData.Events[i];
-				event.TicksBegin = pQueries[queryEvent.QueryIndexBegin];
-				event.TicksEnd = pQueries[queryEvent.QueryIndexEnd];
-			}
-
-			std::vector<EventFrame::Event>& events = sampleData.Events;
-			std::sort(events.begin(), events.begin() + sampleData.NumEvents, [](const EventFrame::Event& a, const EventFrame::Event& b)
+				if (a.QueueIndex == b.QueueIndex)
 				{
-					if (a.QueueIndex == b.QueueIndex)
+					if (a.TicksBegin == b.TicksBegin)
 					{
-						if (a.TicksBegin == b.TicksBegin)
-						{
-							// If the begin and end time is the same, sort by index to make the sort stable
-							if (a.TicksEnd == b.TicksEnd)
-								return a.Index < b.Index;
+						// If the begin and end time is the same, sort by index to make the sort stable
+						if (a.TicksEnd == b.TicksEnd)
+							return a.Index < b.Index;
 
-							// An event with zero length is a special case. Assume it comes first
-							bool aZero = a.TicksBegin == a.TicksEnd;
-							bool bZero = b.TicksBegin == b.TicksEnd;
-							if (aZero != bZero)
-								return aZero > bZero;
+						// An event with zero length is a special case. Assume it comes first
+						bool aZero = a.TicksBegin == a.TicksEnd;
+						bool bZero = b.TicksBegin == b.TicksEnd;
+						if (aZero != bZero)
+							return aZero > bZero;
 
-							// If the start time is the same, the one with the longest duration will be first
-							return a.TicksEnd > b.TicksEnd;
-						}
-						return a.TicksBegin < b.TicksBegin;
+						// If the start time is the same, the one with the longest duration will be first
+						return a.TicksEnd > b.TicksEnd;
 					}
-					return a.QueueIndex < b.QueueIndex;
-				});
+					return a.TicksBegin < b.TicksBegin;
+				}
+				return a.QueueIndex < b.QueueIndex;
+			});
 
-			uint32 eventStart = 0;
-			for (uint32 queueIndex = 0; queueIndex < (uint32)m_Queues.size(); ++queueIndex)
+		uint32 eventStart = 0;
+		for (uint32 queueIndex = 0; queueIndex < (uint32)m_Queues.size(); ++queueIndex)
+		{
+			uint32 eventEnd = eventStart;
+			while (events[eventEnd].QueueIndex == queueIndex && eventEnd < sampleData.NumEvents)
+				++eventEnd;
+
+			if (eventStart == eventEnd)
+				continue;
+
+			sampleData.EventsPerQueue[queueIndex] = Span<const EventFrame::Event>(&events[eventStart], eventEnd - eventStart);
+
+			FixedStack<uint32, 32> stack;
+			for (uint32 i = eventStart; i < eventEnd; ++i)
 			{
-				uint32 eventEnd = eventStart;
-				while (events[eventEnd].QueueIndex == queueIndex && eventEnd < sampleData.NumEvents)
-					++eventEnd;
+				EventFrame::Event& event = events[i];
 
-				if (eventStart == eventEnd)
-					continue;
-
-				sampleData.EventsPerQueue[queueIndex] = Span<const EventFrame::Event>(&events[eventStart], eventEnd - eventStart);
-
-				FixedStack<uint32, 32> stack;
-				for (uint32 i = eventStart; i < eventEnd; ++i)
+				// While there is a parent and the current event starts after the parent ends, pop it off the stack
+				while (stack.GetSize() > 0)
 				{
-					EventFrame::Event& event = events[i];
-
-					// While there is a parent and the current event starts after the parent ends, pop it off the stack
-					while (stack.GetSize() > 0)
+					const EventFrame::Event& parent = events[stack.Top()];
+					if (event.TicksBegin >= parent.TicksEnd)
 					{
-						const EventFrame::Event& parent = events[stack.Top()];
-						if (event.TicksBegin >= parent.TicksEnd)
-						{
-							stack.Pop();
-						}
-						else
-						{
-							check(event.TicksEnd <= parent.TicksEnd);
-							break;
-						}
+						stack.Pop();
 					}
-
-					// Set the event's depth
-					event.Depth = stack.GetSize();
-					stack.Push() = i;
+					else
+					{
+						check(event.TicksEnd <= parent.TicksEnd);
+						break;
+					}
 				}
 
-				eventStart = eventEnd;
+				// Set the event's depth
+				event.Depth = stack.GetSize();
+				stack.Push() = i;
 			}
+
+			eventStart = eventEnd;
 		}
+
 		++m_FrameToReadback;
 	}
 
