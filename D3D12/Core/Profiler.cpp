@@ -177,8 +177,17 @@ void GPUProfiler::Tick()
 					{
 						if (a.TicksBegin == b.TicksBegin)
 						{
+							// If the begin and end time is the same, sort by index to make the sort stable
 							if (a.TicksEnd == b.TicksEnd)
 								return a.Index < b.Index;
+
+							// An event with zero length is a special case. Assume it comes first
+							bool aZero = a.TicksBegin == a.TicksEnd;
+							bool bZero = b.TicksBegin == b.TicksEnd;
+							if (aZero != bZero)
+								return aZero > bZero;
+
+							// If the start time is the same, the one with the longest duration will be first
 							return a.TicksEnd > b.TicksEnd;
 						}
 						return a.TicksBegin < b.TicksBegin;
@@ -207,7 +216,7 @@ void GPUProfiler::Tick()
 					while (stack.GetSize() > 0)
 					{
 						const EventFrame::Event& parent = events[stack.Top()];
-						if (event.TicksBegin >= parent.TicksEnd || parent.TicksBegin == parent.TicksEnd)
+						if (event.TicksBegin >= parent.TicksEnd)
 						{
 							stack.Pop();
 						}
