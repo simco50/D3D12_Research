@@ -51,11 +51,11 @@
 // Usage:
 //		PROFILE_GPU_SCOPE(ID3D12GraphicsCommandList* pCommandList, const char* pName)
 //		PROFILE_GPU_SCOPE(ID3D12GraphicsCommandList* pCommandList)
-#define PROFILE_GPU_SCOPE(...)							GPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, __VA_ARGS__)
+#define PROFILE_GPU_SCOPE(cmdlist, ...)					GPUProfileScope MACRO_CONCAT(gpu_profiler, __COUNTER__)(__FUNCTION__, __FILE__, __LINE__, cmdlist, __VA_ARGS__)
 
 // Usage:
 //		PROFILE_GPU_BEGIN(const char* pName, ID3D12GraphicsCommandList* pCommandList)
-#define PROFILE_GPU_BEGIN(name, cmdlist)				gGPUProfiler.BeginEvent(name, cmdlist, __FILE__, __LINE__)
+#define PROFILE_GPU_BEGIN(cmdlist, name)				gGPUProfiler.BeginEvent(name, cmdlist, __FILE__, __LINE__)
 
 // Usage:
 //		PROFILE_GPU_END(ID3D12GraphicsCommandList* pCommandList)
