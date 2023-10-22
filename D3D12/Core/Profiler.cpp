@@ -152,28 +152,10 @@ void GPUProfiler::Tick()
 			event.TicksEnd						= queryRange.IsCopyQuery ? copyQueries[queryRange.QueryIndexEnd] : mainQueries[queryRange.QueryIndexEnd];
 		}
 
+		// Sort events by queue
 		std::vector<EventData::Event>& events = eventData.Events;
 		std::sort(events.begin(), events.begin() + numEvents, [](const EventData::Event& a, const EventData::Event& b)
 			{
-				if (a.QueueIndex == b.QueueIndex)
-				{
-					if (a.TicksBegin == b.TicksBegin)
-					{
-						// If the begin and end time is the same, sort by index to make the sort stable
-						if (a.TicksEnd == b.TicksEnd)
-							return a.Index < b.Index;
-
-						// An event with zero length is a special case. Assume it comes first
-						bool aZero = a.TicksBegin == a.TicksEnd;
-						bool bZero = b.TicksBegin == b.TicksEnd;
-						if (aZero != bZero)
-							return aZero > bZero;
-
-						// If the start time is the same, the one with the longest duration will be first
-						return a.TicksEnd > b.TicksEnd;
-					}
-					return a.TicksBegin < b.TicksBegin;
-				}
 				return a.QueueIndex < b.QueueIndex;
 			});
 
@@ -188,32 +170,6 @@ void GPUProfiler::Tick()
 				continue;
 
 			eventData.EventsPerQueue[queueIndex] = Span<const EventData::Event>(&events[eventStart], eventEnd - eventStart);
-
-			FixedStack<uint32, 32> stack;
-			for (uint32 i = eventStart; i < eventEnd; ++i)
-			{
-				EventData::Event& event = events[i];
-
-				// While there is a parent and the current event starts after the parent ends, pop it off the stack
-				while (stack.GetSize() > 0)
-				{
-					const EventData::Event& parent = events[stack.Top()];
-					if (event.TicksBegin >= parent.TicksEnd)
-					{
-						stack.Pop();
-					}
-					else
-					{
-						check(event.TicksEnd <= parent.TicksEnd);
-						break;
-					}
-				}
-
-				// Set the event's depth
-				event.Depth = stack.GetSize();
-				stack.Push() = i;
-			}
-
 			eventStart = eventEnd;
 		}
 
@@ -277,6 +233,7 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 
 					queryRange.QueryIndexEnd	= query.QueryIndex;
 					sampleEvent.QueueIndex		= m_QueueIndexMap[pQueue];
+					sampleEvent.Depth			= (uint32)queryRangeStack.size();
 				}
 			}
 			pEventData->Queries.clear();

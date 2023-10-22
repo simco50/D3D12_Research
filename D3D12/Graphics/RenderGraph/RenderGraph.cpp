@@ -323,6 +323,8 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 	if (m_pDumpGraphPath)
 		DumpDebugGraph(m_pDumpGraphPath);
 
+	std::vector<CommandContext*> contexts;
+#if 1
 	// Group passes in jobs
 	const uint32 maxPassesPerJob = 15;
 	std::vector<Span<RGPass*>> passGroups;
@@ -363,13 +365,10 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 			pLastPass = pPass;
 		}
 	}
-	if (pLastPass->ID != firstPass)
-	{
-		passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], pLastPass->ID - firstPass + 1));
-		pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
-	}
+	if (currentGroupSize > 0)
+		passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], (uint32)m_RenderPasses.size() - firstPass));
+	pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
 
-	std::vector<CommandContext*> contexts;
 	TaskContext context;
 
 	{
@@ -393,6 +392,16 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 		PROFILE_CPU_SCOPE("Wait Render Jobs");
 		TaskQueue::Join(context);
 	}
+#else
+	PROFILE_CPU_SCOPE("Schedule Render Jobs");
+	CommandContext* pContext = pDevice->AllocateCommandContext();
+	for (RGPass* pPass : m_RenderPasses)
+	{
+		if (!pPass->IsCulled)
+			ExecutePass(pPass, *pContext);
+	}
+	contexts.push_back(pContext);
+#endif
 
 	CommandContext::Execute(contexts);
 
