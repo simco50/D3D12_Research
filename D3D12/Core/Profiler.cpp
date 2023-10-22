@@ -242,6 +242,85 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 }
 
 
+void GPUProfiler::QueryHeap::Initialize(ID3D12Device* pDevice, ID3D12CommandQueue* pResolveQueue, uint32 maxNumQueries, uint32 frameLatency)
+{
+	m_pResolveQueue = pResolveQueue;
+	m_FrameLatency = frameLatency;
+	m_MaxNumQueries = maxNumQueries;
+
+	D3D12_COMMAND_QUEUE_DESC queueDesc = pResolveQueue->GetDesc();
+
+	D3D12_QUERY_HEAP_DESC heapDesc{};
+	heapDesc.Count = maxNumQueries;
+	heapDesc.NodeMask = 0x1;
+	heapDesc.Type = queueDesc.Type == D3D12_COMMAND_LIST_TYPE_COPY ? D3D12_QUERY_HEAP_TYPE_COPY_QUEUE_TIMESTAMP : D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+	pDevice->CreateQueryHeap(&heapDesc, IID_PPV_ARGS(&m_pQueryHeap));
+
+	for (uint32 i = 0; i < frameLatency; ++i)
+		pDevice->CreateCommandAllocator(queueDesc.Type, IID_PPV_ARGS(&m_CommandAllocators.emplace_back()));
+	pDevice->CreateCommandList(0x1, queueDesc.Type, m_CommandAllocators[0], nullptr, IID_PPV_ARGS(&m_pCommandList));
+
+	D3D12_RESOURCE_DESC readbackDesc = CD3DX12_RESOURCE_DESC::Buffer((uint64)maxNumQueries * sizeof(uint64) * frameLatency);
+	D3D12_HEAP_PROPERTIES heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
+	pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &readbackDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_pReadbackResource));
+	void* pReadbackData = nullptr;
+	m_pReadbackResource->Map(0, nullptr, &pReadbackData);
+	m_pReadbackData = (uint64*)pReadbackData;
+
+	pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_pResolveFence));
+	m_ResolveWaitHandle = CreateEventExA(nullptr, "Fence Event", 0, EVENT_ALL_ACCESS);
+}
+
+void GPUProfiler::QueryHeap::Shutdown()
+{
+	if (!IsInitialized())
+		return;
+
+	for (ID3D12CommandAllocator* pAllocator : m_CommandAllocators)
+		pAllocator->Release();
+	m_pCommandList->Release();
+	m_pQueryHeap->Release();
+	m_pReadbackResource->Release();
+	m_pResolveFence->Release();
+	CloseHandle(m_ResolveWaitHandle);
+}
+
+uint32 GPUProfiler::QueryHeap::RecordQuery(ID3D12GraphicsCommandList* pCmd)
+{
+	uint32 index = m_QueryIndex.fetch_add(1);
+	pCmd->EndQuery(m_pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, index);
+	return index;
+}
+
+uint32 GPUProfiler::QueryHeap::Resolve(uint32 frameIndex)
+{
+	if (!IsInitialized())
+		return 0;
+
+	uint32 frameBit = frameIndex % m_FrameLatency;
+	uint32 queryStart = frameBit * m_MaxNumQueries;
+	uint32 numQueries = m_QueryIndex;
+	m_pCommandList->ResolveQueryData(m_pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, 0, numQueries, m_pReadbackResource, queryStart * sizeof(uint64));
+	m_pCommandList->Close();
+	ID3D12CommandList* pCmdLists[] = { m_pCommandList };
+	m_pResolveQueue->ExecuteCommandLists(1, pCmdLists);
+	m_pResolveQueue->Signal(m_pResolveFence, frameIndex + 1);
+	return numQueries;
+}
+
+void GPUProfiler::QueryHeap::Reset(uint32 frameIndex)
+{
+	if (!IsInitialized())
+		return;
+
+	m_QueryIndex = 0;
+	ID3D12CommandAllocator* pAllocator = m_CommandAllocators[frameIndex % m_FrameLatency];
+	pAllocator->Reset();
+	m_pCommandList->Reset(pAllocator, nullptr);
+}
+
+
+
 //-----------------------------------------------------------------------------
 // [SECTION] CPU Profiler
 //-----------------------------------------------------------------------------
