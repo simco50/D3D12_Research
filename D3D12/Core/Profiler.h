@@ -126,37 +126,6 @@ private:
 	std::atomic<uint32> m_Offset;
 };
 
-template<typename T, uint32 N>
-struct FixedStack
-{
-public:
-	T& Pop()
-	{
-		check(Depth > 0);
-		--Depth;
-		return StackData[Depth];
-	}
-
-	T& Push()
-	{
-		Depth++;
-		check(Depth < ARRAYSIZE(StackData));
-		return StackData[Depth - 1];
-	}
-
-	T& Top()
-	{
-		check(Depth > 0);
-		return StackData[Depth - 1];
-	}
-
-	uint32 GetSize() const { return Depth; }
-
-private:
-	uint32 Depth = 0;
-	T StackData[N]{};
-};
-
 void DrawProfilerHUD();
 
 //-----------------------------------------------------------------------------
@@ -616,6 +585,38 @@ public:
 	struct TLS
 	{
 		static constexpr int MAX_STACK_DEPTH = 32;
+
+		template<typename T, uint32 N>
+		struct FixedStack
+		{
+		public:
+			T& Pop()
+			{
+				check(Depth > 0);
+				--Depth;
+				return StackData[Depth];
+			}
+
+			T& Push()
+			{
+				Depth++;
+				check(Depth < ARRAYSIZE(StackData));
+				return StackData[Depth - 1];
+			}
+
+			T& Top()
+			{
+				check(Depth > 0);
+				return StackData[Depth - 1];
+			}
+
+			uint32 GetSize() const { return Depth; }
+
+		private:
+			uint32 Depth = 0;
+			T StackData[N]{};
+		};
+
 
 		FixedStack<uint32, MAX_STACK_DEPTH> EventStack;
 		uint32								ThreadIndex		= 0;
