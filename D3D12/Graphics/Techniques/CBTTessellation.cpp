@@ -422,7 +422,7 @@ void CBTTessellation::Shade(RGGraph& graph, const SceneView* pView, const SceneT
 
 void CBTTessellation::CBTDemo()
 {
-	PROFILE_SCOPE("CPU CBT Demo");
+	PROFILE_CPU_SCOPE();
 
 	ImGui::Begin("CBT Demo");
 
@@ -510,7 +510,7 @@ void CBTTessellation::CBTDemo()
 	}
 
 	{
-		PROFILE_SCOPE("CBT Update");
+		PROFILE_CPU_SCOPE("CBT Update");
 		cbt.IterateLeaves([&](uint32 heapIndex)
 			{
 				if (splitMode)
@@ -573,7 +573,7 @@ void CBTTessellation::CBTDemo()
 	};
 
 	{
-		PROFILE_SCOPE("CBT Draw");
+		PROFILE_CPU_SCOPE("CBT Draw");
 		ImGui::GetWindowDrawList()->AddQuadFilled(
 			cPos + ImVec2(0, 0),
 			cPos + ImVec2(scale, 0),

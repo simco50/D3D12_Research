@@ -189,7 +189,7 @@ void DemoApp::SetupScene()
 void DemoApp::Update()
 {
 	{
-		PROFILE_SCOPE("Update");
+		PROFILE_CPU_SCOPE("Update");
 
 		constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
 		if (m_RenderPath == RenderPath::Visibility)
@@ -315,7 +315,7 @@ void DemoApp::Update()
 		}
 
 		{
-			PROFILE_SCOPE("Frustum Culling");
+			PROFILE_CPU_SCOPE("Frustum Culling");
 
 			// Sort
 			auto CompareSort = [this](const Batch& a, const Batch& b)
@@ -334,7 +334,7 @@ void DemoApp::Update()
 			{
 				TaskQueue::Execute([&](int)
 					{
-						PROFILE_SCOPE("Frustum Cull Main");
+						PROFILE_CPU_SCOPE("Frustum Cull Main");
 						m_SceneData.VisibilityMask.SetAll();
 						BoundingFrustum frustum = m_pCamera->GetViewTransform().PerspectiveFrustum;
 						for (const Batch& b : m_SceneData.Batches)
@@ -347,7 +347,7 @@ void DemoApp::Update()
 			{
 				TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
 					{
-						PROFILE_SCOPE("Frustum Cull Shadows");
+						PROFILE_CPU_SCOPE("Frustum Cull Shadows");
 						ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
 						shadowView.Visibility.SetAll();
 						for (const Batch& b : m_SceneData.Batches)
@@ -359,7 +359,7 @@ void DemoApp::Update()
 
 			TaskQueue::Execute([&](int)
 				{
-					PROFILE_SCOPE("Compute Bounds");
+					PROFILE_CPU_SCOPE("Compute Bounds");
 					bool boundsSet = false;
 					for (const Batch& b : m_SceneData.Batches)
 					{
@@ -379,7 +379,7 @@ void DemoApp::Update()
 		}
 
 		{
-			PROFILE_SCOPE("Record RenderGraph");
+			PROFILE_CPU_SCOPE("Record RenderGraph");
 
 			const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
@@ -463,12 +463,12 @@ void DemoApp::Update()
 										context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &view.View, pShadowmap->Get()));
 
 										{
-											GPU_PROFILE_SCOPE(context, "Opaque");
+											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 											context.SetPipelineState(m_pShadowsOpaquePSO);
 											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::Opaque);
 										}
 										{
-											GPU_PROFILE_SCOPE(context, "Masked");
+											PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
 											context.SetPipelineState(m_pShadowsAlphaMaskPSO);
 											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 										}
@@ -502,12 +502,12 @@ void DemoApp::Update()
 
 									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pDepth->Get()));
 									{
-										GPU_PROFILE_SCOPE(context, "Opaque");
+										PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 										context.SetPipelineState(m_pDepthPrepassOpaquePSO);
 										Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
 									}
 									{
-										GPU_PROFILE_SCOPE(context, "Masked");
+										PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
 										context.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
 										Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 									}
@@ -1222,7 +1222,7 @@ void DemoApp::InitializePipelines()
 
 void DemoApp::UpdateImGui()
 {
-	PROFILE_SCOPE("ImGui Update");
+	PROFILE_CPU_SCOPE("ImGui Update");
 
 	static ImGuiConsole console;
 	static bool showProfiler = false;
@@ -1385,7 +1385,7 @@ void DemoApp::UpdateImGui()
 
 	if (showProfiler)
 	{
-		PROFILE_SCOPE("Profiler");
+		PROFILE_CPU_SCOPE("Profiler");
 		if (ImGui::Begin("Profiler", &showProfiler))
 		{
 			DrawProfilerHUD();
@@ -1543,7 +1543,7 @@ void DemoApp::LoadMesh(const std::string& filePath, World& world)
 
 void DemoApp::CreateShadowViews(SceneView& view, World& world)
 {
-	PROFILE_SCOPE("Shadow Setup");
+	PROFILE_CPU_SCOPE("Shadow Setup");
 
 	float minPoint = 0;
 	float maxPoint = 1;

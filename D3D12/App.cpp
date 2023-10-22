@@ -167,7 +167,7 @@ void App::Update_Internal()
 	Update();
 
 	{
-		PROFILE_SCOPE("Execute Commandlist");
+		PROFILE_CPU_SCOPE("Execute Commandlist");
 		CommandContext* pContext = m_pDevice->AllocateCommandContext();
 		ImGuiRenderer::Render(*pContext, m_pSwapchain->GetBackBuffer());
 		pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
@@ -175,12 +175,12 @@ void App::Update_Internal()
 	}
 
 	{
-		PROFILE_SCOPE("Present");
+		PROFILE_CPU_SCOPE("Present");
 		m_pSwapchain->Present();
 		ImGuiRenderer::PresentViewports();
 	}
 	{
-		PROFILE_SCOPE("Wait for GPU frame");
+		PROFILE_CPU_SCOPE("Wait for GPU frame");
 		m_pDevice->TickFrame();
 	}
 }

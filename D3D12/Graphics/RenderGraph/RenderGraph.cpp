@@ -85,7 +85,7 @@ RGGraph::~RGGraph()
 
 void RGGraph::Compile(RGResourcePool& resourcePool)
 {
-	PROFILE_SCOPE();
+	PROFILE_CPU_SCOPE();
 	constexpr bool PassCulling = false;
 
 	if (PassCulling)
@@ -314,7 +314,7 @@ void RGGraph::PopEvent()
 
 void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 {
-	PROFILE_SCOPE();
+	PROFILE_CPU_SCOPE();
 
 	Compile(resourcePool);
 
@@ -373,7 +373,7 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 	TaskContext context;
 
 	{
-		PROFILE_SCOPE("Schedule Render Jobs");
+		PROFILE_CPU_SCOPE("Schedule Render Jobs");
 		for (Span<RGPass*> passGroup : passGroups)
 		{
 			CommandContext* pContext = pDevice->AllocateCommandContext();
@@ -390,12 +390,12 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 	}
 
 	{
-		PROFILE_SCOPE("Wait Render Jobs");
+		PROFILE_CPU_SCOPE("Wait Render Jobs");
 		TaskQueue::Join(context);
 	}
 
 	{
-		PROFILE_SCOPE("ExecuteCommandLists");
+		PROFILE_CPU_SCOPE("ExecuteCommandLists");
 		CommandContext::Execute(contexts);
 	}
 
@@ -422,8 +422,8 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 	}
 
 	{
-		GPU_PROFILE_SCOPE(context, pPass->GetName());
-		PROFILE_SCOPE(pPass->GetName());
+		PROFILE_GPU_SCOPE(context.GetCommandList(), pPass->GetName());
+		PROFILE_CPU_SCOPE(pPass->GetName());
 
 		PrepareResources(pPass, context);
 

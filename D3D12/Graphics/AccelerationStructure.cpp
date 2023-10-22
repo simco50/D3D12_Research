@@ -38,7 +38,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 	GraphicsDevice* pDevice = context.GetParent();
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		GPU_PROFILE_SCOPE(context, "Build Acceleration Structures");
+		PROFILE_GPU_SCOPE(context.GetCommandList(), "Build Acceleration Structures");
 
 		ID3D12GraphicsCommandList4* pCmd = context.GetCommandList();
 
@@ -140,13 +140,13 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 		}
 
 		{
-			GPU_PROFILE_SCOPE(context, "BLAS Compaction");
+			PROFILE_GPU_SCOPE(context.GetCommandList(), "BLAS Compaction");
 			ProcessCompaction(context);
 		}
 
 		if(!blasInstances.empty() || !m_pTLAS)
 		{
-			GPU_PROFILE_SCOPE(context, "TLAS Data Generation");
+			PROFILE_GPU_SCOPE(context.GetCommandList(), "TLAS Data Generation");
 
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
 			prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
@@ -188,7 +188,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 		}
 
 		{
-			GPU_PROFILE_SCOPE(context, "Build TLAS");
+			PROFILE_GPU_SCOPE(context.GetCommandList(), "Build TLAS");
 
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
 			asDesc.DestAccelerationStructureData = m_pTLAS->GetGpuHandle();

@@ -1,9 +1,6 @@
 #pragma once
 #include "Graphics/RHI/D3D.h"
 
-#define GPU_PROFILE_SCOPE(commandlist, ...)		PROFILE_GPU_SCOPE((commandlist).GetCommandList(), __VA_ARGS__)
-#define PROFILE_SCOPE(...)						PROFILE_CPU_SCOPE(__VA_ARGS__)
-
 #ifndef WITH_PROFILING
 #define WITH_PROFILING 1
 #endif
@@ -191,7 +188,8 @@ public:
 	// Record a GPU event end on the commandlist
 	void EndEvent(ID3D12GraphicsCommandList* pCmd);
 
-	// Resolve and tick frame
+	// Resolve the last frame and advance to the next frame.
+	// Call at the START of the frame.
 	void Tick();
 
 	// Notify profiler that these commandlists are executed on a particular queue
@@ -262,7 +260,7 @@ public:
 	URange GetFrameRange() const
 	{
 		uint32 end = m_FrameToReadback;
-		uint32 begin = m_FrameIndex < m_NumSampleHistory ? 0 : m_FrameIndex - (uint32)m_NumSampleHistory;
+		uint32 begin = m_FrameIndex < m_EventHistorySize ? 0 : m_FrameIndex - (uint32)m_EventHistorySize;
 		return URange(begin, end);
 	}
 
@@ -285,10 +283,9 @@ private:
 		return fenceValue <= m_LastCompletedFence;
 	}
 
-	EventData* m_pEventData = nullptr;
-	uint32 m_NumSampleHistory = 0;
-	const EventData& GetSampleFrame(uint32 frameIndex) const { return m_pEventData[frameIndex % m_NumSampleHistory]; }
-	EventData& GetSampleFrame(uint32 frameIndex) { return m_pEventData[frameIndex % m_NumSampleHistory]; }
+
+	const EventData& GetSampleFrame(uint32 frameIndex) const { return m_pEventData[frameIndex % m_EventHistorySize]; }
+	EventData& GetSampleFrame(uint32 frameIndex) { return m_pEventData[frameIndex % m_EventHistorySize]; }
 	EventData& GetSampleFrame() { return GetSampleFrame(m_FrameIndex); }
 
 	// Data for a single frame of GPU queries. One for each frame latency
@@ -309,8 +306,6 @@ private:
 	};
 	QueryData& GetQueryData(uint32 frameIndex) { return m_pQueryData[frameIndex % m_FrameLatency]; }
 	QueryData& GetQueryData() { return GetQueryData(m_FrameIndex); }
-	QueryData* m_pQueryData = nullptr;
-	uint32 m_FrameLatency = 0;
 
 	// Query data for each commandlist
 	class CommandListData
@@ -320,9 +315,9 @@ private:
 		{
 			struct Query
 			{
-				uint32 QueryIndex	: 16;
-				uint32 RangeIndex	: 15;
-				uint32 IsBegin		: 1;
+				uint32 QueryIndex : 16;
+				uint32 RangeIndex : 15;
+				uint32 IsBegin : 1;
 			};
 			static_assert(sizeof(Query) == sizeof(uint32));
 			std::vector<Query> Queries;
@@ -367,7 +362,15 @@ private:
 		SRWLOCK											m_CommandListMapLock{};
 		std::unordered_map<ID3D12CommandList*, uint32>	m_CommandListMap;
 		std::vector<Data>								m_CommandListData;
-	} m_CommandListData{};
+	};
+
+	CommandListData				m_CommandListData{};
+
+	EventData*					m_pEventData			= nullptr;
+	uint32						m_EventHistorySize		= 0;
+
+	QueryData*					m_pQueryData			= nullptr;
+	uint32						m_FrameLatency			= 0;
 
 	uint32						m_FrameToReadback		= 0;
 	uint32						m_FrameIndex			= 0;
@@ -392,16 +395,16 @@ private:
 // Helper RAII-style structure to push and pop a GPU sample event
 struct GPUProfileScope
 {
-	GPUProfileScope(const char* pFunction, const char* pFilePath, uint32 lineNr, ID3D12GraphicsCommandList* pCmd, const char* pName)
+	GPUProfileScope(const char* pFunction, const char* pFilePath, uint32 lineNumber, ID3D12GraphicsCommandList* pCmd, const char* pName)
 		: pCmd(pCmd)
 	{
-		gGPUProfiler.BeginEvent(pCmd, pName, pFilePath, lineNr);
+		gGPUProfiler.BeginEvent(pCmd, pName, pFilePath, lineNumber);
 	}
 
-	GPUProfileScope(const char* pFunction, const char* pFilePath, uint32 lineNr, ID3D12GraphicsCommandList* pCmd)
+	GPUProfileScope(const char* pFunction, const char* pFilePath, uint32 lineNumber, ID3D12GraphicsCommandList* pCmd)
 		: pCmd(pCmd)
 	{
-		gGPUProfiler.BeginEvent(pCmd, pFunction, pFilePath, lineNr);
+		gGPUProfiler.BeginEvent(pCmd, pFunction, pFilePath, lineNumber);
 	}
 
 	~GPUProfileScope()
@@ -426,8 +429,8 @@ extern class CPUProfiler gCPUProfiler;
 
 struct CPUProfilerCallbacks
 {
-	using EventBeginFn = void(*)(const char* /*pName*/, void* /*pUserData*/);
-	using EventEndFn = void(*)(void* /*pUserData*/);
+	using EventBeginFn	= void(*)(const char* /*pName*/, void* /*pUserData*/);
+	using EventEndFn	= void(*)(void* /*pUserData*/);
 
 	EventBeginFn	OnEventBegin	= nullptr;
 	EventEndFn		OnEventEnd		= nullptr;
@@ -440,7 +443,7 @@ struct CPUProfilerCallbacks
 class CPUProfiler
 {
 public:
-	void Initialize(uint32 historySize, uint32 maxSamples);
+	void Initialize(uint32 historySize, uint32 maxEvents);
 	void Shutdown();
 
 	// Start and push an event on the current thread
@@ -472,8 +475,8 @@ public:
 			const char* pFilePath	= nullptr;	// File path of file in which this event is recorded
 			uint64		TicksBegin	= 0;		// The ticks at the start of this event
 			uint64		TicksEnd	= 0;		// The ticks at the end of this event
-			uint32		ThreadIndex	: 11;		// Thread Index of the thread that recorderd this event
 			uint32		LineNumber	: 16;		// Line number of file in which this event is recorded
+			uint32		ThreadIndex	: 11;		// Thread Index of the thread that recorderd this event
 			uint32		Depth		: 5;		// Depth of the event
 		};
 
@@ -498,19 +501,20 @@ public:
 	{
 		char		Name[128]	{};
 		uint32		ThreadID	= 0;
-		const TLS*	pTLS		= nullptr;
 		uint32		Index		= 0;
+		const TLS*	pTLS		= nullptr;
 	};
 
 	URange GetFrameRange() const
 	{
-		uint32 begin = m_FrameIndex < m_HistorySize ? 0 : m_FrameIndex - (uint32)m_HistorySize + 1;
+		uint32 begin = m_FrameIndex - Math::Min(m_FrameIndex, m_HistorySize) + 1;
 		uint32 end = m_FrameIndex;
 		return URange(begin, end);
 	}
 
 	Span<const EventData::Event> GetEventsForThread(const ThreadData& thread, uint32 frame) const
 	{
+		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
 		const EventData& data = m_pEventData[frame % m_HistorySize];
 		if (thread.Index < data.EventsPerThread.size())
 			return data.EventsPerThread[thread.Index];
@@ -526,13 +530,9 @@ public:
 		ticksMax = m_pEventData[youngestFrameIndex].Events[0].TicksEnd;
 	}
 
-	void SetEventCallback(const CPUProfilerCallbacks& inCallbacks)
-	{
-		m_EventCallback = inCallbacks;
-	}
-
 	Span<const ThreadData> GetThreads() const { return m_ThreadData; }
 
+	void SetEventCallback(const CPUProfilerCallbacks& inCallbacks) { m_EventCallback = inCallbacks;	}
 	void SetPaused(bool paused) { m_QueuedPaused = paused; }
 	bool IsPaused() const { return m_Paused; }
 
@@ -554,10 +554,7 @@ private:
 	}
 
 	// Return the sample data of the current frame
-	EventData& GetData()
-	{
-		return m_pEventData[m_FrameIndex % m_HistorySize];
-	}
+	EventData& GetData() { return m_pEventData[m_FrameIndex % m_HistorySize]; }
 
 	CPUProfilerCallbacks m_EventCallback;
 

@@ -15,7 +15,7 @@ void GPUProfiler::Initialize(ID3D12Device* pDevice, Span<ID3D12CommandQueue*> qu
 {
 	m_pResolveQueue = queues[0];
 	m_FrameLatency = frameLatency;
-	m_NumSampleHistory = sampleHistory;
+	m_EventHistorySize = sampleHistory;
 
 	m_pEventData = new EventData[sampleHistory];
 
@@ -325,7 +325,7 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 //-----------------------------------------------------------------------------
 
 
-void CPUProfiler::Initialize(uint32 historySize, uint32 maxSamples)
+void CPUProfiler::Initialize(uint32 historySize, uint32 maxEvents)
 {
 	Shutdown();
 
@@ -333,7 +333,7 @@ void CPUProfiler::Initialize(uint32 historySize, uint32 maxSamples)
 	m_HistorySize = historySize;
 
 	for (uint32 i = 0; i < historySize; ++i)
-		m_pEventData[i].Events.resize(maxSamples);
+		m_pEventData[i].Events.resize(maxEvents);
 }
 
 

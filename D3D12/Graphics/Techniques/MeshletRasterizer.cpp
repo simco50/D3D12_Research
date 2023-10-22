@@ -470,7 +470,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				
 				for (uint32 binIndex = 0; binIndex < numBins; ++binIndex)
 				{
-					GPU_PROFILE_SCOPE(context, Sprintf("Raster Bin - %s", PipelineBinToString[binIndex]).c_str());
+					PROFILE_GPU_SCOPE(context.GetCommandList(), Sprintf("Raster Bin - %s", PipelineBinToString[binIndex]).c_str());
 
 					struct
 					{

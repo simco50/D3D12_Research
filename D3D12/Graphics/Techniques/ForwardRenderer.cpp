@@ -139,18 +139,18 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 				if (!translucentOnly)
 				{
 					{
-						GPU_PROFILE_SCOPE(context, "Opaque");
+						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 						context.SetPipelineState(m_pClusteredForwardPSO);
 						Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
 					}
 					{
-						GPU_PROFILE_SCOPE(context, "Opaque - Masked");
+						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque - Masked");
 						context.SetPipelineState(m_pClusteredForwardMaskedPSO);
 						Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 					}
 				}
 				{
-					GPU_PROFILE_SCOPE(context, "Transparant");
+					PROFILE_GPU_SCOPE(context.GetCommandList(), "Transparant");
 					context.SetPipelineState(m_pClusteredForwardAlphaBlendPSO);
 					Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
 				}
@@ -184,13 +184,13 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 						});
 
 					{
-						GPU_PROFILE_SCOPE(context, "Opaque");
+						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 						context.SetPipelineState(m_pTiledForwardPSO);
 						Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
 					}
 
 					{
-						GPU_PROFILE_SCOPE(context, "Opaque Masked");
+						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque Masked");
 						context.SetPipelineState(m_pTiledForwardMaskedPSO);
 						Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
 					}
@@ -207,7 +207,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 						});
 
 					{
-						GPU_PROFILE_SCOPE(context, "Transparant");
+						PROFILE_GPU_SCOPE(context.GetCommandList(), "Transparant");
 						context.SetPipelineState(m_pTiledForwardAlphaBlendPSO);
 						Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
 					}

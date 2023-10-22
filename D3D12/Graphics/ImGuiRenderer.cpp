@@ -242,7 +242,7 @@ namespace ViewportImpl
 
 		{
 			CommandContext* pContext = static_cast<CommandContext*>(pCmd);
-			GPU_PROFILE_SCOPE(*pContext, "Render ImGui Viewport");
+			PROFILE_GPU_SCOPE(pContext->GetCommandList());
 
 			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			pContext->BeginRenderPass(RenderPassInfo(pBackBuffer, RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
@@ -258,7 +258,7 @@ namespace ViewportImpl
 
 	static void Viewport_Present(ImGuiViewport* pViewport, void*)
 	{
-		PROFILE_SCOPE("Present ImGui Viewport");
+		PROFILE_CPU_SCOPE();
 		ViewportData* pViewportData = static_cast<ViewportData*>(pViewport->RendererUserData);
 		pViewportData->pSwapChain->Present();
 	}
@@ -364,15 +364,15 @@ void ImGuiRenderer::NewFrame()
 
 void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 {
-	GPU_PROFILE_SCOPE(context, "ImGui");
+	PROFILE_GPU_SCOPE(context.GetCommandList());
 
 	{
-		GPU_PROFILE_SCOPE(context, "ImGui::Render()");
+		PROFILE_GPU_SCOPE(context.GetCommandList(), "ImGui::Render()");
 		ImGui::Render();
 	}
 
 	{
-		GPU_PROFILE_SCOPE(context, "Transitions");
+		PROFILE_GPU_SCOPE(context.GetCommandList(), "Transitions");
 		ImDrawData* pDrawData = ImGui::GetDrawData();
 		ImVec2 clip_off = pDrawData->DisplayPos;
 		for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
@@ -389,7 +389,7 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 	}
 
 	{
-		GPU_PROFILE_SCOPE(context, "Render");
+		PROFILE_GPU_SCOPE(context.GetCommandList(), "Render");
 		ImDrawData* pDrawData = ImGui::GetDrawData();
 
 		context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
@@ -399,7 +399,7 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 	}
 
 	{
-		GPU_PROFILE_SCOPE(context, "Render Viewports");
+		PROFILE_GPU_SCOPE(context.GetCommandList(), "Render Viewports");
 
 		// Update and Render additional Platform Windows
 		if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
