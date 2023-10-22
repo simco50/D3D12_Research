@@ -96,6 +96,8 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 	gpuCallbacks.OnEventEnd = [](ID3D12GraphicsCommandList* pCmd, void*) { ::PIXEndEvent(pCmd);	};
 	gGPUProfiler.SetEventCallback(gpuCallbacks);
 #endif
+
+	PROFILE_REGISTER_THREAD("Main Thread");
 }
 
 void App::Init_Internal()
@@ -123,7 +125,6 @@ void App::Init_Internal()
 	Console::Initialize();
 	ConsoleManager::Initialize();
 
-	PROFILE_REGISTER_THREAD("Main Thread");
 	TaskQueue::Initialize(std::thread::hardware_concurrency());
 
 	Vector2i displayDimensions = Window::GetDisplaySize();

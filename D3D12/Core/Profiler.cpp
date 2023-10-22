@@ -159,18 +159,17 @@ void GPUProfiler::Tick()
 				return a.QueueIndex < b.QueueIndex;
 			});
 
-		uint32 eventStart = 0;
+		URange eventRange(0, 0);
 		for (uint32 queueIndex = 0; queueIndex < (uint32)m_Queues.size(); ++queueIndex)
 		{
-			uint32 eventEnd = eventStart;
-			while (events[eventEnd].QueueIndex == queueIndex && eventEnd < numEvents)
-				++eventEnd;
+			while (queueIndex < events[eventRange.Begin].QueueIndex)
+				eventRange.Begin++;
+			eventRange.End = eventRange.Begin;
+			while (events[eventRange.End].QueueIndex == queueIndex && eventRange.End < numEvents)
+				++eventRange.End;
 
-			if (eventStart == eventEnd)
-				continue;
-
-			eventData.EventsPerQueue[queueIndex] = Span<const EventData::Event>(&events[eventStart], eventEnd - eventStart);
-			eventStart = eventEnd;
+			eventData.EventsPerQueue[queueIndex] = Span<const EventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
+			eventRange.Begin = eventRange.End;
 		}
 
 		++m_FrameToReadback;
@@ -327,16 +326,17 @@ void CPUProfiler::Tick()
 			return a.ThreadIndex < b.ThreadIndex;
 		});
 
-	uint32 eventStart = 0;
+	URange eventRange(0, 0);
 	for (uint32 threadIndex = 0; threadIndex < (uint32)m_ThreadData.size(); ++threadIndex)
 	{
-		uint32 eventEnd = eventStart;
-		while (events[eventEnd].ThreadIndex == threadIndex && eventEnd < frame.NumEvents)
-			++eventEnd;
+		while (threadIndex < events[eventRange.Begin].ThreadIndex)
+			eventRange.Begin++;
+		eventRange.End = eventRange.Begin;
+		while (events[eventRange.End].ThreadIndex == threadIndex && eventRange.End < frame.NumEvents)
+			++eventRange.End;
 
-		if(threadIndex < (uint32)frame.EventsPerThread.size())
-			frame.EventsPerThread[threadIndex] = Span<const EventData::Event>(&events[eventStart], eventEnd - eventStart);
-		eventStart = eventEnd;
+		frame.EventsPerThread[threadIndex] = Span<const EventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
+		eventRange.Begin = eventRange.End;
 	}
 
 	++m_FrameIndex;
