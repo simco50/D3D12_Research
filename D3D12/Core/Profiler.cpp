@@ -38,9 +38,9 @@ void GPUProfiler::Initialize(
 		queueInfo.InitCalibration();
 
 		if (desc.Type == D3D12_COMMAND_LIST_TYPE_COPY && !m_CopyHeap.IsInitialized())
-			m_CopyHeap.Initialize(pDevice, pQueue, maxNumCopyEvents, frameLatency);
+			m_CopyHeap.Initialize(pDevice, pQueue, 2 * maxNumCopyEvents, frameLatency);
 		else if (desc.Type != D3D12_COMMAND_LIST_TYPE_COPY && !m_MainHeap.IsInitialized())
-			m_MainHeap.Initialize(pDevice, pQueue, maxNumEvents, frameLatency);
+			m_MainHeap.Initialize(pDevice, pQueue, 2 * maxNumEvents, frameLatency);
 	}
 
 	m_pEventData = new EventData[sampleHistory];
@@ -82,32 +82,29 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 	CommandListData::Data* pCmdData = m_CommandListData.Get(pCmd, true);
 
 	// Allocate a query range. This stores a begin/end query index pair. (Also event index)
-	uint32 rangeIndex = queryData.RangeIndex.fetch_add(1);
-	check(rangeIndex < queryData.Ranges.size());
+	uint32 eventIndex = m_EventIndex.fetch_add(1);
+	check(eventIndex < eventData.Events.size());
 
-	// Allocate a timestamp query
-	QueryHeap& heap = GetHeap(pCmd->GetType());
-	uint32 queryIndex = heap.AllocateQuery();
+	// Record a timestamp query
+	uint32 queryIndex = GetHeap(pCmd->GetType()).RecordQuery(pCmd);
 
-	// Record a query in the commandlist
+	// Assign the query to the commandlist
 	CommandListData::Data::Query& cmdListQuery	= pCmdData->Queries.emplace_back();
 	cmdListQuery.QueryIndex						= queryIndex;
-	cmdListQuery.RangeIndex						= rangeIndex;
+	cmdListQuery.RangeIndex						= eventIndex;
 	cmdListQuery.IsBegin						= true;
 
 	// Allocate a query range in the query frame
-	QueryData::QueryRange& range	= queryData.Ranges[rangeIndex];
+	QueryData::QueryRange& range	= queryData.Ranges[eventIndex];
 	range.QueryIndexBegin			= queryIndex;
 	range.IsCopyQuery				= pCmd->GetType() == D3D12_COMMAND_LIST_TYPE_COPY;
 
 	// Allocate an event in the sample history
-	EventData::Event& event			= eventData.Events[rangeIndex];
-	event.Index						= rangeIndex;
+	EventData::Event& event			= eventData.Events[eventIndex];
+	event.Index						= eventIndex;
 	event.pName						= eventData.Allocator.String(pName);
 	event.pFilePath					= pFilePath;
 	event.LineNumber				= lineNumber;
-
-	pCmd->EndQuery(heap.GetHeap(), D3D12_QUERY_TYPE_TIMESTAMP, queryIndex);
 }
 
 
@@ -119,19 +116,12 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 	if (m_IsPaused)
 		return;
 
-	CommandListData::Data* pCmdData = m_CommandListData.Get(pCmd, true);
-
-	// Allocate a timestamp query
-	QueryHeap& heap = GetHeap(pCmd->GetType());
-	uint32 queryIndex = heap.AllocateQuery();
-
 	// Record a query in the commandlist
+	CommandListData::Data* pCmdData		= m_CommandListData.Get(pCmd, true);
 	CommandListData::Data::Query& query = pCmdData->Queries.emplace_back();
-	query.QueryIndex = queryIndex;
-	query.RangeIndex = 0x7FFF;		// Range index is only required for 'Begin' events
-	query.IsBegin = false;
-
-	pCmd->EndQuery(heap.GetHeap(), D3D12_QUERY_TYPE_TIMESTAMP, queryIndex);
+	query.QueryIndex					= GetHeap(pCmd->GetType()).RecordQuery(pCmd);
+	query.RangeIndex					= 0x7FFF; // Range index is only required for 'Begin' events
+	query.IsBegin						= false;
 }
 
 void GPUProfiler::Tick()
@@ -140,6 +130,9 @@ void GPUProfiler::Tick()
 	m_CopyHeap.WaitFrame(m_FrameIndex);
 	m_MainHeap.WaitFrame(m_FrameIndex);
 
+	GetSampleFrame(m_FrameIndex).NumEvents = m_EventIndex;
+	m_EventIndex = 0;
+
 	while (m_FrameToReadback < m_FrameIndex)
 	{
 		QueryData& queryData = GetQueryData(m_FrameToReadback);
@@ -147,7 +140,7 @@ void GPUProfiler::Tick()
 		if (!m_MainHeap.IsFrameComplete(m_FrameToReadback) || !m_CopyHeap.IsFrameComplete(m_FrameToReadback))
 			break;
 
-		uint32 numEvents = queryData.RangeIndex;
+		uint32 numEvents = eventData.NumEvents;
 		Span<const uint64> mainQueries = m_MainHeap.GetQueryData(m_FrameToReadback);
 		Span<const uint64> copyQueries = m_CopyHeap.GetQueryData(m_FrameToReadback);
 
@@ -244,10 +237,8 @@ void GPUProfiler::Tick()
 		m_MainHeap.Reset(m_FrameIndex);
 		m_CopyHeap.Reset(m_FrameIndex);
 
-		QueryData& queryData = GetQueryData();
-		queryData.RangeIndex = 0;
-
 		EventData& eventFrame = GetSampleFrame();
+		eventFrame.NumEvents = 0;
 		eventFrame.Allocator.Reset();
 		for (uint32 i = 0; i < (uint32)m_Queues.size(); ++i)
 			eventFrame.EventsPerQueue[i] = {};

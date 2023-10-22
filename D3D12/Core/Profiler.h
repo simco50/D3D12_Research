@@ -229,6 +229,7 @@ public:
 		LinearAllocator					Allocator;			// Scratch allocator for frame
 		std::vector<Span<const Event>>	EventsPerQueue;		// Span of events for each queue
 		std::vector<Event>				Events;				// Event storage for frame
+		uint32							NumEvents = 0;		// Total number of recorded events
 	};
 
 	// Data of a single GPU queue. Allows converting GPU timestamps to CPU timestamps
@@ -329,9 +330,11 @@ private:
 			CloseHandle(m_ResolveWaitHandle);
 		}
 
-		uint32 AllocateQuery()
+		uint32 RecordQuery(ID3D12GraphicsCommandList* pCmd)
 		{
-			return m_QueryIndex.fetch_add(1);
+			uint32 index = m_QueryIndex.fetch_add(1);
+			pCmd->EndQuery(m_pQueryHeap, D3D12_QUERY_TYPE_TIMESTAMP, index);
+			return index;
 		}
 
 		uint32 Resolve(uint32 frameIndex)
@@ -394,12 +397,12 @@ private:
 			}
 		}
 
-		bool IsInitialized() const { return m_pQueryHeap != nullptr; }
-		ID3D12QueryHeap* GetHeap() const { return m_pQueryHeap; }
+		bool IsInitialized() const			{ return m_pQueryHeap != nullptr; }
+		ID3D12QueryHeap* GetHeap() const	{ return m_pQueryHeap; }
 
 	private:
-		uint32 m_MaxNumQueries = 0;
 		std::vector<ID3D12CommandAllocator*>	m_CommandAllocators;
+		uint32									m_MaxNumQueries			= 0;
 		uint32									m_FrameLatency			= 0;
 		std::atomic<uint32>						m_QueryIndex			= 0;
 		ID3D12GraphicsCommandList*				m_pCommandList			= nullptr;
@@ -411,6 +414,7 @@ private:
 		HANDLE									m_ResolveWaitHandle		= nullptr;
 		uint64									m_LastCompletedFence	= 0;
 	};
+
 
 	const EventData& GetSampleFrame(uint32 frameIndex) const { return m_pEventData[frameIndex % m_EventHistorySize]; }
 	EventData& GetSampleFrame(uint32 frameIndex) { return m_pEventData[frameIndex % m_EventHistorySize]; }
@@ -426,9 +430,7 @@ private:
 			uint32 IsCopyQuery		: 1;
 		};
 		static_assert(sizeof(QueryRange) == sizeof(uint32));
-
-		std::atomic<uint32>			RangeIndex = 0;
-		std::vector<QueryRange>		Ranges;
+		std::vector<QueryRange>	Ranges;
 	};
 	QueryData& GetQueryData(uint32 frameIndex) { return m_pQueryData[frameIndex % m_FrameLatency]; }
 	QueryData& GetQueryData() { return GetQueryData(m_FrameIndex); }
@@ -496,6 +498,7 @@ private:
 
 	EventData*					m_pEventData			= nullptr;
 	uint32						m_EventHistorySize		= 0;
+	std::atomic<uint32>			m_EventIndex			= 0;
 
 	QueryData*					m_pQueryData			= nullptr;
 	uint32						m_FrameLatency			= 0;
