@@ -315,9 +315,9 @@ private:
 		{
 			struct Query
 			{
-				uint32 QueryIndex : 16;
-				uint32 RangeIndex : 15;
-				uint32 IsBegin : 1;
+				uint32 QueryIndex	: 16;
+				uint32 RangeIndex	: 15;
+				uint32 IsBegin		: 1;
 			};
 			static_assert(sizeof(Query) == sizeof(uint32));
 			std::vector<Query> Queries;
@@ -482,8 +482,8 @@ public:
 
 		std::vector<Span<const Event>>	EventsPerThread;	// Events per thread of the frame
 		std::vector<Event>				Events;				// All events of the frame
-		std::atomic<uint32>				NumEvents = 0;		// The number of events
 		LinearAllocator					Allocator;			// Scratch allocator storing all dynamic allocations of the frame
+		std::atomic<uint32>				NumEvents = 0;		// The number of events
 	};
 
 	// Thread-local storage to keep track of current depth and event stack
@@ -524,10 +524,9 @@ public:
 	// Get the ticks range of the history
 	void GetHistoryRange(uint64& ticksMin, uint64& ticksMax) const
 	{
-		uint32 oldestFrameIndex = (m_FrameIndex + 1) % m_HistorySize;
-		ticksMin = m_pEventData[oldestFrameIndex].Events[0].TicksBegin;
-		uint32 youngestFrameIndex = (m_FrameIndex + (uint32)m_HistorySize - 1) % m_HistorySize;
-		ticksMax = m_pEventData[youngestFrameIndex].Events[0].TicksEnd;
+		URange range = GetFrameRange();
+		ticksMin = GetData(range.Begin).Events[0].TicksBegin;
+		ticksMax = GetData(range.End).Events[0].TicksEnd;
 	}
 
 	Span<const ThreadData> GetThreads() const { return m_ThreadData; }
@@ -554,7 +553,9 @@ private:
 	}
 
 	// Return the sample data of the current frame
-	EventData& GetData() { return m_pEventData[m_FrameIndex % m_HistorySize]; }
+	EventData& GetData()								{ return GetData(m_FrameIndex); }
+	EventData& GetData(uint32 frameIndex)				{ return m_pEventData[frameIndex % m_HistorySize]; }
+	const EventData& GetData(uint32 frameIndex)	const	{ return m_pEventData[frameIndex % m_HistorySize]; }
 
 	CPUProfilerCallbacks m_EventCallback;
 
