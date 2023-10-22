@@ -25,6 +25,7 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 
 SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& contexts)
 {
+	PROFILE_CPU_SCOPE();
 	check(contexts.GetSize());
 
 	// Commandlists can be recorded in parallel.

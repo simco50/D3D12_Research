@@ -394,10 +394,7 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 		TaskQueue::Join(context);
 	}
 
-	{
-		PROFILE_CPU_SCOPE("ExecuteCommandLists");
-		CommandContext::Execute(contexts);
-	}
+	CommandContext::Execute(contexts);
 
 	// Update exported resource names
 	for (ExportedTexture& exportResource : m_ExportTextures)

@@ -23,6 +23,7 @@ static GlobalResource<PipelineState> gUpdateTLASPSO;
 
 void AccelerationStructure::Build(CommandContext& context, const SceneView& view)
 {
+	PROFILE_CPU_SCOPE();
 	if (!gCommonRS)
 	{
 		gCommonRS = new RootSignature(context.GetParent());

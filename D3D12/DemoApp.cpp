@@ -308,6 +308,7 @@ void DemoApp::Update()
 		World* pWorldMut = &m_World;
 
 		{
+			PROFILE_CPU_SCOPE("Update GPU Scene");
 			CommandContext* pContext = m_pDevice->AllocateCommandContext();
 			Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
 			pViewMut->AccelerationStructure.Build(*pContext, *pView);
