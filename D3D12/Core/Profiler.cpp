@@ -24,7 +24,7 @@ void GPUProfiler::Initialize(
 	m_EventHistorySize = sampleHistory;
 
 	m_CommandListData.Setup(maxNumActiveCommandLists);
-
+	m_QueueEventStack.resize(queues.GetSize());
 	for (uint16 queueIndex = 0; queueIndex < queues.GetSize(); ++queueIndex)
 	{
 		ID3D12CommandQueue* pQueue = queues[queueIndex];
@@ -126,6 +126,11 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 
 void GPUProfiler::Tick()
 {
+	for (ActiveEventStack& stack : m_QueueEventStack)
+	{
+		check(stack.GetSize() == 0, "Forgot to End %d Events", stack.GetSize());
+	}
+
 	// If the next frame is not finished resolving, wait for it here so the data can be read from before it's being reset
 	m_CopyHeap.WaitFrame(m_FrameIndex);
 	m_MainHeap.WaitFrame(m_FrameIndex);
@@ -205,10 +210,11 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 	if (m_IsPaused)
 		return;
 
+	uint32 queueIndex = m_QueueIndexMap.at(pQueue);
+	ActiveEventStack& eventStack = m_QueueEventStack[queueIndex];
 	QueryData& queryData = GetQueryData();
 	EventData& sampleFrame = GetSampleFrame();
 
-	std::vector<uint32> queryRangeStack;
 	for (ID3D12CommandList* pCmd : commandLists)
 	{
 		CommandListData::Data* pEventData = m_CommandListData.Get(pCmd, false);
@@ -218,27 +224,27 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 			{
 				if (query.IsBegin)
 				{
-					queryRangeStack.push_back(query.RangeIndex);
+					eventStack.Push() = query.RangeIndex;
+					EventData::Event& sampleEvent = sampleFrame.Events[query.RangeIndex];
+					sampleEvent.QueueIndex = queueIndex;
 				}
 				else
 				{
-					check(!queryRangeStack.empty(), "Event Begin/End mismatch");
+					check(eventStack.GetSize() > 0, "Event Begin/End mismatch");
 					check(query.RangeIndex == 0x7FFF);
-					uint32 queryRangeIndex = queryRangeStack.back();
-					queryRangeStack.pop_back();
+					uint32 queryRangeIndex = eventStack.Pop();
 
 					QueryData::QueryRange& queryRange	= queryData.Ranges[queryRangeIndex];
 					EventData::Event& sampleEvent		= sampleFrame.Events[queryRangeIndex];
 
 					queryRange.QueryIndexEnd	= query.QueryIndex;
-					sampleEvent.QueueIndex		= m_QueueIndexMap[pQueue];
-					sampleEvent.Depth			= (uint32)queryRangeStack.size();
+					sampleEvent.Depth			= eventStack.GetSize();
+					check(sampleEvent.QueueIndex == queueIndex, "Begin/EndEvent must be recorded on the same queue");
 				}
 			}
 			pEventData->Queries.clear();
 		}
 	}
-	check(queryRangeStack.empty(), "Forgot to End %d Events", queryRangeStack.size());
 }
 
 

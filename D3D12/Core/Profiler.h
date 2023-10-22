@@ -75,6 +75,38 @@
 
 #endif
 
+
+template<typename T, uint32 N>
+struct FixedStack
+{
+public:
+	T& Pop()
+	{
+		check(Depth > 0);
+		--Depth;
+		return StackData[Depth];
+	}
+
+	T& Push()
+	{
+		Depth++;
+		check(Depth < ARRAYSIZE(StackData));
+		return StackData[Depth - 1];
+	}
+
+	T& Top()
+	{
+		check(Depth > 0);
+		return StackData[Depth - 1];
+	}
+
+	uint32 GetSize() const { return Depth; }
+
+private:
+	uint32 Depth = 0;
+	T StackData[N]{};
+};
+
 // Simple Linear Allocator
 class LinearAllocator
 {
@@ -408,6 +440,9 @@ private:
 	QueryHeap					m_MainHeap;
 	QueryHeap					m_CopyHeap;
 
+	static constexpr uint32 MAX_EVENT_DEPTH = 32;
+	using ActiveEventStack = FixedStack<uint32, MAX_EVENT_DEPTH>;
+	std::vector<ActiveEventStack>						m_QueueEventStack;
 	std::vector<QueueInfo>								m_Queues;
 	std::unordered_map<ID3D12CommandQueue*, uint32>		m_QueueIndexMap;
 	GPUProfilerCallbacks								m_EventCallback;
@@ -515,38 +550,6 @@ public:
 	struct TLS
 	{
 		static constexpr int MAX_STACK_DEPTH = 32;
-
-		template<typename T, uint32 N>
-		struct FixedStack
-		{
-		public:
-			T& Pop()
-			{
-				check(Depth > 0);
-				--Depth;
-				return StackData[Depth];
-			}
-
-			T& Push()
-			{
-				Depth++;
-				check(Depth < ARRAYSIZE(StackData));
-				return StackData[Depth - 1];
-			}
-
-			T& Top()
-			{
-				check(Depth > 0);
-				return StackData[Depth - 1];
-			}
-
-			uint32 GetSize() const { return Depth; }
-
-		private:
-			uint32 Depth = 0;
-			T StackData[N]{};
-		};
-
 
 		FixedStack<uint32, MAX_STACK_DEPTH> EventStack;
 		uint32								ThreadIndex		= 0;
