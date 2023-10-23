@@ -339,20 +339,19 @@ private:
 		ID3D12QueryHeap* GetHeap() const	{ return m_pQueryHeap; }
 
 	private:
-		std::vector<ID3D12CommandAllocator*>	m_CommandAllocators;
-		uint32									m_MaxNumQueries			= 0;
-		uint32									m_FrameLatency			= 0;
-		std::atomic<uint32>						m_QueryIndex			= 0;
-		ID3D12GraphicsCommandList*				m_pCommandList			= nullptr;
-		ID3D12QueryHeap*						m_pQueryHeap			= nullptr;
-		ID3D12Resource*							m_pReadbackResource		= nullptr;
-		const uint64*							m_pReadbackData			= nullptr;
-		ID3D12CommandQueue*						m_pResolveQueue			= nullptr;
-		ID3D12Fence*							m_pResolveFence			= nullptr;
-		HANDLE									m_ResolveWaitHandle		= nullptr;
-		uint64									m_LastCompletedFence	= 0;
+		std::vector<ID3D12CommandAllocator*>	m_CommandAllocators;				// CommandAlloctors to resolve queries. 1 per frame
+		uint32									m_MaxNumQueries			= 0;		// Max number of event queries
+		uint32									m_FrameLatency			= 0;		// Number of GPU frame latency
+		std::atomic<uint32>						m_QueryIndex			= 0;		// Current index of queries
+		ID3D12GraphicsCommandList*				m_pCommandList			= nullptr;	// CommandList to resolve queries
+		ID3D12QueryHeap*						m_pQueryHeap			= nullptr;	// Heap containing MaxNumQueries * FrameLatency queries
+		ID3D12Resource*							m_pReadbackResource		= nullptr;	// Readback resource storing resolved query dara
+		const uint64*							m_pReadbackData			= nullptr;	// Mapped readback resource pointer
+		ID3D12CommandQueue*						m_pResolveQueue			= nullptr;	// Queue to resolve queries on
+		ID3D12Fence*							m_pResolveFence			= nullptr;	// Fence for tracking when queries are finished resolving
+		HANDLE									m_ResolveWaitHandle		= nullptr;	// Handle to allow waiting for resolve to finish
+		uint64									m_LastCompletedFence	= 0;		// Last finish fence value
 	};
-
 
 	const EventData& GetSampleFrame(uint32 frameIndex) const { return m_pEventData[frameIndex % m_EventHistorySize]; }
 	EventData& GetSampleFrame(uint32 frameIndex) { return m_pEventData[frameIndex % m_EventHistorySize]; }
@@ -434,24 +433,24 @@ private:
 
 	CommandListData				m_CommandListData{};
 
-	EventData*					m_pEventData			= nullptr;
-	uint32						m_EventHistorySize		= 0;
-	std::atomic<uint32>			m_EventIndex			= 0;
+	EventData*					m_pEventData			= nullptr;		// Data containing all resulting events. 1 per frame history
+	uint32						m_EventHistorySize		= 0;			// Number of frames to keep track of
+	std::atomic<uint32>			m_EventIndex			= 0;			// Current event index
 
-	QueryData*					m_pQueryData			= nullptr;
-	uint32						m_FrameLatency			= 0;
+	QueryData*					m_pQueryData			= nullptr;		// Data containing all intermediate query event data. 1 per frame latency
+	uint32						m_FrameLatency			= 0;			// Max number of in-flight GPU frames
 
-	uint32						m_FrameToReadback		= 0;
-	uint32						m_FrameIndex			= 0;
+	uint32						m_FrameToReadback		= 0;			// Next frame to readback from
+	uint32						m_FrameIndex			= 0;			// Current frame index
 
 	QueryHeap					m_MainHeap;
 	QueryHeap					m_CopyHeap;
 
 	static constexpr uint32 MAX_EVENT_DEPTH = 32;
 	using ActiveEventStack = FixedStack<uint32, MAX_EVENT_DEPTH>;
-	std::vector<ActiveEventStack>						m_QueueEventStack;
-	std::vector<QueueInfo>								m_Queues;
-	std::unordered_map<ID3D12CommandQueue*, uint32>		m_QueueIndexMap;
+	std::vector<ActiveEventStack>						m_QueueEventStack;	// Stack of active events for each command queue
+	std::vector<QueueInfo>								m_Queues;			// All registered queues
+	std::unordered_map<ID3D12CommandQueue*, uint32>		m_QueueIndexMap;	// Map from command queue to index
 	GPUProfilerCallbacks								m_EventCallback;
 
 	bool						m_IsPaused				= false;
