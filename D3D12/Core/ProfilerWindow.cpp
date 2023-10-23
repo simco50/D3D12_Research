@@ -38,6 +38,9 @@ struct HUDContext
 	bool PauseThreshold = false;
 	float PauseThresholdTime = 100.0f;
 	bool IsPaused = false;
+
+	StringHash HoveredEventHash = 0;
+	bool IsHoveredCPUEvent = true;
 };
 
 static HUDContext gHUDContext;
@@ -98,6 +101,27 @@ static ImColor ColorFromString(const char* pName)
 	uint32 hash = HashString(pName);
 	float hashF = (float)hash / UINT32_MAX;
 	return ImColor(HSVtoRGB(hashF, 0.5f, 0.6f));
+}
+
+static StringHash GetEventHash(const GPUProfiler::EventData::Event& event)
+{
+	StringHash hash;
+	if (!event.pFilePath)
+		hash.Combine(StringHash(event.pName));
+	hash.Combine(StringHash(event.pFilePath));
+	hash.Combine(event.LineNumber);
+	hash.Combine(event.QueueIndex);
+	return hash;
+}
+
+static StringHash GetEventHash(const CPUProfiler::EventData::Event& event)
+{
+	StringHash hash;
+	if (!event.pFilePath)
+		hash.Combine(StringHash(event.pName));
+	hash.Combine(StringHash(event.pFilePath));
+	hash.Combine(event.LineNumber);
+	return hash;
 }
 
 static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
@@ -323,56 +347,62 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			return isOpen;
 		};
 
+		URange gpuRange = gGPUProfiler.GetFrameRange();
+		for (const GPUProfiler::QueueInfo& queue : gGPUProfiler.GetQueues())
 		{
-			URange gpuRange = gGPUProfiler.GetFrameRange();
-			for (const GPUProfiler::QueueInfo& queue : gGPUProfiler.GetQueues())
+			// Add thread name for track
+			bool isOpen = TrackHeader(queue.Name, ImGui::GetID(&queue));
+			uint32 maxDepth = isOpen ? style.MaxDepth : 1;
+			uint32 trackDepth = 1;
+			cursor.y += style.BarHeight;
+
+			for (uint32 i = gpuRange.Begin; i < gpuRange.End; ++i)
 			{
-				// Add thread name for track
-				bool isOpen = TrackHeader(queue.Name, ImGui::GetID(&queue));
-				uint32 maxDepth = isOpen ? style.MaxDepth : 1;
-				uint32 trackDepth = 1;
-				cursor.y += style.BarHeight;
-
-				for (uint32 i = gpuRange.Begin; i < gpuRange.End; ++i)
+				// Add a bar in the right place for each event
+				/*
+					|[=============]			|
+					|	[======]				|
+				*/
+				Span<const GPUProfiler::EventData::Event> events = gGPUProfiler.GetEventsForQueue(queue, i);
+				for (const GPUProfiler::EventData::Event& event : events)
 				{
-					// Add a bar in the right place for each event
-					/*
-						|[=============]			|
-						|	[======]				|
-					*/
-					Span<const GPUProfiler::EventData::Event> events = gGPUProfiler.GetEventsForQueue(queue, i);
-					for (const GPUProfiler::EventData::Event& event : events)
+					// Skip events above the max depth
+					if ((int)event.Depth >= maxDepth)
+						continue;
+
+					trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
+
+					uint64 cpuBeginTicks = queue.GpuToCpuTicks(event.TicksBegin);
+					uint64 cpuEndTicks = queue.GpuToCpuTicks(event.TicksEnd);
+
+					bool hovered;
+					DrawBar(ImGui::GetID(&event), cpuBeginTicks, cpuEndTicks, event.Depth, event.pName, &hovered);
+					if (hovered)
 					{
-						// Skip events above the max depth
-						if ((int)event.Depth >= maxDepth)
-							continue;
-
-						trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
-
-						uint64 cpuBeginTicks = queue.GpuToCpuTicks(event.TicksBegin);
-						uint64 cpuEndTicks = queue.GpuToCpuTicks(event.TicksEnd);
-
-						bool hovered;
-						DrawBar(ImGui::GetID(&event), cpuBeginTicks, cpuEndTicks, event.Depth, event.pName, &hovered);
-						if (hovered)
+						if (ImGui::IsKeyDown(ImGuiKey_LeftShift))
 						{
-							if (ImGui::BeginTooltip())
-							{
-								ImGui::Text("%s | %.3f ms", event.pName, TicksToMs * (float)(cpuEndTicks - cpuBeginTicks));
-								ImGui::Text("Frame %d", i);
-								if (event.pFilePath)
-									ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
-								ImGui::EndTooltip();
-							}
+							StringHash eventHash = GetEventHash(event);
+							context.HoveredEventHash = eventHash;
+							context.IsHoveredCPUEvent = false;
+						}
+
+						if (ImGui::BeginTooltip())
+						{
+							ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.4f, 1.0f), "%s | %.3f ms", event.pName, TicksToMs * (float)(cpuEndTicks - cpuBeginTicks));
+							ImGui::Text("Frame %d", i);
+							if (event.pFilePath)
+								ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
+							ImGui::EndTooltip();
 						}
 					}
 				}
-
-				// Add vertical line to end track
-				cursor.y += trackDepth * style.BarHeight;
-				pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor));
 			}
+
+			// Add vertical line to end track
+			cursor.y += trackDepth * style.BarHeight;
+			pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor));
 		}
+		
 
 		// Split between GPU and CPU tracks
 		pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor), 4);
@@ -411,9 +441,16 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					DrawBar(ImGui::GetID(&event), event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered);
 					if (hovered)
 					{
+						if (ImGui::IsKeyDown(ImGuiKey_LeftShift))
+						{
+							StringHash eventHash = GetEventHash(event);
+							context.HoveredEventHash = eventHash;
+							context.IsHoveredCPUEvent = true;
+						}
+
 						if (ImGui::BeginTooltip())
 						{
-							ImGui::Text("%s | %.3f ms", event.pName, TicksToMs * (float)(event.TicksEnd - event.TicksBegin));
+							ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.4f, 1.0f), "%s | %.3f ms", event.pName, TicksToMs * (float)(event.TicksEnd - event.TicksBegin));
 							ImGui::Text("Frame %d", frameIndex);
 							if (event.pFilePath)
 								ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
@@ -426,6 +463,83 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			// Add vertical line to end track
 			cursor.y += trackDepth * style.BarHeight;
 			pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor));
+		}
+
+		// Add extra data to tooltip
+		if ((uint32)context.HoveredEventHash != 0)
+		{
+			std::vector<float> eventTimes;
+			if (context.IsHoveredCPUEvent)
+			{
+				for (uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
+				{
+					for (const CPUProfiler::EventData::Event& event : gCPUProfiler.GetEvents(i))
+					{
+						if (GetEventHash(event) == context.HoveredEventHash)
+						{
+							float time = TicksToMs * (float)(event.TicksEnd - event.TicksBegin);
+							eventTimes.push_back(time);
+						}
+					}
+				}
+			}
+			else
+			{
+				Span<const GPUProfiler::QueueInfo> queues = gGPUProfiler.GetQueues();
+				for (uint32 i = gpuRange.Begin; i < gpuRange.End; ++i)
+				{
+					for (const GPUProfiler::EventData::Event& event : gGPUProfiler.GetEvents(i))
+					{
+						if (GetEventHash(event) == context.HoveredEventHash)
+						{
+							uint64 cpuBeginTicks = queues[event.QueueIndex].GpuToCpuTicks(event.TicksBegin);
+							uint64 cpuEndTicks = queues[event.QueueIndex].GpuToCpuTicks(event.TicksEnd);
+							float time = TicksToMs * (float)(cpuEndTicks - cpuBeginTicks);
+							eventTimes.push_back(time);
+						}
+					}
+				}
+			}
+
+			if (eventTimes.size() > 0)
+			{
+				float total = 0.0f;
+				float min = 10000.0f;
+				float max = 0.0f;
+				for (float t : eventTimes)
+				{
+					total += t;
+					min = Math::Min(t, min);
+					max = Math::Max(t, max);
+				}
+
+				uint32 n = (uint32)eventTimes.size() / 2;
+				std::nth_element(eventTimes.begin(), eventTimes.begin() + n, eventTimes.end());
+				float median = eventTimes[n];
+
+				if (ImGui::BeginTooltip())
+				{
+					ImGui::Separator();
+					if (ImGui::BeginTable("TooltipTable", 2))
+					{
+						ImGui::TableNextColumn();	ImGui::Text("Occurances:");
+						ImGui::TableNextColumn();	ImGui::Text("%d", eventTimes.size());
+
+						ImGui::TableNextColumn();	ImGui::Text("Average:");
+						ImGui::TableNextColumn();	ImGui::Text("%.2f ms", total / eventTimes.size());
+
+						ImGui::TableNextColumn();	ImGui::Text("Median:");
+						ImGui::TableNextColumn();	ImGui::Text("%.2f ms", median);
+
+						ImGui::TableNextColumn();	ImGui::Text("Min/Max:");
+						ImGui::TableNextColumn();	ImGui::Text("%.2f/%.2f ms", min, max);
+
+						ImGui::EndTable();
+					}
+					ImGui::EndTooltip();
+				}
+			}
+			context.HoveredEventHash = 0;
 		}
 
 		// The final height of the timeline

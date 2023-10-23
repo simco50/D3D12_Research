@@ -282,6 +282,13 @@ public:
 		return eventData.EventsPerQueue[queueIndex];
 	}
 
+	Span<const EventData::Event> GetEvents(uint32 frame) const
+	{
+		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
+		const EventData& eventData = GetSampleFrame(frame);
+		return Span<const EventData::Event>(eventData.Events.data(), eventData.NumEvents);
+	}
+
 	void SetEventCallback(const GPUProfilerCallbacks& inCallbacks) { m_EventCallback = inCallbacks; }
 
 private:
@@ -579,6 +586,13 @@ public:
 		if (thread.Index < data.EventsPerThread.size())
 			return data.EventsPerThread[thread.Index];
 		return {};
+	}
+
+	Span<const EventData::Event> GetEvents(uint32 frame) const
+	{
+		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
+		const EventData& eventData = GetData(frame);
+		return Span<const EventData::Event>(eventData.Events.data(), eventData.NumEvents);
 	}
 
 	// Get the ticks range of the history
