@@ -215,20 +215,50 @@ public:
 
 		struct Event
 		{
-			const char* pName		= "";	// Name of event
-			const char* pFilePath	= "";	// File path of location where event was started
-			uint64		TicksBegin	= 0;	// Begin GPU ticks
-			uint64		TicksEnd	= 0;	// End GPU ticks
-			uint32		LineNumber	: 16;	// Line number of file where event was started
-			uint32		Index		: 16;	// Index of event, to ensure stable sort when ordering
-			uint32		Depth		: 8;	// Stack depth of event
-			uint32		QueueIndex	: 8;	// Index of QueueInfo
-			uint32		padding		: 16;
+			const char* pName		= nullptr;	// Name of event
+			const char* pFilePath	= nullptr;	// File path of location where event was started
+			uint64		TicksBegin	= 0;		// Begin GPU ticks
+			uint64		TicksEnd	= 0;		// End GPU ticks
+			uint32		LineNumber	: 16;		// Line number of file where event was started
+			uint32		Depth		: 8;		// Stack depth of event
+			uint32		QueueIndex	: 8;		// Index of QueueInfo
+			uint32		padding		: 32;
 		};
 		static_assert(sizeof(Event) == sizeof(uint32) * 10);
 
+		class Iterator
+		{
+		public:
+			Iterator(Span<const Event> events, uint32 queueIndex)
+				: m_Events(events), m_QueueIndex(queueIndex), m_CurrentIndex(0)
+			{
+				AdvanceToValid();
+			}
+
+			void operator++()
+			{
+				++m_CurrentIndex;
+				AdvanceToValid();
+			}
+
+			bool IsValid() const { return m_CurrentIndex < m_Events.GetSize(); }
+			const Event& Get() const { return m_Events[m_CurrentIndex]; }
+
+		private:
+			void AdvanceToValid()
+			{
+				while (m_CurrentIndex < m_Events.GetSize() && m_Events[m_CurrentIndex].QueueIndex != m_QueueIndex)
+					m_CurrentIndex++;
+			}
+
+			Span<const Event>	m_Events;
+			uint32				m_QueueIndex;
+			uint32				m_CurrentIndex;
+		};
+
+		Iterator Iterate(uint32 queueIndex) const { return Iterator(Span<const Event>(Events.data(), NumEvents), queueIndex); }
+
 		LinearAllocator					Allocator;			// Scratch allocator for frame
-		std::vector<Span<const Event>>	EventsPerQueue;		// Span of events for each queue
 		std::vector<Event>				Events;				// Event storage for frame
 		uint32							NumEvents = 0;		// Total number of recorded events
 	};
@@ -255,8 +285,9 @@ public:
 			return (float)ticks / GPUFrequency * 1000.0f;
 		}
 
-		ID3D12CommandQueue* pQueue = nullptr;	// The D3D queue object
-		char Name[128];							// Name of the queue
+		char				Name[128];				// Name of the queue
+		ID3D12CommandQueue* pQueue		= nullptr;	// The D3D queue object
+		bool				IsCopyQueue = false;
 
 	private:
 		uint64 GPUCalibrationTicks	= 0;		// The number of GPU ticks when the calibration was done
@@ -274,12 +305,12 @@ public:
 		return URange(begin, end);
 	}
 
-	Span<const EventData::Event> GetEventsForQueue(const QueueInfo& queue, uint32 frame) const
+	EventData::Iterator IterateEvents(uint32 frame, const QueueInfo& queue) const
 	{
 		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
-		uint32 queueIndex = m_QueueIndexMap.at(queue.pQueue);
 		const EventData& eventData = GetSampleFrame(frame);
-		return eventData.EventsPerQueue[queueIndex];
+		uint32 queueIndex = m_QueueIndexMap.at(queue.pQueue);
+		return eventData.Iterate(queueIndex);
 	}
 
 	Span<const EventData::Event> GetEvents(uint32 frame) const
@@ -362,9 +393,8 @@ private:
 	{
 		struct QueryRange
 		{
-			uint32 QueryIndexBegin	: 15;
-			uint32 QueryIndexEnd	: 15;
-			uint32 IsCopyQuery		: 1;
+			uint32 QueryIndexBegin	: 16;
+			uint32 QueryIndexEnd	: 16;
 		};
 		static_assert(sizeof(QueryRange) == sizeof(uint32));
 		std::vector<QueryRange>	Ranges;
@@ -544,12 +574,46 @@ public:
 			uint32		LineNumber	: 16;		// Line number of file in which this event is recorded
 			uint32		ThreadIndex	: 11;		// Thread Index of the thread that recorderd this event
 			uint32		Depth		: 5;		// Depth of the event
+			uint32		padding		: 32;
+		};
+		static_assert(sizeof(Event) == 10 * sizeof(uint32));
+
+		class Iterator
+		{
+		public:
+			Iterator(Span<const Event> events, uint32 threadIndex)
+				: m_Events(events), m_ThreadIndex(threadIndex), m_CurrentIndex(0)
+			{
+				AdvanceToValid();
+			}
+
+			void operator++()
+			{
+				++m_CurrentIndex;
+				AdvanceToValid();
+			}
+
+			bool IsValid() const { return m_CurrentIndex < m_Events.GetSize(); }
+			const Event& Get() const { return m_Events[m_CurrentIndex]; }
+
+
+		private:
+			void AdvanceToValid()
+			{
+				while (m_CurrentIndex < m_Events.GetSize() && m_Events[m_CurrentIndex].ThreadIndex != m_ThreadIndex)
+					m_CurrentIndex++;
+			}
+
+			Span<const Event>	m_Events;
+			uint32				m_ThreadIndex;
+			uint32				m_CurrentIndex;
 		};
 
-		std::vector<Span<const Event>>	EventsPerThread;	// Events per thread of the frame
+		Iterator Iterate(uint32 threadIndex) const { return Iterator(Span<const Event>(Events.data(), NumEvents), threadIndex); }
+
 		std::vector<Event>				Events;				// All events of the frame
 		LinearAllocator					Allocator;			// Scratch allocator storing all dynamic allocations of the frame
-		std::atomic<uint32>				NumEvents = 0;		// The number of events
+		uint32							NumEvents = 0;		// The number of events
 	};
 
 	// Thread-local storage to keep track of current depth and event stack
@@ -578,13 +642,11 @@ public:
 		return URange(begin, end);
 	}
 
-	Span<const EventData::Event> GetEventsForThread(const ThreadData& thread, uint32 frame) const
+	EventData::Iterator IterateEvents(uint32 frame, const ThreadData& thread) const
 	{
 		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
-		const EventData& data = m_pEventData[frame % m_HistorySize];
-		if (thread.Index < data.EventsPerThread.size())
-			return data.EventsPerThread[thread.Index];
-		return {};
+		const EventData& eventData = GetData(frame);
+		return eventData.Iterate(thread.Index);
 	}
 
 	Span<const EventData::Event> GetEvents(uint32 frame) const
@@ -638,6 +700,7 @@ private:
 	EventData*				m_pEventData		= nullptr;	// Per-frame data
 	uint32					m_HistorySize		= 0;		// History size
 	uint32					m_FrameIndex		= 0;		// The current frame index
+	std::atomic<uint32>		m_EventIndex		= 0;		// The current event index
 	bool					m_Paused			= false;	// The current pause state
 	bool					m_QueuedPaused		= false;	// The queued pause state
 };

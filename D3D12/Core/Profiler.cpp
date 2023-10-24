@@ -20,6 +20,9 @@ void GPUProfiler::Initialize(
 	uint32						maxNumCopyEvents,
 	uint32						maxNumActiveCommandLists)
 {
+	// Event indices are 15 bit, so max 2^15 events
+	check(maxNumEvents + maxNumCopyEvents < (1 << 15));
+
 	m_FrameLatency = frameLatency;
 	m_EventHistorySize = sampleHistory;
 
@@ -35,6 +38,7 @@ void GPUProfiler::Initialize(
 		uint32 size = ARRAYSIZE(queueInfo.Name);
 		pQueue->GetPrivateData(WKPDID_D3DDebugObjectName, &size, queueInfo.Name);
 		queueInfo.pQueue = pQueue;
+		queueInfo.IsCopyQueue = desc.Type == D3D12_COMMAND_LIST_TYPE_COPY;
 		queueInfo.InitCalibration();
 
 		if (desc.Type == D3D12_COMMAND_LIST_TYPE_COPY && !m_CopyHeap.IsInitialized())
@@ -48,7 +52,6 @@ void GPUProfiler::Initialize(
 	{
 		EventData& eventData = m_pEventData[i];
 		eventData.Events.resize(maxNumEvents + maxNumCopyEvents);
-		eventData.EventsPerQueue.resize(queues.GetSize());
 	}
 
 	m_pQueryData = new QueryData[frameLatency];
@@ -97,11 +100,9 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 	// Allocate a query range in the query frame
 	QueryData::QueryRange& range	= queryData.Ranges[eventIndex];
 	range.QueryIndexBegin			= queryIndex;
-	range.IsCopyQuery				= pCmd->GetType() == D3D12_COMMAND_LIST_TYPE_COPY;
 
 	// Allocate an event in the sample history
 	EventData::Event& event			= eventData.Events[eventIndex];
-	event.Index						= eventIndex;
 	event.pName						= eventData.Allocator.String(pName);
 	event.pFilePath					= pFilePath;
 	event.LineNumber				= lineNumber;
@@ -151,30 +152,13 @@ void GPUProfiler::Tick()
 
 		for (uint32 i = 0; i < numEvents; ++i)
 		{
-			QueryData::QueryRange& queryRange	= queryData.Ranges[i];
-			EventData::Event& event				= eventData.Events[i];
-			event.TicksBegin					= queryRange.IsCopyQuery ? copyQueries[queryRange.QueryIndexBegin] : mainQueries[queryRange.QueryIndexBegin];
-			event.TicksEnd						= queryRange.IsCopyQuery ? copyQueries[queryRange.QueryIndexEnd] : mainQueries[queryRange.QueryIndexEnd];
-		}
+			QueryData::QueryRange&	queryRange	= queryData.Ranges[i];
+			EventData::Event&		event		= eventData.Events[i];
+			const QueueInfo&		queue		= m_Queues[event.QueueIndex];
+			Span<const uint64>		queries		= queue.IsCopyQueue ? copyQueries : mainQueries;
 
-		// Sort events by queue
-		std::vector<EventData::Event>& events = eventData.Events;
-		std::sort(events.begin(), events.begin() + numEvents, [](const EventData::Event& a, const EventData::Event& b)
-			{
-				return a.QueueIndex < b.QueueIndex;
-			});
-
-		URange eventRange(0, 0);
-		for (uint32 queueIndex = 0; queueIndex < (uint32)m_Queues.size() && eventRange.Begin < eventData.NumEvents; ++queueIndex)
-		{
-			while (queueIndex > events[eventRange.Begin].QueueIndex)
-				eventRange.Begin++;
-			eventRange.End = eventRange.Begin;
-			while (events[eventRange.End].QueueIndex == queueIndex && eventRange.End < eventData.NumEvents)
-				++eventRange.End;
-
-			eventData.EventsPerQueue[queueIndex] = Span<const EventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
-			eventRange.Begin = eventRange.End;
+			event.TicksBegin					= queries[queryRange.QueryIndexBegin];
+			event.TicksEnd						= queries[queryRange.QueryIndexEnd];
 		}
 
 		++m_FrameToReadback;
@@ -200,8 +184,6 @@ void GPUProfiler::Tick()
 		EventData& eventFrame = GetSampleFrame();
 		eventFrame.NumEvents = 0;
 		eventFrame.Allocator.Reset();
-		for (uint32 i = 0; i < (uint32)m_Queues.size(); ++i)
-			eventFrame.EventsPerQueue[i] = {};
 	}
 }
 
@@ -334,7 +316,8 @@ void GPUProfiler::QueryHeap::Reset(uint32 frameIndex)
 
 void CPUProfiler::Initialize(uint32 historySize, uint32 maxEvents)
 {
-	Shutdown();
+	// Event indices are 16 bit, so max 2^16 events
+	check(maxEvents < (1 << 16));
 
 	m_pEventData = new EventData[historySize];
 	m_HistorySize = historySize;
@@ -359,7 +342,7 @@ void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint32 li
 		return;
 
 	EventData& data = GetData();
-	uint32 newIndex = data.NumEvents.fetch_add(1);
+	uint32 newIndex = m_EventIndex.fetch_add(1);
 	check(newIndex < data.Events.size());
 
 	TLS& tls = GetTLS();
@@ -403,32 +386,15 @@ void CPUProfiler::Tick()
 	for (auto& threadData : m_ThreadData)
 		check(threadData.pTLS->EventStack.GetSize() == 0);
 
-	// Sort the events by thread and group by thread
-	EventData& frame = GetData();
-	std::vector<EventData::Event>& events = frame.Events;
-	std::sort(events.begin(), events.begin() + frame.NumEvents, [](const EventData::Event& a, const EventData::Event& b)
-		{
-			return a.ThreadIndex < b.ThreadIndex;
-		});
-
-	URange eventRange(0, 0);
-	for (uint32 threadIndex = 0; threadIndex < (uint32)m_ThreadData.size() && eventRange.Begin < frame.NumEvents; ++threadIndex)
-	{
-		while (threadIndex > events[eventRange.Begin].ThreadIndex)
-			eventRange.Begin++;
-		eventRange.End = eventRange.Begin;
-		while (events[eventRange.End].ThreadIndex == threadIndex && eventRange.End < frame.NumEvents)
-			++eventRange.End;
-
-		frame.EventsPerThread[threadIndex] = Span<const EventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
-		eventRange.Begin = eventRange.End;
-	}
+	EventData& data = GetData();
+	data.NumEvents = m_EventIndex;
 
 	++m_FrameIndex;
 
 	EventData& newData = GetData();
 	newData.Allocator.Reset();
 	newData.NumEvents = 0;
+	m_EventIndex = 0;
 
 	BeginEvent("CPU Frame");
 }
@@ -458,9 +424,6 @@ void CPUProfiler::RegisterThread(const char* pName)
 	data.ThreadID = GetCurrentThreadId();
 	data.pTLS = &tls;
 	data.Index = (uint32)m_ThreadData.size() - 1;
-
-	for (uint32 i = 0; i < m_HistorySize; ++i)
-		m_pEventData[i].EventsPerThread.resize(m_ThreadData.size());
 }
 
 #endif

@@ -195,7 +195,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		URange cpuRange = gCPUProfiler.GetFrameRange();
 		for(uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
 		{
-			Span<const CPUProfiler::EventData::Event> events = gCPUProfiler.GetEventsForThread(gCPUProfiler.GetThreads()[0], i);
+			Span<const CPUProfiler::EventData::Event> events = gCPUProfiler.GetEvents(i);
 			if (events.GetSize() > 0 && frameNr++ % 2 == 0)
 			{
 				float beginOffset = (events[0].TicksBegin - beginAnchor) * TicksToPixels;
@@ -363,9 +363,10 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					|[=============]			|
 					|	[======]				|
 				*/
-				Span<const GPUProfiler::EventData::Event> events = gGPUProfiler.GetEventsForQueue(queue, i);
-				for (const GPUProfiler::EventData::Event& event : events)
+				for(GPUProfiler::EventData::Iterator iterator = gGPUProfiler.IterateEvents(i, queue); iterator.IsValid(); ++iterator)
 				{
+					const GPUProfiler::EventData::Event& event = iterator.Get();
+
 					// Skip events above the max depth
 					if ((int)event.Depth >= maxDepth)
 						continue;
@@ -402,7 +403,6 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			cursor.y += trackDepth * style.BarHeight;
 			pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor));
 		}
-		
 
 		// Split between GPU and CPU tracks
 		pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor), 4);
@@ -428,9 +428,10 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			*/
 			for (uint32 frameIndex = cpuRange.Begin; frameIndex < cpuRange.End; ++frameIndex)
 			{
-				Span<const CPUProfiler::EventData::Event> events = gCPUProfiler.GetEventsForThread(thread, frameIndex);
-				for (const CPUProfiler::EventData::Event& event : events)
+				for(CPUProfiler::EventData::Iterator iterator = gCPUProfiler.IterateEvents(frameIndex, thread); iterator.IsValid(); ++iterator)
 				{
+					const CPUProfiler::EventData::Event& event = iterator.Get();
+
 					// Skip events above the max depth
 					if (event.Depth >= maxDepth)
 						continue;
