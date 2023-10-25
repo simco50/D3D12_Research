@@ -373,11 +373,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 					trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
 
-					uint64 cpuBeginTicks = queue.GpuToCpuTicks(event.TicksBegin);
-					uint64 cpuEndTicks = queue.GpuToCpuTicks(event.TicksEnd);
-
 					bool hovered;
-					DrawBar(ImGui::GetID(&event), cpuBeginTicks, cpuEndTicks, event.Depth, event.pName, &hovered);
+					DrawBar(ImGui::GetID(&event), event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered);
 					if (hovered)
 					{
 						if (ImGui::IsKeyDown(ImGuiKey_LeftShift))
@@ -389,7 +386,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 						if (ImGui::BeginTooltip())
 						{
-							ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.4f, 1.0f), "%s | %.3f ms", event.pName, TicksToMs * (float)(cpuEndTicks - cpuBeginTicks));
+							ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.4f, 1.0f), "%s | %.3f ms", event.pName, TicksToMs * (float)(event.TicksEnd - event.TicksBegin));
 							ImGui::Text("Frame %d", i);
 							if (event.pFilePath)
 								ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
@@ -493,9 +490,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					{
 						if (GetEventHash(event) == context.HoveredEventHash)
 						{
-							uint64 cpuBeginTicks = queues[event.QueueIndex].GpuToCpuTicks(event.TicksBegin);
-							uint64 cpuEndTicks = queues[event.QueueIndex].GpuToCpuTicks(event.TicksEnd);
-							float time = TicksToMs * (float)(cpuEndTicks - cpuBeginTicks);
+							float time = TicksToMs * (float)(event.TicksEnd - event.TicksBegin);
 							eventTimes.push_back(time);
 						}
 					}

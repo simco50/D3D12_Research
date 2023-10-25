@@ -217,8 +217,8 @@ public:
 		{
 			const char* pName		= nullptr;	// Name of event
 			const char* pFilePath	= nullptr;	// File path of location where event was started
-			uint64		TicksBegin	= 0;		// Begin GPU ticks
-			uint64		TicksEnd	= 0;		// End GPU ticks
+			uint64		TicksBegin	= 0;		// Begin CPU ticks
+			uint64		TicksEnd	= 0;		// End CPU ticks
 			uint32		LineNumber	: 16;		// Line number of file where event was started
 			uint32		Depth		: 8;		// Stack depth of event
 			uint32		QueueIndex	: 8;		// Index of QueueInfo
@@ -264,36 +264,14 @@ public:
 	};
 
 	// Data of a single GPU queue. Allows converting GPU timestamps to CPU timestamps
-	class QueueInfo
+	struct QueueInfo
 	{
-	public:
-		void InitCalibration()
-		{
-			pQueue->GetClockCalibration(&GPUCalibrationTicks, &CPUCalibrationTicks);
-			pQueue->GetTimestampFrequency(&GPUFrequency);
-			QueryPerformanceFrequency((LARGE_INTEGER*)&CPUFrequency);
-		}
-
-		uint64 GpuToCpuTicks(uint64 gpuTicks) const
-		{
-			check(gpuTicks >= GPUCalibrationTicks);
-			return CPUCalibrationTicks + (gpuTicks - GPUCalibrationTicks) * CPUFrequency / GPUFrequency;
-		}
-
-		float TicksToMS(uint64 ticks) const
-		{
-			return (float)ticks / GPUFrequency * 1000.0f;
-		}
-
-		char				Name[128];				// Name of the queue
-		ID3D12CommandQueue* pQueue		= nullptr;	// The D3D queue object
-		bool				IsCopyQueue = false;
-
-	private:
-		uint64 GPUCalibrationTicks	= 0;		// The number of GPU ticks when the calibration was done
-		uint64 CPUCalibrationTicks	= 0;		// The number of CPU ticks when the calibration was done
-		uint64 GPUFrequency			= 0;		// The GPU tick frequency
-		uint64 CPUFrequency			= 0;		// The CPU tick frequency
+		char					Name[128]				{};			// Name of the queue
+		ID3D12CommandQueue*		pQueue					= nullptr;	// The D3D queue object
+		uint64					GPUCalibrationTicks		= 0;		// The number of GPU ticks when the calibration was done
+		uint64					CPUCalibrationTicks		= 0;		// The number of CPU ticks when the calibration was done
+		uint64					GPUFrequency			= 0;		// The GPU tick frequency
+		bool					IsCopyQueue				= false;	// True if queue is a copy queue
 	};
 
 	Span<const QueueInfo> GetQueues() const { return m_Queues; }
@@ -459,6 +437,12 @@ private:
 		std::vector<Data>								m_CommandListData;
 	};
 
+	uint64 ConvertToCPUTicks(const QueueInfo& queue, uint64 gpuTicks) const
+	{
+		check(gpuTicks >= queue.GPUCalibrationTicks);
+		return queue.CPUCalibrationTicks + (gpuTicks - queue.GPUCalibrationTicks) * m_CPUTickFrequency / queue.GPUFrequency;
+	}
+
 	QueryHeap& GetHeap(D3D12_COMMAND_LIST_TYPE type) { return type == D3D12_COMMAND_LIST_TYPE_COPY ? m_CopyHeap : m_MainHeap; }
 
 	CommandListData				m_CommandListData{};
@@ -475,6 +459,7 @@ private:
 
 	QueryHeap					m_MainHeap;
 	QueryHeap					m_CopyHeap;
+	uint64						m_CPUTickFrequency		= 0;
 
 	static constexpr uint32 MAX_EVENT_DEPTH = 32;
 	using ActiveEventStack = FixedStack<uint32, MAX_EVENT_DEPTH>;

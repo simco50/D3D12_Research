@@ -36,16 +36,29 @@ void GPUProfiler::Initialize(
 		m_QueueIndexMap[pQueue] = (uint32)m_Queues.size();
 		QueueInfo& queueInfo = m_Queues.emplace_back();
 		uint32 size = ARRAYSIZE(queueInfo.Name);
-		pQueue->GetPrivateData(WKPDID_D3DDebugObjectName, &size, queueInfo.Name);
+		if(FAILED(pQueue->GetPrivateData(WKPDID_D3DDebugObjectName, &size, queueInfo.Name)))
+		{
+			if (desc.Type == D3D12_COMMAND_LIST_TYPE_DIRECT)
+				strcpy_s(queueInfo.Name, "Direct Queue");
+			else if (desc.Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+				strcpy_s(queueInfo.Name, "Compute Queue");
+			else if (desc.Type == D3D12_COMMAND_LIST_TYPE_COPY)
+				strcpy_s(queueInfo.Name, "Copy Queue");
+			else
+				strcpy_s(queueInfo.Name, "??? Queue");
+		}
+
 		queueInfo.pQueue = pQueue;
 		queueInfo.IsCopyQueue = desc.Type == D3D12_COMMAND_LIST_TYPE_COPY;
-		queueInfo.InitCalibration();
+		pQueue->GetClockCalibration(&queueInfo.GPUCalibrationTicks, &queueInfo.CPUCalibrationTicks);
+		pQueue->GetTimestampFrequency(&queueInfo.GPUFrequency);
 
 		if (desc.Type == D3D12_COMMAND_LIST_TYPE_COPY && !m_CopyHeap.IsInitialized())
 			m_CopyHeap.Initialize(pDevice, pQueue, 2 * maxNumCopyEvents, frameLatency);
 		else if (desc.Type != D3D12_COMMAND_LIST_TYPE_COPY && !m_MainHeap.IsInitialized())
 			m_MainHeap.Initialize(pDevice, pQueue, 2 * maxNumEvents, frameLatency);
 	}
+	QueryPerformanceFrequency((LARGE_INTEGER*)&m_CPUTickFrequency);
 
 	m_pEventData = new EventData[sampleHistory];
 	for (uint32 i = 0; i < sampleHistory; ++i)
@@ -157,8 +170,9 @@ void GPUProfiler::Tick()
 			const QueueInfo&		queue		= m_Queues[event.QueueIndex];
 			Span<const uint64>		queries		= queue.IsCopyQueue ? copyQueries : mainQueries;
 
-			event.TicksBegin					= queries[queryRange.QueryIndexBegin];
-			event.TicksEnd						= queries[queryRange.QueryIndexEnd];
+			// Convert to CPU ticks and assign to event
+			event.TicksBegin					= ConvertToCPUTicks(queue, queries[queryRange.QueryIndexBegin]);
+			event.TicksEnd						= ConvertToCPUTicks(queue, queries[queryRange.QueryIndexEnd]);
 		}
 
 		++m_FrameToReadback;
