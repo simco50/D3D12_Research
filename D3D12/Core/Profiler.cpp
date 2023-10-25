@@ -28,7 +28,7 @@ void GPUProfiler::Initialize(
 
 	m_CommandListData.Setup(maxNumActiveCommandLists);
 	m_QueueEventStack.resize(queues.GetSize());
-	for (uint16 queueIndex = 0; queueIndex < queues.GetSize(); ++queueIndex)
+	for (uint32 queueIndex = 0; queueIndex < queues.GetSize(); ++queueIndex)
 	{
 		ID3D12CommandQueue* pQueue = queues[queueIndex];
 		D3D12_COMMAND_QUEUE_DESC desc = pQueue->GetDesc();
@@ -49,6 +49,7 @@ void GPUProfiler::Initialize(
 		}
 
 		queueInfo.pQueue = pQueue;
+		queueInfo.Index = queueIndex;
 		queueInfo.IsCopyQueue = desc.Type == D3D12_COMMAND_LIST_TYPE_COPY;
 		pQueue->GetClockCalibration(&queueInfo.GPUCalibrationTicks, &queueInfo.CPUCalibrationTicks);
 		pQueue->GetTimestampFrequency(&queueInfo.GPUFrequency);

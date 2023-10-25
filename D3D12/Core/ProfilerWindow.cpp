@@ -195,7 +195,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		URange cpuRange = gCPUProfiler.GetFrameRange();
 		for(uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
 		{
-			Span<const CPUProfiler::EventData::Event> events = gCPUProfiler.GetEvents(i);
+			Span<const CPUProfiler::EventData::Event> events = gCPUProfiler.GetEventData(i).GetEvents();
 			if (events.GetSize() > 0 && frameNr++ % 2 == 0)
 			{
 				float beginOffset = (events[0].TicksBegin - beginAnchor) * TicksToPixels;
@@ -363,7 +363,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					|[=============]			|
 					|	[======]				|
 				*/
-				for(GPUProfiler::EventData::Iterator iterator = gGPUProfiler.IterateEvents(i, queue); iterator.IsValid(); ++iterator)
+				for(GPUProfiler::EventData::Iterator iterator = gGPUProfiler.GetEventData(i).Iterate(queue.Index); iterator.IsValid(); ++iterator)
 				{
 					const GPUProfiler::EventData::Event& event = iterator.Get();
 
@@ -425,7 +425,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			*/
 			for (uint32 frameIndex = cpuRange.Begin; frameIndex < cpuRange.End; ++frameIndex)
 			{
-				for(CPUProfiler::EventData::Iterator iterator = gCPUProfiler.IterateEvents(frameIndex, thread); iterator.IsValid(); ++iterator)
+				const CPUProfiler::EventData& eventData = gCPUProfiler.GetEventData(frameIndex);
+				for(CPUProfiler::EventData::Iterator iterator = eventData.Iterate(thread.Index); iterator.IsValid(); ++iterator)
 				{
 					const CPUProfiler::EventData::Event& event = iterator.Get();
 
@@ -471,7 +472,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			{
 				for (uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
 				{
-					for (const CPUProfiler::EventData::Event& event : gCPUProfiler.GetEvents(i))
+					const CPUProfiler::EventData& eventData = gCPUProfiler.GetEventData(i);
+					for (const CPUProfiler::EventData::Event& event : eventData.GetEvents())
 					{
 						if (GetEventHash(event) == context.HoveredEventHash)
 						{
@@ -486,7 +488,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 				Span<const GPUProfiler::QueueInfo> queues = gGPUProfiler.GetQueues();
 				for (uint32 i = gpuRange.Begin; i < gpuRange.End; ++i)
 				{
-					for (const GPUProfiler::EventData::Event& event : gGPUProfiler.GetEvents(i))
+					const GPUProfiler::EventData& eventData = gGPUProfiler.GetEventData(i);
+					for (const GPUProfiler::EventData::Event& event : eventData.GetEvents())
 					{
 						if (GetEventHash(event) == context.HoveredEventHash)
 						{

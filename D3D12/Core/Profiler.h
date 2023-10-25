@@ -207,8 +207,9 @@ public:
 	void SetPaused(bool paused) { m_PauseQueued = paused; }
 
 	// Data for a single frame of profiling events. On for each history frame
-	struct EventData
+	class EventData
 	{
+	public:
 		EventData()
 			: Allocator(1 << 14)
 		{}
@@ -256,7 +257,11 @@ public:
 			uint32				m_CurrentIndex;
 		};
 
-		Iterator Iterate(uint32 queueIndex) const { return Iterator(Span<const Event>(Events.data(), NumEvents), queueIndex); }
+		Iterator Iterate(uint32 queueIndex) const { return Iterator(GetEvents(), queueIndex); }
+		Span<const Event> GetEvents() const { return Span<const Event>(Events.data(), NumEvents); }
+
+	private:
+		friend class GPUProfiler;
 
 		LinearAllocator					Allocator;			// Scratch allocator for frame
 		std::vector<Event>				Events;				// Event storage for frame
@@ -271,6 +276,7 @@ public:
 		uint64					GPUCalibrationTicks		= 0;		// The number of GPU ticks when the calibration was done
 		uint64					CPUCalibrationTicks		= 0;		// The number of CPU ticks when the calibration was done
 		uint64					GPUFrequency			= 0;		// The GPU tick frequency
+		uint32					Index					= 0;		// Index of queue
 		bool					IsCopyQueue				= false;	// True if queue is a copy queue
 	};
 
@@ -283,19 +289,10 @@ public:
 		return URange(begin, end);
 	}
 
-	EventData::Iterator IterateEvents(uint32 frame, const QueueInfo& queue) const
+	const EventData& GetEventData(uint32 frameIndex) const
 	{
-		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
-		const EventData& eventData = GetSampleFrame(frame);
-		uint32 queueIndex = m_QueueIndexMap.at(queue.pQueue);
-		return eventData.Iterate(queueIndex);
-	}
-
-	Span<const EventData::Event> GetEvents(uint32 frame) const
-	{
-		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
-		const EventData& eventData = GetSampleFrame(frame);
-		return Span<const EventData::Event>(eventData.Events.data(), eventData.NumEvents);
+		check(frameIndex >= GetFrameRange().Begin && frameIndex < GetFrameRange().End);
+		return GetSampleFrame(frameIndex);
 	}
 
 	void SetEventCallback(const GPUProfilerCallbacks& inCallbacks) { m_EventCallback = inCallbacks; }
@@ -541,8 +538,9 @@ public:
 	void RegisterThread(const char* pName = nullptr);
 
 	// Struct containing all sampling data of a single frame
-	struct EventData
+	class EventData
 	{
+	public:
 		static constexpr uint32 ALLOCATOR_SIZE = 1 << 14;
 
 		EventData()
@@ -581,7 +579,6 @@ public:
 			bool IsValid() const { return m_CurrentIndex < m_Events.GetSize(); }
 			const Event& Get() const { return m_Events[m_CurrentIndex]; }
 
-
 		private:
 			void AdvanceToValid()
 			{
@@ -594,7 +591,11 @@ public:
 			uint32				m_CurrentIndex;
 		};
 
-		Iterator Iterate(uint32 threadIndex) const { return Iterator(Span<const Event>(Events.data(), NumEvents), threadIndex); }
+		Iterator Iterate(uint32 threadIndex) const { return Iterator(GetEvents(), threadIndex); }
+		const Span<const Event> GetEvents() const { return Span<const Event>(Events.data(), NumEvents); }
+
+	private:
+		friend class CPUProfiler;
 
 		std::vector<Event>				Events;				// All events of the frame
 		LinearAllocator					Allocator;			// Scratch allocator storing all dynamic allocations of the frame
@@ -627,18 +628,10 @@ public:
 		return URange(begin, end);
 	}
 
-	EventData::Iterator IterateEvents(uint32 frame, const ThreadData& thread) const
+	const EventData& GetEventData(uint32 frameIndex) const
 	{
-		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
-		const EventData& eventData = GetData(frame);
-		return eventData.Iterate(thread.Index);
-	}
-
-	Span<const EventData::Event> GetEvents(uint32 frame) const
-	{
-		check(frame >= GetFrameRange().Begin && frame < GetFrameRange().End);
-		const EventData& eventData = GetData(frame);
-		return Span<const EventData::Event>(eventData.Events.data(), eventData.NumEvents);
+		check(frameIndex >= GetFrameRange().Begin && frameIndex < GetFrameRange().End);
+		return GetData(frameIndex);
 	}
 
 	// Get the ticks range of the history
