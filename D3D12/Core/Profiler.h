@@ -227,43 +227,14 @@ public:
 		};
 		static_assert(sizeof(Event) == sizeof(uint32) * 10);
 
-		class Iterator
-		{
-		public:
-			Iterator(Span<const Event> events, uint32 queueIndex)
-				: m_Events(events), m_QueueIndex(queueIndex), m_CurrentIndex(0)
-			{
-				AdvanceToValid();
-			}
-
-			void operator++()
-			{
-				++m_CurrentIndex;
-				AdvanceToValid();
-			}
-
-			bool IsValid() const { return m_CurrentIndex < m_Events.GetSize(); }
-			const Event& Get() const { return m_Events[m_CurrentIndex]; }
-
-		private:
-			void AdvanceToValid()
-			{
-				while (m_CurrentIndex < m_Events.GetSize() && m_Events[m_CurrentIndex].QueueIndex != m_QueueIndex)
-					m_CurrentIndex++;
-			}
-
-			Span<const Event>	m_Events;
-			uint32				m_QueueIndex;
-			uint32				m_CurrentIndex;
-		};
-
-		Iterator Iterate(uint32 queueIndex) const { return Iterator(GetEvents(), queueIndex); }
 		Span<const Event> GetEvents() const { return Span<const Event>(Events.data(), NumEvents); }
+		Span<const Event> GetEvents(uint32 queueIndex) const { return queueIndex < EventsPerQueue.size() ? EventsPerQueue[queueIndex] : Span<const Event>(); }
 
 	private:
 		friend class GPUProfiler;
 
 		LinearAllocator					Allocator;			// Scratch allocator for frame
+		std::vector<Span<const Event>>	EventsPerQueue;		// Span of events for each queue
 		std::vector<Event>				Events;				// Event storage for frame
 		uint32							NumEvents = 0;		// Total number of recorded events
 	};
@@ -561,42 +532,12 @@ public:
 		};
 		static_assert(sizeof(Event) == 10 * sizeof(uint32));
 
-		class Iterator
-		{
-		public:
-			Iterator(Span<const Event> events, uint32 threadIndex)
-				: m_Events(events), m_ThreadIndex(threadIndex), m_CurrentIndex(0)
-			{
-				AdvanceToValid();
-			}
-
-			void operator++()
-			{
-				++m_CurrentIndex;
-				AdvanceToValid();
-			}
-
-			bool IsValid() const { return m_CurrentIndex < m_Events.GetSize(); }
-			const Event& Get() const { return m_Events[m_CurrentIndex]; }
-
-		private:
-			void AdvanceToValid()
-			{
-				while (m_CurrentIndex < m_Events.GetSize() && m_Events[m_CurrentIndex].ThreadIndex != m_ThreadIndex)
-					m_CurrentIndex++;
-			}
-
-			Span<const Event>	m_Events;
-			uint32				m_ThreadIndex;
-			uint32				m_CurrentIndex;
-		};
-
-		Iterator Iterate(uint32 threadIndex) const { return Iterator(GetEvents(), threadIndex); }
 		const Span<const Event> GetEvents() const { return Span<const Event>(Events.data(), NumEvents); }
+		const Span<const Event> GetEvents(uint32 threadIndex) const { return threadIndex < (uint32)EventsPerThread.size() ? EventsPerThread[threadIndex] : Span<const Event>(); }
 
 	private:
 		friend class CPUProfiler;
-
+		std::vector<Span<const Event>>	EventsPerThread;	// Span of events for each queue
 		std::vector<Event>				Events;				// All events of the frame
 		LinearAllocator					Allocator;			// Scratch allocator storing all dynamic allocations of the frame
 		uint32							NumEvents = 0;		// The number of events
@@ -632,14 +573,6 @@ public:
 	{
 		check(frameIndex >= GetFrameRange().Begin && frameIndex < GetFrameRange().End);
 		return GetData(frameIndex);
-	}
-
-	// Get the ticks range of the history
-	void GetHistoryRange(uint64& ticksMin, uint64& ticksMax) const
-	{
-		URange range = GetFrameRange();
-		ticksMin = GetData(range.Begin).Events[0].TicksBegin;
-		ticksMax = GetData(range.End).Events[0].TicksEnd;
 	}
 
 	Span<const ThreadData> GetThreads() const { return m_ThreadData; }

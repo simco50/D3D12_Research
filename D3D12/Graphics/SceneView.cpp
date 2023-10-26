@@ -261,11 +261,15 @@ namespace Renderer
 
 	void DrawScene(CommandContext& context, const Span<Batch>& batches, const VisibilityMask& visibility, Batch::Blending blendModes)
 	{
+		PROFILE_CPU_SCOPE();
+		PROFILE_GPU_SCOPE(context.GetCommandList());
 		check(batches.GetSize() <= visibility.Size());
 		for (const Batch& b : batches)
 		{
 			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 			{
+				PROFILE_CPU_SCOPE("Draw Primitive");
+				PROFILE_GPU_SCOPE(context.GetCommandList(), "Draw Pritimive");
 				context.BindRootCBV(0, b.InstanceID);
 				context.DispatchMesh(Math::DivideAndRoundUp(b.pMesh->NumMeshlets, 32));
 			}

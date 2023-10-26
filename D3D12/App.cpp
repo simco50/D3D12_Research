@@ -33,7 +33,7 @@ struct LivePPAgent
 		if (lpp::LppIsValidDefaultAgent(&Agent))
 		{
 			// enable Live++ for all loaded modules
-			Agent.EnableModule(lpp::LppGetCurrentModulePath(), lpp::LPP_MODULES_OPTION_ALL_IMPORT_MODULES, nullptr, nullptr);
+			Agent.EnableModule(lpp::LppGetCurrentModulePath(), lpp::LPP_MODULES_OPTION_ALL_IMPORT_MODULES);
 		}
 	}
 
@@ -54,6 +54,8 @@ struct LivePPAgent
 
 int App::Run()
 {
+	LIVE_PP();
+
 	Init_Internal();
 	while (m_Window.PollMessages())
 	{
@@ -68,7 +70,7 @@ int App::Run()
 
 static void InitializeProfiler(GraphicsDevice* pDevice)
 {
-	const uint32 frameHistory = 5;
+	const uint32 frameHistory = 8;
 	const uint32 maxEvents = 1024;
 	const uint32 maxCopyEvents = 128;
 	const uint32 maxActiveCmdLists = 64;
@@ -102,8 +104,6 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 
 void App::Init_Internal()
 {
-	LIVE_PP();
-
 #ifdef _DEBUG
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #if BREAK_ON_ALLOC > 0

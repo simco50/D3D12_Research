@@ -66,6 +66,7 @@ void GPUProfiler::Initialize(
 	{
 		EventData& eventData = m_pEventData[i];
 		eventData.Events.resize(maxNumEvents + maxNumCopyEvents);
+		eventData.EventsPerQueue.resize(queues.GetSize());
 	}
 
 	m_pQueryData = new QueryData[frameLatency];
@@ -176,6 +177,27 @@ void GPUProfiler::Tick()
 			event.TicksEnd						= ConvertToCPUTicks(queue, queries[queryRange.QueryIndexEnd]);
 		}
 
+		// Sort events by queue and make groups per queue for fast per-queue event iteration.
+		// This is _much_ faster than iterating all event multiple times and filtering
+		std::vector<EventData::Event>& events = eventData.Events;
+		std::sort(events.begin(), events.begin() + numEvents, [](const EventData::Event& a, const EventData::Event& b)
+			{
+				return a.QueueIndex < b.QueueIndex;
+			});
+
+		URange eventRange(0, 0);
+		for (uint32 queueIndex = 0; queueIndex < (uint32)m_Queues.size() && eventRange.Begin < eventData.NumEvents; ++queueIndex)
+		{
+			while (queueIndex > events[eventRange.Begin].QueueIndex)
+				eventRange.Begin++;
+			eventRange.End = eventRange.Begin;
+			while (events[eventRange.End].QueueIndex == queueIndex && eventRange.End < eventData.NumEvents)
+				++eventRange.End;
+
+			eventData.EventsPerQueue[queueIndex] = Span<const EventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
+			eventRange.Begin = eventRange.End;
+		}
+
 		++m_FrameToReadback;
 	}
 
@@ -199,6 +221,8 @@ void GPUProfiler::Tick()
 		EventData& eventFrame = GetSampleFrame();
 		eventFrame.NumEvents = 0;
 		eventFrame.Allocator.Reset();
+		for (uint32 i = 0; i < (uint32)m_Queues.size(); ++i)
+			eventFrame.EventsPerQueue[i] = {};
 	}
 }
 
@@ -403,6 +427,30 @@ void CPUProfiler::Tick()
 
 	EventData& data = GetData();
 	data.NumEvents = m_EventIndex;
+	for (uint32 i = 0; i < m_HistorySize; ++i)
+		data.EventsPerThread.resize(m_ThreadData.size());
+
+	// Sort events by thread and make groups per thread for fast per-thread event iteration.
+	// This is _much_ faster than iterating all event multiple times and filtering
+	EventData& frame = GetData();
+	std::vector<EventData::Event>& events = frame.Events;
+	std::sort(events.begin(), events.begin() + frame.NumEvents, [](const EventData::Event& a, const EventData::Event& b)
+		{
+			return a.ThreadIndex < b.ThreadIndex;
+		});
+
+	URange eventRange(0, 0);
+	for (uint32 threadIndex = 0; threadIndex < (uint32)m_ThreadData.size() && eventRange.Begin < frame.NumEvents; ++threadIndex)
+	{
+		while (threadIndex > events[eventRange.Begin].ThreadIndex)
+			eventRange.Begin++;
+		eventRange.End = eventRange.Begin;
+		while (events[eventRange.End].ThreadIndex == threadIndex && eventRange.End < frame.NumEvents)
+			++eventRange.End;
+
+		frame.EventsPerThread[threadIndex] = Span<const EventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
+		eventRange.Begin = eventRange.End;
+	}
 
 	++m_FrameIndex;
 

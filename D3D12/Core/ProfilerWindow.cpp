@@ -53,7 +53,7 @@ static void EditStyle(StyleOptions& style)
 {
 	ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.7f);
 	ImGui::SliderInt("Depth", &style.MaxDepth, 1, 12);
-	ImGui::SliderInt("Max Time", &style.MaxTime, 8, 66);
+	ImGui::SliderInt("Max Time", &style.MaxTime, 8, 500);
 	ImGui::SliderFloat("Bar Height", &style.BarHeight, 8, 33);
 	ImGui::SliderFloat("Bar Padding", &style.BarPadding, 0, 5);
 	ImGui::SliderFloat("Scroll Bar Size", &style.ScrollBarSize, 1.0f, 40.0f);
@@ -126,6 +126,8 @@ static StringHash GetEventHash(const CPUProfiler::EventData::Event& event)
 
 static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 {
+	PROFILE_CPU_SCOPE();
+
 	HUDContext& context = gHUDContext;
 	StyleOptions& style = context.Style;
 
@@ -156,9 +158,13 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		// How many ticks are in the timeline
 		float ticksInTimeline = MsToTicks * style.MaxTime;
 
-		uint64 timelineTicksBegin, timelineTicksEnd;
-		gCPUProfiler.GetHistoryRange(timelineTicksBegin, timelineTicksEnd);
-		uint64 beginAnchor = timelineTicksBegin;
+		URange cpuRange = gCPUProfiler.GetFrameRange();
+		uint64 beginAnchor = 0;
+		if (cpuRange.GetLength() > 0)
+		{
+			const CPUProfiler::EventData& eventData = gCPUProfiler.GetEventData(cpuRange.Begin);
+			beginAnchor = eventData.GetEvents().GetSize() > 0 ? eventData.GetEvents()[0].TicksBegin : 0;
+		}
 
 		// How many pixels is one tick
 		const float TicksToPixels = timelineWidth / ticksInTimeline;
@@ -192,7 +198,6 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 		// Add dark shade background for every even frame
 		int frameNr = 0;
-		URange cpuRange = gCPUProfiler.GetFrameRange();
 		for(uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
 		{
 			Span<const CPUProfiler::EventData::Event> events = gCPUProfiler.GetEventData(i).GetEvents();
@@ -206,12 +211,14 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 		ImGui::PushClipRect(timelineRect.Min + ImVec2(0, style.BarHeight), timelineRect.Max, true);
 
+		ImRect clipRect = ImGui::GetCurrentWindow()->ClipRect;
+
 		// Common function to draw a single bar
 		/*
 			[=== SomeFunction (1.2 ms) ===]
 		*/
 		bool anyHovered = false;
-		auto DrawBar = [&](uint32 id, uint64 beginTicks, uint64 endTicks, uint32 depth, const char* pName, bool* pOutHovered = nullptr)
+		auto DrawBar = [&](uint64 beginTicks, uint64 endTicks, uint32 depth, const char* pName, bool* pOutHovered = nullptr)
 		{
 			bool hovered = false;
 			if (endTicks > beginAnchor)
@@ -223,7 +230,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 				// Ensure a bar always has a width
 				itemRect.Max.x = ImMax(itemRect.Max.x, itemRect.Min.x + 1);
-				if (ImGui::ItemAdd(itemRect, id, 0))
+				
+				if (clipRect.Overlaps(itemRect))
 				{
 					float ms = TicksToMs * (float)(endTicks - beginTicks);
 
@@ -244,22 +252,25 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					// Darken the bottom
 					ImColor colorBottom = color.Value * ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
 
-					hovered = ImGui::IsItemHovered() && !anyHovered;
-					anyHovered |= hovered;
-
-					// If the bar is double-clicked, zoom in to make the bar fill the entire window
-					if (ImGui::ButtonBehavior(itemRect, ImGui::GetItemID(), nullptr, nullptr, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_PressedOnDoubleClick))
+					if (!anyHovered && ImGui::IsMouseHoveringRect(itemRect.Min, itemRect.Max))
 					{
-						// Zoom ration to make the bar fit the entire window
-						float zoom = timelineWidth / itemRect.GetWidth();
-						context.TimelineScale = zoom;
+						hovered = true;
+						anyHovered = true;
 
-						// Recompute the timeline size with new zoom
-						float newTimelineWidth = timelineRect.GetWidth() * context.TimelineScale;
-						float newTickScale = newTimelineWidth / ticksInTimeline;
-						float newStartPos = newTickScale * (beginTicks - beginAnchor);
+						// If the bar is double-clicked, zoom in to make the bar fill the entire window
+						if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+						{
+							// Zoom ration to make the bar fit the entire window
+							float zoom = timelineWidth / itemRect.GetWidth();
+							context.TimelineScale = zoom;
 
-						context.TimelineOffset.x = -newStartPos;
+							// Recompute the timeline size with new zoom
+							float newTimelineWidth = timelineRect.GetWidth() * context.TimelineScale;
+							float newTickScale = newTimelineWidth / ticksInTimeline;
+							float newStartPos = newTickScale * (beginTicks - beginAnchor);
+
+							context.TimelineOffset.x = -newStartPos;
+						}
 					}
 
 					// Draw the bar rect and outline if hovered
@@ -350,6 +361,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		URange gpuRange = gGPUProfiler.GetFrameRange();
 		for (const GPUProfiler::QueueInfo& queue : gGPUProfiler.GetQueues())
 		{
+			PROFILE_CPU_SCOPE("GPU Track");
+
 			// Add thread name for track
 			bool isOpen = TrackHeader(queue.Name, ImGui::GetID(&queue));
 			uint32 maxDepth = isOpen ? style.MaxDepth : 1;
@@ -363,10 +376,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					|[=============]			|
 					|	[======]				|
 				*/
-				for(GPUProfiler::EventData::Iterator iterator = gGPUProfiler.GetEventData(i).Iterate(queue.Index); iterator.IsValid(); ++iterator)
+				for(const GPUProfiler::EventData::Event& event : gGPUProfiler.GetEventData(i).GetEvents(queue.Index))
 				{
-					const GPUProfiler::EventData::Event& event = iterator.Get();
-
 					// Skip events above the max depth
 					if ((int)event.Depth >= maxDepth)
 						continue;
@@ -374,7 +385,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
 
 					bool hovered;
-					DrawBar(ImGui::GetID(&event), event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered);
+					DrawBar(event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered);
 					if (hovered)
 					{
 						if (ImGui::IsKeyDown(ImGuiKey_LeftShift))
@@ -408,6 +419,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		Span<const CPUProfiler::ThreadData> threads = gCPUProfiler.GetThreads();
 		for (uint32 threadIndex = 0; threadIndex < (uint32)threads.GetSize(); ++threadIndex)
 		{
+			PROFILE_CPU_SCOPE("CPU Track");
+
 			// Add thread name for track
 			const CPUProfiler::ThreadData& thread = threads[threadIndex];
 			const char* pHeaderText;
@@ -426,10 +439,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			for (uint32 frameIndex = cpuRange.Begin; frameIndex < cpuRange.End; ++frameIndex)
 			{
 				const CPUProfiler::EventData& eventData = gCPUProfiler.GetEventData(frameIndex);
-				for(CPUProfiler::EventData::Iterator iterator = eventData.Iterate(thread.Index); iterator.IsValid(); ++iterator)
+				for(const CPUProfiler::EventData::Event& event : eventData.GetEvents(thread.Index))
 				{
-					const CPUProfiler::EventData::Event& event = iterator.Get();
-
 					// Skip events above the max depth
 					if (event.Depth >= maxDepth)
 						continue;
@@ -437,7 +448,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
 
 					bool hovered;
-					DrawBar(ImGui::GetID(&event), event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered);
+					DrawBar(event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered);
 					if (hovered)
 					{
 						if (ImGui::IsKeyDown(ImGuiKey_LeftShift))
