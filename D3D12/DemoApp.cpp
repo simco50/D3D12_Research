@@ -55,6 +55,7 @@ namespace Tweakables
 	ConsoleVariable g_PSSMFactor("r.Shadow.PSSMFactor", 0.85f);
 	ConsoleVariable g_ShadowsGPUCull("r.Shadows.GPUCull", true);
 	ConsoleVariable g_ShadowsOcclusionCulling("r.Shadows.OcclusionCull", true);
+	ConsoleVariable g_CullShadowsDebugStats("r.Shadows.CullingStats", -1);
 
 	// Bloom
 	ConsoleVariable g_Bloom("r.Bloom", true);
@@ -445,11 +446,12 @@ void DemoApp::Update()
 						RG_GRAPH_SCOPE(passName.c_str(), graph);
 						if (Tweakables::g_ShadowsGPUCull)
 						{
-
 							RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
 							context.EnableOcclusionCulling = Tweakables::g_ShadowsOcclusionCulling;
 							RasterResult result;
 							m_pMeshletRasterizer->Render(graph, pView, &shadowView.View, context, result);
+							if(Tweakables::g_CullShadowsDebugStats == i)
+								m_pMeshletRasterizer->PrintStats(graph, pView, context);
 						}
 						else
 						{
@@ -1325,6 +1327,7 @@ void DemoApp::UpdateImGui()
 
 
 	ImGui::Begin(ICON_FA_DESKTOP " Viewport", 0, ImGuiWindowFlags_NoScrollbar);
+	ImDrawList* pDraw = ImGui::GetWindowDrawList();
 	ImVec2 viewportPos = ImGui::GetWindowPos();
 	ImVec2 viewportSize = ImGui::GetWindowSize();
 	ImVec2 imageSize = ImMax(ImGui::GetContentRegionAvail(), ImVec2(16.0f, 16.0f));
@@ -1364,21 +1367,54 @@ void DemoApp::UpdateImGui()
 
 	if (Tweakables::g_VisualizeShadowCascades)
 	{
-		if (ImGui::Begin("Shadow Cascades"))
-		{
-			const Light& sunLight = m_World.Lights[0];
-			float cascadeImageSize = ImGui::GetAutoSize(ImVec2((float)sunLight.ShadowMapSize * Tweakables::g_ShadowCascades, (float)sunLight.ShadowMapSize)).x / Tweakables::g_ShadowCascades;
+		float cascadeImageSize = 256.0f;
+		ImVec2 cursor = viewportOrigin + ImVec2(5, viewportExtents.y - cascadeImageSize - 5);
 
-			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
+		const Light& sunLight = m_World.Lights[0];
+		for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
+		{
+			if (i < sunLight.ShadowMaps.size())
 			{
-				if(i < sunLight.ShadowMaps.size())
+				ShadowView& shadowView = m_SceneData.ShadowViews[sunLight.MatrixIndex + i];
+				const Matrix& lightViewProj = shadowView.View.ViewProjection;
+
+				const ViewTransform& viewTransform = m_pCamera->GetViewTransform();
+				BoundingFrustum frustum = Math::CreateBoundingFrustum(Math::CreatePerspectiveMatrix(viewTransform.FoV, viewTransform.Viewport.GetAspect(), viewTransform.FarPlane, (&m_SceneData.ShadowCascadeDepths.x)[i]), viewTransform.View);
+				DirectX::XMFLOAT3 frustumCorners[8];
+				frustum.GetCorners(frustumCorners);
+
+				ImVec2 corners[8];
+				for (int c = 0; c < 8; ++c)
 				{
-					ImGui::Image(sunLight.ShadowMaps[i], ImVec2(cascadeImageSize, cascadeImageSize));
-					ImGui::SameLine();
+					Vector4 corner;
+					corner = Vector4::Transform(Vector4(frustumCorners[c].x, frustumCorners[c].y, frustumCorners[c].z, 1), lightViewProj);
+					corner.x /= corner.w;
+					corner.y /= corner.w;
+					corner.x = corner.x * 0.5f + 0.5f;
+					corner.y = -corner.y * 0.5f + 0.5f;
+					corners[c] = ImVec2(corner.x, corner.y) * cascadeImageSize;
 				}
+
+				pDraw->AddImage(sunLight.ShadowMaps[i], cursor, cursor + ImVec2(cascadeImageSize, cascadeImageSize));
+
+				ImColor clr(0.7f, 1.0f, 1.0f, 0.5f);
+				pDraw->AddLine(cursor + corners[0], cursor + corners[4], clr);
+				pDraw->AddLine(cursor + corners[1], cursor + corners[5], clr);
+				pDraw->AddLine(cursor + corners[2], cursor + corners[6], clr);
+				pDraw->AddLine(cursor + corners[3], cursor + corners[7], clr);
+
+				pDraw->AddLine(cursor + corners[0], cursor + corners[1], clr);
+				pDraw->AddLine(cursor + corners[1], cursor + corners[2], clr);
+				pDraw->AddLine(cursor + corners[2], cursor + corners[3], clr);
+				pDraw->AddLine(cursor + corners[3], cursor + corners[0], clr);
+
+				pDraw->AddLine(cursor + corners[4], cursor + corners[5], clr);
+				pDraw->AddLine(cursor + corners[5], cursor + corners[6], clr);
+				pDraw->AddLine(cursor + corners[6], cursor + corners[7], clr);
+				pDraw->AddLine(cursor + corners[7], cursor + corners[4], clr);
+				cursor.x += cascadeImageSize + 5;
 			}
 		}
-		ImGui::End();
 	}
 
 	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_P))
@@ -1481,7 +1517,11 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
 			ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
 			ImGui::Checkbox("GPU Cull", &Tweakables::g_ShadowsGPUCull.Get());
-			ImGui::Checkbox("GPU Occlusion Cull", &Tweakables::g_ShadowsOcclusionCulling.Get());
+			if (Tweakables::g_ShadowsGPUCull)
+			{
+				ImGui::Checkbox("GPU Occlusion Cull", &Tweakables::g_ShadowsOcclusionCulling.Get());
+				ImGui::SliderInt("GPU Cull Stats", &Tweakables::g_CullShadowsDebugStats.Get(), -1, m_SceneData.NumLights - 1);
+			}
 		}
 		if (ImGui::CollapsingHeader("Bloom"))
 		{
