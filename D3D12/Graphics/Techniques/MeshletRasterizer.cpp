@@ -184,7 +184,7 @@ RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode,
 	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter",		BufferDesc::CreateTyped(2, ResourceFormat::R32_UINT));
 }
 
-void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, const RasterContext& rasterContext, RasterResult& outResult)
+void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, RasterContext& rasterContext, RasterResult& outResult)
 {
 	RGBuffer* pInstanceCullArgs = nullptr;
 
@@ -343,6 +343,9 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
 	RGBuffer* pBinnedMeshlets = graph.Create("GPURender.Classify.BinnedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32)));
 
+	// Store bin data for debugging
+	rasterContext.pBinnedMeshletOffsetAndCounts[psoPhaseIndex] = pMeshletOffsetAndCounts;
+
 	{
 		RG_GRAPH_SCOPE("Classify Shader Types", graph);
 
@@ -391,6 +394,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.SetPipelineState(m_pMeshletClassify);
 
 					context.BindRootCBV(0, classifyParams);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
 					context.BindResources(2, pMeshletCounts->Get()->GetUAV());
 					context.BindResources(3, {
 						rasterContext.pVisibleMeshlets->Get()->GetSRV(),
@@ -429,6 +433,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.SetPipelineState(m_pMeshletWriteBins);
 
 					context.BindRootCBV(0, classifyParams);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
 					context.BindResources(2, {
 						pMeshletOffsetAndCounts->Get()->GetUAV(),
 						pBinnedMeshlets->Get()->GetUAV(),
@@ -493,7 +498,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
 
-void MeshletRasterizer::Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, const RasterContext& rasterContext, RasterResult& outResult)
+void MeshletRasterizer::Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterContext& rasterContext, RasterResult& outResult)
 {
 	check(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB");
 
@@ -554,20 +559,35 @@ void MeshletRasterizer::Render(RGGraph& graph, const SceneView* pView, const Vie
 	outResult.pVisibleMeshlets = rasterContext.pVisibleMeshlets;
 }
 
-void MeshletRasterizer::PrintStats(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext)
+void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, const SceneView* pView, const RasterContext& rasterContext)
 {
+	RGBuffer* pDummy = graph.Create("Dummy", BufferDesc::CreateTyped(10, ResourceFormat::RGBA8_UINT));
+	RGBuffer* pBins0 = rasterContext.pBinnedMeshletOffsetAndCounts[0] ? rasterContext.pBinnedMeshletOffsetAndCounts[0] : pDummy;
+	RGBuffer* pBins1 = rasterContext.pBinnedMeshletOffsetAndCounts[0] ? rasterContext.pBinnedMeshletOffsetAndCounts[1] : pDummy;
+
 	graph.AddPass("Print Stats", RGPassFlag::Compute)
-		.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshletsCounter })
+		.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshletsCounter, pBins0, pBins1 })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pPrintStatsPSO);
 
+				struct
+				{
+					Vector2 Position;
+					uint32 NumBins;
+				} params;
+				params.Position = position;
+				params.NumBins = pBins0->GetDesc().NumElements();
+
+				context.BindRootCBV(0, params);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
 					rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
 					rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
 					rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
+					pBins0->Get()->GetSRV(),
+					pBins1->Get()->GetSRV(),
 					}, 1);
 				context.Dispatch(1);
 			});

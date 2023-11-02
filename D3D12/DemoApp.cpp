@@ -82,6 +82,7 @@ namespace Tweakables
 
 	// Misc
 	ConsoleVariable CullDebugStats("r.CullingStats", false);
+	ConsoleVariable RenderGraphJobify("r.RenderGraph.Jobify", true);
 
 	bool g_DumpRenderGraph = false;
 	bool g_EnableRenderGraphResourceTracker = false;
@@ -450,8 +451,8 @@ void DemoApp::Update()
 							context.EnableOcclusionCulling = Tweakables::g_ShadowsOcclusionCulling;
 							RasterResult result;
 							m_pMeshletRasterizer->Render(graph, pView, &shadowView.View, context, result);
-							if(Tweakables::g_CullShadowsDebugStats == i)
-								m_pMeshletRasterizer->PrintStats(graph, pView, context);
+							if(Tweakables::g_CullShadowsDebugStats == (int)i)
+								m_pMeshletRasterizer->PrintStats(graph, Vector2(400, 20), pView, context);
 						}
 						else
 						{
@@ -492,7 +493,7 @@ void DemoApp::Update()
 						rasterContext.EnableOcclusionCulling = Tweakables::g_OcclusionCulling;
 						m_pMeshletRasterizer->Render(graph, pView, &pView->MainView, rasterContext, rasterResult);
 						if (Tweakables::CullDebugStats)
-							m_pMeshletRasterizer->PrintStats(graph, pView, rasterContext);
+							m_pMeshletRasterizer->PrintStats(graph, Vector2(20, 20), pView, rasterContext);
 					}
 					else
 					{
@@ -1094,7 +1095,7 @@ void DemoApp::Update()
 		if(Tweakables::g_EnableRenderGraphResourceTracker)
 			graph.EnableResourceTrackerView();
 
-		graph.Execute(*m_RenderGraphPool, m_pDevice);
+		graph.Execute(*m_RenderGraphPool, m_pDevice, Tweakables::RenderGraphJobify);
 		
 	}
 
@@ -1439,6 +1440,8 @@ void DemoApp::UpdateImGui()
 	{
 		if (ImGui::CollapsingHeader("General"))
 		{
+			ImGui::Checkbox("Jobify RenderGraph", &Tweakables::RenderGraphJobify.Get());
+
 			static constexpr const char* pPathNames[] =
 			{
 				"Tiled",

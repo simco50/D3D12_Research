@@ -164,10 +164,10 @@ void App::Init_Internal()
 void App::Update_Internal()
 {
 	Time::Tick();
-	Input::Instance().Update();
 	ImGuiRenderer::NewFrame();
 
 	Update();
+	Input::Instance().Update();
 
 	{
 		PROFILE_CPU_SCOPE("Execute Commandlist");

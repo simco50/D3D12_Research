@@ -79,6 +79,8 @@ Buffer<uint> tCounter_VisibleMeshlets 								: register(t3);	// List of meshlet
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets 				: register(t4);	// List of meshlets to rasterize
 Texture2D<float> tHZB 												: register(t3);	// Current HZB texture
 
+StructuredBuffer<uint4> tBinnedMeshletOffsetAndCounts[2] 			: register(t4);
+
 
 // Returns the offset in the candidate meshlet buffer for the current phase
 uint GetCandidateMeshletOffset(bool phase2)
@@ -263,6 +265,14 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 	}
 }
 
+struct PrintParams
+{
+	float2 Pos;
+	uint NumBins;
+};
+
+ConstantBuffer<PrintParams> cPrintParams : register(b0);
+
 /*
 	Debug statistics
 */
@@ -286,18 +296,21 @@ void PrintStatsCS()
 	uint phase1VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 	uint phase2VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE2_VISIBLE_MESHLETS];
 
-	TextWriter writer = CreateTextWriter(float2(20, 20));
+	TextWriter writer = CreateTextWriter(cPrintParams.Pos);
 
+	uint align = 280;
 	String sceneText = TEXT("--- Scene ---");
 	writer.Text(sceneText);
 	writer.NewLine();
 	String instancesText = TEXT("Total instances: ");
 	writer.Text(instancesText);
+	writer.LeftAlign(align);
 	writer.Int(numInstances, true);
 	writer.NewLine();
 
 	String meshletsText = TEXT("Total meshlets: ");
 	writer.Text(meshletsText);
+	writer.LeftAlign(align);
 	writer.Int(numMeshlets, true);
 
 	writer.NewLine();
@@ -306,12 +319,14 @@ void PrintStatsCS()
 	writer.Text(totalProcessedMeshletsText);
 
 	int numProcessedMeshletsCapped = min(MAX_NUM_MESHLETS, processedMeshlets);
+	writer.LeftAlign(align);
 	writer.Int(numProcessedMeshletsCapped, true);
 	if(numProcessedMeshletsCapped < processedMeshlets)
 	{
 		writer.SetColor(float4(1, 0, 0, 1));
 		String openBraceText = TEXT(" (+");
 		writer.Text(openBraceText);
+		writer.LeftAlign(align);
 		writer.Int(processedMeshlets - numProcessedMeshletsCapped, true);
 		writer.Text(')');
 		writer.SetColor(float4(1, 1, 1, 1));
@@ -328,10 +343,12 @@ void PrintStatsCS()
 	String visibleMeshletsText = TEXT("Visible meshlets: ");
 
 	writer.Text(processedMeshletsText);
+	writer.LeftAlign(align);
 	writer.Int(phase1CandidateMeshlets, true);
 	writer.NewLine();
 
 	writer.Text(visibleMeshletsText);
+	writer.LeftAlign(align);
 	writer.Int(phase1VisibleMeshlets, true);
 	writer.NewLine();
 	writer.NewLine();
@@ -341,14 +358,50 @@ void PrintStatsCS()
 	writer.NewLine();
 
 	writer.Text(processedMeshletsText);
+	writer.LeftAlign(align);
 	writer.Int(occludedInstances, true);
 	writer.NewLine();
 
 	writer.Text(processedMeshletsText);
+	writer.LeftAlign(align);
 	writer.Int(phase2CandidateMeshlets, true);
 	writer.NewLine();
 
 	writer.Text(visibleMeshletsText);
+	writer.LeftAlign(align);
 	writer.Int(phase2VisibleMeshlets, true);
 	writer.NewLine();
+	writer.NewLine();
+
+	String binHeaderText = TEXT("--- Bins ---");
+	writer.Text(binHeaderText);
+	writer.NewLine();
+
+	for(int p = 0; p < 2; ++p)
+	{
+		String phaseText = TEXT("Phase ");
+		writer.Text(phaseText);
+		writer.Int(p + 1);
+		writer.NewLine();
+		for(int i = 0; i < cPrintParams.NumBins; ++i)
+		{
+			String binText = TEXT("Bin ");
+			writer.Text(binText);
+			writer.Int(i, false);
+			writer.Text(':');
+			writer.Text(' ');
+
+			uint4 offsetAndCount  = tBinnedMeshletOffsetAndCounts[p][i];
+			String countText = TEXT("Count: ");
+			writer.Text(countText);
+			writer.Int(offsetAndCount.x);
+
+			writer.LeftAlign(200);
+			String offsetText = TEXT(" Offset: ");
+			writer.Text(offsetText);
+			writer.Int(offsetAndCount.w);
+
+			writer.NewLine();
+		}
+	}
 }

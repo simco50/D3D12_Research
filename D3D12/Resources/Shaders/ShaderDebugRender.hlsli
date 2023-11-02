@@ -275,6 +275,11 @@ struct TextWriter
 		Cursor.x = StartLocation.x;
 	}
 
+	void LeftAlign(float offset)
+	{
+		Cursor.x = StartLocation.x + offset;
+	}
+
 	void Text(uint character)
 	{
 		uint offset;

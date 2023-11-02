@@ -27,6 +27,7 @@ struct RasterContext
 	RGBuffer* pVisibleMeshletsCounter = nullptr;
 	RGBuffer* pOccludedInstances = nullptr;
 	RGBuffer* pOccludedInstancesCounter = nullptr;
+	RGBuffer* pBinnedMeshletOffsetAndCounts[2]{};
 };
 
 struct RasterResult
@@ -41,8 +42,8 @@ class MeshletRasterizer
 {
 public:
 	MeshletRasterizer(GraphicsDevice* pDevice);
-	void Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, const RasterContext& context, RasterResult& outResult);
-	void PrintStats(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext);
+	void Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterContext& context, RasterResult& outResult);
+	void PrintStats(RGGraph& graph, const Vector2& position, const SceneView* pView, const RasterContext& rasterContext);
 
 private:
 	enum class RasterPhase
@@ -62,7 +63,7 @@ private:
 	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
-	void CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, const RasterContext& context, RasterResult& outResult);
+	void CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
 
 	RefCountPtr<RootSignature> m_pCommonRS;
 	

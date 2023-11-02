@@ -274,7 +274,7 @@ public:
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
-	void Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice);
+	void Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice, bool jobify);
 
 	template<typename T, typename... Args>
 	NO_DISCARD T* Allocate(Args&&... args)

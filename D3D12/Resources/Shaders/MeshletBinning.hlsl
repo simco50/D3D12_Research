@@ -113,16 +113,6 @@ void AllocateBinRangesCS(uint threadID : SV_DispatchThreadID)
 		InterlockedAdd(uGlobalMeshletCounter[0], numMeshlets, globalOffset);
 	offset += WaveReadLaneFirst(globalOffset);
 	uMeshletOffsetAndCounts[bin] = uint4(0, 1, 1, offset);
-
-#if 0
-	TextWriter writer = CreateTextWriter(float2(10, threadID * 25 + 10 + cBinningParams.IsSecondPhase * 100));
-	String binText = TEXT("Bin ");
-	writer.Text(binText);
-	writer.Int(bin);
-	String colonText = TEXT(": ");
-	writer.Text(colonText);
-	writer.Int(numMeshlets);
-#endif
 }
 
 [numthreads(64, 1, 1)]

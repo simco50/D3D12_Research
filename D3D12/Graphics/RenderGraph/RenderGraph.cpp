@@ -312,7 +312,7 @@ void RGGraph::PopEvent()
 		++m_RenderPasses.back()->NumEventsToEnd;
 }
 
-void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
+void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice, bool jobify)
 {
 	PROFILE_CPU_SCOPE();
 
@@ -324,84 +324,89 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice)
 		DumpDebugGraph(m_pDumpGraphPath);
 
 	std::vector<CommandContext*> contexts;
-#if 1
-	// Group passes in jobs
-	const uint32 maxPassesPerJob = 15;
-	std::vector<Span<RGPass*>> passGroups;
 
-	// Duplicate profile events that cross the border of jobs to retain event hierarchy
-	uint32 firstPass = 0;
-	uint32 currentGroupSize = 0;
-	std::vector<uint32> activeEvents;
-	RGPass* pLastPass = nullptr;
-
-	for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
+	if (jobify)
 	{
-		RGPass* pPass = m_RenderPasses[passIndex];
-		if (!pPass->IsCulled)
+		// Group passes in jobs
+		const uint32 maxPassesPerJob = 15;
+		std::vector<Span<RGPass*>> passGroups;
+
+		// Duplicate profile events that cross the border of jobs to retain event hierarchy
+		uint32 firstPass = 0;
+		uint32 currentGroupSize = 0;
+		std::vector<uint32> activeEvents;
+		RGPass* pLastPass = nullptr;
+
+		for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
 		{
-			pPass->CPUEventsToStart = pPass->EventsToStart;
-			pPass->NumCPUEventsToEnd = pPass->NumEventsToEnd;
-
-			for (uint32 event : pPass->CPUEventsToStart)
-				activeEvents.push_back(event);
-
-			if (currentGroupSize == 0)
+			RGPass* pPass = m_RenderPasses[passIndex];
+			if (!pPass->IsCulled)
 			{
-				firstPass = pPass->ID;
-				pPass->CPUEventsToStart = activeEvents;
+				pPass->CPUEventsToStart = pPass->EventsToStart;
+				pPass->NumCPUEventsToEnd = pPass->NumEventsToEnd;
+
+				for (uint32 event : pPass->CPUEventsToStart)
+					activeEvents.push_back(event);
+
+				if (currentGroupSize == 0)
+				{
+					firstPass = pPass->ID;
+					pPass->CPUEventsToStart = activeEvents;
+				}
+
+				for (uint32 i = 0; i < pPass->NumCPUEventsToEnd; ++i)
+					activeEvents.pop_back();
+
+				++currentGroupSize;
+				if (currentGroupSize >= maxPassesPerJob)
+				{
+					pPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
+					passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], passIndex - firstPass + 1));
+					currentGroupSize = 0;
+				}
+				pLastPass = pPass;
 			}
+		}
+		if (currentGroupSize > 0)
+			passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], (uint32)m_RenderPasses.size() - firstPass));
+		pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
 
-			for (uint32 i = 0; i < pPass->NumCPUEventsToEnd; ++i)
-				activeEvents.pop_back();
+		TaskContext context;
 
-			++currentGroupSize;
-			if (currentGroupSize >= maxPassesPerJob)
+		{
+			PROFILE_CPU_SCOPE("Schedule Render Jobs");
+			for (Span<RGPass*> passGroup : passGroups)
 			{
-				pPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
-				passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], passIndex - firstPass + 1));
-				currentGroupSize = 0;
+				CommandContext* pContext = pDevice->AllocateCommandContext();
+				TaskQueue::Execute([this, passGroup, pContext](int)
+					{
+						for (RGPass* pPass : passGroup)
+						{
+							if (!pPass->IsCulled)
+								ExecutePass(pPass, *pContext);
+						}
+					}, context);
+				contexts.push_back(pContext);
 			}
-			pLastPass = pPass;
+		}
+
+		{
+			PROFILE_CPU_SCOPE("Wait Render Jobs");
+			TaskQueue::Join(context);
 		}
 	}
-	if (currentGroupSize > 0)
-		passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], (uint32)m_RenderPasses.size() - firstPass));
-	pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
-
-	TaskContext context;
-
+	else
 	{
 		PROFILE_CPU_SCOPE("Schedule Render Jobs");
-		for (Span<RGPass*> passGroup : passGroups)
-		{
-			CommandContext* pContext = pDevice->AllocateCommandContext();
-			TaskQueue::Execute([this, passGroup, pContext](int)
-				{
-					for (RGPass* pPass : passGroup)
-					{
-						if (!pPass->IsCulled)
-							ExecutePass(pPass, *pContext);
-					}
-				}, context);
-			contexts.push_back(pContext);
-		}
-	}
 
-	{
-		PROFILE_CPU_SCOPE("Wait Render Jobs");
-		TaskQueue::Join(context);
+		CommandContext* pContext = pDevice->AllocateCommandContext();
+		for (RGPass* pPass : m_RenderPasses)
+		{
+			if (!pPass->IsCulled)
+				ExecutePass(pPass, *pContext);
+		}
+		contexts.push_back(pContext);
 	}
-#else
-	PROFILE_CPU_SCOPE("Schedule Render Jobs");
-	CommandContext* pContext = pDevice->AllocateCommandContext();
-	for (RGPass* pPass : m_RenderPasses)
-	{
-		if (!pPass->IsCulled)
-			ExecutePass(pPass, *pContext);
-	}
-	contexts.push_back(pContext);
-#endif
 
 	CommandContext::Execute(contexts);
 

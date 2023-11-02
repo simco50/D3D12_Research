@@ -52,7 +52,7 @@
 
 // Usage:
 //		PROFILE_GPU_BEGIN(const char* pName, ID3D12GraphicsCommandList* pCommandList)
-#define PROFILE_GPU_BEGIN(cmdlist, name)				gGPUProfiler.BeginEvent(name, cmdlist, __FILE__, __LINE__)
+#define PROFILE_GPU_BEGIN(cmdlist, name)				gGPUProfiler.BeginEvent(cmdlist, name, __FILE__, __LINE__)
 
 // Usage:
 //		PROFILE_GPU_END(ID3D12GraphicsCommandList* pCommandList)

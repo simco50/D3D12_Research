@@ -10,6 +10,7 @@
 #include "ResourceViews.h"
 #include "ShaderBindingTable.h"
 #include "StateObject.h"
+#include "Core/Profiler.h"
 
 CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pScratchAllocationManager)
 	: GraphicsObject(pParent),
@@ -420,6 +421,9 @@ bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType
 
 void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 {
+	PROFILE_GPU_SCOPE(resolveContext.GetCommandList());
+	PROFILE_CPU_SCOPE();
+
 	for (const CommandContext::PendingBarrier& pending : m_PendingBarriers)
 	{
 		uint32 subResource = pending.Subresource;
