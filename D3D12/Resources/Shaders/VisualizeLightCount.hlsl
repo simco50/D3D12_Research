@@ -14,9 +14,9 @@ Texture2D<float> tDepth : register(t0);
 RWTexture2D<float4> uOutput : register(u0);
 
 #if TILED_FORWARD
-Texture2D<uint2> tLightGrid : register(t2);
+Texture2D<uint2> tLightGrid : register(t1);
 #elif CLUSTERED_FORWARD
-Buffer<uint> tLightGrid : register(t2);
+Buffer<uint> tLightGrid : register(t1);
 #endif
 
 static const int MaxNumLights = 10;
