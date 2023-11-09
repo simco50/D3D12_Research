@@ -14,6 +14,10 @@ struct PrecomputedLightData
 	float SpotCosAngle;
 	float3 ViewSpaceDirection;
 	float SpotSinAngle;
+	float Range;
+	uint IsSpot : 1;
+	uint IsPoint : 1;
+	uint IsDirectional : 1;
 };
 
 ConstantBuffer<PassData> cPass : register(b0);
@@ -86,12 +90,11 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 	[loop]
 	for (uint i = 0; i < cView.LightCount && numLights < MAX_LIGHTS_PER_CLUSTER; ++i)
 	{
-		Light light = GetLight(i);
-		if(light.IsPoint)
+		PrecomputedLightData lightData = tLightData[i];
+		if(lightData.IsPoint)
 		{
-			PrecomputedLightData lightData = tLightData[i];
 			Sphere sphere;
-			sphere.Radius = light.Range;
+			sphere.Radius = lightData.Range;
 			sphere.Position = lightData.ViewSpacePosition;
 			if (SphereInAABB(sphere, clusterAABB))
 			{
@@ -99,10 +102,8 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 				++numLights;
 			}
 		}
-		else if(light.IsSpot)
+		else if(lightData.IsSpot)
 		{
-			PrecomputedLightData lightData = tLightData[i];
-
 			Sphere sphere;
 			sphere.Radius = clusterRadius;
 			sphere.Position = clusterAABB.Center.xyz;
@@ -110,7 +111,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 			if (ConeInSphere(
 				lightData.ViewSpacePosition,
 				lightData.ViewSpaceDirection,
-				light.Range,
+				lightData.Range,
 				float2(lightData.SpotSinAngle, lightData.SpotCosAngle),
 				sphere))
 			{

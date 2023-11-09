@@ -75,6 +75,10 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 		float SpotCosAngle;
 		Vector3 ViewSpaceDirection;
 		float SpotSinAngle;
+		float Range;
+		uint32 IsSpot : 1;
+		uint32 IsPoint : 1;
+		uint32 IsDirectional : 1;
 	};
 	uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->NumLights;
 
@@ -94,6 +98,10 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 					data.ViewSpaceDirection = Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, light.Rotation), viewMatrix);
 					data.SpotCosAngle = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
 					data.SpotSinAngle = sin(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+					data.Range = light.Range;
+					data.IsSpot = light.Type == LightType::Spot;
+					data.IsPoint = light.Type == LightType::Point;
+					data.IsDirectional = light.Type == LightType::Directional;
 				}
 				context.CopyBuffer(allocation.pBackingResource, pPrecomputeData->Get(), precomputedLightDataSize, allocation.Offset, 0);
 			});
