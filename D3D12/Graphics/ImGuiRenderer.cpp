@@ -202,43 +202,34 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 
 namespace ViewportImpl
 {
-	struct ViewportData
+	static SwapChain* GetSwapChain(const ImGuiViewport* pViewport)
 	{
-		SwapChain* pSwapChain = nullptr;
-	};
+		return static_cast<SwapChain*>(pViewport->RendererUserData);
+	}
 
 	static void Viewport_CreateWindow(ImGuiViewport* pViewport)
 	{
 		GraphicsDevice* pDevice = static_cast<GraphicsDevice*>(ImGui::GetIO().BackendRendererUserData);
-		ViewportData* pViewportData = IM_NEW(ViewportData);
-		pViewport->RendererUserData = pViewportData;
 
 		HWND hwnd = pViewport->PlatformHandleRaw ? (HWND)pViewport->PlatformHandleRaw : (HWND)pViewport->PlatformHandle;
 		IM_ASSERT(hwnd != 0);
-		pViewportData->pSwapChain = new SwapChain(pDevice, DisplayMode::SDR, 3, hwnd);
+		pViewport->RendererUserData = new SwapChain(pDevice, DisplayMode::SDR, 3, hwnd);
 	}
 
 	static void Viewport_DestroyWindow(ImGuiViewport* pViewport)
 	{
-		// The main viewport (owned by the application) will always have RendererUserData == 0 since we didn't create the data for it.
-		if (ViewportData* pViewportData = static_cast<ViewportData*>(pViewport->RendererUserData))
-		{
-			delete pViewportData->pSwapChain;
-			IM_FREE(pViewportData);
-		}
+		delete GetSwapChain(pViewport);
 		pViewport->RendererUserData = nullptr;
 	}
 
 	static void Viewport_Resize(ImGuiViewport* pViewport, ImVec2 size)
 	{
-		ViewportData* pViewportData = static_cast<ViewportData*>(pViewport->RendererUserData);
-		pViewportData->pSwapChain->OnResizeOrMove((uint32)size.x, (uint32)size.y);
+		GetSwapChain(pViewport)->OnResizeOrMove((uint32)size.x, (uint32)size.y);
 	}
 
 	static void Viewport_RenderWindow(ImGuiViewport* pViewport, void* pCmd)
 	{
-		ViewportData* pViewportData = static_cast<ViewportData*>(pViewport->RendererUserData);
-		Texture* pBackBuffer = pViewportData->pSwapChain->GetBackBuffer();
+		Texture* pBackBuffer = GetSwapChain(pViewport)->GetBackBuffer();
 
 		{
 			CommandContext* pContext = static_cast<CommandContext*>(pCmd);
@@ -259,8 +250,7 @@ namespace ViewportImpl
 	static void Viewport_Present(ImGuiViewport* pViewport, void*)
 	{
 		PROFILE_CPU_SCOPE();
-		ViewportData* pViewportData = static_cast<ViewportData*>(pViewport->RendererUserData);
-		pViewportData->pSwapChain->Present();
+		GetSwapChain(pViewport)->Present();
 	}
 
 	static void Setup(GraphicsDevice* pDevice)
@@ -275,6 +265,20 @@ namespace ViewportImpl
 		platform_io.Renderer_SetWindowSize = Viewport_Resize;
 		platform_io.Renderer_RenderWindow = Viewport_RenderWindow;
 		platform_io.Renderer_SwapBuffers = Viewport_Present;
+	}
+
+	static void Shutdown()
+	{
+		ImGuiIO& io = ImGui::GetIO();
+		io.BackendFlags &= ~ImGuiBackendFlags_RendererHasViewports;
+		io.BackendRendererUserData = nullptr;
+
+		ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+		platform_io.Renderer_CreateWindow = nullptr;
+		platform_io.Renderer_DestroyWindow = nullptr;
+		platform_io.Renderer_SetWindowSize = nullptr;
+		platform_io.Renderer_RenderWindow = nullptr;
+		platform_io.Renderer_SwapBuffers = nullptr;
 	}
 }
 
@@ -351,6 +355,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 void ImGuiRenderer::Shutdown()
 {
 	ImGui::DestroyPlatformWindows();
+	ViewportImpl::Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
 }
