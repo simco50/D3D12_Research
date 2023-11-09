@@ -451,6 +451,11 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 
 			if (useRenderPass)
 				context.EndRenderPass();
+
+#define TEST_STATE_LEAKING 0
+#if TEST_STATE_LEAKING
+			context.ClearState();
+#endif
 		}
 	}
 

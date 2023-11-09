@@ -1523,7 +1523,7 @@ void DemoApp::UpdateImGui()
 			if (Tweakables::g_ShadowsGPUCull)
 			{
 				ImGui::Checkbox("GPU Occlusion Cull", &Tweakables::g_ShadowsOcclusionCulling.Get());
-				ImGui::SliderInt("GPU Cull Stats", &Tweakables::g_CullShadowsDebugStats.Get(), -1, m_SceneData.NumLights - 1);
+				ImGui::SliderInt("GPU Cull Stats", &Tweakables::g_CullShadowsDebugStats.Get(), -1, m_SceneData.ShadowViews.size() - 1);
 			}
 		}
 		if (ImGui::CollapsingHeader("Bloom"))

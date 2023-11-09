@@ -34,21 +34,7 @@ void CommandContext::Reset()
 	check(m_PendingBarriers.empty());
 	m_ResourceStates.clear();
 
-	m_CurrentCommandContext = CommandListContext::Invalid;
-
-	m_pCurrentPSO = nullptr;
-	m_pCurrentSO = nullptr;
-	m_pCurrentRS = nullptr;
-
-	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
-	{
-		ID3D12DescriptorHeap* pHeaps[] =
-		{
-			GetParent()->GetGlobalViewHeap()->GetHeap(),
-			GetParent()->GetGlobalSamplerHeap()->GetHeap(),
-		};
-		m_pCommandList->SetDescriptorHeaps(ARRAYSIZE(pHeaps), pHeaps);
-	}
+	ClearState();
 }
 
 SyncPoint CommandContext::Execute()
@@ -84,6 +70,29 @@ void CommandContext::Free(const SyncPoint& syncPoint)
 	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
 	{
 		m_ShaderResourceDescriptorAllocator.ReleaseUsedHeaps(syncPoint);
+	}
+}
+
+void CommandContext::ClearState()
+{
+	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
+	{
+		FlushResourceBarriers();
+
+		m_CurrentCommandContext = CommandListContext::Invalid;
+
+		m_pCurrentPSO = nullptr;
+		m_pCurrentSO = nullptr;
+		m_pCurrentRS = nullptr;
+
+		m_pCommandList->ClearState(nullptr);
+
+		ID3D12DescriptorHeap* pHeaps[] =
+		{
+			GetParent()->GetGlobalViewHeap()->GetHeap(),
+			GetParent()->GetGlobalSamplerHeap()->GetHeap(),
+		};
+		m_pCommandList->SetDescriptorHeaps(ARRAYSIZE(pHeaps), pHeaps);
 	}
 }
 

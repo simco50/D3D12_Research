@@ -141,6 +141,7 @@ public:
 	SyncPoint Execute();
 	static SyncPoint Execute(const Span<CommandContext* const>& contexts);
 	void Free(const SyncPoint& syncPoint);
+	void ClearState();
 
 	void InsertResourceBarrier(GraphicsResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	void InsertAliasingBarrier(const GraphicsResource* pResource);

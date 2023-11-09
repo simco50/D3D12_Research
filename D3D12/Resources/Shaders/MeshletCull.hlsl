@@ -299,13 +299,12 @@ void PrintStatsCS()
 	TextWriter writer = CreateTextWriter(cPrintParams.Pos);
 
 	uint align = 280;
+
+	/*
+		Totals
+	*/
 	String sceneText = TEXT("--- Scene ---");
 	writer.Text(sceneText);
-	writer.NewLine();
-	String instancesText = TEXT("Total instances: ");
-	writer.Text(instancesText);
-	writer.LeftAlign(align);
-	writer.Int(numInstances, true);
 	writer.NewLine();
 
 	String meshletsText = TEXT("Total meshlets: ");
@@ -335,21 +334,44 @@ void PrintStatsCS()
 	writer.NewLine();
 	writer.NewLine();
 
+	/*
+		Phase 1
+	*/
 	String phase1Text = TEXT("--- Phase 1 ---");
 	writer.Text(phase1Text);
 	writer.NewLine();
 
-	String processedMeshletsText = TEXT("Processed meshlets: ");
+	String instancesText = TEXT("Input instances: ");
+	writer.Text(instancesText);
+	writer.LeftAlign(align);
+	writer.Int(numInstances, true);
+	writer.NewLine();
+
+	String processedMeshletsText = TEXT("Input meshlets: ");
 	String visibleMeshletsText = TEXT("Visible meshlets: ");
+	String occludedMeshletsText = TEXT("Occluded meshlets: ");
+	String occludedInstancesText = TEXT("Occluded instances: ");
 
 	writer.Text(processedMeshletsText);
 	writer.LeftAlign(align);
 	writer.Int(phase1CandidateMeshlets, true);
 	writer.NewLine();
 
+	writer.Text(occludedInstancesText);
+	writer.LeftAlign(align);
+	writer.Int(occludedInstances, true);
+	writer.NewLine();
+
+	writer.Text(occludedMeshletsText);
+	writer.LeftAlign(align);
+	writer.Int(phase2CandidateMeshlets, true);
+	writer.NewLine();
+
 	writer.Text(visibleMeshletsText);
 	writer.LeftAlign(align);
+	writer.SetColor(Colors::Green);
 	writer.Int(phase1VisibleMeshlets, true);
+	writer.SetColor(Colors::White);
 	writer.NewLine();
 	writer.NewLine();
 
@@ -357,7 +379,7 @@ void PrintStatsCS()
 	writer.Text(phase2Text);
 	writer.NewLine();
 
-	writer.Text(processedMeshletsText);
+	writer.Text(instancesText);
 	writer.LeftAlign(align);
 	writer.Int(occludedInstances, true);
 	writer.NewLine();
@@ -369,7 +391,9 @@ void PrintStatsCS()
 
 	writer.Text(visibleMeshletsText);
 	writer.LeftAlign(align);
+	writer.SetColor(Colors::Green);
 	writer.Int(phase2VisibleMeshlets, true);
+	writer.SetColor(Colors::White);
 	writer.NewLine();
 	writer.NewLine();
 
