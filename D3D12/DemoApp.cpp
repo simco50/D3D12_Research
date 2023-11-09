@@ -1140,7 +1140,6 @@ void DemoApp::InitializePipelines()
 			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
 			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
 			psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
 			psoDesc.SetName("Depth Prepass Opaque");
@@ -1523,7 +1522,7 @@ void DemoApp::UpdateImGui()
 			if (Tweakables::g_ShadowsGPUCull)
 			{
 				ImGui::Checkbox("GPU Occlusion Cull", &Tweakables::g_ShadowsOcclusionCulling.Get());
-				ImGui::SliderInt("GPU Cull Stats", &Tweakables::g_CullShadowsDebugStats.Get(), -1, m_SceneData.ShadowViews.size() - 1);
+				ImGui::SliderInt("GPU Cull Stats", &Tweakables::g_CullShadowsDebugStats.Get(), -1, (int)m_SceneData.ShadowViews.size() - 1);
 			}
 		}
 		if (ImGui::CollapsingHeader("Bloom"))
