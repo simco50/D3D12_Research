@@ -31,6 +31,7 @@ public:
 
 	ID3D12RootSignature* GetRootSignature() const { return m_pRootSignature.Get(); }
 
+	uint32 GetNumRootConstants(uint32 rootIndex) const { check(IsRootConstant(rootIndex)); return m_RootParameters[rootIndex].Data.Constants.Num32BitValues; }
 	bool IsRootConstant(uint32 rootIndex) const { return m_RootParameters[rootIndex].Data.ParameterType == D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS; }
 	uint32 GetDescriptorTableSize(uint32 rootIndex) const;
 	uint32 GetNumRootParameters() const { return m_NumParameters; }

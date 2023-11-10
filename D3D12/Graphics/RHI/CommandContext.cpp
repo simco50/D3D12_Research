@@ -365,6 +365,21 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 	if (isRootConstants)
 	{
 		check(dataSize % sizeof(uint32) == 0);
+		uint32 rootConstantsSize = m_pCurrentRS->GetNumRootConstants(rootIndex) * sizeof(uint32);
+		check(dataSize <= rootConstantsSize);
+
+#ifdef _DEBUG
+		// In debug, write 0xCDCDCDCD to unwritten root constants
+		if (rootConstantsSize != dataSize)
+		{
+			void* pLocalData = _alloca(rootConstantsSize);
+			memset(pLocalData, (int)0xCDCDCDCD, rootConstantsSize);
+			memcpy(pLocalData, pData, dataSize);
+			dataSize = rootConstantsSize;
+			pData = pLocalData;
+		}
+#endif
+
 		if (m_CurrentCommandContext == CommandListContext::Graphics)
 			m_pCommandList->SetGraphicsRoot32BitConstants(rootIndex, dataSize / sizeof(uint32), pData, 0);
 		else
