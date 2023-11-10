@@ -21,12 +21,8 @@ struct LightCull3DData
 
 struct LightCull2DData
 {
-	RGTexture* pLightGridOpaque;
-	RGTexture* pLightGridTransparant;
-
-	RGBuffer* pLightIndexCounter;
-	RGBuffer* pLightIndexListOpaque;
-	RGBuffer* pLightIndexListTransparant;
+	RGBuffer* pLightListOpaque;
+	RGBuffer* pLightListTransparent;
 };
 
 class LightCulling

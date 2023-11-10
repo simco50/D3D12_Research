@@ -14,7 +14,7 @@ Texture2D<float> tDepth : register(t0);
 RWTexture2D<float4> uOutput : register(u0);
 
 #if TILED_FORWARD
-Texture2D<uint2> tLightGrid : register(t1);
+Buffer<uint> tLightList : register(t1);
 #elif CLUSTERED_FORWARD
 Buffer<uint> tLightGrid : register(t1);
 #endif
@@ -60,7 +60,9 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 
 #if TILED_FORWARD
 	uint2 tileIndex = uint2(floor(threadId.xy / TILED_LIGHTING_TILE_SIZE));
-	uint lightCount = tLightGrid[tileIndex].y;
+	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
+	uint lightGridOffset = tileIndex1D * MAX_LIGHTS_PER_TILE;
+	uint lightCount = tLightList[lightGridOffset];
 #elif CLUSTERED_FORWARD
 	float depth = tDepth.Load(uint3(threadId.xy, 0));
 	float viewDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);

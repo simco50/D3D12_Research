@@ -1,7 +1,6 @@
 #include "Common.hlsli"
 #include "Constants.hlsli"
 
-#define MAX_LIGHTS_PER_TILE 256
 #define SPLITZ_CULLING 1
 
 struct Plane
@@ -25,37 +24,27 @@ struct Cone
 
 struct PrecomputedLightData
 {
-	float3 ViewSpacePosition;
-	float SpotCosAngle;
-	float3 ViewSpaceDirection;
-	float SpotSinAngle;
+	float3 SphereViewPosition;
+	float SphereRadius;
+	uint Index;
 };
 
 Texture2D tDepthTexture : register(t0);
 StructuredBuffer<PrecomputedLightData> tLightData : register(t1);
 
-globallycoherent RWBuffer<uint> uLightIndexCounter : register(u0);
-RWBuffer<uint> uOpaqueLightIndexList : register(u1);
-RWTexture2D<uint2> uOpaqueOutLightGrid : register(u2);
+RWBuffer<uint> uLightListOpaque 		: register(u0);
+RWBuffer<uint> uLightListTransparent 	: register(u1);
 
-RWBuffer<uint> uTransparantLightIndexList : register(u3);
-RWTexture2D<uint2> uTransparantOutLightGrid : register(u4);
+groupshared uint 	gsMinDepth;
+groupshared uint 	gsMaxDepth;
+groupshared Frustum gsGroupFrustum;
+groupshared AABB 	gsGroupAABB;
 
-groupshared uint MinDepth;
-groupshared uint MaxDepth;
-groupshared Frustum GroupFrustum;
-groupshared AABB GroupAABB;
-
-groupshared uint OpaqueLightCount;
-groupshared uint OpaqueLightIndexStartOffset;
-groupshared uint OpaqueLightList[MAX_LIGHTS_PER_TILE];
-
-groupshared uint TransparantLightCount;
-groupshared uint TransparantLightIndexStartOffset;
-groupshared uint TransparantLightList[MAX_LIGHTS_PER_TILE];
+groupshared uint 	gsOpaqueLightCount;
+groupshared uint 	gsTransparentLightCount;
 
 #if SPLITZ_CULLING
-groupshared uint DepthMask;
+groupshared uint 	gsDepthMask;
 #endif
 
 bool SphereBehindPlane(Sphere sphere, Plane plane)
@@ -66,29 +55,6 @@ bool SphereBehindPlane(Sphere sphere, Plane plane)
 bool PointBehindPlane(float3 p, Plane plane)
 {
 	return dot(plane.Normal, p) - plane.DistanceToOrigin < 0;
-}
-
-bool ConeBehindPlane(Cone cone, Plane plane)
-{
-	float3 furthestPointDirection = cross(cross(plane.Normal, cone.Direction), cone.Direction);
-	float3 furthestPointOnCircle = cone.Tip + cone.Direction * cone.Height - furthestPointDirection * cone.Radius;
-	return PointBehindPlane(cone.Tip, plane) && PointBehindPlane(furthestPointOnCircle, plane);
-}
-
-bool ConeInFrustum(Cone cone, Frustum frustum, float zNear, float zFar)
-{
-	Plane nearPlane, farPlane;
-	nearPlane.Normal = float3(0, 0, 1);
-	nearPlane.DistanceToOrigin = zNear;
-	farPlane.Normal = float3(0, 0, -1);
-	farPlane.DistanceToOrigin = -zFar;
-
-	bool inside = !(ConeBehindPlane(cone, nearPlane) || ConeBehindPlane(cone, farPlane));
-	for(int i = 0; i < 4 && inside; ++i)
-	{
-		inside = !ConeBehindPlane(cone, frustum.Planes[i]);
-	}
-	return inside;
 }
 
 bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
@@ -110,26 +76,6 @@ Plane CalculatePlane(float3 a, float3 b, float3 c)
 	plane.Normal = normalize(cross(v1, v0));
 	plane.DistanceToOrigin = dot(plane.Normal, a);
 	return plane;
-}
-
-void AddLightForOpaque(uint lightIndex)
-{
-	uint index;
-	InterlockedAdd(OpaqueLightCount, 1, index);
-	if (index < MAX_LIGHTS_PER_TILE)
-	{
-		OpaqueLightList[index] = lightIndex;
-	}
-}
-
-void AddLightForTransparant(uint lightIndex)
-{
-	uint index;
-	InterlockedAdd(TransparantLightCount, 1, index);
-	if (index < MAX_LIGHTS_PER_TILE)
-	{
-		TransparantLightList[index] = lightIndex;
-	}
 }
 
 uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
@@ -157,27 +103,30 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	//Initialize the groupshared data only on the first thread of the group
 	if (groupIndex == 0)
 	{
-		MinDepth = 0xffffffff;
-		MaxDepth = 0;
-		OpaqueLightCount = 0;
-		TransparantLightCount = 0;
+		gsMinDepth = 0xffffffff;
+		gsMaxDepth = 0;
+		gsOpaqueLightCount = 0;
+		gsTransparentLightCount = 0;
 #if SPLITZ_CULLING
-		DepthMask = 0;
+		gsDepthMask = 0;
 #endif
 	}
+
+	uint tileIndex = groupId.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * groupId.y;
+	uint lightGridOffset = tileIndex * MAX_LIGHTS_PER_TILE;
 
 	//Wait for thread 0 to finish with initializing the groupshared data
 	GroupMemoryBarrierWithGroupSync();
 
 	//Find the min and max depth values in the threadgroup
-	InterlockedMin(MinDepth, depth);
-	InterlockedMax(MaxDepth, depth);
+	InterlockedMin(gsMinDepth, depth);
+	InterlockedMax(gsMaxDepth, depth);
 
 	//Wait for all the threads to finish
 	GroupMemoryBarrierWithGroupSync();
 
-	float fMinDepth = asfloat(MaxDepth);
-	float fMaxDepth = asfloat(MinDepth);
+	float fMinDepth = asfloat(gsMaxDepth);
+	float fMaxDepth = asfloat(gsMinDepth);
 
 	if(groupIndex == 0)
 	{
@@ -191,10 +140,10 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
 		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.TargetDimensionsInv, cView.ProjectionInverse).xyz;
 
-		GroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
-		GroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
-		GroupFrustum.Planes[2] = CalculatePlane(float3(0, 0, 0), viewSpace[4], viewSpace[5]);
-		GroupFrustum.Planes[3] = CalculatePlane(float3(0, 0, 0), viewSpace[7], viewSpace[6]);
+		gsGroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
+		gsGroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);
+		gsGroupFrustum.Planes[2] = CalculatePlane(float3(0, 0, 0), viewSpace[4], viewSpace[5]);
+		gsGroupFrustum.Planes[3] = CalculatePlane(float3(0, 0, 0), viewSpace[7], viewSpace[6]);
 
 		float3 minAABB = 1000000;
 		float3 maxAABB = -1000000;
@@ -204,7 +153,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 			minAABB = min(minAABB, viewSpace[i]);
 			maxAABB = max(maxAABB, viewSpace[i]);
 		}
-		GroupAABB = AABBFromMinMax(minAABB, maxAABB);
+		gsGroupAABB = AABBFromMinMax(minAABB, maxAABB);
 	}
 
 	// Convert depth values to view space.
@@ -216,92 +165,52 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cView.TargetDimensionsInv, cView.ProjectionInverse).z;
 	float depthRange = 31.0f / (maxDepthVS - minDepthVS);
 	uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
-	InterlockedOr(DepthMask, 1u << cellIndex);
+	InterlockedOr(gsDepthMask, 1u << cellIndex);
 #endif
-
-	// Clipping plane for minimum depth value
-	Plane minPlane;
-	minPlane.Normal = float3(0.0f, 0.0f, 1.0f);
-	minPlane.DistanceToOrigin = minDepthVS;
 
 	GroupMemoryBarrierWithGroupSync();
 
-	//Perform the light culling
+	// Perform the light culling
 	[loop]
 	for(uint i = groupIndex; i < cView.LightCount; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
 	{
-		Light light = GetLight(i);
+		PrecomputedLightData lightData = tLightData[i];
+		Sphere sphere;
+		sphere.Position = lightData.SphereViewPosition;
+		sphere.Radius = lightData.SphereRadius;
 
-		if(light.IsPoint)
+		if (SphereInFrustum(sphere, gsGroupFrustum, nearClipVS, maxDepthVS))
 		{
-			PrecomputedLightData lightData = tLightData[i];
-			Sphere sphere;
-			sphere.Radius = light.Range;
-			sphere.Position = lightData.ViewSpacePosition;
-			if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
-			{
-				AddLightForTransparant(i);
+			uint lightIndex;
+			uint count = WaveActiveCountBits(true);
+			if(WaveIsFirstLane())
+				InterlockedAdd(gsTransparentLightCount, count, lightIndex);
+			lightIndex = WaveReadLaneFirst(lightIndex) + WavePrefixCountBits(true);
 
-				if(SphereInAABB(sphere, GroupAABB))
-				{
+			uLightListTransparent[lightGridOffset + lightIndex + 1] = lightData.Index;
+
+			if(SphereInAABB(sphere, gsGroupAABB))
+			{
 #if SPLITZ_CULLING
-					if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
+				if(gsDepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
 #endif
-					{
-						AddLightForOpaque(i);
-					}
+				{
+					count = WaveActiveCountBits(true);
+					if(WaveIsFirstLane())
+						InterlockedAdd(gsOpaqueLightCount, count, lightIndex);
+					lightIndex = WaveReadLaneFirst(lightIndex) + WavePrefixCountBits(true);
+
+					uLightListOpaque[lightGridOffset + lightIndex + 1] = lightData.Index;
 				}
 			}
-		}
-		else if(light.IsSpot)
-		{
-			PrecomputedLightData lightData = tLightData[i];
-			Sphere sphere;
-			sphere.Radius = light.Range * 0.5f / pow(light.SpotlightAngles.y, 2);
-			sphere.Position = lightData.ViewSpacePosition + lightData.ViewSpaceDirection * sphere.Radius;
-			if (SphereInFrustum(sphere, GroupFrustum, nearClipVS, maxDepthVS))
-			{
-				AddLightForTransparant(i);
-
-				if(SphereInAABB(sphere, GroupAABB))
-				{
-#if SPLITZ_CULLING
-					if(DepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
-#endif
-					{
-						AddLightForOpaque(i);
-					}
-				}
-			}
-		}
-		else
-		{
-			AddLightForTransparant(i);
-			AddLightForOpaque(i);
 		}
 	}
 
 	GroupMemoryBarrierWithGroupSync();
 
-	//Populate the light grid only on the first thread in the group
-	if (groupIndex == 0)
+	if(groupIndex == 0)
 	{
-		InterlockedAdd(uLightIndexCounter[0], OpaqueLightCount, OpaqueLightIndexStartOffset);
-		uOpaqueOutLightGrid[groupId.xy] = uint2(OpaqueLightIndexStartOffset, OpaqueLightCount);
-
-		InterlockedAdd(uLightIndexCounter[1], TransparantLightCount, TransparantLightIndexStartOffset);
-		uTransparantOutLightGrid[groupId.xy] = uint2(TransparantLightIndexStartOffset, TransparantLightCount);
-	}
-
-	GroupMemoryBarrierWithGroupSync();
-
-	//Distribute populating the light index light amonst threads in the thread group
-	for (uint i = groupIndex; i < OpaqueLightCount; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
-	{
-		uOpaqueLightIndexList[OpaqueLightIndexStartOffset + i] = OpaqueLightList[i];
-	}
-	for (uint i = groupIndex; i < TransparantLightCount; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
-	{
-		uTransparantLightIndexList[TransparantLightIndexStartOffset + i] = TransparantLightList[i];
+		uLightListTransparent[lightGridOffset] = gsTransparentLightCount;
+		uLightListOpaque[lightGridOffset] = gsOpaqueLightCount;
 	}
 }

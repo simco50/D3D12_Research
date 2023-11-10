@@ -24,7 +24,7 @@ static constexpr int gVolumetricNumZSlices = 128;
 
 // Tiled
 static constexpr int MAX_LIGHT_DENSITY = 72000;
-static constexpr int FORWARD_PLUS_BLOCK_SIZE = 16;
+static constexpr int gTiledLightingTileSize = 16;
 
 ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
@@ -132,8 +132,8 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 					sceneTextures.pDepth->Get()->GetSRV(),
 					sceneTextures.pPreviousColor->Get()->GetSRV(),
 					pFogTexture->Get()->GetSRV(),
-					lightCullData.pLightGrid->Get()->GetSRV(),
 					lightCullData.pLightIndexGrid->Get()->GetSRV(),
+					lightCullData.pLightGrid->Get()->GetSRV(),
 					});
 
 				if (!translucentOnly)
@@ -161,7 +161,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 {
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture })
-		.Read({ lightCullData.pLightGridOpaque, lightCullData.pLightGridTransparant, lightCullData.pLightIndexListOpaque, lightCullData.pLightIndexListTransparant })
+		.Read({ lightCullData.pLightListOpaque, lightCullData.pLightListTransparent })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
 		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
@@ -179,8 +179,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 						sceneTextures.pDepth->Get()->GetSRV(),
 						sceneTextures.pPreviousColor->Get()->GetSRV(),
 						pFogTexture->Get()->GetSRV(),
-						lightCullData.pLightGridOpaque->Get()->GetSRV(),
-						lightCullData.pLightIndexListOpaque->Get()->GetSRV(),
+						lightCullData.pLightListOpaque->Get()->GetSRV(),
 						});
 
 					{
@@ -202,8 +201,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 						sceneTextures.pDepth->Get()->GetSRV(),
 						sceneTextures.pPreviousColor->Get()->GetSRV(),
 						pFogTexture->Get()->GetSRV(),
-						lightCullData.pLightGridTransparant->Get()->GetSRV(),
-						lightCullData.pLightIndexListTransparant->Get()->GetSRV(),
+						lightCullData.pLightListTransparent->Get()->GetSRV(),
 						});
 
 					{

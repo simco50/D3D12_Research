@@ -37,23 +37,23 @@ Texture2D<float> tDepth : register(t1);
 Texture2D tPreviousSceneColor :	register(t2);
 Texture3D<float4> tLightScattering : register(t3);
 
+Buffer<uint> tLightIndexList : register(t4);
 #if CLUSTERED_FORWARD
-Buffer<uint> tLightGrid : register(t4);
+Buffer<uint> tLightGrid : register(t5);
 uint GetSliceFromDepth(float depth)
 {
 	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
 }
-#elif TILED_FORWARD
-Texture2D<uint2> tLightGrid : register(t4);
 #endif
-Buffer<uint> tLightIndexList : register(t5);
 
 void GetLightCount(float2 pixel, float linearDepth, out uint lightCount, out uint startOffset)
 {
 #if TILED_FORWARD
 	uint2 tileIndex = uint2(floor(pixel / TILED_LIGHTING_TILE_SIZE));
-	startOffset = tLightGrid[tileIndex].x;
-	lightCount = tLightGrid[tileIndex].y;
+	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
+	uint lightGridOffset = tileIndex1D * MAX_LIGHTS_PER_TILE;
+	startOffset = lightGridOffset + 1;
+	lightCount = min(4, tLightIndexList[lightGridOffset]);
 #elif CLUSTERED_FORWARD
 	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
 	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);

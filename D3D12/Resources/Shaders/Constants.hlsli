@@ -12,6 +12,7 @@ static const float PI_DIV_4 = 0.78539816339744830961;
 static const float SQRT_2   = 1.41421356237309504880;
 
 static const uint MAX_LIGHTS_PER_CLUSTER = 32;
+static const uint MAX_LIGHTS_PER_TILE = 32;
 static const uint TILED_LIGHTING_TILE_SIZE = 16;
 
 namespace Colors
