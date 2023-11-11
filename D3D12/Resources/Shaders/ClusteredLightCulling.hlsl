@@ -24,8 +24,7 @@ ConstantBuffer<PassData> cPass : register(b0);
 
 StructuredBuffer<PrecomputedLightData> tLightData : register(t0);
 
-RWBuffer<uint> uLightIndexList : register(u0);
-RWBuffer<uint> uLightGrid : register(u1);
+RWBuffer<uint> uLightGrid : register(u0);
 
 bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, float2 coneAngleSinCos, Sphere sphere)
 {
@@ -98,7 +97,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 			sphere.Position = lightData.ViewSpacePosition;
 			if (SphereInAABB(sphere, clusterAABB))
 			{
-				uLightIndexList[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights] = i;
+				uLightGrid[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights + 1] = i;
 				++numLights;
 			}
 		}
@@ -115,16 +114,16 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 				float2(lightData.SpotSinAngle, lightData.SpotCosAngle),
 				sphere))
 			{
-				uLightIndexList[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights] = i;
+				uLightGrid[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights + 1] = i;
 				++numLights;
 			}
 		}
 		else
 		{
-			uLightIndexList[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights] = i;
+			uLightGrid[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights + 1] = i;
 			++numLights;
 		}
 	}
 
-	uLightGrid[clusterIndex] = numLights;
+	uLightGrid[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER] = numLights;
 }

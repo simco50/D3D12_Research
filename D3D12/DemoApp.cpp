@@ -645,7 +645,7 @@ void DemoApp::Update()
 					graph.AddPass("Visibility Shading", RGPassFlag::Raster)
 						.Read({ pFog, rasterResult.pVisibleMeshlets })
 						.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
-						.Read({ lightCull3DData.pLightGrid, lightCull3DData.pLightIndexGrid })
+						.Read({ lightCull3DData.pLightGrid })
 						.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::NoAccess, false, RenderTargetLoadAction::Load)
 						.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
 						.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
@@ -678,7 +678,6 @@ void DemoApp::Update()
 									sceneTextures.pPreviousColor->Get()->GetSRV(),
 									pFog->Get()->GetSRV(),
 									rasterResult.pVisibleMeshlets->Get()->GetSRV(),
-									lightCull3DData.pLightIndexGrid->Get()->GetSRV(),
 									lightCull3DData.pLightGrid->Get()->GetSRV(),
 									});
 								context.Draw(0, 3);

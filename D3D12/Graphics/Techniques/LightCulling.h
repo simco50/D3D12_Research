@@ -9,7 +9,6 @@ struct SceneTextures;
 struct LightCull3DData
 {
 	Vector3i ClusterCount;
-	RGBuffer* pLightIndexGrid;
 	RGBuffer* pLightGrid;
 	uint32 ClusterSize;
 

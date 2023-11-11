@@ -108,9 +108,6 @@ void AddLightTransparent(uint lightIndex)
 [numthreads(TILED_LIGHTING_TILE_SIZE, TILED_LIGHTING_TILE_SIZE, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
-	if(any(threadID.xy >= cView.TargetDimensions.xy))
-		return;
-
 	int2 uv = threadID.xy;
 	float fDepth = tDepthTexture[uv].r;
 
@@ -136,9 +133,12 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	//Wait for thread 0 to finish with initializing the groupshared data
 	GroupMemoryBarrierWithGroupSync();
 
-	//Find the min and max depth values in the threadgroup
-	InterlockedMin(gsMinDepth, depth);
-	InterlockedMax(gsMaxDepth, depth);
+	if(all(threadID.xy < cView.TargetDimensions.xy))
+	{
+		//Find the min and max depth values in the threadgroup
+		InterlockedMin(gsMinDepth, depth);
+		InterlockedMax(gsMaxDepth, depth);
+	}
 
 	//Wait for all the threads to finish
 	GroupMemoryBarrierWithGroupSync();

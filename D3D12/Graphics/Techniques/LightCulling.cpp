@@ -16,7 +16,7 @@
 // Clustered
 static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClustersNumZ = 32;
-static constexpr int gMaxLightsPerCluster = 32;
+static constexpr int gMaxLightsPerCluster = 128;
 
 static constexpr int gVolumetricFroxelTexelSize = 8;
 static constexpr int gVolumetricNumZSlices = 128;
@@ -66,9 +66,8 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 
-	cullData.pLightIndexGrid = graph.Create("Light Index Grid", BufferDesc::CreateTyped(gMaxLightsPerCluster * totalClusterCount, ResourceFormat::R16_UINT));
-	// LightGrid: x : Offset | y : Count
-	cullData.pLightGrid = graph.Create("Light Grid", BufferDesc::CreateTyped(totalClusterCount, ResourceFormat::R16_UINT));
+	// Max Lights + Counter
+	cullData.pLightGrid = graph.Create("Light Index Grid", BufferDesc::CreateTyped((gMaxLightsPerCluster + 1) * totalClusterCount, ResourceFormat::R16_UINT));
 
 	struct PrecomputedLightData
 	{
@@ -109,7 +108,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 
 	graph.AddPass("Cull Lights", RGPassFlag::Compute)
 		.Read(pPrecomputeData)
-		.Write({ cullData.pLightGrid, cullData.pLightIndexGrid })
+		.Write({ cullData.pLightGrid })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pClusteredCullPSO);
@@ -133,7 +132,6 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
-					cullData.pLightIndexGrid->Get()->GetUAV(),
 					cullData.pLightGrid->Get()->GetUAV(),
 					});
 				context.BindResources(3, {

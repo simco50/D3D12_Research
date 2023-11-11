@@ -19,8 +19,7 @@ Texture2D<float> tDepth : register(t2);
 Texture2D tPreviousSceneColor :	register(t3);
 Texture3D<float4> tFog : register(t4);
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t5);
-StructuredBuffer<uint> tLightIndexList : register(t6);
-StructuredBuffer<uint> tLightGrid : register(t7);
+StructuredBuffer<uint> tLightGrid : register(t6);
 
 MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttribute attributes)
 {
@@ -69,12 +68,12 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 
 	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
 	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
-	uint lightOffset = CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER * tileIndex;
-	uint lightCount = tLightGrid[tileIndex];
+	uint lightOffset = CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER * tileIndex + 1;
+	uint lightCount = tLightGrid[tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER];
 
 	for(uint i = 0; i < lightCount; ++i)
 	{
-		Light light = GetLight(tLightIndexList[lightOffset + i]);
+		Light light = GetLight(tLightGrid[lightOffset + i]);
 		LightResult result = DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 
 		totalResult.Diffuse += result.Diffuse;

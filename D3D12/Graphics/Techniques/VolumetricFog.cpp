@@ -54,7 +54,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 	graph.Export(pTargetVolume, &fogData.pFogHistory);
 
 	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
-		.Read({ pSourceVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
+		.Read({ pSourceVolume, lightCullData.pLightGrid })
 		.Write(pTargetVolume)
 		.Bind([=](CommandContext& context)
 			{
@@ -88,7 +88,6 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					lightCullData.pLightGrid->Get()->GetSRV(),
-					lightCullData.pLightIndexGrid->Get()->GetSRV(),
 					pSourceVolume->Get()->GetSRV(),
 					});
 
@@ -103,7 +102,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 	RGTexture* pFinalVolumeFog = graph.Create("Volumetric Fog", volumeDesc);
 
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
-		.Read({ pTargetVolume, lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
+		.Read({ pTargetVolume })
 		.Write(pFinalVolumeFog)
 		.Bind([=](CommandContext& context)
 			{
@@ -126,10 +125,8 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, pFinalFog->GetUAV());
 				context.BindResources(3, {
-					lightCullData.pLightGrid->Get()->GetSRV(),
-					lightCullData.pLightIndexGrid->Get()->GetSRV(),
 					pTargetVolume->Get()->GetSRV(),
-					});
+					}, 1);
 
 				context.Dispatch(
 					ComputeUtils::GetNumThreadGroups(

@@ -103,7 +103,7 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
-		.Read({ lightCullData.pLightGrid, lightCullData.pLightIndexGrid })
+		.Read({ lightCullData.pLightGrid })
 		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
 		.RenderTarget(sceneTextures.pColorTarget, rtLoadOp)
 		.RenderTarget(sceneTextures.pNormals, rtLoadOp)
@@ -132,7 +132,6 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 					sceneTextures.pDepth->Get()->GetSRV(),
 					sceneTextures.pPreviousColor->Get()->GetSRV(),
 					pFogTexture->Get()->GetSRV(),
-					lightCullData.pLightIndexGrid->Get()->GetSRV(),
 					lightCullData.pLightGrid->Get()->GetSRV(),
 					});
 

@@ -13,11 +13,7 @@ ConstantBuffer<PassParameters> cPass : register(b0);
 Texture2D<float> tDepth : register(t0);
 RWTexture2D<float4> uOutput : register(u0);
 
-#if TILED_FORWARD
-Buffer<uint> tLightList : register(t1);
-#elif CLUSTERED_FORWARD
 Buffer<uint> tLightGrid : register(t1);
-#endif
 
 static const int MaxNumLights = 32;
 
@@ -64,7 +60,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
 	uint lightCount = 0;
 	for(uint i = 0; i < TILED_LIGHTING_NUM_BUCKETS; ++i)
-		lightCount += countbits(tLightList[lightGridOffset + i]);
+		lightCount += countbits(tLightGrid[lightGridOffset + i]);
 	uint2 tileSize = 16;
 #elif CLUSTERED_FORWARD
 	float depth = tDepth.Load(uint3(threadId.xy, 0));
@@ -72,7 +68,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	uint slice = floor(log(viewDepth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
 	uint3 clusterIndex3D = uint3(floor(threadId.xy / cPass.ClusterSize), slice);
 	uint clusterIndex1D = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
-	uint lightCount = tLightGrid[clusterIndex1D];
+	uint lightCount = tLightGrid[clusterIndex1D * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER];
 	uint2 tileSize = cPass.ClusterSize.xy;
 #endif
 

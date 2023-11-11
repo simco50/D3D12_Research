@@ -36,10 +36,9 @@ Texture2D<float> tAO :	register(t0);
 Texture2D<float> tDepth : register(t1);
 Texture2D tPreviousSceneColor :	register(t2);
 Texture3D<float4> tLightScattering : register(t3);
+Buffer<uint> tLightGrid : register(t4);
 
-Buffer<uint> tLightIndexList : register(t4);
 #if CLUSTERED_FORWARD
-Buffer<uint> tLightGrid : register(t5);
 uint GetSliceFromDepth(float depth)
 {
 	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
@@ -57,7 +56,7 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 	LightResult totalResult = (LightResult)0;
 	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
-		uint bucket = tLightIndexList[lightGridOffset + bucketIndex];
+		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
 		while(bucket)
 		{
 			uint bitIndex = firstbitlow(bucket);
@@ -78,12 +77,12 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 	LightResult totalResult = (LightResult)0;
 	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
 	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
-	uint startOffset = tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER;
-	uint lightCount = tLightGrid[tileIndex];
+	uint startOffset = tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + 1;
+	uint lightCount = tLightGrid[tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER];
 
 	for(uint i = 0; i < lightCount; ++i)
 	{
-		uint lightIndex = tLightIndexList[startOffset + i];
+		uint lightIndex = tLightGrid[startOffset + i];
 		Light light = GetLight(lightIndex);
 		totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 	}

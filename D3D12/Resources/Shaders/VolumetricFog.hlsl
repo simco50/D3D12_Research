@@ -25,8 +25,8 @@ ConstantBuffer<InjectParams> cInjectParams : register(b0);
 ConstantBuffer<InjectParams> cAccumulateParams : register(b0);
 
 Buffer<uint> tLightGrid : register(t0);
-Buffer<uint> tLightIndexList : register(t1);
-Texture3D<float4> tLightScattering : register(t2);
+Texture3D<float4> tLightScattering : register(t1);
+
 RWTexture3D<float4> uOutLightScattering : register(u0);
 
 float3 GetWorldPosition(uint3 index, float offset, float3 clusterDimensionsInv, out float linearDepth)
@@ -128,12 +128,12 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	{
 		// Iterate over all the lights and light the froxel
 		uint tileIndex = GetLightCluster(threadId.xy, z);
-		uint lightOffset = tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER;
-		uint lightCount = tLightGrid[tileIndex];
+		uint lightOffset = tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + 1;
+		uint lightCount = tLightGrid[tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER];
 
 		for(i = 0; i < lightCount; ++i)
 		{
-			int lightIndex = tLightIndexList[lightOffset + i];
+			int lightIndex = tLightGrid[lightOffset + i];
 			Light light = GetLight(lightIndex);
 			if(light.IsEnabled && light.IsVolumetric)
 			{
