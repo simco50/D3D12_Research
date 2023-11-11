@@ -88,7 +88,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 	uint numLights = 0;
 
 	[loop]
-	for (uint i = 0; i < cView.LightCount && numLights < MAX_LIGHTS_PER_CLUSTER; ++i)
+	for (uint i = 0; i < cView.LightCount && numLights < CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER; ++i)
 	{
 		PrecomputedLightData lightData = tLightData[i];
 		if(lightData.IsPoint)
@@ -98,7 +98,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 			sphere.Position = lightData.ViewSpacePosition;
 			if (SphereInAABB(sphere, clusterAABB))
 			{
-				uLightIndexList[clusterIndex * MAX_LIGHTS_PER_CLUSTER + numLights] = i;
+				uLightIndexList[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights] = i;
 				++numLights;
 			}
 		}
@@ -115,13 +115,13 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 				float2(lightData.SpotSinAngle, lightData.SpotCosAngle),
 				sphere))
 			{
-				uLightIndexList[clusterIndex * MAX_LIGHTS_PER_CLUSTER + numLights] = i;
+				uLightIndexList[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights] = i;
 				++numLights;
 			}
 		}
 		else
 		{
-			uLightIndexList[clusterIndex * MAX_LIGHTS_PER_CLUSTER + numLights] = i;
+			uLightIndexList[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights] = i;
 			++numLights;
 		}
 	}

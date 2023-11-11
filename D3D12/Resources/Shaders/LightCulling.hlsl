@@ -40,8 +40,8 @@ groupshared uint 	gsMaxDepth;
 groupshared Frustum gsGroupFrustum;
 groupshared AABB 	gsGroupAABB;
 
-groupshared uint 	gsOpaqueLightCount;
-groupshared uint 	gsTransparentLightCount;
+groupshared uint 	gsLightBucketsOpaque[TILED_LIGHTING_NUM_BUCKETS];
+groupshared uint 	gsLightBucketsTransparent[TILED_LIGHTING_NUM_BUCKETS];
 
 #if SPLITZ_CULLING
 groupshared uint 	gsDepthMask;
@@ -91,6 +91,20 @@ uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
 	return mask;
 }
 
+void AddLightOpaque(uint lightIndex)
+{
+	uint bucketIndex = lightIndex / 32;
+	uint localIndex = lightIndex % 32;
+	InterlockedOr(gsLightBucketsOpaque[bucketIndex], 1u << localIndex);
+}
+
+void AddLightTransparent(uint lightIndex)
+{
+	uint bucketIndex = lightIndex / 32;
+	uint localIndex = lightIndex % 32;
+	InterlockedOr(gsLightBucketsTransparent[bucketIndex], 1u << localIndex);
+}
+
 [numthreads(TILED_LIGHTING_TILE_SIZE, TILED_LIGHTING_TILE_SIZE, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
@@ -105,15 +119,16 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	{
 		gsMinDepth = 0xffffffff;
 		gsMaxDepth = 0;
-		gsOpaqueLightCount = 0;
-		gsTransparentLightCount = 0;
 #if SPLITZ_CULLING
 		gsDepthMask = 0;
 #endif
 	}
 
-	uint tileIndex = groupId.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * groupId.y;
-	uint lightGridOffset = tileIndex * MAX_LIGHTS_PER_TILE;
+	if(groupIndex < TILED_LIGHTING_NUM_BUCKETS)
+	{
+		gsLightBucketsOpaque[groupIndex] = 0;
+		gsLightBucketsTransparent[groupIndex] = 0;
+	}
 
 	//Wait for thread 0 to finish with initializing the groupshared data
 	GroupMemoryBarrierWithGroupSync();
@@ -181,13 +196,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 
 		if (SphereInFrustum(sphere, gsGroupFrustum, nearClipVS, maxDepthVS))
 		{
-			uint lightIndex;
-			uint count = WaveActiveCountBits(true);
-			if(WaveIsFirstLane())
-				InterlockedAdd(gsTransparentLightCount, count, lightIndex);
-			lightIndex = WaveReadLaneFirst(lightIndex) + WavePrefixCountBits(true);
-
-			uLightListTransparent[lightGridOffset + lightIndex + 1] = lightData.Index;
+			AddLightTransparent(lightData.Index);
 
 			if(SphereInAABB(sphere, gsGroupAABB))
 			{
@@ -195,12 +204,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 				if(gsDepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
 #endif
 				{
-					count = WaveActiveCountBits(true);
-					if(WaveIsFirstLane())
-						InterlockedAdd(gsOpaqueLightCount, count, lightIndex);
-					lightIndex = WaveReadLaneFirst(lightIndex) + WavePrefixCountBits(true);
-
-					uLightListOpaque[lightGridOffset + lightIndex + 1] = lightData.Index;
+					AddLightOpaque(lightData.Index);
 				}
 			}
 		}
@@ -208,9 +212,11 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 
 	GroupMemoryBarrierWithGroupSync();
 
-	if(groupIndex == 0)
+	uint tileIndex = groupId.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * groupId.y;
+	uint lightGridOffset = tileIndex * TILED_LIGHTING_NUM_BUCKETS;
+	if(groupIndex < TILED_LIGHTING_NUM_BUCKETS)
 	{
-		uLightListTransparent[lightGridOffset] = gsTransparentLightCount;
-		uLightListOpaque[lightGridOffset] = gsOpaqueLightCount;
+		uLightListTransparent[lightGridOffset + groupIndex] = gsLightBucketsTransparent[groupIndex];
+		uLightListOpaque[lightGridOffset + groupIndex] = gsLightBucketsOpaque[groupIndex];
 	}
 }

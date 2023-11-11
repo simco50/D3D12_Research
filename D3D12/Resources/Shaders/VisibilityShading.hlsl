@@ -19,8 +19,8 @@ Texture2D<float> tDepth : register(t2);
 Texture2D tPreviousSceneColor :	register(t3);
 Texture3D<float4> tFog : register(t4);
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t5);
-StructuredBuffer<uint> tLightGrid : register(t6);
-StructuredBuffer<uint> tLightIndexList : register(t7);
+StructuredBuffer<uint> tLightIndexList : register(t6);
+StructuredBuffer<uint> tLightGrid : register(t7);
 
 MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttribute attributes)
 {
@@ -63,30 +63,18 @@ uint GetSliceFromDepth(float depth)
 	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
 }
 
-void GetLightCount(float2 pixel, float linearDepth, out uint lightCount, out uint startOffset)
-{
-	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
-	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
-	startOffset = MAX_LIGHTS_PER_CLUSTER * tileIndex;
-	lightCount = tLightGrid[tileIndex];
-}
-
-Light GetLight(uint lightIndex, uint lightOffset)
-{
-	lightIndex = tLightIndexList[lightOffset + lightIndex];
-	return GetLight(lightIndex);
-}
-
 LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	LightResult totalResult = (LightResult)0;
 
-	uint lightCount, lightOffset;
-	GetLightCount(pixel, linearDepth, lightCount, lightOffset);
+	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
+	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
+	uint lightOffset = CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER * tileIndex;
+	uint lightCount = tLightGrid[tileIndex];
 
 	for(uint i = 0; i < lightCount; ++i)
 	{
-		Light light = GetLight(i, lightOffset);
+		Light light = GetLight(tLightIndexList[lightOffset + i]);
 		LightResult result = DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 
 		totalResult.Diffuse += result.Diffuse;

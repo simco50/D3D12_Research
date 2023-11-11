@@ -61,8 +61,10 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 #if TILED_FORWARD
 	uint2 tileIndex = uint2(floor(threadId.xy / TILED_LIGHTING_TILE_SIZE));
 	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
-	uint lightGridOffset = tileIndex1D * MAX_LIGHTS_PER_TILE;
-	uint lightCount = tLightList[lightGridOffset];
+	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
+	uint lightCount = 0;
+	for(uint i = 0; i < TILED_LIGHTING_NUM_BUCKETS; ++i)
+		lightCount += countbits(tLightList[lightGridOffset + i]);
 #elif CLUSTERED_FORWARD
 	float depth = tDepth.Load(uint3(threadId.xy, 0));
 	float viewDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);

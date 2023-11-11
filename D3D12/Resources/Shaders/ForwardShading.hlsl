@@ -46,66 +46,63 @@ uint GetSliceFromDepth(float depth)
 }
 #endif
 
-void GetLightCount(float2 pixel, float linearDepth, out uint lightCount, out uint startOffset)
-{
 #if TILED_FORWARD
+
+LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
+{
 	uint2 tileIndex = uint2(floor(pixel / TILED_LIGHTING_TILE_SIZE));
 	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
-	uint lightGridOffset = tileIndex1D * MAX_LIGHTS_PER_TILE;
-	startOffset = lightGridOffset + 1;
-	lightCount = min(4, tLightIndexList[lightGridOffset]);
-#elif CLUSTERED_FORWARD
-	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
-	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
-	startOffset = tileIndex * MAX_LIGHTS_PER_CLUSTER;
-	lightCount = tLightGrid[tileIndex];
-#else
-	startOffset = 0;
-	lightCount = cView.LightCount;
-#endif
+	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
+
+	LightResult totalResult = (LightResult)0;
+	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
+	{
+		uint bucket = tLightIndexList[lightGridOffset + bucketIndex];
+		while(bucket)
+		{
+			uint lightIndex = firstbitlow(bucket);
+			bucket ^= 1u << lightIndex;
+
+			Light light = GetLight(lightIndex);
+			totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+		}
+	}
+	return totalResult;
 }
 
-Light GetLight(uint lightIndex, uint lightOffset)
-{
-#if TILED_FORWARD || CLUSTERED_FORWARD
-	lightIndex = tLightIndexList[lightOffset + lightIndex];
-#endif
-	return GetLight(lightIndex);
-}
+#elif CLUSTERED_FORWARD
 
 LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	LightResult totalResult = (LightResult)0;
-
-	uint lightCount, lightOffset;
-	GetLightCount(pixel, linearDepth, lightCount, lightOffset);
+	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
+	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
+	uint startOffset = tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER;
+	uint lightCount = tLightGrid[tileIndex];
 
 	for(uint i = 0; i < lightCount; ++i)
 	{
-		Light light = GetLight(i, lightOffset);
-		LightResult result = DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
-
-#define SCREEN_SPACE_SHADOWS 0
-#if SCREEN_SPACE_SHADOWS
-		float3 L = normalize(worldPos - light.Position);
-		if(light.IsDirectional)
-		{
-			L = light.Direction;
-		}
-
-		float length = 0.1f * pos.w * cView.ProjectionInverse[1][1];
-		float occlusion = ScreenSpaceShadows(worldPos, L, tDepth, 8, length, dither);
-
-		result.Diffuse *= occlusion;
-		result.Specular *= occlusion;
-#endif
-
-		totalResult.Diffuse += result.Diffuse;
-		totalResult.Specular += result.Specular;
+		uint lightIndex = tLightIndexList[startOffset + i];
+		Light light = GetLight(lightIndex);
+		totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 	}
-
 	return totalResult;
 }
+
+#else
+
+LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
+{
+	LightResult totalResult = (LightResult)0;
+	for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
+	{
+		Light light = GetLight(lightIndex);
+		totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+	}
+	return totalResult;
+}
+
+#endif
 
 InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {

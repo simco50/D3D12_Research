@@ -669,9 +669,8 @@ void DemoApp::Update()
 									sceneTextures.pPreviousColor->Get()->GetSRV(),
 									pFog->Get()->GetSRV(),
 									rasterResult.pVisibleMeshlets->Get()->GetSRV(),
-									lightCull3DData.pLightGrid->Get()->GetSRV(),
 									lightCull3DData.pLightIndexGrid->Get()->GetSRV(),
-
+									lightCull3DData.pLightGrid->Get()->GetSRV(),
 									});
 								context.Draw(0, 3);
 							});

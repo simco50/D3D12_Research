@@ -128,7 +128,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	{
 		// Iterate over all the lights and light the froxel
 		uint tileIndex = GetLightCluster(threadId.xy, z);
-		uint lightOffset = tileIndex * MAX_LIGHTS_PER_CLUSTER;
+		uint lightOffset = tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER;
 		uint lightCount = tLightGrid[tileIndex];
 
 		for(i = 0; i < lightCount; ++i)

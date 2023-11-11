@@ -23,7 +23,8 @@ static constexpr int gVolumetricNumZSlices = 128;
 
 // Tiled
 static constexpr int gTiledLightingTileSize = 16;
-static constexpr int gMaxLightsPerTile = 32;
+static constexpr int gMaxLightsPerTile = 1024;
+static_assert(gMaxLightsPerTile % 32 == 0);
 
 LightCulling::LightCulling(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
@@ -152,10 +153,10 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 {
 	uint32 tilesX = Math::DivideAndRoundUp((uint32)pView->MainView.Viewport.GetWidth(), gTiledLightingTileSize);
 	uint32 tilesY = Math::DivideAndRoundUp((uint32)pView->MainView.Viewport.GetHeight(), gTiledLightingTileSize);
-	uint32 lightListElements = tilesX * tilesY * gMaxLightsPerTile;
+	uint32 lightListElements = tilesX * tilesY * (gMaxLightsPerTile / 32);
 
-	resources.pLightListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R16_UINT));
-	resources.pLightListTransparent = graph.Create("Light List - Transparant", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R16_UINT));
+	resources.pLightListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));
+	resources.pLightListTransparent = graph.Create("Light List - Transparant", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));
 
 	struct PrecomputedLightData
 	{
