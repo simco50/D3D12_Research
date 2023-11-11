@@ -161,6 +161,15 @@ void DemoApp::SetupScene()
 		sunLight.VolumetricLighting = true;
 		m_World.Lights.push_back(sunLight);
 	}
+
+	{
+		for (int i = 0; i < 256; ++i)
+		{
+			Light p = Light::Point(Vector3(Math::RandomRange(-5.0f, 5.0f), 0.0f, Math::RandomRange(-5.0f, 5.0f)), 1.0f, 100.0f, Color(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f)));
+			m_World.Lights.push_back(p);
+		}
+	}
+
 	{
 		Light spot = Light::Spot(Vector3(0, 0, 0), 4.0f, Vector3::Down, 70.0f, 50.0f, 100.0f);
 		spot.CastShadows = true;

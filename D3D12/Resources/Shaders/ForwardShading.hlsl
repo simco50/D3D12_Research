@@ -60,9 +60,10 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 		uint bucket = tLightIndexList[lightGridOffset + bucketIndex];
 		while(bucket)
 		{
-			uint lightIndex = firstbitlow(bucket);
-			bucket ^= 1u << lightIndex;
+			uint bitIndex = firstbitlow(bucket);
+			bucket ^= 1u << bitIndex;
 
+			uint lightIndex = bitIndex + bucketIndex * 32;
 			Light light = GetLight(lightIndex);
 			totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 		}

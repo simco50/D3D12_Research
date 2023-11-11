@@ -19,7 +19,7 @@ Buffer<uint> tLightList : register(t1);
 Buffer<uint> tLightGrid : register(t1);
 #endif
 
-static const int MaxNumLights = 10;
+static const int MaxNumLights = 32;
 
 static const int2 SobelWeights[] = {
 	int2(1,  1), int2(0,  2), int2(-1,  1),
@@ -48,7 +48,7 @@ float3 ApplyEdgeDetection(uint2 pixel, float3 color)
 
 float3 GetColor(uint2 pixel, uint lightCount)
 {
-	float3 color = Inferno(saturate((float)lightCount / MaxNumLights));
+	float3 color = Turbo(saturate((float)lightCount / MaxNumLights));
 	return ApplyEdgeDetection(pixel, color);
 }
 
@@ -65,6 +65,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	uint lightCount = 0;
 	for(uint i = 0; i < TILED_LIGHTING_NUM_BUCKETS; ++i)
 		lightCount += countbits(tLightList[lightGridOffset + i]);
+	uint2 tileSize = 16;
 #elif CLUSTERED_FORWARD
 	float depth = tDepth.Load(uint3(threadId.xy, 0));
 	float viewDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
@@ -72,24 +73,27 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	uint3 clusterIndex3D = uint3(floor(threadId.xy / cPass.ClusterSize), slice);
 	uint clusterIndex1D = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
 	uint lightCount = tLightGrid[clusterIndex1D];
+	uint2 tileSize = cPass.ClusterSize.xy;
 #endif
-	uOutput[threadId.xy] = float4(GetColor(threadId.xy, lightCount), 1);
 
 	// Draw legend
 	const float boxSize = 40;
 	const float2 topLeft = cView.ViewportDimensions - float2(boxSize + 10, boxSize * MaxNumLights + 10);
 
-	if(threadId.x < MaxNumLights && threadId.y == 0)
+	uint2 edge = threadId.xy % tileSize == 0;
+	if(all(edge))
 	{
-		float2 cursor = float2(topLeft.x, topLeft.y + threadId.x * boxSize);
-		DrawRect(topLeft * cView.ViewportDimensionsInv, (cursor + boxSize) * cView.ViewportDimensionsInv, RectMode::MinMax);
-		TextWriter writer = CreateTextWriter(cursor + 0.2f * boxSize);
-		writer.Int(threadId.x);
+		TextWriter writer = CreateTextWriter(threadId.xy + (tileSize - 16) * 0.5f);
+		writer.SetScale(0.6f);
+		writer.SetColor(float4(0, 0, 0, 0.7f));
+		writer.Int(lightCount);
 	}
 
-	float2 boxPos = ((int2)threadId.xy - topLeft) / float2(boxSize, boxSize * MaxNumLights);
-	if(all(boxPos >= 0) && all(boxPos <= 1))
-	{
-		uOutput[threadId.xy] = float4(Inferno(boxPos.y), 1);
-	}
+	float4 color = float4(GetColor(threadId.xy, lightCount), 1);
+
+	// Black edges
+	if(any(edge))
+		color *= 0.6f;
+
+	uOutput[threadId.xy] = color;
 }

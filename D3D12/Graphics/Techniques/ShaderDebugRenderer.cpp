@@ -51,9 +51,10 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 
 		struct PackedCharacterInstance
 		{
-			uint32 Position;
-			uint32 Character;
-			uint32 Color;
+			uint32 Position		: 32;
+			uint32 Character	: 16;
+			uint32 Scale		: 16;
+			uint32 Color		: 32;
 		} Characters[8192];
 
 		struct PackedLineInstance

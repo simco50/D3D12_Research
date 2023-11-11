@@ -56,6 +56,7 @@ void RenderGlyphVS(
 
 	float2 pos = float2(uv.x, uv.y);
 	pos *= glyph.Dimensions;
+	pos *= instance.Scale;
 	pos += instance.Position;
 	pos *= cData.TargetDimensionsInv;
 

@@ -108,6 +108,9 @@ void AddLightTransparent(uint lightIndex)
 [numthreads(TILED_LIGHTING_TILE_SIZE, TILED_LIGHTING_TILE_SIZE, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
+	if(any(threadID.xy >= cView.TargetDimensions.xy))
+		return;
+
 	int2 uv = threadID.xy;
 	float fDepth = tDepthTexture[uv].r;
 

@@ -12,13 +12,15 @@ struct CharacterInstance
 	float4 Color;
 	float2 Position;
 	uint Character;
+	float Scale;
 };
 
 struct PackedCharacterInstance
 {
-	uint Position;
-	uint Character;
-	uint Color;
+	uint Position	: 32;
+	uint Character	: 16;
+	uint Scale		: 16;
+	uint Color		: 32;
 };
 
 PackedCharacterInstance PackCharacterInstance(CharacterInstance c)
@@ -27,6 +29,7 @@ PackedCharacterInstance PackCharacterInstance(CharacterInstance c)
 	p.Position = Pack_RG16_FLOAT(c.Position);
 	p.Character = c.Character;
 	p.Color = Pack_RGBA8_UNORM(c.Color);
+	p.Scale = asuint(f32tof16(c.Scale));
 	return p;
 }
 
@@ -36,6 +39,7 @@ CharacterInstance UnpackCharacterInstance(PackedCharacterInstance p)
 	c.Position = Unpack_RG16_FLOAT(p.Position);
 	c.Character = p.Character;
 	c.Color = Unpack_RGBA8_UNORM(p.Color);
+	c.Scale = asfloat(f16tof32(p.Scale));
 	return c;
 }
 
@@ -127,12 +131,13 @@ namespace Private
 		GetRenderData().Store(LINE_INSTANCES_OFFSET + offset * sizeof(PackedLineInstance), PackLineInstance(instance));
 	}
 
-	void AddCharacter(uint character, float2 position, float4 color, uint offset)
+	void AddCharacter(uint character, float2 position, float4 color, float scale, uint offset)
 	{
 		CharacterInstance instance;
 		instance.Position = position;
 		instance.Character = character;
 		instance.Color = color;
+		instance.Scale = scale;
 		GetRenderData().Store(TEXT_INSTANCES_OFFSET + offset * sizeof(PackedCharacterInstance), PackCharacterInstance(instance));
 	}
 }
@@ -255,23 +260,29 @@ struct TextWriter
 	float2 StartLocation;
 	float2 Cursor;
 	float4 Color;
+	float Scale;
 
 	void SetColor(float4 color)
 	{
 		Color = color;
 	}
 
+	void SetScale(float scale)
+	{
+		Scale = scale;
+	}
+
 	void Text_(uint character, uint offset)
 	{
 		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
 		Glyph glyph = glyphBuffer[character];
-		Private::AddCharacter(character, Cursor + glyph.Offset, Color, offset);
-		Cursor.x += glyph.AdvanceX;
+		Private::AddCharacter(character, Cursor + glyph.Offset, Color, Scale, offset);
+		Cursor.x += glyph.AdvanceX * Scale;
 	}
 
 	void NewLine()
 	{
-		Cursor.y += cView.FontSize;
+		Cursor.y += cView.FontSize * Scale;
 		Cursor.x = StartLocation.x;
 	}
 
@@ -401,5 +412,6 @@ TextWriter CreateTextWriter(float2 position, float4 color = float4(1, 1, 1, 1))
 	writer.StartLocation = position;
 	writer.Cursor = position;
 	writer.Color = color;
+	writer.Scale = 1.0f;
 	return writer;
 }
