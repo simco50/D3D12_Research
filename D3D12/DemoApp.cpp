@@ -623,6 +623,7 @@ void DemoApp::Update()
 				else
 					sceneTextures.pAmbientOcclusion = m_pSSAO->Execute(graph, pView, sceneTextures);
 
+				m_pLightCulling->ComputeTiledLightCulling(graph, pView, sceneTextures, lightCull2DData);
 				m_pLightCulling->ComputeClusteredLightCulling(graph, pView, lightCull3DData);
 
 				RGTexture* pFog = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
@@ -633,7 +634,6 @@ void DemoApp::Update()
 
 				if (m_RenderPath == RenderPath::Tiled)
 				{
-					m_pLightCulling->ComputeTiledLightCulling(graph, pView, sceneTextures, lightCull2DData);
 					m_pForwardRenderer->RenderForwardTiled(graph, pView, sceneTextures, lightCull2DData, pFog);
 				}
 				else if (m_RenderPath == RenderPath::Clustered)
@@ -659,17 +659,6 @@ void DemoApp::Update()
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-								struct
-								{
-									Vector4u ClusterDimensions;
-									Vector2u ClusterSize;
-									Vector2 LightGridParams;
-								} parameters;
-								parameters.ClusterDimensions = Vector4u(lightCull3DData.ClusterCount.x, lightCull3DData.ClusterCount.y, lightCull3DData.ClusterCount.z, 0);
-								parameters.ClusterSize = lightCull3DData.ClusterSize;
-								parameters.LightGridParams = lightCull3DData.LightGridParams;
-
-								context.BindRootCBV(0, parameters);
 								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
 								context.BindResources(3, {
 									rasterResult.pVisibilityBuffer->Get()->GetSRV(),
@@ -678,7 +667,7 @@ void DemoApp::Update()
 									sceneTextures.pPreviousColor->Get()->GetSRV(),
 									pFog->Get()->GetSRV(),
 									rasterResult.pVisibleMeshlets->Get()->GetSRV(),
-									lightCull3DData.pLightGrid->Get()->GetSRV(),
+									lightCull2DData.pLightListOpaque->Get()->GetSRV(),
 									});
 								context.Draw(0, 3);
 							});
@@ -1050,9 +1039,9 @@ void DemoApp::Update()
 			{
 				if (Tweakables::g_VisualizeLightDensity)
 				{
-					if (m_RenderPath == RenderPath::Clustered || m_RenderPath == RenderPath::Visibility)
+					if (m_RenderPath == RenderPath::Clustered)
 						sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull3DData);
-					else if (m_RenderPath == RenderPath::Tiled)
+					else if (m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
 						sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull2DData);
 				}
 

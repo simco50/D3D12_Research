@@ -5,14 +5,6 @@
 #include "RayTracing/DDGICommon.hlsli"
 #include "Noise.hlsli"
 
-struct PerViewData
-{
-	uint4 ClusterDimensions;
-	uint2 ClusterSize;
-	float2 LightGridParams;
-};
-ConstantBuffer<PerViewData> cPass : register(b0);
-
 Texture2D<uint> tVisibilityTexture : register(t0);
 Texture2D<float> tAO :	register(t1);
 Texture2D<float> tDepth : register(t2);
@@ -57,29 +49,26 @@ MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttrib
 	return properties;
 }
 
-uint GetSliceFromDepth(float depth)
-{
-	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
-}
-
 LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
+	uint2 tileIndex = uint2(floor(pixel / TILED_LIGHTING_TILE_SIZE));
+	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
+	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
+
 	LightResult totalResult = (LightResult)0;
-
-	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
-	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
-	uint lightOffset = CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER * tileIndex + 1;
-	uint lightCount = tLightGrid[tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER];
-
-	for(uint i = 0; i < lightCount; ++i)
+	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
-		Light light = GetLight(tLightGrid[lightOffset + i]);
-		LightResult result = DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
+		while(bucket)
+		{
+			uint bitIndex = firstbitlow(bucket);
+			bucket ^= 1u << bitIndex;
 
-		totalResult.Diffuse += result.Diffuse;
-		totalResult.Specular += result.Specular;
+			uint lightIndex = bitIndex + bucketIndex * 32;
+			Light light = GetLight(lightIndex);
+			totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+		}
 	}
-
 	return totalResult;
 }
 
