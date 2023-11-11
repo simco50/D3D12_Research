@@ -1154,6 +1154,7 @@ void DemoApp::InitializePipelines()
 			m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
 
 			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 			psoDesc.SetName("Depth Prepass Alpha Mask");
 			m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
 		}
