@@ -14,18 +14,6 @@
 #include "Graphics/Light.h"
 #include "Core/ConsoleVariables.h"
 
-// Clustered
-static constexpr int gLightClusterTexelSize = 64;
-static constexpr int gLightClustersNumZ = 32;
-static constexpr int gMaxLightsPerCluster = 32;
-
-static constexpr int gVolumetricFroxelTexelSize = 8;
-static constexpr int gVolumetricNumZSlices = 128;
-
-// Tiled
-static constexpr int MAX_LIGHT_DENSITY = 72000;
-static constexpr int gTiledLightingTileSize = 16;
-
 ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
@@ -121,7 +109,7 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 				} frameData;
 
 				frameData.ClusterDimensions = Vector4i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y, lightCullData.ClusterCount.z, 0);
-				frameData.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
+				frameData.ClusterSize = Vector2i(lightCullData.ClusterSize, lightCullData.ClusterSize);
 				frameData.LightGridParams = lightCullData.LightGridParams;
 
 				context.BindRootCBV(1, frameData);

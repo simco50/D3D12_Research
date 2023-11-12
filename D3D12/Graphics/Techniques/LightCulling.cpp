@@ -18,11 +18,8 @@ static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClustersNumZ = 32;
 static constexpr int gMaxLightsPerCluster = 128;
 
-static constexpr int gVolumetricFroxelTexelSize = 8;
-static constexpr int gVolumetricNumZSlices = 128;
-
 // Tiled
-static constexpr int gTiledLightingTileSize = 16;
+static constexpr int gTiledLightingTileSize = 8;
 static constexpr int gMaxLightsPerTile = 1024;
 static_assert(gMaxLightsPerTile % 32 == 0);
 

@@ -61,7 +61,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	uint lightCount = 0;
 	for(uint i = 0; i < TILED_LIGHTING_NUM_BUCKETS; ++i)
 		lightCount += countbits(tLightGrid[lightGridOffset + i]);
-	uint2 tileSize = 16;
+	uint2 tileSize = TILED_LIGHTING_TILE_SIZE;
 #elif CLUSTERED_FORWARD
 	float depth = tDepth.Load(uint3(threadId.xy, 0));
 	float viewDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
@@ -73,23 +73,25 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 #endif
 
 	// Draw legend
-	const float boxSize = 40;
-	const float2 topLeft = cView.ViewportDimensions - float2(boxSize + 10, boxSize * MaxNumLights + 10);
+	const float boxSize = 26;
 
-	uint2 edge = threadId.xy % tileSize == 0;
-	if(all(edge))
+	if(threadId.x < MaxNumLights && threadId.y == 0)
 	{
-		TextWriter writer = CreateTextWriter(threadId.xy + (tileSize - 16) * 0.5f);
-		writer.SetScale(0.6f);
-		writer.SetColor(float4(0, 0, 0, 0.7f));
-		writer.Int(lightCount);
+		float2 cursor = float2(5 + threadId.x * boxSize, 5);
+		TextWriter writer = CreateTextWriter(cursor + 0.2f * boxSize);
+		writer.Int(threadId.x);
 	}
 
 	float4 color = float4(GetColor(threadId.xy, lightCount), 1);
 
 	// Black edges
+	uint2 edge = threadId.xy % tileSize == 0;
 	if(any(edge))
 		color *= 0.6f;
+
+	float2 boxPos = ((int2)threadId.xy - 5) / float2(boxSize * MaxNumLights, boxSize);
+	if(all(boxPos >= 0) && all(boxPos <= 1))
+		color = float4(Turbo(boxPos.x), 1);
 
 	uOutput[threadId.xy] = color;
 }
