@@ -146,6 +146,8 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 
 void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& resources)
 {
+	RG_GRAPH_SCOPE("Light Culling", graph);
+
 	uint32 tilesX = Math::DivideAndRoundUp((uint32)pView->MainView.Viewport.GetWidth(), gTiledLightingTileSize);
 	uint32 tilesY = Math::DivideAndRoundUp((uint32)pView->MainView.Viewport.GetHeight(), gTiledLightingTileSize);
 	uint32 lightListElements = tilesX * tilesY * (gMaxLightsPerTile / 32);
@@ -157,7 +159,6 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 	{
 		Vector3 SphereViewPosition;
 		float SphereRadius;
-		uint32 Index;
 	};
 
 	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->NumLights, sizeof(PrecomputedLightData)));
@@ -191,7 +192,6 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 						data.SphereRadius = light.Range * 0.5f / powf(cosAngle, 2);
 						data.SphereViewPosition = Vector3::Transform(light.Position, viewMatrix) + Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, light.Rotation), viewMatrix) * light.Range;
 					}
-					data.Index = i;
 				}
 				context.CopyBuffer(allocation.pBackingResource, pPrecomputeData->Get(), precomputedLightDataSize, allocation.Offset, 0);
 			});

@@ -26,14 +26,13 @@ struct PrecomputedLightData
 {
 	float3 SphereViewPosition;
 	float SphereRadius;
-	uint Index;
 };
 
-Texture2D tDepthTexture : register(t0);
-StructuredBuffer<PrecomputedLightData> tLightData : register(t1);
+Texture2D tDepthTexture 							: register(t0);
+StructuredBuffer<PrecomputedLightData> tLightData 	: register(t1);
 
-RWBuffer<uint> uLightListOpaque 		: register(u0);
-RWBuffer<uint> uLightListTransparent 	: register(u1);
+RWBuffer<uint> uLightListOpaque 					: register(u0);
+RWBuffer<uint> uLightListTransparent 				: register(u1);
 
 groupshared uint 	gsMinDepth;
 groupshared uint 	gsMaxDepth;
@@ -50,11 +49,6 @@ groupshared uint 	gsDepthMask;
 bool SphereBehindPlane(Sphere sphere, Plane plane)
 {
 	return dot(plane.Normal, sphere.Position) - plane.DistanceToOrigin < -sphere.Radius;
-}
-
-bool PointBehindPlane(float3 p, Plane plane)
-{
-	return dot(plane.Normal, p) - plane.DistanceToOrigin < 0;
 }
 
 bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
@@ -108,13 +102,7 @@ void AddLightTransparent(uint lightIndex)
 [numthreads(TILED_LIGHTING_TILE_SIZE, TILED_LIGHTING_TILE_SIZE, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
 {
-	int2 uv = threadID.xy;
-	float fDepth = tDepthTexture[uv].r;
-
-	//Convert to uint because you can't used interlocked functions on floats
-	uint depth = asuint(fDepth);
-
-	//Initialize the groupshared data only on the first thread of the group
+	// Initialize groupshared data
 	if (groupIndex == 0)
 	{
 		gsMinDepth = 0xffffffff;
@@ -123,24 +111,33 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 		gsDepthMask = 0;
 #endif
 	}
-
 	if(groupIndex < TILED_LIGHTING_NUM_BUCKETS)
 	{
 		gsLightBucketsOpaque[groupIndex] = 0;
 		gsLightBucketsTransparent[groupIndex] = 0;
 	}
 
-	//Wait for thread 0 to finish with initializing the groupshared data
+	// Wait to finish initializing groupshared data
 	GroupMemoryBarrierWithGroupSync();
 
-	if(all(threadID.xy < cView.TargetDimensions.xy))
+	int2 uv = min(threadID.xy, cView.TargetDimensions.xy - 1);
+	float fDepth = tDepthTexture[uv].r;
+
+	// Convert to uint because you can't used interlocked functions on floats
+	uint depth = asuint(fDepth);
+
+	// Get the min/max depth in the wave
+	float waveMin = WaveActiveMin(depth);
+	float waveMax = WaveActiveMax(depth);
+
+	// Let first thread in wave combine into groupshared min/max
+	if(WaveIsFirstLane())
 	{
-		//Find the min and max depth values in the threadgroup
-		InterlockedMin(gsMinDepth, depth);
-		InterlockedMax(gsMaxDepth, depth);
+		InterlockedMin(gsMinDepth, waveMin);
+		InterlockedMax(gsMaxDepth, waveMax);
 	}
 
-	//Wait for all the threads to finish
+	// Wait for all the threads to finish
 	GroupMemoryBarrierWithGroupSync();
 
 	float fMinDepth = asfloat(gsMaxDepth);
@@ -175,12 +172,12 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	}
 
 	// Convert depth values to view space.
-	float minDepthVS = ScreenToView(float4(0, 0, fMinDepth, 1), cView.TargetDimensionsInv, cView.ProjectionInverse).z;
-	float maxDepthVS = ScreenToView(float4(0, 0, fMaxDepth, 1), cView.TargetDimensionsInv, cView.ProjectionInverse).z;
-	float nearClipVS = ScreenToView(float4(0, 0, 1, 1), cView.TargetDimensionsInv, cView.ProjectionInverse).z;
+	float minDepthVS = LinearizeDepth(fMinDepth);
+	float maxDepthVS = LinearizeDepth(fMaxDepth);
+	float nearClipVS = cView.FarZ;
 
 #if SPLITZ_CULLING
-	float depthVS = ScreenToView(float4(0, 0, fDepth, 1), cView.TargetDimensionsInv, cView.ProjectionInverse).z;
+	float depthVS = LinearizeDepth(fDepth);
 	float depthRange = 31.0f / (maxDepthVS - minDepthVS);
 	uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
 	InterlockedOr(gsDepthMask, 1u << cellIndex);
@@ -189,7 +186,6 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	GroupMemoryBarrierWithGroupSync();
 
 	// Perform the light culling
-	[loop]
 	for(uint i = groupIndex; i < cView.LightCount; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
 	{
 		PrecomputedLightData lightData = tLightData[i];
@@ -199,7 +195,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 
 		if (SphereInFrustum(sphere, gsGroupFrustum, nearClipVS, maxDepthVS))
 		{
-			AddLightTransparent(lightData.Index);
+			AddLightTransparent(i);
 
 			if(SphereInAABB(sphere, gsGroupAABB))
 			{
@@ -207,7 +203,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 				if(gsDepthMask & CreateLightMask(minDepthVS, depthRange, sphere))
 #endif
 				{
-					AddLightOpaque(lightData.Index);
+					AddLightOpaque(i);
 				}
 			}
 		}
@@ -215,11 +211,12 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 
 	GroupMemoryBarrierWithGroupSync();
 
+	// Export bitmasks
 	uint tileIndex = groupId.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * groupId.y;
 	uint lightGridOffset = tileIndex * TILED_LIGHTING_NUM_BUCKETS;
-	if(groupIndex < TILED_LIGHTING_NUM_BUCKETS)
+	for(uint i = groupIndex; i < TILED_LIGHTING_NUM_BUCKETS; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
 	{
-		uLightListTransparent[lightGridOffset + groupIndex] = gsLightBucketsTransparent[groupIndex];
-		uLightListOpaque[lightGridOffset + groupIndex] = gsLightBucketsOpaque[groupIndex];
+		uLightListTransparent[lightGridOffset + i] = gsLightBucketsTransparent[i];
+		uLightListOpaque[lightGridOffset + i] = gsLightBucketsOpaque[i];
 	}
 }
