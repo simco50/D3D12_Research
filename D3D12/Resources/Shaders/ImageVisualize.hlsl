@@ -2,6 +2,7 @@
 
 enum TextureDimension : uint
 {
+	Unknown,
 	Tex1D,
 	Tex1DArray,
 	Tex2D,
