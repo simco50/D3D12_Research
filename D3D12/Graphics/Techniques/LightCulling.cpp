@@ -16,12 +16,12 @@
 // Clustered
 static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClustersNumZ = 32;
-static constexpr int gMaxLightsPerCluster = 128;
+static constexpr int gMaxLightsPerCluster = 256;
 static_assert(gMaxLightsPerCluster % 32 == 0);
 
 // Tiled
 static constexpr int gTiledLightingTileSize = 8;
-static constexpr int gMaxLightsPerTile = 1024;
+static constexpr int gMaxLightsPerTile = 256;
 static_assert(gMaxLightsPerTile % 32 == 0);
 
 LightCulling::LightCulling(GraphicsDevice* pDevice)

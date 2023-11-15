@@ -82,54 +82,52 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 	AABB clusterAABB = ComputeAABB(clusterIndex3D);
 	float clusterRadius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
 
-	uint clusterIndex = Flatten3D(dispatchThreadId, cPass.ClusterDimensions.xy);
-
-	uint lightMasks[CLUSTERED_LIGHTING_NUM_BUCKETS];
-	for(uint i = 0; i < CLUSTERED_LIGHTING_NUM_BUCKETS; ++i)
-		lightMasks[i] = 0;
+	uint lightIndex = 0;
 
 	[loop]
-	for (uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
+	for(uint bucketIndex = 0; bucketIndex < CLUSTERED_LIGHTING_NUM_BUCKETS && lightIndex < cView.LightCount; ++bucketIndex)
 	{
-		PrecomputedLightData lightData = tLightData[lightIndex];
-		if(lightData.IsPoint)
-		{
-			Sphere sphere;
-			sphere.Radius = lightData.Range;
-			sphere.Position = lightData.ViewSpacePosition;
-			if (SphereInAABB(sphere, clusterAABB))
-			{
-				uint bucketIndex = lightIndex / 32;
-				uint localIndex = lightIndex % 32;
-				lightMasks[bucketIndex] |= 1u << localIndex;
-			}
-		}
-		else if(lightData.IsSpot)
-		{
-			Sphere sphere;
-			sphere.Radius = clusterRadius;
-			sphere.Position = clusterAABB.Center.xyz;
+		uint lightMask = 0;
 
-			if (ConeInSphere(
-				lightData.ViewSpacePosition,
-				lightData.ViewSpaceDirection,
-				lightData.Range,
-				float2(lightData.SpotSinAngle, lightData.SpotCosAngle),
-				sphere))
+		[loop]
+		for(uint i = 0; i < 32 && lightIndex < cView.LightCount; ++i)
+		{
+			PrecomputedLightData lightData = tLightData[lightIndex];
+			++lightIndex;
+
+			if(lightData.IsPoint)
 			{
-				uint bucketIndex = lightIndex / 32;
-				uint localIndex = lightIndex % 32;
-				lightMasks[bucketIndex] |= 1u << localIndex;
+				Sphere sphere;
+				sphere.Radius = lightData.Range;
+				sphere.Position = lightData.ViewSpacePosition;
+				if (SphereInAABB(sphere, clusterAABB))
+				{
+					lightMask |= 1u << i;
+				}
+			}
+			else if(lightData.IsSpot)
+			{
+				Sphere sphere;
+				sphere.Radius = clusterRadius;
+				sphere.Position = clusterAABB.Center.xyz;
+
+				if (ConeInSphere(
+					lightData.ViewSpacePosition,
+					lightData.ViewSpaceDirection,
+					lightData.Range,
+					float2(lightData.SpotSinAngle, lightData.SpotCosAngle),
+					sphere))
+				{
+					lightMask |= 1u << i;
+				}
+			}
+			else
+			{
+				lightMask |= 1u << i;
 			}
 		}
-		else
-		{
-			uint bucketIndex = lightIndex / 32;
-			uint localIndex = lightIndex % 32;
-			lightMasks[bucketIndex] |= 1u << localIndex;
-		}
+
+		uint clusterIndex = Flatten3D(dispatchThreadId, cPass.ClusterDimensions.xy);
+		uLightGrid[clusterIndex * CLUSTERED_LIGHTING_NUM_BUCKETS + bucketIndex] = lightMask;
 	}
-
-	for(uint i = 0; i < CLUSTERED_LIGHTING_NUM_BUCKETS; ++i)
-		uLightGrid[clusterIndex * CLUSTERED_LIGHTING_NUM_BUCKETS + i] = lightMasks[i];
 }

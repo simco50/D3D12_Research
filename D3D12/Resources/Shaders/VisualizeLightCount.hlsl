@@ -63,8 +63,8 @@ uint GetLightCount(uint2 threadId, out uint2 tileLocation, out uint2 tileSize)
 	tileSize = TILED_LIGHTING_TILE_SIZE;
 
 #elif CLUSTERED_FORWARD
-	float truncatedDepth = tDepth.Load(uint3(threadId.xy, 0));
-	float viewDepth = LinearizeDepth(truncatedDepth, cView.NearZ, cView.FarZ);
+	float depth = tDepth.Load(uint3(threadId.xy, 0));
+	float viewDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
 	uint slice = floor(log(viewDepth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
 	uint3 clusterIndex3D = uint3(floor(threadId.xy / cPass.ClusterSize), slice);
 	uint clusterIndex1D = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
