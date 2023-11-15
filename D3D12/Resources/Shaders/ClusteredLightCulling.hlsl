@@ -84,12 +84,14 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	uint clusterIndex = Flatten3D(dispatchThreadId, cPass.ClusterDimensions.xyz);
 
-	uint numLights = 0;
+	uint lightMasks[CLUSTERED_LIGHTING_NUM_BUCKETS];
+	for(uint i = 0; i < CLUSTERED_LIGHTING_NUM_BUCKETS; ++i)
+		lightMasks[i] = 0;
 
 	[loop]
-	for (uint i = 0; i < cView.LightCount && numLights < CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER; ++i)
+	for (uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
 	{
-		PrecomputedLightData lightData = tLightData[i];
+		PrecomputedLightData lightData = tLightData[lightIndex];
 		if(lightData.IsPoint)
 		{
 			Sphere sphere;
@@ -97,8 +99,9 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 			sphere.Position = lightData.ViewSpacePosition;
 			if (SphereInAABB(sphere, clusterAABB))
 			{
-				uLightGrid[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights + 1] = i;
-				++numLights;
+				uint bucketIndex = lightIndex / 32;
+				uint localIndex = lightIndex % 32;
+				lightMasks[bucketIndex] |= 1u << localIndex;
 			}
 		}
 		else if(lightData.IsSpot)
@@ -114,16 +117,19 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 				float2(lightData.SpotSinAngle, lightData.SpotCosAngle),
 				sphere))
 			{
-				uLightGrid[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights + 1] = i;
-				++numLights;
+				uint bucketIndex = lightIndex / 32;
+				uint localIndex = lightIndex % 32;
+				lightMasks[bucketIndex] |= 1u << localIndex;
 			}
 		}
 		else
 		{
-			uLightGrid[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + numLights + 1] = i;
-			++numLights;
+			uint bucketIndex = lightIndex / 32;
+			uint localIndex = lightIndex % 32;
+			lightMasks[bucketIndex] |= 1u << localIndex;
 		}
 	}
 
-	uLightGrid[clusterIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER] = numLights;
+	for(uint i = 0; i < CLUSTERED_LIGHTING_NUM_BUCKETS; ++i)
+		uLightGrid[clusterIndex * CLUSTERED_LIGHTING_NUM_BUCKETS + i] = lightMasks[i];
 }

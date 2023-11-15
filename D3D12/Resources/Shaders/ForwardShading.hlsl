@@ -74,17 +74,23 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 
 LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
-	LightResult totalResult = (LightResult)0;
 	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
-	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xyz);
-	uint startOffset = tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + 1;
-	uint lightCount = tLightGrid[tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER];
+	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xy);
+	uint lightGridOffset = tileIndex * CLUSTERED_LIGHTING_NUM_BUCKETS;
 
-	for(uint i = 0; i < lightCount; ++i)
+	LightResult totalResult = (LightResult)0;
+	for(uint bucketIndex = 0; bucketIndex < CLUSTERED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
-		uint lightIndex = tLightGrid[startOffset + i];
-		Light light = GetLight(lightIndex);
-		totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
+		while(bucket)
+		{
+			uint bitIndex = firstbitlow(bucket);
+			bucket ^= 1u << bitIndex;
+
+			uint lightIndex = bitIndex + bucketIndex * 32;
+			Light light = GetLight(lightIndex);
+			totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+		}
 	}
 	return totalResult;
 }

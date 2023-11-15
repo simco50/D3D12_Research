@@ -17,6 +17,7 @@
 static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClustersNumZ = 32;
 static constexpr int gMaxLightsPerCluster = 128;
+static_assert(gMaxLightsPerCluster % 32 == 0);
 
 // Tiled
 static constexpr int gTiledLightingTileSize = 8;
@@ -63,8 +64,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 
-	// Max Lights + Counter
-	cullData.pLightGrid = graph.Create("Light Index Grid", BufferDesc::CreateTyped((gMaxLightsPerCluster + 1) * totalClusterCount, ResourceFormat::R16_UINT));
+	cullData.pLightGrid = graph.Create("Light Index Grid", BufferDesc::CreateTyped(gMaxLightsPerCluster / 32 * totalClusterCount, ResourceFormat::R32_UINT));
 
 	struct PrecomputedLightData
 	{

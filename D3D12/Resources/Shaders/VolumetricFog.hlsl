@@ -128,32 +128,40 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	{
 		// Iterate over all the lights and light the froxel
 		uint tileIndex = GetLightCluster(threadId.xy, z);
-		uint lightOffset = tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER + 1;
-		uint lightCount = tLightGrid[tileIndex * CLUSTERED_LIGHTING_MAX_LIGHTS_PER_CLUSTER];
+		uint lightGridOffset = tileIndex * CLUSTERED_LIGHTING_NUM_BUCKETS;
 
-		for(i = 0; i < lightCount; ++i)
+		LightResult totalResult = (LightResult)0;
+		for(uint bucketIndex = 0; bucketIndex < CLUSTERED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 		{
-			int lightIndex = tLightGrid[lightOffset + i];
-			Light light = GetLight(lightIndex);
-			if(light.IsEnabled && light.IsVolumetric)
+			uint bucket = tLightGrid[lightGridOffset + bucketIndex];
+			while(bucket)
 			{
-				float3 L;
-				float attenuation = GetAttenuation(light, worldPosition, L);
-				if(attenuation <= 0.0f)
-					continue;
+				uint bitIndex = firstbitlow(bucket);
+				bucket ^= 1u << bitIndex;
 
-				if(light.CastShadows)
+				uint lightIndex = bitIndex + bucketIndex * 32;
+				Light light = GetLight(lightIndex);
+
+				if(light.IsEnabled && light.IsVolumetric)
 				{
-					int shadowIndex = GetShadowMapIndex(light, worldPosition, z, dither);
-					attenuation *= ShadowNoPCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMapIndex + shadowIndex, light.InvShadowSize);
+					float3 L;
+					float attenuation = GetAttenuation(light, worldPosition, L);
+					if(attenuation <= 0.0f)
+						continue;
+
+					if(light.CastShadows)
+					{
+						int shadowIndex = GetShadowMapIndex(light, worldPosition, z, dither);
+						attenuation *= ShadowNoPCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMapIndex + shadowIndex, light.InvShadowSize);
+					}
+					if(attenuation <= 0.0f)
+						continue;
+
+					float VdotL = dot(V, L);
+					float3 lightColor = light.GetColor() * light.Intensity;
+
+					totalLighting += attenuation * lightColor * saturate(HenyeyGreenstreinPhase(VdotL, 0.3f));
 				}
-				if(attenuation <= 0.0f)
-					continue;
-
-				float VdotL = dot(V, L);
-				float3 lightColor = light.GetColor() * light.Intensity;
-
-				totalLighting += attenuation * lightColor * saturate(HenyeyGreenstreinPhase(VdotL, 0.3f));
 			}
 		}
 	}
