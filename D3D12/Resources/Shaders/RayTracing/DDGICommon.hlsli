@@ -32,7 +32,7 @@ DDGIVolume GetDDGIVolume(uint index)
 bool DDGIIsProbeActive(DDGIVolume volume, uint3 index3D)
 {
 #if DDGI_USE_PROBE_STATES
-	uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions);
+	uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions.xy);
 	Buffer<uint> stateBuffer = ResourceDescriptorHeap[volume.ProbeStatesIndex];
 	return stateBuffer[index1D] == 0;
 #else
@@ -51,7 +51,7 @@ float3 DDGIGetRayDirection(uint rayIndex, uint numRays, float3x3 randomRotation 
 
 float3 GetDDGIProbeIndex3D(DDGIVolume volume, uint index)
 {
-	return UnFlatten3D(index, volume.ProbeVolumeDimensions);
+	return UnFlatten3D(index, volume.ProbeVolumeDimensions.xy);
 }
 
 float3 GetDDGIProbePosition(DDGIVolume volume, uint3 index3D)
@@ -61,7 +61,7 @@ float3 GetDDGIProbePosition(DDGIVolume volume, uint3 index3D)
 	if(volume.ProbeOffsetIndex != INVALID_HANDLE)
 	{
 		Buffer<float4> offsetBuffer = ResourceDescriptorHeap[volume.ProbeOffsetIndex];
-		uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions);
+		uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions.xy);
 		position += offsetBuffer[index1D].xyz;
 	}
 #endif

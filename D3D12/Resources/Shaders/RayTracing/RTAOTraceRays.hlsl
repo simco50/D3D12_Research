@@ -31,8 +31,8 @@ void RayGen()
 	uint launchIndex1d = launchIndex.x + launchIndex.y * launchDim.x;
 	float2 uv = (launchIndex + 0.5f) * dimInv;
 
-	float3 world = WorldFromDepth(uv, tSceneDepth.SampleLevel(sPointClamp, uv, 0).r, cView.ViewProjectionInverse);
-	float3 viewNormal = NormalFromDepth(uv, tSceneDepth);
+	float3 world = WorldPositionFromDepth(uv, tSceneDepth.SampleLevel(sPointClamp, uv, 0).r, cView.ViewProjectionInverse);
+	float3 viewNormal = ViewNormalFromDepth(uv, tSceneDepth, NormalReconstructMethod::Taps5);
 	float3 normal = mul(viewNormal, (float3x3)cView.ViewInverse);
 
 	uint seed = SeedThread(launchIndex, launchDim, cView.FrameIndex);

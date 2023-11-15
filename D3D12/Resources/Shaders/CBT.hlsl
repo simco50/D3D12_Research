@@ -490,7 +490,7 @@ void ShadePS(
 	out PSOut output)
 {
 	float depth = tDepth.SampleLevel(sPointClamp, uv, 0);
-	float3 viewPos = ViewFromDepth(uv, depth, cView.ProjectionInverse);
+	float3 viewPos = ViewPositionFromDepth(uv, depth, cView.ProjectionInverse);
 	float3 worldPos = mul(float4(viewPos, 1), cView.ViewInverse).xyz;
 
 	float height;

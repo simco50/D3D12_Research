@@ -35,7 +35,7 @@ float3 GetWorldPosition(uint3 index, float offset, float3 clusterDimensionsInv, 
 	float z = (float)(index.z + offset) * clusterDimensionsInv.z;
 	linearDepth = cView.FarZ + Square(saturate(z)) * (cView.NearZ - cView.FarZ);
 	float ndcZ = LinearDepthToNDC(linearDepth, cView.Projection);
-	return WorldFromDepth(texelUV, ndcZ, cView.ViewProjectionInverse);
+	return WorldPositionFromDepth(texelUV, ndcZ, cView.ViewProjectionInverse);
 }
 
 float3 GetWorldPosition(uint3 index, float offset, float3 clusterDimensionsInv)
@@ -53,7 +53,7 @@ uint GetLightCluster(uint2 fogCellIndex, float depth)
 {
 	uint slice = GetLightClusterSliceFromDepth(depth);
 	uint3 clusterIndex3D = uint3(floor(fogCellIndex * cInjectParams.LightClusterSizeFactor), slice);
-	return Flatten3D(clusterIndex3D, uint3(cInjectParams.LightClusterDimensions, 0));
+	return Flatten3D(clusterIndex3D, cInjectParams.LightClusterDimensions);
 }
 
 struct FogVolume

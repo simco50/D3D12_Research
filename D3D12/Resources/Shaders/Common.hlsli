@@ -72,33 +72,14 @@ float LinearDepthToNDC(float z, float4x4 projection)
 	return (z * projection[2][2] + projection[3][2]) / z;
 }
 
-// Convert clip space (-1, 1) coordinates to view space
-float3 ClipToView(float4 clip, float4x4 projectionInverse)
+float3 ViewPositionFromDepth(float2 uv, float depth, float4x4 projectionInverse)
 {
-	// View space position.
-	float4 view = mul(clip, projectionInverse);
-	// Perspective projection.
-	view = view / view.w;
-	return view.xyz;
+	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, 0.0f, 1.0f) * cView.NearZ;
+	float3 viewRay = mul(clip, cView.ProjectionInverse).xyz;
+	return viewRay * LinearizeDepth01(depth);
 }
 
-// Convert view space position to screen UVs (0, 1). Non-linear Z
-float3 ViewToWindow(float3 view, float4x4 projection)
-{
-	float4 proj = mul(float4(view, 1), projection);
-	proj.xyz /= proj.w;
-	proj.x = (proj.x + 1) / 2;
-	proj.y = 1 - (proj.y + 1) / 2;
-	return proj.xyz;
-}
-
-float3 ViewFromDepth(float2 uv, float depth, float4x4 projectionInverse)
-{
-	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, depth, 1.0f);
-	return ClipToView(clip, projectionInverse);
-}
-
-float3 ViewFromDepth(float2 uv, Texture2D<float> depthTexture)
+float3 ViewPositionFromDepth(float2 uv, Texture2D<float> depthTexture)
 {
 	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, 0.0f, 1.0f) * cView.NearZ;
 	float3 viewRay = mul(clip, cView.ProjectionInverse).xyz;
@@ -106,90 +87,105 @@ float3 ViewFromDepth(float2 uv, Texture2D<float> depthTexture)
 	return viewRay * LinearizeDepth01(depth);
 }
 
-float3 WorldFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
+float3 WorldPositionFromDepth(float2 uv, float depth, float4x4 viewProjectionInverse)
 {
 	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, depth, 1.0f);
 	float4 world = mul(clip, viewProjectionInverse);
 	return world.xyz / world.w;
 }
 
-#define NORMAL_RECONSTRUCTION_METHOD 0
+enum class NormalReconstructMethod
+{
+	Taps3,
+	Taps5,
+	Taps13,
+};
 
-float3 NormalFromDepth(float2 uv, Texture2D<float> depthTexture)
+float3 ViewNormalFromDepth(float2 uv, Texture2D<float> depthTexture, NormalReconstructMethod method = NormalReconstructMethod::Taps3)
 {
 	SamplerState depthSampler = sPointClamp;
 	float2 invDimensions = cView.ViewportDimensionsInv;
 	float4x4 inverseProjection = cView.ProjectionInverse;
 
-#if NORMAL_RECONSTRUCTION_METHOD == 0
-	float3 vpos0 = ViewFromDepth(uv, depthTexture);
-	float3 vpos1 = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture);
-	float3 vpos2 = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture);
-	float3 viewNormal = normalize(cross(vpos2 - vpos0, vpos1 - vpos0));
+	if(method == NormalReconstructMethod::Taps3)
+	{
+		float3 vpos0 = ViewPositionFromDepth(uv, depthTexture);
+		float3 vpos1 = ViewPositionFromDepth(uv + float2(1, 0) * invDimensions, depthTexture);
+		float3 vpos2 = ViewPositionFromDepth(uv + float2(0, -1) * invDimensions, depthTexture);
+		return normalize(cross(vpos2 - vpos0, vpos1 - vpos0));
+	}
+	else if(method == NormalReconstructMethod::Taps5)
+	{
+		// János Turánszki' - Improved Normal Reconstruction
+		// https://wickedengine.net/2019/09/22/improved-normal-reconstruction-from-depth/
+		float3 vposc = ViewPositionFromDepth(uv, depthTexture);
+		float3 vposl = ViewPositionFromDepth(uv + float2(-1, 0) * invDimensions, depthTexture);
+		float3 vposr = ViewPositionFromDepth(uv + float2(1, 0) * invDimensions, depthTexture);
+		float3 vposd = ViewPositionFromDepth(uv + float2(0, -1) * invDimensions, depthTexture);
+		float3 vposu = ViewPositionFromDepth(uv + float2(0, 1) * invDimensions, depthTexture);
 
-#elif NORMAL_RECONSTRUCTION_METHOD == 1
-	// János Turánszki' - Improved Normal Reconstruction
-	// https://wickedengine.net/2019/09/22/improved-normal-reconstruction-from-depth/
-	float3 vposc = ViewFromDepth(uv, depthTexture);
-	float3 vposl = ViewFromDepth(uv + float2(-1, 0) * invDimensions, depthTexture);
-	float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture);
-	float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture);
-	float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture);
+		float3 l = vposc - vposl;
+		float3 r = vposr - vposc;
+		float3 d = vposc - vposd;
+		float3 u = vposu - vposc;
 
-	float3 l = vposc - vposl;
-	float3 r = vposr - vposc;
-	float3 d = vposc - vposd;
-	float3 u = vposu - vposc;
+		float3 hDeriv = abs(l.z) < abs(r.z) ? l : r;
+		float3 vDeriv = abs(d.z) < abs(u.z) ? d : u;
 
-	float3 hDeriv = abs(l.z) < abs(r.z) ? l : r;
-	float3 vDeriv = abs(d.z) < abs(u.z) ? d : u;
+		return normalize(cross(hDeriv, vDeriv));
+	}
+	else if(method == NormalReconstructMethod::Taps13)
+	{
+		// Yuwen Wu - Accurate Normal Reconstruction
+		// https://atyuwen.github.io/posts/normal-reconstruction/
+		float depth_c = depthTexture.SampleLevel(depthSampler, uv, 0, int2( 0,  0));
+		float depth_l = depthTexture.SampleLevel(depthSampler, uv, 0, int2(-1,  0));
+		float depth_r = depthTexture.SampleLevel(depthSampler, uv, 0, int2( 1,  0));
+		float depth_d = depthTexture.SampleLevel(depthSampler, uv, 0, int2( 0, -1));
+		float depth_u = depthTexture.SampleLevel(depthSampler, uv, 0, int2( 0,  1));
 
-	float3 viewNormal = normalize(cross(hDeriv, vDeriv));
+		float3 posVS_c = ViewPositionFromDepth(uv, depth_c, cView.ProjectionInverse);
+		float3 posVS_l = ViewPositionFromDepth(uv, depth_l, cView.ProjectionInverse);
+		float3 posVS_r = ViewPositionFromDepth(uv, depth_r, cView.ProjectionInverse);
+		float3 posVS_d = ViewPositionFromDepth(uv, depth_d, cView.ProjectionInverse);
+		float3 posVS_u = ViewPositionFromDepth(uv, depth_u, cView.ProjectionInverse);
 
-#elif NORMAL_RECONSTRUCTION_METHOD == 2
-	// Yuwen Wu - Accurate Normal Reconstruction
-	// https://atyuwen.github.io/posts/normal-reconstruction/
-	float3 vposc = ViewFromDepth(uv, depthTexture);
-	float3 vposl = ViewFromDepth(uv + float2(-1, 0) * invDimensions, depthTexture);
-	float3 vposr = ViewFromDepth(uv + float2(1, 0) * invDimensions, depthTexture);
-	float3 vposd = ViewFromDepth(uv + float2(0, -1) * invDimensions, depthTexture);
-	float3 vposu = ViewFromDepth(uv + float2(0, 1) * invDimensions, depthTexture);
+		float3 l = posVS_c - posVS_l;
+		float3 r = posVS_r - posVS_c;
+		float3 d = posVS_c - posVS_d;
+		float3 u = posVS_u - posVS_c;
 
-	float3 l = vposc - vposl;
-	float3 r = vposr - vposc;
-	float3 d = vposc - vposd;
-	float3 u = vposu - vposc;
+		// get depth values at 1 & 2 pixels offsets from current along the horizontal axis
+		float4 H = float4(
+			depth_l,
+			depth_r,
+			depthTexture.SampleLevel(depthSampler, uv, 0, int2(-2, 0)),
+			depthTexture.SampleLevel(depthSampler, uv, 0, int2( 2, 0))
+		);
 
-	// get depth values at 1 & 2 pixels offsets from current along the horizontal axis
-	float4 H = float4(
-		depthTexture.SampleLevel(depthSampler, uv + float2(-1.0, 0.0) * invDimensions, 0).x,
-		depthTexture.SampleLevel(depthSampler, uv + float2( 1.0, 0.0) * invDimensions, 0).x,
-		depthTexture.SampleLevel(depthSampler, uv + float2(-2.0, 0.0) * invDimensions, 0).x,
-		depthTexture.SampleLevel(depthSampler, uv + float2( 2.0, 0.0) * invDimensions, 0).x
-	);
+		// get depth values at 1 & 2 pixels offsets from current along the vertical axis
+		float4 V = float4(
+			depth_d,
+			depth_u,
+			depthTexture.SampleLevel(depthSampler, uv, 0, int2(0, -2)),
+			depthTexture.SampleLevel(depthSampler, uv, 0, int2(0,  2))
+		);
 
-	// get depth values at 1 & 2 pixels offsets from current along the vertical axis
-	float4 V = float4(
-		depthTexture.SampleLevel(depthSampler, uv + float2(0.0,-1.0) * invDimensions, 0).x,
-		depthTexture.SampleLevel(depthSampler, uv + float2(0.0, 1.0) * invDimensions, 0).x,
-		depthTexture.SampleLevel(depthSampler, uv + float2(0.0,-2.0) * invDimensions, 0).x,
-		depthTexture.SampleLevel(depthSampler, uv + float2(0.0, 2.0) * invDimensions, 0).x
-	);
+		// current pixel's depth difference from slope of offset depth samples
+		// differs from original article because we're using non-linear depth values
+		// see article's comments
+		float2 he = abs((2 * H.xy - H.zw) - depth_c);
+		float2 ve = abs((2 * V.xy - V.zw) - depth_c);
 
-	// current pixel's depth difference from slope of offset depth samples
-	// differs from original article because we're using non-linear depth values
-	// see article's comments
-	float2 he = abs((2 * H.xy - H.zw) - c);
-	float2 ve = abs((2 * V.xy - V.zw) - c);
+		// pick horizontal and vertical diff with the smallest depth difference from slopes
+		float3 hDeriv = he.x < he.y ? l : r;
+		float3 vDeriv = ve.x < ve.y ? d : u;
 
-	// pick horizontal and vertical diff with the smallest depth difference from slopes
-	float3 hDeriv = he.x < he.y ? l : r;
-	float3 vDeriv = ve.x < ve.y ? d : u;
+		// get view space normal from the cross product of the best derivatives
+		return normalize(cross(hDeriv, vDeriv));
+	}
 
-	// get view space normal from the cross product of the best derivatives
-	float3 viewNormal = normalize(cross(hDeriv, vDeriv));
-#endif
-	return viewNormal;
+	return 0;
 }
 
 // Convert screen space coordinates (0, width/height) to view space.
@@ -197,7 +193,7 @@ float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
 {
 	// Convert to normalized texture coordinates
 	float2 screenNormalized = screen.xy * screenDimensionsInv;
-	return ViewFromDepth(screenNormalized, screen.z, projectionInverse);
+	return ViewPositionFromDepth(screenNormalized, screen.z, projectionInverse);
 }
 
 AABB AABBFromMinMax(float3 minimum, float3 maximum)
@@ -366,28 +362,28 @@ float3x3 CreateTangentToWorld(float3 normal, float4 tangent)
 	return TBN;
 }
 
-uint Flatten2D(uint2 index, uint2 dimensions)
+uint Flatten2D(uint2 index, uint dimensionsX)
 {
-	return index.x + index.y * dimensions.x;
+	return index.x + index.y * dimensionsX;
 }
 
-uint Flatten3D(uint3 index, uint3 dimensions)
+uint Flatten3D(uint3 index, uint2 dimensionsXY)
 {
-	return index.x + index.y * dimensions.x + index.z * dimensions.x * dimensions.y;
+	return index.x + index.y * dimensionsXY.x + index.z * dimensionsXY.x * dimensionsXY.y;
 }
 
-uint2 UnFlatten2D(uint index, uint2 dimensions)
+uint2 UnFlatten2D(uint index, uint dimensionsX)
 {
-	return uint2(index % dimensions.x, index / dimensions.x);
+	return uint2(index % dimensionsX, index / dimensionsX);
 }
 
-uint3 UnFlatten3D(uint index, uint3 dimensions)
+uint3 UnFlatten3D(uint index, uint2 dimensionsXY)
 {
 	uint3 outIndex;
-	outIndex.z = index / (dimensions.x * dimensions.y);
-	index -= (outIndex.z * dimensions.x * dimensions.y);
-	outIndex.y = index / dimensions.x;
-	outIndex.x = index % dimensions.x;
+	outIndex.z = index / (dimensionsXY.x * dimensionsXY.y);
+	index -= (outIndex.z * dimensionsXY.x * dimensionsXY.y);
+	outIndex.y = index / dimensionsXY.x;
+	outIndex.x = index % dimensionsXY.x;
 	return outIndex;
 }
 

@@ -212,6 +212,16 @@ float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<
 	return 1.0f - occlusion;
 }
 
+// Convert view space position to screen UVs (0, 1). Non-linear Z
+float3 ViewPositionToUV(float3 view, float4x4 projection)
+{
+	float4 proj = mul(float4(view, 1), projection);
+	proj.xyz /= proj.w;
+	proj.x = (proj.x + 1) / 2;
+	proj.y = 1 - (proj.y + 1) / 2;
+	return proj.xyz;
+}
+
 float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R, Texture2D<float> depthTexture, Texture2D<float4> previousSceneColor, float dither, inout float ssrWeight)
 {
 	float3 ssr = 0;
@@ -231,8 +241,8 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 			float3 reflectionVs = mul(reflectionWs, (float3x3)cView.View);
 			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
 
-			float3 rayStart = ViewToWindow(rayStartVS, cView.Projection);
-			float3 rayEnd = ViewToWindow(rayEndVS, cView.Projection);
+			float3 rayStart = ViewPositionToUV(rayStartVS, cView.Projection);
+			float3 rayEnd = ViewPositionToUV(rayEndVS, cView.Projection);
 
 			float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
 			rayStep = rayStep / length(rayEnd.xy - rayStart.xy);

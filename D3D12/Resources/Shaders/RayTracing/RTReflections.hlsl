@@ -33,7 +33,7 @@ void RayGen()
 	float3 N = DecodeNormalOctahedron(tSceneNormals.SampleLevel(sLinearClamp, uv, 0));
 	float R = tSceneRoughness.SampleLevel(sLinearClamp, uv, 0);
 
-	float3 worldPosition = WorldFromDepth(uv, depth, cView.ViewProjectionInverse);
+	float3 worldPosition = WorldPositionFromDepth(uv, depth, cView.ViewProjectionInverse);
 
 	float reflectivity = R;
 

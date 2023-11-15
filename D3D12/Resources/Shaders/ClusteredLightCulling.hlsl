@@ -82,7 +82,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 	AABB clusterAABB = ComputeAABB(clusterIndex3D);
 	float clusterRadius = sqrt(dot(clusterAABB.Extents.xyz, clusterAABB.Extents.xyz));
 
-	uint clusterIndex = Flatten3D(dispatchThreadId, cPass.ClusterDimensions.xyz);
+	uint clusterIndex = Flatten3D(dispatchThreadId, cPass.ClusterDimensions.xy);
 
 	uint lightMasks[CLUSTERED_LIGHTING_NUM_BUCKETS];
 	for(uint i = 0; i < CLUSTERED_LIGHTING_NUM_BUCKETS; ++i)

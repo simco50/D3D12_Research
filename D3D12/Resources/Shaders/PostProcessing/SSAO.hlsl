@@ -29,8 +29,8 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 {
 	float2 uv = ((float2)threadId.xy + 0.5f) * cView.TargetDimensionsInv;
 	float depth = tDepthTexture.SampleLevel(sPointClamp, uv, 0);
-	float3 viewNormal = NormalFromDepth(uv, tDepthTexture);
-	float3 viewPos = ViewFromDepth(uv.xy, depth, cView.ProjectionInverse).xyz;
+	float3 viewNormal = ViewNormalFromDepth(uv, tDepthTexture, NormalReconstructMethod::Taps5);
+	float3 viewPos = ViewPositionFromDepth(uv.xy, depth, cView.ProjectionInverse).xyz;
 
 	uint seed = SeedThread(threadId.xy, cView.TargetDimensions, cView.FrameIndex);
 	float3 randomVec = float3(Random01(seed), Random01(seed), Random01(seed)) * 2.0f - 1.0f;

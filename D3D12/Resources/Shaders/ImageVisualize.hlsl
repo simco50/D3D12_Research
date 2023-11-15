@@ -2,7 +2,6 @@
 
 enum TextureDimension : uint
 {
-	Unknown,
 	Tex1D,
 	Tex1DArray,
 	Tex2D,
@@ -74,7 +73,7 @@ void CSMain(uint3 threadID : SV_DispatchThreadID)
 	RWTexture2D<float4> target = ResourceDescriptorHeap[cConstants.TextureTarget];
 	float4 texSample = SampleTexture(uv);
 	float2 range = cConstants.ValueRange;
-	
+
 	float4 output = 0;
 	uint numBits = countbits(cConstants.ChannelMask);
 	if(numBits == 1)
