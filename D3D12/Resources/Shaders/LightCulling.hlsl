@@ -11,7 +11,7 @@ struct Plane
 
 struct Frustum
 {
-	Plane Planes[4];
+	float4 Planes[4];
 };
 
 struct Cone
@@ -46,30 +46,30 @@ groupshared uint 	gsLightBucketsTransparent[TILED_LIGHTING_NUM_BUCKETS];
 groupshared uint 	gsDepthMask;
 #endif
 
-bool SphereBehindPlane(Sphere sphere, Plane plane)
-{
-	return dot(plane.Normal, sphere.Position) - plane.DistanceToOrigin < -sphere.Radius;
-}
-
 bool SphereInFrustum(Sphere sphere, Frustum frustum, float depthNear, float depthFar)
 {
 	bool inside = !(sphere.Position.z + sphere.Radius < depthNear || sphere.Position.z - sphere.Radius > depthFar);
-	for(int i = 0; i < 4 && inside; ++i)
-	{
-		inside = !SphereBehindPlane(sphere, frustum.Planes[i]);
-	}
-	return inside;
+
+	float light_min_z = sphere.Position.z - sphere.Radius;
+	float light_max_z = sphere.Position.z + sphere.Radius;
+
+	float d0 = dot(frustum.Planes[0], float4(sphere.Position, 1));
+	float d1 = dot(frustum.Planes[1], float4(sphere.Position, 1));
+	float d2 = dot(frustum.Planes[2], float4(sphere.Position, 1));
+	float d3 = dot(frustum.Planes[3], float4(sphere.Position, 1));
+	float d_max = max(d0, max(d1, max(d2, d3)));
+
+	return light_max_z > depthNear && light_min_z < depthFar && d_max - sphere.Radius < 0;
 }
 
-Plane CalculatePlane(float3 a, float3 b, float3 c)
+float4 CalculatePlane(float3 a, float3 b, float3 c)
 {
 	float3 v0 = b - a;
 	float3 v1 = c - a;
 
-	Plane plane;
-	plane.Normal = normalize(cross(v1, v0));
-	plane.DistanceToOrigin = dot(plane.Normal, a);
-	return plane;
+	float3 normal = normalize(cross(v1, v0));
+	float distanceToOrigin = dot(normal, a);
+	return float4(normal, distanceToOrigin);
 }
 
 uint CreateLightMask(float depthRangeMin, float depthRange, Sphere sphere)
@@ -180,7 +180,9 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	float depthVS = LinearizeDepth(fDepth);
 	float depthRange = 31.0f / (maxDepthVS - minDepthVS);
 	uint cellIndex = max(0, min(31, floor((depthVS - minDepthVS) * depthRange)));
-	InterlockedOr(gsDepthMask, 1u << cellIndex);
+	uint mask = WaveActiveBitOr(1u << cellIndex);
+	if(WaveIsFirstLane())
+		InterlockedOr(gsDepthMask, mask);
 #endif
 
 	GroupMemoryBarrierWithGroupSync();
