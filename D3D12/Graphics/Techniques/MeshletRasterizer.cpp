@@ -419,6 +419,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						});
 					context.BindResources(3, pMeshletCounts->Get()->GetSRV());
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(numBins, 64));
+					context.InsertUAVBarrier();
 				});
 
 		// Write the meshlet index of each meshlet into the appropriate bin.
@@ -563,7 +564,7 @@ void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, cons
 {
 	RGBuffer* pDummy = graph.Create("Dummy", BufferDesc::CreateTyped(10, ResourceFormat::RGBA8_UINT));
 	RGBuffer* pBins0 = rasterContext.pBinnedMeshletOffsetAndCounts[0] ? rasterContext.pBinnedMeshletOffsetAndCounts[0] : pDummy;
-	RGBuffer* pBins1 = rasterContext.pBinnedMeshletOffsetAndCounts[0] ? rasterContext.pBinnedMeshletOffsetAndCounts[1] : pDummy;
+	RGBuffer* pBins1 = rasterContext.pBinnedMeshletOffsetAndCounts[1] ? rasterContext.pBinnedMeshletOffsetAndCounts[1] : pDummy;
 
 	graph.AddPass("Print Stats", RGPassFlag::Compute)
 		.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshletsCounter, pBins0, pBins1 })
