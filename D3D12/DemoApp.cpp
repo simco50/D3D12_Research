@@ -163,14 +163,6 @@ void DemoApp::SetupScene()
 	}
 
 	{
-		for (int i = 0; i < 256; ++i)
-		{
-			Light p = Light::Point(Vector3(Math::RandomRange(-5.0f, 5.0f), 0.0f, Math::RandomRange(-5.0f, 5.0f)), 1.0f, 100.0f, Color(Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f), Math::RandomRange(0.0f, 1.0f)));
-			m_World.Lights.push_back(p);
-		}
-	}
-
-	{
 		Light spot = Light::Spot(Vector3(0, 0, 0), 4.0f, Vector3::Down, 70.0f, 50.0f, 100.0f);
 		spot.CastShadows = true;
 		spot.VolumetricLighting = true;
@@ -396,11 +388,11 @@ void DemoApp::Update()
 			const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
 			SceneTextures sceneTextures;
-			sceneTextures.pDepth			= graph.Create("Depth Stencil", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
-			sceneTextures.pRoughness		= graph.Create("Roughness", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
-			sceneTextures.pColorTarget		= graph.Create("Color Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
-			sceneTextures.pNormals			= graph.Create("Normals", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-			sceneTextures.pVelocity			= graph.Create("Velocity", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+			sceneTextures.pDepth			= graph.Create("Depth Stencil",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
+			sceneTextures.pColorTarget		= graph.Create("Color Target",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[0]));
+			sceneTextures.pNormals			= graph.Create("Normals",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[1]));
+			sceneTextures.pRoughness		= graph.Create("Roughness",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[2]));
+			sceneTextures.pVelocity			= graph.Create("Velocity",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 			sceneTextures.pPreviousColor	= graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
 			LightCull2DData lightCull2DData;

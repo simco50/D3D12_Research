@@ -386,7 +386,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					for (const GPUProfiler::EventData::Event& event : gGPUProfiler.GetEventData(i).GetEvents(queue.Index))
 					{
 						// Skip events above the max depth
-						if ((int)event.Depth >= style.MaxDepth)
+						if (event.Depth >= (uint32)style.MaxDepth)
 							continue;
 
 						trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
@@ -449,7 +449,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					for (const CPUProfiler::EventData::Event& event : eventData.GetEvents(thread.Index))
 					{
 						// Skip events above the max depth
-						if (event.Depth >= style.MaxDepth)
+						if (event.Depth >= (uint32)style.MaxDepth)
 							continue;
 
 						trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);

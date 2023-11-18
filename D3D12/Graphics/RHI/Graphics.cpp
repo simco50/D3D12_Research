@@ -1010,7 +1010,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 		{
 		case ResourceFormat::D32S8:			return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
 		case ResourceFormat::D32_FLOAT:		return DXGI_FORMAT_R32_FLOAT;
-		case ResourceFormat::D24S8:			return DXGI_FORMAT_R24G8_TYPELESS;
+		case ResourceFormat::D24S8:			return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 		case ResourceFormat::D16_UNORM:		return DXGI_FORMAT_R16_UNORM;
 		default: return D3D::ConvertFormat(format);
 		}

@@ -167,10 +167,10 @@ namespace GraphicsCommon
 	Texture* GetDefaultTexture(DefaultTexture type);
 
 	constexpr static ResourceFormat ShadowFormat = ResourceFormat::D16_UNORM;
-	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D32S8;
+	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D24S8;
 	constexpr static ResourceFormat GBufferFormat[] = {
 		ResourceFormat::RGBA16_FLOAT,
-		ResourceFormat::RG16_FLOAT,
+		ResourceFormat::RG16_SNORM,
 		ResourceFormat::R8_UNORM
 	};
 
