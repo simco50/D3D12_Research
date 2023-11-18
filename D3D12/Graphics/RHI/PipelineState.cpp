@@ -284,7 +284,7 @@ void PipelineState::CreateInternal()
 			static D3D12_SHADER_BYTECODE dummy;
 			return dummy;
 		}
-	};
+		};
 
 	bool shaderCompileError = false;
 	std::string name = m_Desc.m_Name;
@@ -294,12 +294,19 @@ void PipelineState::CreateInternal()
 		const PipelineStateInitializer::ShaderDesc& desc = m_Desc.m_ShaderDescs[i];
 		if (desc.Path.length() > 0)
 		{
-			pShader = GetParent()->GetShaderManager()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
-			if (!pShader)
+			while(!pShader)
 			{
-				shaderCompileError = true;
+				ShaderResult result = GetParent()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
+				pShader = result.pShader;
+				if (result.Error.length())
+				{
+					bool retry = ::MessageBoxA(GetActiveWindow(), result.Error.c_str(), "Shader Compilation Failed", MB_RETRYCANCEL) == IDRETRY;
+					if (!retry)
+						break;
+				}
 			}
-			else
+
+			if(pShader)
 			{
 				GetByteCode((ShaderType)i) = CD3DX12_SHADER_BYTECODE(pShader->pByteCode->GetBufferPointer(), pShader->pByteCode->GetBufferSize());
 				if (name.empty())
@@ -322,6 +329,7 @@ void PipelineState::CreateInternal()
 	{
 		E_LOG(Warning, "Failed to compile PipelineState '%s'", m_Desc.m_Name);
 	}
+
 	check(m_pPipelineState);
 	E_LOG(Info, "Compiled Pipeline: %s", m_Desc.m_Name.c_str());
 	m_NeedsReload = false;

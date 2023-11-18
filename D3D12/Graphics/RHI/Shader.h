@@ -103,6 +103,14 @@ struct Shader
 	bool IsDirty = false;
 };
 
+struct ShaderResult
+{
+	Shader* pShader;
+	std::string Error;
+
+	operator Shader* () const { return pShader; }
+};
+
 class ShaderManager
 {
 public:
@@ -112,7 +120,7 @@ public:
 	void ConditionallyReloadShaders();
 	void AddIncludeDir(const std::string& includeDir);
 
-	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines = {});
+	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines = {});
 
 	DECLARE_MULTICAST_DELEGATE(OnShaderEdited, Shader* /*pShader*/);
 	OnShaderEdited& OnShaderEditedEvent() { return m_OnShaderEditedEvent; }

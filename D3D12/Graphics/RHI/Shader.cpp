@@ -635,7 +635,7 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 	}
 }
 
-Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
+ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	std::lock_guard lock(m_CompileMutex);
 
@@ -656,7 +656,7 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	}
 
 	if (pShader && !pShader->IsDirty)
-		return pShader;
+		return { pShader, "" };
 
 	ShaderCompiler::CompileJob job;
 	job.Defines = defines;
@@ -672,8 +672,9 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 
 	if (!result.Success())
 	{
-		E_LOG(Warning, "Failed to compile shader \"%s:%s\": %s", pShaderPath, pEntryPoint, result.ErrorMessage.c_str());
-		return nullptr;
+		std::string error = Sprintf("Failed to compile shader \"%s:%s\": %s", pShaderPath, pEntryPoint, result.ErrorMessage.c_str());
+		E_LOG(Warning, "%s", error);
+		return { nullptr, error };
 	}
 
 	{
@@ -691,5 +692,5 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 			m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
 		m_FilepathToObjectMap[pathHash].Shaders[hash] = pShader;
 	}
-	return pShader;
+	return { pShader };
 }

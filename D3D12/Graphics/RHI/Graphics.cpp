@@ -1141,12 +1141,12 @@ RefCountPtr<CommandSignature> GraphicsDevice::CreateCommandSignature(const Comma
 	return new CommandSignature(this, pCmdSignature);
 }
 
-Shader* GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
+ShaderResult GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	return m_pShaderManager->GetShader(pShaderPath, shaderType, pEntryPoint, defines);
 }
 
-Shader* GraphicsDevice::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
+ShaderResult GraphicsDevice::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
 {
 	return m_pShaderManager->GetShader(pShaderPath, ShaderType::MAX, nullptr, defines);
 }

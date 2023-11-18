@@ -166,8 +166,8 @@ public:
 	RefCountPtr<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
 	RefCountPtr<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
 
-	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	Shader* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
+	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
+	ShaderResult GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
 
 	void RegisterGlobalResource(RefCountPtr<GraphicsObject>&& pResource)
 	{
