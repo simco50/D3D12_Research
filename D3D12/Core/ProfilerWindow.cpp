@@ -39,6 +39,7 @@ struct HUDContext
 	float PauseThresholdTime = 100.0f;
 	bool IsPaused = false;
 
+	uint32 SelectedEventFrame = 0;
 	StringHash SelectedEventHash = 0;
 	bool IsSelectedCPUEvent = true;
 };
@@ -361,6 +362,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 				trackTextCursor.x += caretSize;
 				pDraw->AddText(trackTextCursor, ImColor(style.BGTextColor), pName);
+				cursor.y += style.BarHeight;
 				return isOpen;
 			};
 
@@ -370,50 +372,51 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			PROFILE_CPU_SCOPE("GPU Track");
 
 			// Add thread name for track
-			bool isOpen = TrackHeader(queue.Name, ImGui::GetID(&queue));
-			uint32 maxDepth = isOpen ? style.MaxDepth : 1;
-			uint32 trackDepth = 1;
-			cursor.y += style.BarHeight;
-
-			for (uint32 i = gpuRange.Begin; i < gpuRange.End; ++i)
+			if (TrackHeader(queue.Name, ImGui::GetID(&queue)))
 			{
-				// Add a bar in the right place for each event
-				/*
-					|[=============]			|
-					|	[======]				|
-				*/
-				for (const GPUProfiler::EventData::Event& event : gGPUProfiler.GetEventData(i).GetEvents(queue.Index))
+				uint32 trackDepth = 0;
+
+				for (uint32 i = gpuRange.Begin; i < gpuRange.End; ++i)
 				{
-					// Skip events above the max depth
-					if ((int)event.Depth >= maxDepth)
-						continue;
-
-					trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
-
-					bool hovered, clicked;
-					DrawBar(event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered, &clicked);
-					if (hovered)
+					// Add a bar in the right place for each event
+					/*
+						|[=============]			|
+						|	[======]				|
+					*/
+					for (const GPUProfiler::EventData::Event& event : gGPUProfiler.GetEventData(i).GetEvents(queue.Index))
 					{
-						if (ImGui::BeginTooltip())
+						// Skip events above the max depth
+						if ((int)event.Depth >= style.MaxDepth)
+							continue;
+
+						trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
+
+						bool hovered, clicked;
+						DrawBar(event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered, &clicked);
+						if (hovered)
 						{
-							ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.4f, 1.0f), "%s | %.3f ms", event.pName, TicksToMs * (float)(event.TicksEnd - event.TicksBegin));
-							ImGui::Text("Frame %d", i);
-							if (event.pFilePath)
-								ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
-							ImGui::EndTooltip();
+							if (ImGui::BeginTooltip())
+							{
+								ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.4f, 1.0f), "%s | %.3f ms", event.pName, TicksToMs * (float)(event.TicksEnd - event.TicksBegin));
+								ImGui::Text("Frame %d", i);
+								if (event.pFilePath)
+									ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
+								ImGui::EndTooltip();
+							}
+						}
+						if (clicked)
+						{
+							StringHash eventHash = GetEventHash(event);
+							context.SelectedEventHash = eventHash;
+							context.IsSelectedCPUEvent = false;
+							context.SelectedEventFrame = i;
 						}
 					}
-					if (clicked)
-					{
-						StringHash eventHash = GetEventHash(event);
-						context.SelectedEventHash = eventHash;
-						context.IsSelectedCPUEvent = false;
-					}
 				}
+				cursor.y += trackDepth * style.BarHeight;
 			}
 
 			// Add vertical line to end track
-			cursor.y += trackDepth * style.BarHeight;
 			pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor));
 		}
 
@@ -430,52 +433,53 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			const CPUProfiler::ThreadData& thread = threads[threadIndex];
 			const char* pHeaderText;
 			ImFormatStringToTempBuffer(&pHeaderText, nullptr, "%s [%d]", thread.Name, thread.ThreadID);
-			bool isOpen = TrackHeader(pHeaderText, ImGui::GetID(&thread));
 
-			uint32 maxDepth = isOpen ? style.MaxDepth : 1;
-			uint32 trackDepth = 1;
-			cursor.y += style.BarHeight;
-
-			// Add a bar in the right place for each event
-			/*
-				|[=============]			|
-				|	[======]				|
-			*/
-			for (uint32 frameIndex = cpuRange.Begin; frameIndex < cpuRange.End; ++frameIndex)
+			if (TrackHeader(pHeaderText, ImGui::GetID(&thread)))
 			{
-				const CPUProfiler::EventData& eventData = gCPUProfiler.GetEventData(frameIndex);
-				for (const CPUProfiler::EventData::Event& event : eventData.GetEvents(thread.Index))
+				uint32 trackDepth = 0;
+
+				// Add a bar in the right place for each event
+				/*
+					|[=============]			|
+					|	[======]				|
+				*/
+				for (uint32 frameIndex = cpuRange.Begin; frameIndex < cpuRange.End; ++frameIndex)
 				{
-					// Skip events above the max depth
-					if (event.Depth >= maxDepth)
-						continue;
-
-					trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
-
-					bool hovered, clicked;
-					DrawBar(event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered, &clicked);
-					if (hovered)
+					const CPUProfiler::EventData& eventData = gCPUProfiler.GetEventData(frameIndex);
+					for (const CPUProfiler::EventData::Event& event : eventData.GetEvents(thread.Index))
 					{
-						if (ImGui::BeginTooltip())
+						// Skip events above the max depth
+						if (event.Depth >= style.MaxDepth)
+							continue;
+
+						trackDepth = ImMax(trackDepth, (uint32)event.Depth + 1);
+
+						bool hovered, clicked;
+						DrawBar(event.TicksBegin, event.TicksEnd, event.Depth, event.pName, &hovered, &clicked);
+						if (hovered)
 						{
-							ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.4f, 1.0f), "%s | %.3f ms", event.pName, TicksToMs * (float)(event.TicksEnd - event.TicksBegin));
-							ImGui::Text("Frame %d", frameIndex);
-							if (event.pFilePath)
-								ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
-							ImGui::EndTooltip();
+							if (ImGui::BeginTooltip())
+							{
+								ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.4f, 1.0f), "%s | %.3f ms", event.pName, TicksToMs * (float)(event.TicksEnd - event.TicksBegin));
+								ImGui::Text("Frame %d", frameIndex);
+								if (event.pFilePath)
+									ImGui::Text("%s:%d", Paths::GetFileName(event.pFilePath).c_str(), event.LineNumber);
+								ImGui::EndTooltip();
+							}
+						}
+						if (clicked)
+						{
+							StringHash eventHash = GetEventHash(event);
+							context.SelectedEventHash = eventHash;
+							context.IsSelectedCPUEvent = true;
+							context.SelectedEventFrame = frameIndex;
 						}
 					}
-					if (clicked)
-					{
-						StringHash eventHash = GetEventHash(event);
-						context.SelectedEventHash = eventHash;
-						context.IsSelectedCPUEvent = true;
-					}
 				}
+				cursor.y += trackDepth * style.BarHeight;
 			}
 
 			// Add vertical line to end track
-			cursor.y += trackDepth * style.BarHeight;
 			pDraw->AddLine(ImVec2(timelineRect.Min.x, cursor.y), ImVec2(timelineRect.Max.x, cursor.y), ImColor(style.BGTextColor));
 		}
 
@@ -586,6 +590,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		{
 			std::vector<float> eventTimes;
 			const char* pName = "";
+			float eventTime = 0;
 			if (context.IsSelectedCPUEvent)
 			{
 				for (uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
@@ -598,6 +603,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 							float time = TicksToMs * (float)(event.TicksEnd - event.TicksBegin);
 							eventTimes.push_back(time);
 							pName = event.pName;
+							if (i == context.SelectedEventFrame)
+								eventTime = time;
 						}
 					}
 				}
@@ -615,6 +622,8 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 							float time = TicksToMs * (float)(event.TicksEnd - event.TicksBegin);
 							eventTimes.push_back(time);
 							pName = event.pName;
+							if (i == context.SelectedEventFrame)
+								eventTime = time;
 						}
 					}
 				}
@@ -635,12 +644,14 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 				uint32 n = (uint32)eventTimes.size() / 2;
 				std::nth_element(eventTimes.begin(), eventTimes.begin() + n, eventTimes.end());
 				float median = eventTimes[n];
-				float firstTime = eventTimes.front();
 
 				ImGui::BeginGroup();
 				ImGui::Text(pName);
 				if (ImGui::BeginTable("TooltipTable", 2))
 				{
+					ImGui::TableNextColumn();	ImGui::Text("Time:");
+					ImGui::TableNextColumn();	ImGui::Text("%.2f ms", eventTime);
+
 					ImGui::TableNextColumn();	ImGui::Text("Occurances:");
 					ImGui::TableNextColumn();	ImGui::Text("%d", eventTimes.size());
 
