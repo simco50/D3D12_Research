@@ -6,7 +6,7 @@
 #include "dxc/dxcapi.h"
 #include "dxc/d3d12shader.h"
 #include "D3D.h"
-#include "Core/Serializer.h"
+#include "Core/Stream.h"
 #include "Core/Profiler.h"
 
 namespace ShaderCompiler
@@ -118,15 +118,15 @@ namespace ShaderCompiler
 		if (!TestFileTime(shaderFullPath.c_str()))
 			return false;
 
-		Serializer s;
-		s.Open(pCachePath, Serializer::Mode::Read);
+		FileStream fs;
+		fs.Open(pCachePath, FileMode::Read);
 		uint32 version = 0;
-		s.Serialize(version);
+		fs >> version;
 		if (version != CompileResult::Version)
 			return false;
 
-		s.Serialize(result.ShaderHash);
-		s.Serialize(result.Includes);
+		fs >> result.ShaderHash;
+		fs >> result.Includes;
 
 		// Test if includes sources are not newer than the cached file
 		for (std::string& include : result.Includes)
@@ -138,9 +138,11 @@ namespace ShaderCompiler
 			}
 		}
 
-		uint32 size = 0;
-		void* pData = nullptr;
-		s.Serialize(pData, size);
+		uint32 size;
+		fs >> size;
+
+		char* pData = new char[size];
+		fs.Read(pData, size);
 		pUtils->CreateBlob(pData, size, DXC_CP_ACP, (IDxcBlobEncoding**)result.pBlob.GetAddressOf());
 		delete[] pData;
 
@@ -153,15 +155,16 @@ namespace ShaderCompiler
 
 		Paths::CreateDirectoryTree(pCachePath);
 
-		Serializer s;
-		s.Open(pCachePath, Serializer::Mode::Write);
+		FileStream fs;
+		fs.Open(pCachePath, FileMode::Write);
 		uint32 version = CompileResult::Version;
-		s.Serialize(version);
-		s.Serialize(result.ShaderHash);
-		s.Serialize(result.Includes);
+		fs << version;
+		fs << result.ShaderHash;
+		fs << result.Includes;
 		void* pBlob = result.pBlob->GetBufferPointer();
 		uint32 size = (uint32)result.pBlob->GetBufferSize();
-		s.Serialize(pBlob, size);
+		fs << size;
+		fs.Write(pBlob, size);
 		return true;
 	}
 
@@ -237,15 +240,12 @@ namespace ShaderCompiler
 			}
 		}
 
-		FILE* pFile = nullptr;
-		if(fopen_s(&pFile, pFileName, "rb") == 0)
+		FileStream stream;
+		if(stream.Open(pFileName, FileMode::Read))
 		{
-			check(fseek(pFile, 0, SEEK_END) == 0);
-			std::vector<char> charBuffer(ftell(pFile) + 1);
-			check(fseek(pFile, 0, SEEK_SET) == 0);
-			fread(charBuffer.data(), sizeof(char), charBuffer.size(), pFile);
-			check(fclose(pFile) == 0);
-
+			// +1 null terminator
+			std::vector<char> charBuffer(stream.GetLength() + 1);
+			stream.Read(charBuffer.data(), (uint32)charBuffer.size());
 			std::string buffer = CustomPreprocess(charBuffer.data());
 
 			CachedFile file;
@@ -450,17 +450,17 @@ namespace ShaderCompiler
 				{
 					std::string filePathBase = Paths::GetFileNameWithoutExtension(cachePath);
 					{
-						FILE* pFile = nullptr;
-						fopen_s(&pFile, Sprintf("%s%s.hlsl", Paths::ShaderCacheDir(), filePathBase).c_str(), "w");
-						fwrite(pHLSL->GetStringPointer(), pHLSL->GetStringLength(), 1, pFile);
-						fclose(pFile);
+						FileStream stream;
+						if(stream.Open(Sprintf("%s%s.hlsl", Paths::ShaderCacheDir(), filePathBase).c_str(), FileMode::Write))
+							stream.Write(pHLSL->GetStringPointer(), (uint32)pHLSL->GetStringLength());
 					}
 					{
-						FILE* pFile = nullptr;
-
-						fopen_s(&pFile, Sprintf("%s%s.bat", Paths::ShaderCacheDir(), filePathBase).c_str(), "w");
-						std::string txt = Sprintf("dxc.exe %s -Fo %s.shaderbin %s.hlsl", arguments.ToString(), filePathBase, filePathBase);
-						fwrite(txt.c_str(), txt.size(), 1, pFile);
+						FileStream stream;
+						if (stream.Open(Sprintf("%s%s.bat", Paths::ShaderCacheDir(), filePathBase).c_str(), FileMode::Write))
+						{
+							std::string txt = Sprintf("dxc.exe %s -Fo %s.shaderbin %s.hlsl", arguments.ToString(), filePathBase, filePathBase);
+							stream.Write(txt.c_str(), (uint32)txt.size());
+						}
 					}
 				}
 			}
@@ -525,10 +525,9 @@ namespace ShaderCompiler
 				RefCountPtr<IDxcBlobUtf8> pDebugDataPathUTF8;
 				pUtils->GetBlobAsUtf8(pDebugDataPath.Get(), pDebugDataPathUTF8.GetAddressOf());
 				std::string symbolsPath = Sprintf("%s%s", Paths::ShaderCacheDir().c_str(), pDebugDataPathUTF8->GetStringPointer());
-				FILE* pFile = nullptr;
-				fopen_s(&pFile, symbolsPath.c_str(), "w");
-				fwrite((char*)pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize(), 1, pFile);
-				fclose(pFile);
+				FileStream stream;
+				if(stream.Open(symbolsPath.c_str(), FileMode::Write))
+					stream.Write(pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize());
 			}
 		}
 #endif

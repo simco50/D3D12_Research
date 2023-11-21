@@ -1,13 +1,15 @@
 #pragma once
 #include "Graphics/RHI/RHI.h"
 
+class Stream;
+
 class Image final
 {
 public:
 	Image(ResourceFormat format = ResourceFormat::Unknown);
 	Image(uint32 width, uint32 height, uint32 depth, ResourceFormat format, uint32 numMips = 1, const void* pInitialData = nullptr);
 	bool Load(const char* filePath);
-	bool Load(const void* pData, size_t dataSize, const char* pFormatHint);
+	bool Load(Stream& stream, const char* pFormatHint);
 	void Save(const char* pFilePath);
 
 	bool SetSize(uint32 x, uint32 y, uint32 depth, uint32 numMips);
@@ -33,8 +35,8 @@ public:
 	const Image* GetNextImage() const { return m_pNextImage.get(); }
 
 private:
-	bool LoadDDS(const void* pBytes, uint32 numBytes);
-	bool LoadSTB(const void* pBytes, uint32 numBytes);
+	bool LoadDDS(Stream& stream);
+	bool LoadSTB(Stream& stream);
 
 	uint32 m_Width = 0;
 	uint32 m_Height = 0;

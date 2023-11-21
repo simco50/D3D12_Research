@@ -20,6 +20,7 @@
 #include "meshoptimizer.h"
 
 #include "LDraw.h"
+#include "Core/Stream.h"
 
 Mesh::~Mesh()
 {
@@ -250,11 +251,20 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, float uniformSca
 					if (it == textureMap.end())
 					{
 						Image image;
-						bool validImage;
+						bool validImage = false;
 						if (pImage->buffer_view)
-							validImage = image.Load((char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, pImage->buffer_view->size, pImage->mime_type);
+						{
+							MemoryStream stream(false, (char*)pImage->buffer_view->buffer->data + pImage->buffer_view->offset, (uint32)pImage->buffer_view->size);
+							validImage = image.Load(stream, pImage->mime_type);
+						}
 						else
-							validImage =image.Load(Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str());
+						{
+							FileStream stream;
+							if (stream.Open(Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), FileMode::Read))
+							{
+								validImage = image.Load(stream, "dds");
+							}
+						}
 
 						if(validImage)
 							pTex = GraphicsCommon::CreateTextureFromImage(pDevice, image, srgb, pName);

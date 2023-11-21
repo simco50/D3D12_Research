@@ -9,6 +9,7 @@
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include "Core/Paths.h"
+#include "Core/Stream.h"
 
 Image::Image(ResourceFormat format)
 	: m_Format(format)
@@ -30,35 +31,29 @@ bool Image::Load(const char* inputStream)
 	const std::string extension = Paths::GetFileExtenstion(inputStream);
 	bool success = false;
 
-	FILE* pFile = nullptr;
-	fopen_s(&pFile, inputStream, "rb");
-	if (!pFile)
+	FileStream stream;
+	if (!stream.Open(inputStream, FileMode::Read))
 		return false;
-
-	fseek(pFile, 0, SEEK_END);
-	std::vector<char> data((size_t)ftell(pFile));
-	fseek(pFile, 0, SEEK_SET);
-	fread(data.data(), data.size(), 1, pFile);
 
 	if (extension == "dds")
 	{
-		success = LoadDDS(data.data(), (uint32)data.size());
+		success = LoadDDS(stream);
 	}
 	//If not one of the above, load with Stbi by default (jpg, png, tga, bmp, ...)
 	else
 	{
-		success = LoadSTB(data.data(), (uint32)data.size());
+		success = LoadSTB(stream);
 	}
 	return success;
 }
 
-bool Image::Load(const void* pData, size_t dataSize, const char* pFormatHint)
+bool Image::Load(Stream& stream, const char* pFormatHint)
 {
 	if (std::string(pFormatHint).find("dds") != std::string::npos)
 	{
-		return LoadDDS(pData, (uint32)dataSize);
+		return LoadDDS(stream);
 	}
-	return LoadSTB(pData, (uint32)dataSize);
+	return LoadSTB(stream);
 }
 
 bool Image::SetSize(uint32 width, uint32 height, uint32 depth, uint32 numMips)
@@ -161,17 +156,20 @@ const unsigned char* Image::GetData(uint32 mipLevel) const
 	return m_Pixels.data() + offset;
 }
 
-bool Image::LoadSTB(const void* pBytes, uint32 numBytes)
+bool Image::LoadSTB(Stream& stream)
 {
 	int components = 0;
 
-	const uint8* pData = (uint8*)pBytes;
-	m_IsHdr = stbi_is_hdr_from_memory(pData, numBytes);
+	uint32 size = stream.GetLength();
+	std::vector<uint8> buffer(size);
+	stream.Read(buffer.data(), size);
+
+	m_IsHdr = stbi_is_hdr_from_memory(buffer.data(), size);
 
 	if (m_IsHdr)
 	{
 		int width, height;
-		float* pPixels = stbi_loadf_from_memory(pData, numBytes, &width, &height, &components, 4);
+		float* pPixels = stbi_loadf_from_memory(buffer.data(), size, &width, &height, &components, 4);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -188,7 +186,7 @@ bool Image::LoadSTB(const void* pBytes, uint32 numBytes)
 	else
 	{
 		int width, height;
-		unsigned char* pPixels = stbi_load_from_memory(pData, numBytes, &width, &height, &components, 4);
+		unsigned char* pPixels = stbi_load_from_memory(buffer.data(), size, &width, &height, &components, 4);
 		if (pPixels == nullptr)
 		{
 			return false;
@@ -204,10 +202,8 @@ bool Image::LoadSTB(const void* pBytes, uint32 numBytes)
 	}
 }
 
-bool Image::LoadDDS(const void* pData, uint32 /*numBytes*/)
+bool Image::LoadDDS(Stream& stream)
 {
-	char* pBytes = (char*)pData;
-
 	// .DDS subheader.
 #pragma pack(push,1)
 	struct PixelFormatHeader
@@ -268,46 +264,47 @@ bool Image::LoadDDS(const void* pData, uint32 /*numBytes*/)
 	auto MakeFourCC = [](uint32 a, uint32 b, uint32 c, uint32 d) { return a | (b << 8u) | (c << 16u) | (d << 24u); };
 
 	constexpr const char pMagic[] = "DDS ";
-	if (memcmp(pMagic, pBytes, 4) != 0)
+
+	char magic[4];
+	stream.Read(magic, 4);
+	if (memcmp(pMagic, magic, 4) != 0)
 	{
 		return false;
 	}
-	pBytes += 4;
 
-	const FileHeader* pHeader = (FileHeader*)pBytes;
-	pBytes += sizeof(FileHeader);
+	FileHeader header;
+	stream.Read(&header, sizeof(FileHeader));
 
-	if (pHeader->dwSize == sizeof(FileHeader) &&
-		pHeader->ddpf.dwSize == sizeof(PixelFormatHeader))
+	if (header.dwSize == sizeof(FileHeader) &&
+		header.ddpf.dwSize == sizeof(PixelFormatHeader))
 	{
 		m_sRgb = false;
-		uint32 bpp = pHeader->ddpf.dwRGBBitCount;
+		uint32 bpp = header.ddpf.dwRGBBitCount;
 
-		uint32 fourCC = pHeader->ddpf.dwFourCC;
+		uint32 fourCC = header.ddpf.dwFourCC;
 		bool hasDxgi = fourCC == MakeFourCC('D', 'X', '1', '0');
-		const DX10FileHeader* pDx10Header = nullptr;
 
+		DX10FileHeader dx10Header{};
 		if (hasDxgi)
 		{
-			pDx10Header = (DX10FileHeader*)pBytes;
-			pBytes += sizeof(DX10FileHeader);
+			stream.Read(&dx10Header, sizeof(DX10FileHeader));
 
 			auto ConvertDX10Format = [](DXGI_FORMAT format, ResourceFormat& outFormat, bool& outSRGB)
-			{
-				if (format == DXGI_FORMAT_BC1_UNORM)			{ outFormat = ResourceFormat::BC1_UNORM;			outSRGB = false;	return;		}
-				if (format == DXGI_FORMAT_BC1_UNORM_SRGB)		{ outFormat = ResourceFormat::BC1_UNORM;			outSRGB = true;		return;		}
-				if (format == DXGI_FORMAT_BC2_UNORM)			{ outFormat = ResourceFormat::BC2_UNORM;			outSRGB = false;	return;		}
-				if (format == DXGI_FORMAT_BC2_UNORM_SRGB)		{ outFormat = ResourceFormat::BC2_UNORM;			outSRGB = true;		return;		}
-				if (format == DXGI_FORMAT_BC3_UNORM)			{ outFormat = ResourceFormat::BC3_UNORM;			outSRGB = false;	return;		}
-				if (format == DXGI_FORMAT_BC4_UNORM)			{ outFormat = ResourceFormat::BC4_UNORM;			outSRGB = false;	return;		}
-				if (format == DXGI_FORMAT_BC5_UNORM)			{ outFormat = ResourceFormat::BC5_UNORM;			outSRGB = false;	return;		}
-				if (format == DXGI_FORMAT_BC6H_UF16)			{ outFormat = ResourceFormat::BC6H_UFLOAT;			outSRGB = false;	return;		}
-				if (format == DXGI_FORMAT_BC7_UNORM)			{ outFormat = ResourceFormat::BC7_UNORM;			outSRGB = false;	return;		}
-				if (format == DXGI_FORMAT_BC7_UNORM_SRGB)		{ outFormat = ResourceFormat::BC7_UNORM;			outSRGB = true;		return;		}
-				if (format == DXGI_FORMAT_R32G32B32A32_FLOAT)	{ outFormat = ResourceFormat::RGBA32_FLOAT;			outSRGB = false;	return;		}
-				if (format == DXGI_FORMAT_R32G32_FLOAT)			{ outFormat = ResourceFormat::RG32_FLOAT;			outSRGB = false;	return;		}
-			};
-			ConvertDX10Format((DXGI_FORMAT)pDx10Header->dxgiFormat, m_Format, m_sRgb);
+				{
+					if (format == DXGI_FORMAT_BC1_UNORM) { outFormat = ResourceFormat::BC1_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC1_UNORM_SRGB) { outFormat = ResourceFormat::BC1_UNORM;			outSRGB = true;		return; }
+					if (format == DXGI_FORMAT_BC2_UNORM) { outFormat = ResourceFormat::BC2_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC2_UNORM_SRGB) { outFormat = ResourceFormat::BC2_UNORM;			outSRGB = true;		return; }
+					if (format == DXGI_FORMAT_BC3_UNORM) { outFormat = ResourceFormat::BC3_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC4_UNORM) { outFormat = ResourceFormat::BC4_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC5_UNORM) { outFormat = ResourceFormat::BC5_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC6H_UF16) { outFormat = ResourceFormat::BC6H_UFLOAT;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC7_UNORM) { outFormat = ResourceFormat::BC7_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC7_UNORM_SRGB) { outFormat = ResourceFormat::BC7_UNORM;			outSRGB = true;		return; }
+					if (format == DXGI_FORMAT_R32G32B32A32_FLOAT) { outFormat = ResourceFormat::RGBA32_FLOAT;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_R32G32_FLOAT) { outFormat = ResourceFormat::RG32_FLOAT;			outSRGB = false;	return; }
+				};
+			ConvertDX10Format((DXGI_FORMAT)dx10Header.dxgiFormat, m_Format, m_sRgb);
 		}
 		else
 		{
@@ -323,12 +320,12 @@ bool Image::LoadDDS(const void* pData, uint32 /*numBytes*/)
 				if (bpp == 32)
 				{
 					auto TestMask = [=](uint32 r, uint32 g, uint32 b, uint32 a)
-					{
-						return pHeader->ddpf.dwRBitMask == r &&
-							pHeader->ddpf.dwGBitMask == g &&
-							pHeader->ddpf.dwBBitMask == b &&
-							pHeader->ddpf.dwABitMask == a;
-					};
+						{
+							return header.ddpf.dwRBitMask == r &&
+								header.ddpf.dwGBitMask == g &&
+								header.ddpf.dwBBitMask == b &&
+								header.ddpf.dwABitMask == a;
+						};
 
 					if (TestMask(0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000))
 					{
@@ -349,24 +346,24 @@ bool Image::LoadDDS(const void* pData, uint32 /*numBytes*/)
 			}
 		}
 
-		bool isCubemap = (pHeader->dwCaps2 & 0x0000FC00U) != 0 || (hasDxgi && (pDx10Header->miscFlag & 0x4) != 0);
+		bool isCubemap = (header.dwCaps2 & 0x0000FC00U) != 0 || (hasDxgi && (dx10Header.miscFlag & 0x4) != 0);
 		uint32 imageChainCount = 1;
 		if (isCubemap)
 		{
 			imageChainCount = 6;
 			m_IsCubemap = true;
 		}
-		else if (hasDxgi && pDx10Header->arraySize > 1)
+		else if (hasDxgi && dx10Header.arraySize > 1)
 		{
-			imageChainCount = pDx10Header->arraySize;
+			imageChainCount = dx10Header.arraySize;
 			m_IsArray = true;
 		}
 
 		Image* pCurrentImage = this;
 		for (uint32 imageIdx = 0; imageIdx < imageChainCount; ++imageIdx)
 		{
-			pCurrentImage->SetSize(pHeader->dwWidth, pHeader->dwHeight, pHeader->dwDepth, pHeader->dwMipMapCount);
-			pCurrentImage->SetData(pBytes);
+			pCurrentImage->SetSize(header.dwWidth, header.dwHeight, header.dwDepth, header.dwMipMapCount);
+			stream.Read(m_Pixels.data(), (uint32)m_Pixels.size());
 
 			if (imageIdx < imageChainCount - 1)
 			{

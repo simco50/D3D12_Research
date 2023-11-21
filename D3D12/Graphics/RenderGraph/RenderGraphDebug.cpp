@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
 #include "imgui_internal.h"
+#include "Core/Stream.h"
 #include "Graphics/ImGuiRenderer.h"
 
 template<typename T>
@@ -363,11 +364,8 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 
 	std::string output = Sprintf(pMermaidTemplate, stream.String.c_str());
 	Paths::CreateDirectoryTree(pPath);
-	FILE* pFile = nullptr;
-	fopen_s(&pFile, pPath, "w");
-	if (pFile)
-	{
-		fwrite(output.c_str(), sizeof(char), output.length(), pFile);
-		fclose(pFile);
-	}
+
+	FileStream file;
+	if(file.Open(pPath, FileMode::Write))
+		file.Write(output.c_str(), (uint32)output.length());
 }
