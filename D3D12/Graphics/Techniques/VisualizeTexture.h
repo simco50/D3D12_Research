@@ -22,6 +22,10 @@ private:
 	float Slice = 0.0f;
 	bool XRay = false;
 	float Scale = 1.0f;
+	Vector2u HoveredPixel;
+
+	uint32 m_ReadbackIndex = 0;
+	RefCountPtr<Buffer> m_pReadbackBuffer;
 
 	RefCountPtr<PipelineState> m_pVisualizePSO;
 	RefCountPtr<RootSignature> m_pVisualizeRS;

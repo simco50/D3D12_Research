@@ -11,12 +11,21 @@
 #include "imgui_internal.h"
 #include "IconsFontAwesome4.h"
 
+struct PickingData
+{
+	Vector4 DataFloat;
+	Vector4u DataUInt;
+};
+
 VisualizeTexture::VisualizeTexture(GraphicsDevice* pDevice)
 {
 	m_pVisualizeRS = new RootSignature(pDevice);
 	m_pVisualizeRS->AddRootCBV(0);
+	m_pVisualizeRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 	m_pVisualizeRS->Finalize("Common");
 	m_pVisualizePSO = pDevice->CreateComputePipeline(m_pVisualizeRS, "ImageVisualize.hlsl", "CSMain");
+
+	m_pReadbackBuffer = pDevice->CreateBuffer(BufferDesc::CreateReadback(sizeof(PickingData) * 3), "Picking Data");
 }
 
 void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
@@ -32,13 +41,16 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 	}
 
 	const TextureDesc& desc = pTexture->GetDesc();
-	RGTexture* pTarget = graph.Create("Visualize Target", TextureDesc::Create2D(desc.Width, desc.Height, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource));
+	Vector2u mipSize(desc.Width >> MipLevel, desc.Height >> MipLevel);
+	RGTexture* pTarget = graph.Create("Visualize Target", TextureDesc::Create2D(mipSize.x, mipSize.y, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource));
 	SourceName = pTexture->GetName();
 	SourceDesc = pTexture->GetDesc();
 
+	RGBuffer* pPickingBuffer = graph.Create("Picking Buffer", BufferDesc::CreateStructured(1, sizeof(Vector4) + sizeof(Vector4u)));
+
 	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read(pTexture)
-		.Write(pTarget)
+		.Write({ pTarget, pPickingBuffer })
 		.Bind([=](CommandContext& cmdContext)
 			{
 				cmdContext.SetComputeRootSignature(m_pVisualizeRS);
@@ -46,23 +58,25 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 
 				struct ConstantsData
 				{
-					Vector2 InvDimensions;
+					Vector2u HoveredPixel;
+					Vector2u Dimensions;
 					Vector2 ValueRange;
 					uint32 TextureSource;
 					uint32 TextureTarget;
 					TextureType TextureType;
 					uint32 ChannelMask;
-					float MipLevel;
-					float Slice;
+					uint32 MipLevel;
+					uint32 Slice;
+					uint32 IsIntegerFormat;
 				} constants;
 
 				const TextureDesc& desc = pTexture->GetDesc();
 				const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
 
+				constants.HoveredPixel = HoveredPixel;
 				constants.TextureSource = pTexture->Get()->GetSRV()->GetHeapIndex();
 				constants.TextureTarget = pTarget->Get()->GetUAV()->GetHeapIndex();
-				constants.InvDimensions.x = 1.0f / desc.Width;
-				constants.InvDimensions.y = 1.0f / desc.Height;
+				constants.Dimensions = mipSize;
 				constants.TextureType = pTexture->GetDesc().Type;
 				constants.ValueRange = Vector2(RangeMin, RangeMax);
 				constants.ChannelMask =
@@ -71,15 +85,25 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 					(VisibleChannels[2] ? 1 : 0) << 2 |
 					(VisibleChannels[3] ? 1 : 0) << 3;
 				constants.ChannelMask &= ((1u << formatInfo.NumComponents) - 1u);
-				constants.MipLevel = (float)MipLevel;
-				constants.Slice = Slice / desc.DepthOrArraySize;
-				if (pTexture->GetDesc().Type == TextureType::TextureCube)
-					constants.Slice = (float)CubeFaceIndex;
+				constants.MipLevel = (uint32)MipLevel;
+				constants.Slice = (uint32)Slice;
+				constants.IsIntegerFormat = formatInfo.Type == FormatType::Integer;
 
 				cmdContext.BindRootCBV(0, constants);
+				cmdContext.BindResources(1, pPickingBuffer->Get()->GetUAV());
 				cmdContext.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 8, desc.Height, 8));
 			});
-	
+
+	graph.AddPass("Copy Picking Data", RGPassFlag::Copy)
+		.Read(pPickingBuffer)
+		.Write(graph.Import(m_pReadbackBuffer))
+		.Bind([=](CommandContext& context)
+			{
+				context.CopyBuffer(pPickingBuffer->Get(), m_pReadbackBuffer, sizeof(PickingData), 0, sizeof(PickingData) * m_ReadbackIndex);
+			});
+
+	m_ReadbackIndex = (m_ReadbackIndex + 1) % 3;
+
 	graph.Export(pTarget, &pVisualizeTexture);
 }
 
@@ -177,7 +201,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 			{
 				Group group;
 
-				ImGui::BeginDisabled(desc.Type != TextureType::TextureCube && desc.Type != TextureType::TextureCubeArray && desc.Type != TextureType::Texture3D);
+				ImGui::BeginDisabled(desc.Type != TextureType::Texture3D);
 				ImGui::SameLine();
 				ImGui::AlignTextToFramePadding();
 				if (desc.Type == TextureType::Texture3D)
@@ -186,14 +210,6 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 					ImGui::SameLine();
 					ImGui::SetNextItemWidth(100);
 					ImGui::SliderFloat("##SliceNr", &Slice, 0, (float)desc.DepthOrArraySize - 1, "%.2f");
-				}
-				else
-				{
-					ImGui::Text("Face");
-					ImGui::SameLine();
-					constexpr const char* faceNames[] = { "Right", "Left", "Top", "Bottom", "Back", "Front" };
-					ImGui::SetNextItemWidth(100);
-					ImGui::Combo("##SliceFace", &CubeFaceIndex, faceNames, ARRAYSIZE(faceNames));
 				}
 				ImGui::EndDisabled();
 			}
@@ -383,6 +399,8 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 					}
 				}
 
+				HoveredPixel = Vector2u((uint32)Math::Floor(UV.x * mipSize.x), (uint32)Math::Floor(UV.y * mipSize.y));
+
 				if (held)
 				{
 					if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
@@ -419,6 +437,39 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 					UV = ImClamp(UV, ImVec2(0, 0), ImVec2(1, 1));
 					Vector2u texel((uint32)Math::Floor(UV.x * mipSize.x), (uint32)Math::Floor(UV.y * mipSize.y));
 					ImGui::Text("%s - %dx%d %d mips - %s - %8d, %8d (%.4f, %.4f)", SourceName.c_str(), desc.Width, desc.Height, desc.Mips, formatInfo.pName, texel.x, texel.y, UV.x, 1.0f - UV.y);
+
+					PickingData pickData = static_cast<PickingData*>(m_pReadbackBuffer->GetMappedData())[m_ReadbackIndex];
+
+					std::string valueString;
+					if (formatInfo.Type == FormatType::Integer)
+					{
+						for (uint32 i = 0; i < formatInfo.NumComponents; ++i)
+						{
+							if (i != 0)
+								valueString += ", ";
+							valueString += Sprintf("%d", pickData.DataUInt[i]);
+						}
+
+						valueString += " (";
+						for (uint32 i = 0; i < formatInfo.NumComponents; ++i)
+						{
+							if (i != 0)
+								valueString += ", ";
+							valueString += Sprintf("0x%08x", pickData.DataUInt[i]);
+						}
+						valueString += ")";
+					}
+					else
+					{
+						for (uint32 i = 0; i < formatInfo.NumComponents; ++i)
+						{
+							if (i != 0)
+								valueString += ", ";
+							valueString += Sprintf("%f", (&pickData.DataFloat.x)[i]);
+						}
+					}
+					ImGui::SameLine();
+					ImGui::Text(" - %s", valueString.c_str());
 				}
 			}
 			ImGui::PopID();
