@@ -197,8 +197,8 @@ void DDGI::RenderVisualization(RGGraph& graph, const SceneView* pView, const Wor
 	{
 		const DDGIVolume& ddgi = pWorld->DDGIVolumes[i];
 		graph.AddPass("DDGI Visualize", RGPassFlag::Raster)
-			.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true)
-			.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
+			.DepthStencil(sceneTextures.pDepth)
+			.RenderTarget(sceneTextures.pColorTarget)
 			.Bind([=](CommandContext& context)
 				{
 					context.SetGraphicsRootSignature(m_pCommonRS);

@@ -14,42 +14,26 @@ enum class CommandListContext
 	Invalid,
 };
 
-enum class RenderTargetLoadAction : uint8
+enum class RenderPassColorFlags
 {
-	DontCare,
-	Load,
-	Clear,
-	NoAccess
+	None,
+	Clear = 1 << 0,
+	Resolve = 1 << 1,
 };
-DECLARE_BITMASK_TYPE(RenderTargetLoadAction)
+DEFINE_ENUM_FLAG_OPERATORS(RenderPassColorFlags)
 
-enum class RenderTargetStoreAction : uint8
+enum class RenderPassDepthFlags
 {
-	DontCare,
-	Store,
-	Resolve,
-	NoAccess,
+	None,
+	ClearDepth = 1 << 0,
+	ClearStencil = 1 << 1,
+	ReadOnlyDepth = 1 << 2,
+	ReadOnlyStencil = 1 << 3,
+
+	ReadOnly = ReadOnlyDepth | ReadOnlyStencil,
+	Clear = ClearDepth | ClearStencil,
 };
-DECLARE_BITMASK_TYPE(RenderTargetStoreAction)
-
-constexpr uint8 CombineRenderTargetAction(RenderTargetLoadAction loadAction, RenderTargetStoreAction storeAction)
-{
-	return (uint8)loadAction << 4 | (uint8)storeAction;
-}
-
-enum class RenderPassAccess : uint8
-{
-	DontCare_DontCare =	CombineRenderTargetAction(RenderTargetLoadAction::DontCare,	RenderTargetStoreAction::DontCare),
-	DontCare_Store =	CombineRenderTargetAction(RenderTargetLoadAction::DontCare,	RenderTargetStoreAction::Store),
-	Clear_Store =		CombineRenderTargetAction(RenderTargetLoadAction::Clear,	RenderTargetStoreAction::Store),
-	Load_Store =		CombineRenderTargetAction(RenderTargetLoadAction::Load,		RenderTargetStoreAction::Store),
-	Clear_DontCare =	CombineRenderTargetAction(RenderTargetLoadAction::Clear,	RenderTargetStoreAction::DontCare),
-	Load_DontCare =		CombineRenderTargetAction(RenderTargetLoadAction::Load,		RenderTargetStoreAction::DontCare),
-	Clear_Resolve =		CombineRenderTargetAction(RenderTargetLoadAction::Clear,	RenderTargetStoreAction::Resolve),
-	Load_Resolve =		CombineRenderTargetAction(RenderTargetLoadAction::Load,		RenderTargetStoreAction::Resolve),
-	DontCare_Resolve =	CombineRenderTargetAction(RenderTargetLoadAction::DontCare,	RenderTargetStoreAction::Resolve),
-	NoAccess =			CombineRenderTargetAction(RenderTargetLoadAction::NoAccess,	RenderTargetStoreAction::NoAccess),
-};
+DEFINE_ENUM_FLAG_OPERATORS(RenderPassDepthFlags)
 
 struct RenderPassInfo
 {
@@ -57,7 +41,7 @@ struct RenderPassInfo
 	{
 		Texture* Target = nullptr;
 		Texture* ResolveTarget = nullptr;
-		RenderPassAccess Access = RenderPassAccess::DontCare_DontCare;
+		RenderPassColorFlags Flags = RenderPassColorFlags::None;
 		int MipLevel = 0;
 		int ArrayIndex = 0;
 	};
@@ -65,47 +49,28 @@ struct RenderPassInfo
 	struct DepthTargetInfo
 	{
 		Texture* Target = nullptr;
-		RenderPassAccess Access = RenderPassAccess::NoAccess;
-		RenderPassAccess StencilAccess = RenderPassAccess::NoAccess;
-		bool Write = true;
+		RenderPassDepthFlags Flags = RenderPassDepthFlags::None;
 	};
 
 	RenderPassInfo() = default;
 
-	RenderPassInfo(Texture* pRenderTarget, RenderPassAccess renderTargetAccess, Texture* pDepthBuffer, RenderPassAccess depthAccess, bool depthWrite, bool uavWrites = false, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess)
+	RenderPassInfo(Texture* pRenderTarget, RenderPassColorFlags colorFlags, Texture* pDepthBuffer, RenderPassDepthFlags depthFlags)
 		: RenderTargetCount(1)
 	{
-		RenderTargets[0].Access = renderTargetAccess;
+		RenderTargets[0].Flags = colorFlags;
 		RenderTargets[0].Target = pRenderTarget;
-		DepthStencilTarget.Access = depthAccess;
+		DepthStencilTarget.Flags = RenderPassDepthFlags::None;
 		DepthStencilTarget.Target = pDepthBuffer;
-		DepthStencilTarget.StencilAccess = stencilAccess;
-		DepthStencilTarget.Write = depthWrite;
-		WriteUAVs = uavWrites;
 	}
 
-	static RenderPassInfo DepthOnly(Texture* pDepthTarget, RenderPassAccess depthAccess, RenderPassAccess stencilAccess = RenderPassAccess::NoAccess, bool uavWrites = false)
+	static RenderPassInfo DepthOnly(Texture* pDepthTarget, RenderPassDepthFlags depthFlags)
 	{
 		RenderPassInfo result;
-		result.DepthStencilTarget.Access = depthAccess;
+		result.DepthStencilTarget.Flags = depthFlags;
 		result.DepthStencilTarget.Target = pDepthTarget;
-		result.DepthStencilTarget.StencilAccess = stencilAccess;
-		result.DepthStencilTarget.Write = true;
-		result.WriteUAVs = uavWrites;
 		return result;
 	}
 
-	static RenderTargetLoadAction GetBeginAccess(RenderPassAccess access)
-	{
-		return (RenderTargetLoadAction)((uint8)access >> 4);
-	}
-
-	static RenderTargetStoreAction GetEndAccess(RenderPassAccess access)
-	{
-		return (RenderTargetStoreAction)((uint8)access & 0xF);
-	}
-
-	bool WriteUAVs = false;
 	uint32 RenderTargetCount = 0;
 	std::array<RenderTargetInfo, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> RenderTargets{};
 	DepthTargetInfo DepthStencilTarget{};
@@ -164,8 +129,6 @@ public:
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
 
-	void ClearColor(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const Color& color = Color(0.0f, 0.0f, 0.0f, 1.0f));
-	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, D3D12_CLEAR_FLAGS clearFlags = D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, float depth = 1.0f, unsigned char stencil = 0);
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, ResourceFormat format);
 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);

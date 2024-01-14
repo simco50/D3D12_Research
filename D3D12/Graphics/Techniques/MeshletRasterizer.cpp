@@ -449,11 +449,11 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 	// Finally, using the list of visible meshlets and classification data, rasterize the meshlets.
 	// For each bin, we bind the associated PSO and record an indirect DispatchMesh.
-	const RenderTargetLoadAction depthLoadAction = rasterPhase == RasterPhase::Phase1 ? RenderTargetLoadAction::Clear : RenderTargetLoadAction::Load;
+	const RenderPassDepthFlags depthFlags = rasterPhase == RasterPhase::Phase1 ? RenderPassDepthFlags::Clear : RenderPassDepthFlags::None;
 	RGPass& drawPass = graph.AddPass("Rasterize", RGPassFlag::Raster)
 		.Read({ rasterContext.pVisibleMeshlets, pMeshletOffsetAndCounts, pBinnedMeshlets })
 		.Write(outResult.pDebugData)
-		.DepthStencil(rasterContext.pDepth, depthLoadAction, true, depthLoadAction)
+		.DepthStencil(rasterContext.pDepth, depthFlags)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
@@ -490,7 +490,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 			});
 
 	if(outResult.pVisibilityBuffer)
-		drawPass.RenderTarget(outResult.pVisibilityBuffer, rasterPhase == RasterPhase::Phase1 ? RenderTargetLoadAction::DontCare : RenderTargetLoadAction::Load);
+		drawPass.RenderTarget(outResult.pVisibilityBuffer);
 
 	// Build the HZB, this HZB must be persistent across frames for this system to work.
 	// In Phase 1, the HZB is built so it can be used in Phase 2 for accurrate occlusion culling.

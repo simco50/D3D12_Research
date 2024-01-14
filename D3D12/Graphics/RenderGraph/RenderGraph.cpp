@@ -37,23 +37,23 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 	return *this;
 }
 
-RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderTargetLoadAction loadAccess, RGTexture* pResolveTarget)
+RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassColorFlags flags, RGTexture* pResolveTarget)
 {
 	check(EnumHasAllFlags(Flags, RGPassFlag::Raster));
 	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	if(pResolveTarget && pResolveTarget != pResource)
 		AddAccess(pResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 
-	RenderTargets.push_back({ pResource, loadAccess, pResolveTarget });
+	RenderTargets.push_back({ pResource, flags, pResolveTarget });
 	return *this;
 }
 
-RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool writeDepth, RenderTargetLoadAction stencilAccess)
+RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderPassDepthFlags flags)
 {
 	check(EnumHasAllFlags(Flags, RGPassFlag::Raster));
 	check(!DepthStencilTarget.pResource, "Depth Target already assigned");
-	AddAccess(pResource, writeDepth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ);
-	DepthStencilTarget = { pResource, depthAccess, stencilAccess, writeDepth };
+	AddAccess(pResource, EnumHasAllFlags(flags, RenderPassDepthFlags::ReadOnly) ? D3D12_RESOURCE_STATE_DEPTH_READ : D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	DepthStencilTarget = { pResource, flags };
 	return *this;
 }
 
@@ -493,24 +493,21 @@ RenderPassInfo RGPassResources::GetRenderPassInfo() const
 	for (const RGPass::RenderTargetAccess& renderTarget : m_Pass.RenderTargets)
 	{
 		RenderPassInfo::RenderTargetInfo& targetInfo = passInfo.RenderTargets[passInfo.RenderTargetCount++];
-		RenderTargetStoreAction storeAction = RenderTargetStoreAction::Store;
-		if (renderTarget.pResolveTarget && renderTarget.pResource != renderTarget.pResolveTarget)
-			storeAction = RenderTargetStoreAction::Resolve;
-
+		targetInfo.ArrayIndex = 0;
+		targetInfo.MipLevel = 0;
+		targetInfo.Flags = renderTarget.Flags;
 		targetInfo.Target = renderTarget.pResource->Get();
-		targetInfo.Access = (RenderPassAccess)CombineRenderTargetAction(renderTarget.LoadAccess, storeAction);
+		
+		if (renderTarget.pResolveTarget && renderTarget.pResource != renderTarget.pResolveTarget)
+			targetInfo.Flags |= RenderPassColorFlags::Resolve;
+
 		if (renderTarget.pResolveTarget)
 			targetInfo.ResolveTarget = renderTarget.pResolveTarget->Get();
 	}
 	if (m_Pass.DepthStencilTarget.pResource)
 	{
 		passInfo.DepthStencilTarget.Target = m_Pass.DepthStencilTarget.pResource->Get();
-		RenderTargetStoreAction depthStore = m_Pass.DepthStencilTarget.LoadAccess == RenderTargetLoadAction::NoAccess ? RenderTargetStoreAction::NoAccess : RenderTargetStoreAction::Store;
-		passInfo.DepthStencilTarget.Access = (RenderPassAccess)CombineRenderTargetAction(m_Pass.DepthStencilTarget.LoadAccess, depthStore);
-
-		RenderTargetStoreAction stencilStore = m_Pass.DepthStencilTarget.StencilLoadAccess == RenderTargetLoadAction::NoAccess ? RenderTargetStoreAction::NoAccess : RenderTargetStoreAction::Store;
-		passInfo.DepthStencilTarget.StencilAccess = (RenderPassAccess)CombineRenderTargetAction(m_Pass.DepthStencilTarget.StencilLoadAccess, stencilStore);
-		passInfo.DepthStencilTarget.Write = m_Pass.DepthStencilTarget.Write;
+		passInfo.DepthStencilTarget.Flags = m_Pass.DepthStencilTarget.Flags;
 	}
 	return passInfo;
 }
@@ -594,7 +591,7 @@ namespace RGUtils
 	RGPass& AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget)
 	{
 		return graph.AddPass(Sprintf("Resolve [%s -> %s]", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Raster)
-			.RenderTarget(pSource, RenderTargetLoadAction::Load, pTarget);
+			.RenderTarget(pSource, RenderPassColorFlags::None, pTarget);
 	}
 
 	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport)

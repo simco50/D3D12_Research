@@ -236,7 +236,7 @@ namespace ViewportImpl
 			PROFILE_GPU_SCOPE(pContext->GetCommandList());
 
 			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			pContext->BeginRenderPass(RenderPassInfo(pBackBuffer, RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
+			pContext->BeginRenderPass(RenderPassInfo(pBackBuffer, RenderPassColorFlags::Clear, nullptr, RenderPassDepthFlags::None));
 
 			RenderDrawData(pViewport->DrawData, *pContext);
 
@@ -398,7 +398,7 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 		ImDrawData* pDrawData = ImGui::GetDrawData();
 
 		context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
-		context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassAccess::Clear_Store, nullptr, RenderPassAccess::NoAccess, false));
+		context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassColorFlags::Clear, nullptr, RenderPassDepthFlags::None));
 		RenderDrawData(pDrawData, context);
 		context.EndRenderPass();
 	}

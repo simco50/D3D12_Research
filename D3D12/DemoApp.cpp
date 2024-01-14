@@ -458,7 +458,7 @@ void DemoApp::Update()
 						else
 						{
 							graph.AddPass("Raster", RGPassFlag::Raster)
-								.DepthStencil(pShadowmap, RenderTargetLoadAction::Clear, true)
+								.DepthStencil(pShadowmap, RenderPassDepthFlags::Clear)
 								.Bind([=](CommandContext& context)
 									{
 										context.SetGraphicsRootSignature(m_pCommonRS);
@@ -499,7 +499,7 @@ void DemoApp::Update()
 					else
 					{
 						graph.AddPass("Depth Prepass", RGPassFlag::Raster)
-							.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Clear, true, RenderTargetLoadAction::Clear)
+							.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::Clear)
 							.Bind([=](CommandContext& context)
 								{
 									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -638,10 +638,10 @@ void DemoApp::Update()
 						.Read({ pFog, rasterResult.pVisibleMeshlets })
 						.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
 						.Read({ lightCull3DData.pLightGrid })
-						.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::NoAccess, false, RenderTargetLoadAction::Load)
-						.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
-						.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
-						.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
+						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
+						.RenderTarget(sceneTextures.pColorTarget)
+						.RenderTarget(sceneTextures.pNormals)
+						.RenderTarget(sceneTextures.pRoughness)
 						.Bind([=](CommandContext& context)
 							{
 								Texture* pColorTarget = sceneTextures.pColorTarget->Get();
@@ -674,8 +674,8 @@ void DemoApp::Update()
 
 				graph.AddPass("Render Sky", RGPassFlag::Raster)
 					.Read(pSky)
-					.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
-					.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
+					.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
+					.RenderTarget(sceneTextures.pColorTarget)
 					.Bind([=](CommandContext& context)
 						{
 							context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

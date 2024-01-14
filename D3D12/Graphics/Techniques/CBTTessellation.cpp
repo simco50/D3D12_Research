@@ -314,7 +314,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 	graph.AddPass("CBT Render", RGPassFlag::Raster)
 		.Write(pCBTBuffer)
 		.Read(pIndirectArgs)
-		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true, RenderTargetLoadAction::Load)
+		.DepthStencil(sceneTextures.pDepth)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCBTRS);
@@ -358,7 +358,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 		RGTexture* pVisualizeTarget = RGUtils::CreatePersistent(graph, "CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_CBTData.pDebugVisualizeTexture, true);
 		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
 			.Read({ pCBTBuffer, pIndirectArgs })
-			.RenderTarget(pVisualizeTarget, RenderTargetLoadAction::DontCare)
+			.RenderTarget(pVisualizeTarget)
 			.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCBTRS);
@@ -398,10 +398,10 @@ void CBTTessellation::Shade(RGGraph& graph, const SceneView* pView, const SceneT
 
 	graph.AddPass("CBT Shade", RGPassFlag::Raster)
 		.Read({ pFog })
-		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false, RenderTargetLoadAction::Load)
-		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
-		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::Load)
-		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::Load)
+		.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
+		.RenderTarget(sceneTextures.pColorTarget)
+		.RenderTarget(sceneTextures.pNormals)
+		.RenderTarget(sceneTextures.pRoughness)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCBTRS);

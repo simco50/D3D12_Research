@@ -104,8 +104,8 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 
 	graph.AddPass("Render Lines", RGPassFlag::Raster)
 		.Read({ pRenderData, pDrawArgs, pDepth })
-		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
-		.DepthStencil(pDepth, RenderTargetLoadAction::Load, false)
+		.RenderTarget(pTarget)
+		.DepthStencil(pDepth, RenderPassDepthFlags::ReadOnly)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);
@@ -124,7 +124,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 
 	graph.AddPass("Render Text", RGPassFlag::Raster)
 		.Read({ pRenderData, pDrawArgs })
-		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
+		.RenderTarget(pTarget)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pCommonRS);

@@ -78,8 +78,8 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pT
 	uint32 numTriangles = m_NumTriangles;
 
 	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
-		.RenderTarget(pTarget, RenderTargetLoadAction::Load)
-		.DepthStencil(pDepth, RenderTargetLoadAction::Load, true)
+		.RenderTarget(pTarget)
+		.DepthStencil(pDepth)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetGraphicsRootSignature(m_pRS);

@@ -87,15 +87,13 @@ ForwardRenderer::~ForwardRenderer()
 
 void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture, bool translucentOnly)
 {
-	RenderTargetLoadAction rtLoadOp = translucentOnly ? RenderTargetLoadAction::Load : RenderTargetLoadAction::DontCare;
-
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid })
-		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
-		.RenderTarget(sceneTextures.pColorTarget, rtLoadOp)
-		.RenderTarget(sceneTextures.pNormals, rtLoadOp)
-		.RenderTarget(sceneTextures.pRoughness, rtLoadOp)
+		.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
+		.RenderTarget(sceneTextures.pColorTarget)
+		.RenderTarget(sceneTextures.pNormals)
+		.RenderTarget(sceneTextures.pRoughness)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -149,10 +147,10 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture })
 		.Read({ lightCullData.pLightListOpaque, lightCullData.pLightListTransparent })
-		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, false)
-		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::DontCare)
-		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::DontCare)
-		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::DontCare)
+		.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
+		.RenderTarget(sceneTextures.pColorTarget)
+		.RenderTarget(sceneTextures.pNormals)
+		.RenderTarget(sceneTextures.pRoughness)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

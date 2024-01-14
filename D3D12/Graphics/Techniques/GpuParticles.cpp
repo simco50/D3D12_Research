@@ -271,10 +271,10 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 	graph.AddPass("Render Particles", RGPassFlag::Raster)
 		.Read(pData->pIndirectDrawArguments)
 		.Read({ pData->pParticlesBuffer, pData->pAliveList })
-		.DepthStencil(sceneTextures.pDepth, RenderTargetLoadAction::Load, true)
-		.RenderTarget(sceneTextures.pColorTarget, RenderTargetLoadAction::Load)
-		.RenderTarget(sceneTextures.pNormals, RenderTargetLoadAction::Load)
-		.RenderTarget(sceneTextures.pRoughness, RenderTargetLoadAction::Load)
+		.DepthStencil(sceneTextures.pDepth)
+		.RenderTarget(sceneTextures.pColorTarget)
+		.RenderTarget(sceneTextures.pNormals)
+		.RenderTarget(sceneTextures.pRoughness)
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pRenderParticlesPS);

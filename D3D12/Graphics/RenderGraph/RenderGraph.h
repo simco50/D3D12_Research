@@ -168,15 +168,14 @@ public:
 	struct RenderTargetAccess
 	{
 		RGTexture* pResource = nullptr;
-		RenderTargetLoadAction LoadAccess;
+		RenderPassColorFlags Flags = RenderPassColorFlags::None;
 		RGTexture* pResolveTarget = nullptr;
 	};
 
 	struct DepthStencilAccess
 	{
 		RGTexture* pResource = nullptr;
-		RenderTargetLoadAction LoadAccess;
-		RenderTargetLoadAction StencilLoadAccess;
+		RenderPassDepthFlags Flags = RenderPassDepthFlags::None;
 		bool Write;
 	};
 
@@ -201,8 +200,8 @@ public:
 
 	RGPass& Write(Span<RGResource*> resources);
 	RGPass& Read(Span<RGResource*> resources);
-	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction access, RGTexture* pResolveTarget = nullptr);
-	RGPass& DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool write, RenderTargetLoadAction stencilAccess = RenderTargetLoadAction::NoAccess);
+	RGPass& RenderTarget(RGTexture* pResource, RenderPassColorFlags flags = RenderPassColorFlags::None, RGTexture* pResolveTarget = nullptr);
+	RGPass& DepthStencil(RGTexture* pResource, RenderPassDepthFlags flags = RenderPassDepthFlags::None);
 
 	NO_DISCARD const char* GetName() const { return pName; }
 
