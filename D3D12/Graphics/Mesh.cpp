@@ -262,7 +262,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, float uniformSca
 							FileStream stream;
 							if (stream.Open(Paths::Combine(Paths::GetDirectoryPath(pFilePath), pImage->uri).c_str(), FileMode::Read))
 							{
-								validImage = image.Load(stream, "dds");
+								validImage = image.Load(stream, Paths::GetFileExtenstion(pImage->uri).c_str());
 							}
 						}
 
@@ -518,7 +518,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, float uniformSca
 	char* pMappedMemory = (char*)allocation.pMappedMemory;
 
 	uint64 dataOffset = 0;
-	auto CopyData = [&dataOffset, &allocation](const void* pSource, uint64 size)
+	auto CopyData = [&dataOffset, &allocation, bufferAlignment](const void* pSource, uint64 size)
 	{
 		memcpy(static_cast<char*>(allocation.pMappedMemory) + dataOffset, pSource, size);
 		dataOffset = Math::AlignUp(dataOffset + size, bufferAlignment);
