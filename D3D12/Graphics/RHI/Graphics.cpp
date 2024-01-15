@@ -426,11 +426,8 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	m_pGlobalViewHeap											= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, 16384);
 	m_pGlobalSamplerHeap										= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
 
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]	= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 8196);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER]		= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 2048);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_RTV]			= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 128);
-	m_DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_DSV]			= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 64);
-
+	m_pCPUResourceViewHeap										= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 8196);
+	
 	uint8 smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
 	E_LOG(Info, "Shader Model %d.%d", smMaj, smMin);
@@ -484,14 +481,14 @@ void GraphicsDevice::FreeCommandList(CommandContext* pCommandList)
 	m_FreeCommandLists[(int)pCommandList->GetType()].push(pCommandList);
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE GraphicsDevice::AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type)
+D3D12_CPU_DESCRIPTOR_HANDLE GraphicsDevice::AllocateCPUDescriptor()
 {
-	return m_DescriptorHeaps[type]->AllocateDescriptor();
+	return m_pCPUResourceViewHeap->AllocateDescriptor();
 }
 
-void GraphicsDevice::FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
+void GraphicsDevice::FreeCPUDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE descriptor)
 {
-	m_DescriptorHeaps[type]->FreeDescriptor(descriptor);
+	m_pCPUResourceViewHeap->FreeDescriptor(descriptor);
 }
 
 void GraphicsDevice::TickFrame()
@@ -655,92 +652,11 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D
 	}
 	if (EnumHasAnyFlags(desc.Flags, TextureFlag::RenderTarget))
 	{
-		pTexture->m_RTV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		pTexture->m_NeedsStateTracking = true;
-
-		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-		rtvDesc.Format = D3D::ConvertFormat(desc.Format);
-		switch (desc.Type)
-		{
-		case TextureType::Texture1D:
-			rtvDesc.Texture1D.MipSlice = 0;
-			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
-			break;
-		case TextureType::Texture1DArray:
-			rtvDesc.Texture1DArray.ArraySize = desc.DepthOrArraySize;
-			rtvDesc.Texture1DArray.FirstArraySlice = 0;
-			rtvDesc.Texture1DArray.MipSlice = 0;
-			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
-			break;
-		case TextureType::Texture2D:
-			rtvDesc.Texture2D.MipSlice = 0;
-			rtvDesc.Texture2D.PlaneSlice = 0;
-			rtvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS : D3D12_RTV_DIMENSION_TEXTURE2D;
-			break;
-		case TextureType::TextureCube:
-		case TextureType::TextureCubeArray:
-		case TextureType::Texture2DArray:
-			rtvDesc.Texture2DArray.MipSlice = 0;
-			rtvDesc.Texture2DArray.PlaneSlice = 0;
-			rtvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
-			rtvDesc.Texture2DArray.FirstArraySlice = 0;
-			rtvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY : D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-			break;
-		case TextureType::Texture3D:
-			rtvDesc.Texture3D.FirstWSlice = 0;
-			rtvDesc.Texture3D.MipSlice = 0;
-			rtvDesc.Texture3D.WSize = desc.DepthOrArraySize;
-			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
-			break;
-		default:
-			break;
-		}
-		GetParent()->GetDevice()->CreateRenderTargetView(pResource, &rtvDesc, pTexture->m_RTV);
 	}
 	else if (EnumHasAnyFlags(desc.Flags, TextureFlag::DepthStencil))
 	{
-		pTexture->m_RTV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-		pTexture->m_ReadOnlyDSV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 		pTexture->m_NeedsStateTracking = true;
-
-		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-		dsvDesc.Format = D3D::ConvertFormat(desc.Format);
-		switch (desc.Type)
-		{
-		case TextureType::Texture1D:
-			dsvDesc.Texture1D.MipSlice = 0;
-			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
-			break;
-		case TextureType::Texture1DArray:
-			dsvDesc.Texture1DArray.ArraySize = desc.DepthOrArraySize;
-			dsvDesc.Texture1DArray.FirstArraySlice = 0;
-			dsvDesc.Texture1DArray.MipSlice = 0;
-			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
-			break;
-		case TextureType::Texture2D:
-			dsvDesc.Texture2D.MipSlice = 0;
-			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
-			break;
-		case TextureType::Texture3D:
-		case TextureType::Texture2DArray:
-			dsvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
-			dsvDesc.Texture2DArray.FirstArraySlice = 0;
-			dsvDesc.Texture2DArray.MipSlice = 0;
-			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-			break;
-		case TextureType::TextureCube:
-		case TextureType::TextureCubeArray:
-			dsvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize * 6;
-			dsvDesc.Texture2DArray.FirstArraySlice = 0;
-			dsvDesc.Texture2DArray.MipSlice = 0;
-			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-			break;
-		default:
-			break;
-		}
-		GetParent()->GetDevice()->CreateDepthStencilView(pResource, &dsvDesc, pTexture->m_RTV);
-		dsvDesc.Flags = D3D12_DSV_FLAG_READ_ONLY_DEPTH;
-		GetParent()->GetDevice()->CreateDepthStencilView(pResource, &dsvDesc, pTexture->m_ReadOnlyDSV);
 	}
 
 	return pTexture;
@@ -764,8 +680,6 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
 	pTexture->m_NeedsStateTracking = true;
 
-	pTexture->m_RTV = GetParent()->AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-	GetParent()->GetDevice()->CreateRenderTargetView(pSwapchainResource, nullptr, pTexture->m_RTV);
 	pTexture->m_pSRV = CreateSRV(pTexture, TextureSRVDesc(0, 1));
 	return pTexture;
 }
@@ -904,7 +818,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 	check(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor();
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -970,7 +884,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 		uavDesc.Buffer.StructureByteStride = uavDesc.Format == DXGI_FORMAT_UNKNOWN ? bufferDesc.ElementSize : 0;
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor();
 	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), nullptr, &uavDesc, descriptor);
 	DescriptorHandle gpuDescriptor;
 	if (!EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::NoBindless))
@@ -1074,7 +988,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 		break;
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor();
 	m_pDevice->CreateShaderResourceView(pTexture->GetResource(), &srvDesc, descriptor);
 	DescriptorHandle gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new ShaderResourceView(pTexture, descriptor, gpuDescriptor);
@@ -1126,7 +1040,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 	uavDesc.Texture3D.MipSlice = desc.MipLevel;
 	uavDesc.Format = D3D::ConvertFormat(pTexture->GetFormat());
 
-	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor();
 	m_pDevice->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, descriptor);
 	DescriptorHandle gpuDescriptor = RegisterGlobalResourceView(descriptor);
 	return new UnorderedAccessView(pTexture, descriptor, gpuDescriptor);

@@ -195,8 +195,6 @@ public:
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
 	UnorderedAccessView* GetUAV(uint32 subresourceIndex = 0) const;
 	ShaderResourceView* GetSRV() const { return m_pSRV; }
 	uint32 GetUAVIndex(uint32 subresourceIndex = 0) const;
@@ -207,7 +205,4 @@ private:
 	
 	RefCountPtr<ShaderResourceView> m_pSRV;
 	std::vector<RefCountPtr<UnorderedAccessView>> m_UAVs;
-
-	D3D12_CPU_DESCRIPTOR_HANDLE m_RTV = {};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDSV = {};
 };

@@ -9,17 +9,6 @@ Texture::Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12Resourc
 
 Texture::~Texture()
 {
-	if (m_RTV.ptr != 0)
-		GetParent()->FreeCPUDescriptor(EnumHasAnyFlags(m_Desc.Flags, TextureFlag::RenderTarget) ? D3D12_DESCRIPTOR_HEAP_TYPE_RTV : D3D12_DESCRIPTOR_HEAP_TYPE_DSV, m_RTV);
-
-	if (m_ReadOnlyDSV.ptr != 0)
-		GetParent()->FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, m_ReadOnlyDSV);
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetDSV(bool writeable /*= true*/) const
-{
-	check(EnumHasAllFlags(m_Desc.Flags, TextureFlag::DepthStencil));
-	return writeable ? m_RTV : m_ReadOnlyDSV;
 }
 
 UnorderedAccessView* Texture::GetUAV(uint32 subresourceIndex) const
@@ -38,8 +27,3 @@ uint32 Texture::GetSRVIndex() const
 	return m_pSRV ? m_pSRV->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetRTV() const
-{
-	check(EnumHasAllFlags(m_Desc.Flags, TextureFlag::RenderTarget));
-	return m_RTV;
-}

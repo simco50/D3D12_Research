@@ -198,6 +198,10 @@ private:
 	RefCountPtr<ID3D12GraphicsCommandList6> m_pCommandList;
 	RefCountPtr<ID3D12CommandAllocator> m_pAllocator;
 
+	RefCountPtr<ID3D12DescriptorHeap> m_pRTVHeap;
+	uint32 m_RTVSize = 0;
+	RefCountPtr<ID3D12DescriptorHeap> m_pDSVHeap;
+
 	static constexpr uint32 MaxNumBatchedBarriers = 64;
 	std::array<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers> m_BatchedBarriers{};
 	uint32 m_NumBatchedBarriers = 0;

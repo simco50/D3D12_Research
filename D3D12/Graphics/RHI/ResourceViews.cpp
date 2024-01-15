@@ -14,7 +14,7 @@ ResourceView::~ResourceView()
 {
 	if (m_Descriptor.ptr != 0)
 	{
-		GetParent()->FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, m_Descriptor);
+		GetParent()->FreeCPUDescriptor(m_Descriptor);
 		GetParent()->UnregisterGlobalResourceView(m_GpuDescriptor);
 	}
 }

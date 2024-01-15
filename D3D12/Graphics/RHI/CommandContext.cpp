@@ -19,6 +19,18 @@ CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12Comman
 	m_Type(type)
 {
 	check(pCommandList.As(&m_pCommandList));
+
+	ID3D12Device* pDevice = pParent->GetDevice();
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
+	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	heapDesc.NumDescriptors = 1;
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+	VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pDSVHeap.GetAddressOf())));
+
+	heapDesc.NumDescriptors = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT;
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+	VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pRTVHeap.GetAddressOf())));
+	m_RTVSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 }
 
 void CommandContext::Reset()
@@ -479,13 +491,61 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 
 	FlushResourceBarriers();
 
-	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = renderPassInfo.DepthStencilTarget.Target ? renderPassInfo.DepthStencilTarget.Target->GetDSV(!EnumHasAllFlags(renderPassInfo.DepthStencilTarget.Flags, RenderPassDepthFlags::ReadOnly)) : D3D12_CPU_DESCRIPTOR_HANDLE{};
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = {};
+
 	D3D12_CLEAR_FLAGS clearFlags = (D3D12_CLEAR_FLAGS)0;
 	if (EnumHasAllFlags(renderPassInfo.DepthStencilTarget.Flags, RenderPassDepthFlags::ClearDepth))
 		clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
 
 	if (EnumHasAllFlags(renderPassInfo.DepthStencilTarget.Flags, RenderPassDepthFlags::ClearStencil))
 		clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
+
+	if (renderPassInfo.DepthStencilTarget.Target)
+	{
+		dsvHandle = m_pDSVHeap->GetCPUDescriptorHandleForHeapStart();
+
+		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+		const TextureDesc& desc = renderPassInfo.DepthStencilTarget.Target->GetDesc();
+		dsvDesc.Format = D3D::ConvertFormat(desc.Format);
+		switch (desc.Type)
+		{
+		case TextureType::Texture1D:
+			dsvDesc.Texture1D.MipSlice = 0;
+			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
+			break;
+		case TextureType::Texture1DArray:
+			dsvDesc.Texture1DArray.ArraySize = desc.DepthOrArraySize;
+			dsvDesc.Texture1DArray.FirstArraySlice = 0;
+			dsvDesc.Texture1DArray.MipSlice = 0;
+			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+			break;
+		case TextureType::Texture2D:
+			dsvDesc.Texture2D.MipSlice = 0;
+			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
+			break;
+		case TextureType::Texture3D:
+		case TextureType::Texture2DArray:
+			dsvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
+			dsvDesc.Texture2DArray.FirstArraySlice = 0;
+			dsvDesc.Texture2DArray.MipSlice = 0;
+			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+			break;
+		case TextureType::TextureCube:
+		case TextureType::TextureCubeArray:
+			dsvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize * 6;
+			dsvDesc.Texture2DArray.FirstArraySlice = 0;
+			dsvDesc.Texture2DArray.MipSlice = 0;
+			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+			break;
+		default:
+			break;
+		}
+		if(EnumHasAllFlags(renderPassInfo.DepthStencilTarget.Flags, RenderPassDepthFlags::ReadOnlyDepth))
+			dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+		if (EnumHasAllFlags(renderPassInfo.DepthStencilTarget.Flags, RenderPassDepthFlags::ReadOnlyStencil))
+			dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_STENCIL;
+		GetParent()->GetDevice()->CreateDepthStencilView(renderPassInfo.DepthStencilTarget.Target->GetResource(), &dsvDesc, dsvHandle);
+	}
 
 	if (clearFlags != (D3D12_CLEAR_FLAGS)0)
 	{
@@ -498,13 +558,55 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 	{
 		const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
-		rtvs[i] = data.Target->GetRTV();
+
+		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+		const TextureDesc& desc = data.Target->GetDesc();
+		rtvDesc.Format = D3D::ConvertFormat(desc.Format);
+		switch (desc.Type)
+		{
+		case TextureType::Texture1D:
+			rtvDesc.Texture1D.MipSlice = 0;
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
+			break;
+		case TextureType::Texture1DArray:
+			rtvDesc.Texture1DArray.ArraySize = desc.DepthOrArraySize;
+			rtvDesc.Texture1DArray.FirstArraySlice = 0;
+			rtvDesc.Texture1DArray.MipSlice = 0;
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+			break;
+		case TextureType::Texture2D:
+			rtvDesc.Texture2D.MipSlice = 0;
+			rtvDesc.Texture2D.PlaneSlice = 0;
+			rtvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS : D3D12_RTV_DIMENSION_TEXTURE2D;
+			break;
+		case TextureType::TextureCube:
+		case TextureType::TextureCubeArray:
+		case TextureType::Texture2DArray:
+			rtvDesc.Texture2DArray.MipSlice = 0;
+			rtvDesc.Texture2DArray.PlaneSlice = 0;
+			rtvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
+			rtvDesc.Texture2DArray.FirstArraySlice = 0;
+			rtvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY : D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+			break;
+		case TextureType::Texture3D:
+			rtvDesc.Texture3D.FirstWSlice = 0;
+			rtvDesc.Texture3D.MipSlice = 0;
+			rtvDesc.Texture3D.WSize = desc.DepthOrArraySize;
+			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
+			break;
+		default:
+			break;
+		}
+
+		D3D12_CPU_DESCRIPTOR_HANDLE rtv = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), i, m_RTVSize);
+		GetParent()->GetDevice()->CreateRenderTargetView(data.Target->GetResource(), &rtvDesc, rtv);
 
 		if (EnumHasAllFlags(data.Flags, RenderPassColorFlags::Clear))
 		{
 			check(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-			m_pCommandList->ClearRenderTargetView(data.Target->GetRTV(), &data.Target->GetClearBinding().Color.x, 0, nullptr);
+			m_pCommandList->ClearRenderTargetView(rtv, &data.Target->GetClearBinding().Color.x, 0, nullptr);
 		}
+		rtvs[i] = rtv;
 	}
 	m_pCommandList->OMSetRenderTargets(renderPassInfo.RenderTargetCount, rtvs.data(), false, dsvHandle.ptr != 0 ? &dsvHandle : nullptr);
 

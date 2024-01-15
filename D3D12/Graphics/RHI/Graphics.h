@@ -145,8 +145,8 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
-	void FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCPUDescriptor();
+	void FreeCPUDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
 	DescriptorHandle RegisterGlobalResourceView(D3D12_CPU_DESCRIPTOR_HANDLE view);
 	void UnregisterGlobalResourceView(DescriptorHandle& handle);
 
@@ -241,7 +241,7 @@ private:
 	DeferredDeleteQueue m_DeleteQueue;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
-	std::array<RefCountPtr<CPUDescriptorHeap>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
+	RefCountPtr<CPUDescriptorHeap> m_pCPUResourceViewHeap;
 	RefCountPtr<ScratchAllocationManager> m_pScratchAllocationManager;
 	RefCountPtr<RingBufferAllocator> m_pRingBufferAllocator;
 
