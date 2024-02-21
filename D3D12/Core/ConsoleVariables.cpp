@@ -2,8 +2,9 @@
 #include "ConsoleVariables.h"
 #include "Core/Input.h"
 #include "Paths.h"
-#include "imgui_internal.h"
 #include "Stream.h"
+
+#include <External/Imgui/imgui_internal.h>
 
 static std::unordered_map<StringHash, IConsoleObject*> gCvarMap;
 static std::vector<IConsoleObject*> gConsoleObjects;

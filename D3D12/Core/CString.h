@@ -1,5 +1,5 @@
 #pragma once
-#include "stb_sprintf.h"
+#include <External/Stb/stb_sprintf.h>
 
 template<typename CharSource, typename CharDest>
 inline size_t StringConvert(const CharSource* pSource, CharDest* pDestination, int destinationSize);

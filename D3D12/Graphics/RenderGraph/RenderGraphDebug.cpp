@@ -1,8 +1,9 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
-#include "imgui_internal.h"
 #include "Core/Stream.h"
 #include "Graphics/ImGuiRenderer.h"
+
+#include <External/Imgui/imgui_internal.h>
 
 template<typename T>
 std::string BitmaskToString(T mask, const char* (*pValueToString)(T))

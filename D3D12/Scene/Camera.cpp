@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "Camera.h"
 #include "Core/Input.h"
-#include "ImGuizmo.h"
 
 void Camera::Update()
 {
@@ -44,7 +43,7 @@ void FreeCamera::Update()
 	Vector3 movement;
 	if (Input::Instance().IsMouseDown(VK_RBUTTON))
 	{
-		if (!ImGui::IsAnyItemActive() && !ImGuizmo::IsUsing())
+		if (!ImGui::IsAnyItemActive())
 		{
 			Vector2 mouseDelta = Input::Instance().GetMouseDelta();
 			Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * Time::DeltaTime() * 0.1f, 0);

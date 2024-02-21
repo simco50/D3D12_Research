@@ -15,7 +15,7 @@ workspace (ENGINE_NAME)
     platforms { "x64" }
 	defines { "x64" }
 	language "C++"
-	cppdialect "c++17"
+	cppdialect "c++20"
 	startproject (ENGINE_NAME)
 	symbols "On"
 	architecture "x64"
@@ -67,12 +67,6 @@ workspace (ENGINE_NAME)
 		kind "WindowedApp"
 
 		includedirs { "$(ProjectDir)" }
-
-		for i, dir in pairs(os.matchdirs(SOURCE_DIR .. "External/*")) do
-			dirname = string.explode(dir, "/")
-			dir = dirname[#dirname]
-			includedirs ("$(ProjectDir)External/" .. dir)
-		end
 
 		files
 		{ 

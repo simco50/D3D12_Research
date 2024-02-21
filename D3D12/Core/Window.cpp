@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Window.h"
-#include "imgui_impl_win32.h"
+
+#include <External/Imgui/imgui_impl_win32.h>
 
 Window::Window()
 {

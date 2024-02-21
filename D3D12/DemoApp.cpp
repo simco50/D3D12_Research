@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "DemoApp.h"
 #include "Scene/Camera.h"
-#include "ImGuizmo.h"
 #include "Content/Image.h"
 #include "Graphics/DebugRenderer.h"
 #include "Graphics/Mesh.h"
@@ -33,9 +32,10 @@
 #include "Core/Input.h"
 #include "Core/ConsoleVariables.h"
 #include "Core/Utils.h"
-#include "imgui_internal.h"
-#include "IconsFontAwesome4.h"
 #include "Core/Profiler.h"
+
+#include <External/Imgui/imgui_internal.h>
+#include <External/FontAwesome/IconsFontAwesome4.h>
 
 namespace Tweakables
 {
@@ -1333,7 +1333,6 @@ void DemoApp::UpdateImGui()
 
 	ImGui::End();
 
-	ImGuizmo::SetRect(viewportOrigin.x, viewportOrigin.y, viewportExtents.x, viewportExtents.y);
 	if(m_pVisualizeTexture)
 		m_pVisualizeTexture->RenderUI(viewportOrigin, viewportExtents);
 

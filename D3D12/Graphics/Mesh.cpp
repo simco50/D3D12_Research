@@ -10,17 +10,16 @@
 #include "ShaderInterop.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/RingBufferAllocator.h"
+#include "Core/Stream.h"
 
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS
 #define CGLTF_IMPLEMENTATION
-#include "cgltf.h"
+#include <External/cgltf/cgltf.h>
 #pragma warning(pop)
 
-#include "meshoptimizer.h"
-
-#include "LDraw.h"
-#include "Core/Stream.h"
+#include <External/meshoptimizer/meshoptimizer.h>
+#include <External/Ldr/LDraw.h>
 
 Mesh::~Mesh()
 {

@@ -84,7 +84,7 @@ void SoftwareRaster::Render(RGGraph& graph, const SceneView* pView, const Raster
 
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS
-#include "cgltf.h"
+#include <External/cgltf/cgltf.h>
 #pragma warning(pop)
 
 struct Vertex

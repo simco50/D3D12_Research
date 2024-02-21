@@ -8,8 +8,9 @@
 #include "Graphics/ImGuiRenderer.h"
 #include "Graphics/SceneView.h"
 #include "Content/Image.h"
-#include "imgui_internal.h"
-#include "IconsFontAwesome4.h"
+
+#include <External/Imgui/imgui_internal.h>
+#include <External/FontAwesome/IconsFontAwesome4.h>
 
 struct PickingData
 {
@@ -440,6 +441,8 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 
 					PickingData pickData = static_cast<PickingData*>(m_pReadbackBuffer->GetMappedData())[m_ReadbackIndex];
 
+					const char* componentNames[] = { "R", "G", "B", "A" };
+
 					std::string valueString;
 					if (formatInfo.Type == FormatType::Integer)
 					{
@@ -447,7 +450,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 						{
 							if (i != 0)
 								valueString += ", ";
-							valueString += Sprintf("%d", pickData.DataUInt[i]);
+							valueString += Sprintf("%s: %d", componentNames[i], pickData.DataUInt[i]);
 						}
 
 						valueString += " (";
@@ -465,7 +468,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 						{
 							if (i != 0)
 								valueString += ", ";
-							valueString += Sprintf("%f", (&pickData.DataFloat.x)[i]);
+							valueString += Sprintf("%s: %f", componentNames[i], (&pickData.DataFloat.x)[i]);
 						}
 					}
 					ImGui::SameLine();

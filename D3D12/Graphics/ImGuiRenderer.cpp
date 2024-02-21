@@ -6,12 +6,12 @@
 #include "RHI/RootSignature.h"
 #include "RHI/Texture.h"
 #include "SceneView.h"
-#include "ImGuizmo.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
-#include "IconsFontAwesome4.h"
-#include "imgui_impl_win32.h"
-#include "imgui_internal.h"
+
+#include <External/FontAwesome/IconsFontAwesome4.h>
+#include <External/ImGui/imgui_impl_win32.h>
+#include <External/ImGui/imgui_internal.h>
 
 namespace ImGui
 {
@@ -364,7 +364,6 @@ void ImGuiRenderer::NewFrame()
 {
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
-	ImGuizmo::BeginFrame();
 }
 
 void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
