@@ -22,7 +22,7 @@ struct Light
 	bool VolumetricLighting = false;
 	uint32 MatrixIndex = DescriptorHandle::InvalidHeapIndex;
 	std::vector<Texture*> ShadowMaps;
-	RefCountPtr<Texture> pLightTexture = nullptr;
+	Ref<Texture> pLightTexture = nullptr;
 	int ShadowMapSize = 512;
 	bool CastShadows = false;
 

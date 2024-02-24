@@ -38,13 +38,13 @@ public:
 
 private:
 	GraphicsDevice* m_pDevice;
-	RefCountPtr<RootSignature> m_pCommonRS;
+	Ref<RootSignature> m_pCommonRS;
 
 	// Clustered
-	RefCountPtr<PipelineState> m_pClusteredCullPSO;
-	RefCountPtr<PipelineState> m_pTiledVisualizeLightsPSO;
+	Ref<PipelineState> m_pClusteredCullPSO;
+	Ref<PipelineState> m_pTiledVisualizeLightsPSO;
 
 	// Tiled
-	RefCountPtr<PipelineState> m_pTiledCullPSO;
-	RefCountPtr<PipelineState> m_pClusteredVisualizeLightsPSO;
+	Ref<PipelineState> m_pTiledCullPSO;
+	Ref<PipelineState> m_pClusteredVisualizeLightsPSO;
 };

@@ -14,7 +14,7 @@ public:
 	RGTexture* Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	RefCountPtr<RootSignature> m_pSSAORS;
-	RefCountPtr<PipelineState> m_pSSAOPSO;
-	RefCountPtr<PipelineState> m_pSSAOBlurPSO;
+	Ref<RootSignature> m_pSSAORS;
+	Ref<PipelineState> m_pSSAOPSO;
+	Ref<PipelineState> m_pSSAOBlurPSO;
 };

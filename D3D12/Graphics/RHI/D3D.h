@@ -115,7 +115,7 @@ namespace D3D
 		}
 		if (errorCode == DXGI_ERROR_DEVICE_REMOVED && pDevice)
 		{
-			RefCountPtr<ID3D12InfoQueue> pInfo;
+			Ref<ID3D12InfoQueue> pInfo;
 			pDevice->QueryInterface(pInfo.GetAddressOf());
 			if (pInfo)
 			{
@@ -249,7 +249,7 @@ namespace D3D
 			return "nullptr";
 
 		D3D12_RESOURCE_DESC resourceDesc = pResource->GetDesc();
-		RefCountPtr<ID3D12Device> pDevice;
+		Ref<ID3D12Device> pDevice;
 		pResource->GetDevice(IID_PPV_ARGS(pDevice.GetAddressOf()));
 		D3D12_RESOURCE_ALLOCATION_INFO allocationInfo = pDevice->GetResourceAllocationInfo(1, 1, &resourceDesc);
 

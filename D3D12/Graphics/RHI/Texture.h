@@ -203,6 +203,6 @@ public:
 private:
 	TextureDesc m_Desc;
 	
-	RefCountPtr<ShaderResourceView> m_pSRV;
-	std::vector<RefCountPtr<UnorderedAccessView>> m_UAVs;
+	Ref<ShaderResourceView> m_pSRV;
+	std::vector<Ref<UnorderedAccessView>> m_UAVs;
 };

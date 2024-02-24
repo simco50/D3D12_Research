@@ -13,7 +13,7 @@ public:
 private:
 	std::string SourceName;
 	TextureDesc SourceDesc;
-	RefCountPtr<Texture> pVisualizeTexture;
+	Ref<Texture> pVisualizeTexture;
 	int CubeFaceIndex = 0;
 	float RangeMin = 0.0f;
 	float RangeMax = 1.0f;
@@ -25,8 +25,8 @@ private:
 	Vector2u HoveredPixel;
 
 	uint32 m_ReadbackIndex = 0;
-	RefCountPtr<Buffer> m_pReadbackBuffer;
+	Ref<Buffer> m_pReadbackBuffer;
 
-	RefCountPtr<PipelineState> m_pVisualizePSO;
-	RefCountPtr<RootSignature> m_pVisualizeRS;
+	Ref<PipelineState> m_pVisualizePSO;
+	Ref<RootSignature> m_pVisualizeRS;
 };

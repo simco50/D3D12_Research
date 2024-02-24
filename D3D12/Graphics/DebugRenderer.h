@@ -75,8 +75,8 @@ private:
 	DebugTriangle m_Triangles[MaxTriangles];
 	uint32 m_NumTriangles = 0;
 
-	RefCountPtr<PipelineState> m_pTrianglesPSO;
-	RefCountPtr<PipelineState> m_pLinesPSO;
-	RefCountPtr<RootSignature> m_pRS;
+	Ref<PipelineState> m_pTrianglesPSO;
+	Ref<PipelineState> m_pLinesPSO;
+	Ref<RootSignature> m_pRS;
 	DebugRenderer() = default;
 };

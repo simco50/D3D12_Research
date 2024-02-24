@@ -25,7 +25,7 @@ struct SubMesh
 	BoundingBox Bounds;
 	Mesh* pParent = nullptr;
 
-	RefCountPtr<Buffer> pBLAS;
+	Ref<Buffer> pBLAS;
 };
 
 struct SubMeshInstance
@@ -64,15 +64,15 @@ public:
 	int GetMeshCount() const { return (int)m_Meshes.size(); }
 	SubMesh& GetMesh(const int index) { return m_Meshes[index]; }
 	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
-	Span<SubMeshInstance> GetMeshInstances() const { return m_MeshInstances; }
-	Span<SubMesh> GetMeshes() const { return m_Meshes; }
-	Span<Material> GetMaterials() { return m_Materials; }
+	Span<const SubMeshInstance> GetMeshInstances() const { return m_MeshInstances; }
+	Span<const SubMesh> GetMeshes() const { return m_Meshes; }
+	Span<const Material> GetMaterials() { return m_Materials; }
 	Buffer* GetData() const { return m_pGeometryData; }
 
 private:
 	std::vector<Material> m_Materials;
-	RefCountPtr<Buffer> m_pGeometryData;
+	Ref<Buffer> m_pGeometryData;
 	std::vector<SubMesh> m_Meshes;
 	std::vector<SubMeshInstance> m_MeshInstances;
-	std::vector<RefCountPtr<Texture>> m_Textures;
+	std::vector<Ref<Texture>> m_Textures;
 };

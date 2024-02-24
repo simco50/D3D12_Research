@@ -8,7 +8,7 @@ class CommandContext;
 struct RingBufferAllocation
 {
 	CommandContext* pContext;
-	RefCountPtr<Buffer> pBackingResource;
+	Ref<Buffer> pBackingResource;
 	D3D12_GPU_VIRTUAL_ADDRESS GpuHandle{ 0 };
 	uint32 Offset = 0;
 	uint32 Size = 0;
@@ -41,5 +41,5 @@ private:
 	uint32 m_ProduceOffset;
 
 	SyncPoint m_LastSync;
-	RefCountPtr<Buffer> m_pBuffer;
+	Ref<Buffer> m_pBuffer;
 };

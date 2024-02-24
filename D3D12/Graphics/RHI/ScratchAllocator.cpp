@@ -9,7 +9,7 @@ ScratchAllocationManager::ScratchAllocationManager(GraphicsDevice* pParent, Buff
 {
 }
 
-RefCountPtr<Buffer> ScratchAllocationManager::AllocatePage()
+Ref<Buffer> ScratchAllocationManager::AllocatePage()
 {
 	auto AllocateNewPage = [this]() {
 		std::string name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * m_PageSize);
@@ -18,7 +18,7 @@ RefCountPtr<Buffer> ScratchAllocationManager::AllocatePage()
 	return m_PagePool.Allocate(AllocateNewPage);
 }
 
-void ScratchAllocationManager::FreePages(const SyncPoint& syncPoint, const std::vector<RefCountPtr<Buffer>>& pPages)
+void ScratchAllocationManager::FreePages(const SyncPoint& syncPoint, const std::vector<Ref<Buffer>>& pPages)
 {
 	for (auto pPage : pPages)
 	{
@@ -39,7 +39,7 @@ ScratchAllocation ScratchAllocator::Allocate(uint64 size, int alignment)
 
 	if (bufferSize > m_pPageManager->GetPageSize())
 	{
-		RefCountPtr<Buffer> pPage = m_pPageManager->GetParent()->CreateBuffer(BufferDesc::CreateBuffer(size, BufferFlag::Upload), "Large Page");
+		Ref<Buffer> pPage = m_pPageManager->GetParent()->CreateBuffer(BufferDesc::CreateBuffer(size, BufferFlag::Upload), "Large Page");
 		allocation.Offset = 0;
 		allocation.GpuHandle = pPage->GetGpuHandle();
 		allocation.pBackingResource = pPage;

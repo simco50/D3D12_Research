@@ -239,15 +239,15 @@ public:
 		: GraphicsObject(pDevice)
 	{}
 
-	NO_DISCARD RefCountPtr<Texture> Allocate(const char* pName, const TextureDesc& desc);
-	NO_DISCARD RefCountPtr<Buffer> Allocate(const char* pName, const BufferDesc& desc);
+	NO_DISCARD Ref<Texture> Allocate(const char* pName, const TextureDesc& desc);
+	NO_DISCARD Ref<Buffer> Allocate(const char* pName, const BufferDesc& desc);
 	void Tick();
 
 private:
 	template<typename T>
 	struct PooledResource
 	{
-		RefCountPtr<T> pResource;
+		Ref<T> pResource;
 		uint32 LastUsedFrame;
 	};
 	using PooledTexture = PooledResource<Texture>;
@@ -337,8 +337,8 @@ public:
 		return pFallback ? Import(pFallback) : nullptr;
 	}
 
-	void Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget, TextureFlag additionalFlags = TextureFlag::None);
-	void Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget, BufferFlag additionalFlags = BufferFlag::None);
+	void Export(RGTexture* pTexture, Ref<Texture>* pTarget, TextureFlag additionalFlags = TextureFlag::None);
+	void Export(RGBuffer* pBuffer, Ref<Buffer>* pTarget, BufferFlag additionalFlags = BufferFlag::None);
 
 	NO_DISCARD RGTexture* FindTexture(const char* pName) const
 	{
@@ -391,14 +391,14 @@ private:
 	struct ExportedTexture
 	{
 		RGTexture* pTexture;
-		RefCountPtr<Texture>* pTarget;
+		Ref<Texture>* pTarget;
 	};
 	std::vector<ExportedTexture> m_ExportTextures;
 
 	struct ExportedBuffer
 	{
 		RGBuffer* pBuffer;
-		RefCountPtr<Buffer>* pTarget;
+		Ref<Buffer>* pTarget;
 	};
 	std::vector<ExportedBuffer> m_ExportBuffers;
 };
@@ -423,6 +423,6 @@ namespace RGUtils
 {
 	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
 	RGPass& AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
-	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport);
-	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport);
+	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool doExport);
+	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool doExport);
 }

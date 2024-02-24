@@ -13,7 +13,7 @@ public:
 	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	RefCountPtr<StateObject> m_pRtSO;
-	RefCountPtr<RootSignature> m_pGlobalRS;
+	Ref<StateObject> m_pRtSO;
+	Ref<RootSignature> m_pGlobalRS;
 };
 

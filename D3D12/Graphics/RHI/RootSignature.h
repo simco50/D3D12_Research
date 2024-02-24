@@ -45,6 +45,6 @@ private:
 	};
 	std::array<RootParameter, sMaxNumParameters> m_RootParameters{};
 	std::vector<D3D12_STATIC_SAMPLER_DESC> m_StaticSamplers;
-	RefCountPtr<ID3D12RootSignature> m_pRootSignature;
+	Ref<ID3D12RootSignature> m_pRootSignature;
 	uint32 m_NumParameters;
 };

@@ -7,7 +7,7 @@ class CommandQueue : public GraphicsObject
 public:
 	CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type);
 
-	SyncPoint ExecuteCommandLists(const Span<CommandContext* const>& contexts);
+	SyncPoint ExecuteCommandLists(Span<CommandContext* const> contexts);
 	ID3D12CommandQueue* GetCommandQueue() const { return m_pCommandQueue.Get(); }
 
 	void InsertWait(const SyncPoint& syncPoint);
@@ -20,13 +20,13 @@ public:
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 	uint64 GetTimestampFrequency() const { return m_TimestampFrequency; }
 
-	RefCountPtr<ID3D12CommandAllocator> RequestAllocator();
-	void FreeAllocator(const SyncPoint& syncPoint, RefCountPtr<ID3D12CommandAllocator>& pAllocator);
+	Ref<ID3D12CommandAllocator> RequestAllocator();
+	void FreeAllocator(const SyncPoint& syncPoint, Ref<ID3D12CommandAllocator>& pAllocator);
 
 private:
-	RefCountPtr<ID3D12CommandQueue> m_pCommandQueue;
-	FencedPool<RefCountPtr<ID3D12CommandAllocator>, true> m_AllocatorPool;
-	RefCountPtr<Fence> m_pFence;
+	Ref<ID3D12CommandQueue> m_pCommandQueue;
+	FencedPool<Ref<ID3D12CommandAllocator>, true> m_AllocatorPool;
+	Ref<Fence> m_pFence;
 	SyncPoint m_SyncPoint;
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	uint64 m_TimestampFrequency;

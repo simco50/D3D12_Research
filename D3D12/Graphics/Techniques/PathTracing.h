@@ -13,11 +13,11 @@ public:
 	bool IsSupported();
 
 private:
-	RefCountPtr<RootSignature> m_pRS;
-	RefCountPtr<StateObject> m_pSO;
-	RefCountPtr<PipelineState> m_pBlitPSO;
+	Ref<RootSignature> m_pRS;
+	Ref<StateObject> m_pSO;
+	Ref<PipelineState> m_pBlitPSO;
 
-	RefCountPtr<Texture> m_pAccumulationTexture;
+	Ref<Texture> m_pAccumulationTexture;
 	DelegateHandle m_OnShaderCompiledHandle;
 	int m_NumAccumulatedFrames = 1;
 	Matrix m_LastViewProjection;

@@ -44,15 +44,15 @@ private:
 
 	void BuildFontAtlas(GraphicsDevice* pDevice);
 
-	RefCountPtr<RootSignature> m_pCommonRS;
+	Ref<RootSignature> m_pCommonRS;
 
-	RefCountPtr<PipelineState> m_pBuildIndirectDrawArgsPSO;
-	RefCountPtr<PipelineState> m_pRenderTextPSO;
-	RefCountPtr<PipelineState> m_pRenderLinesPSO;
+	Ref<PipelineState> m_pBuildIndirectDrawArgsPSO;
+	Ref<PipelineState> m_pRenderTextPSO;
+	Ref<PipelineState> m_pRenderLinesPSO;
 
-	RefCountPtr<Buffer> m_pRenderDataBuffer;
+	Ref<Buffer> m_pRenderDataBuffer;
 
 	uint32 m_FontSize;
-	RefCountPtr<Texture> m_pFontAtlas;
-	RefCountPtr<Buffer> m_pGlyphData;
+	Ref<Texture> m_pFontAtlas;
+	Ref<Buffer> m_pGlyphData;
 };

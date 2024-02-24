@@ -23,7 +23,7 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 	VERIFY_HR(m_pCommandQueue->GetTimestampFrequency(&m_TimestampFrequency));
 }
 
-SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& contexts)
+SyncPoint CommandQueue::ExecuteCommandLists(Span<CommandContext* const> contexts)
 {
 	PROFILE_CPU_SCOPE();
 	check(contexts.GetSize());
@@ -73,20 +73,20 @@ SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& c
 	return m_SyncPoint;
 }
 
-RefCountPtr<ID3D12CommandAllocator> CommandQueue::RequestAllocator()
+Ref<ID3D12CommandAllocator> CommandQueue::RequestAllocator()
 {
 	auto CreateAllocator = [this]() {
-		RefCountPtr<ID3D12CommandAllocator> pAllocator;
+		Ref<ID3D12CommandAllocator> pAllocator;
 		GetParent()->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
 		D3D::SetObjectName(pAllocator.Get(), Sprintf("Pooled Allocator %d - %s", (int)m_AllocatorPool.GetSize(), D3D::CommandlistTypeToString(m_Type)).c_str());
 		return pAllocator;
 	};
-	RefCountPtr<ID3D12CommandAllocator> pAllocator = m_AllocatorPool.Allocate(CreateAllocator);
+	Ref<ID3D12CommandAllocator> pAllocator = m_AllocatorPool.Allocate(CreateAllocator);
 	pAllocator->Reset();
 	return pAllocator;
 }
 
-void CommandQueue::FreeAllocator(const SyncPoint& syncPoint, RefCountPtr<ID3D12CommandAllocator>& pAllocator)
+void CommandQueue::FreeAllocator(const SyncPoint& syncPoint, Ref<ID3D12CommandAllocator>& pAllocator)
 {
 	m_AllocatorPool.Free(std::move(pAllocator), syncPoint);
 }

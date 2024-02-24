@@ -93,13 +93,13 @@ struct SceneView
 {
 	const World* pWorld = nullptr;
 	std::vector<Batch> Batches;
-	RefCountPtr<Buffer> pLightBuffer;
-	RefCountPtr<Buffer> pMaterialBuffer;
-	RefCountPtr<Buffer> pMeshBuffer;
-	RefCountPtr<Buffer> pInstanceBuffer;
-	RefCountPtr<Buffer> pDDGIVolumesBuffer;
-	RefCountPtr<Buffer> pLightMatricesBuffer;
-	RefCountPtr<Texture> pSky;
+	Ref<Buffer> pLightBuffer;
+	Ref<Buffer> pMaterialBuffer;
+	Ref<Buffer> pMeshBuffer;
+	Ref<Buffer> pInstanceBuffer;
+	Ref<Buffer> pDDGIVolumesBuffer;
+	Ref<Buffer> pLightMatricesBuffer;
+	Ref<Texture> pSky;
 	AccelerationStructure AccelerationStructure;
 	GPUDebugRenderData DebugRenderData;
 	Vector2u HZBDimensions;
@@ -136,7 +136,7 @@ struct SceneTextures
 
 namespace Renderer
 {
-	void DrawScene(CommandContext& context, const Span<Batch>& batches, const VisibilityMask& visibility, Batch::Blending blendModes);
+	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes);
 	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes);
 	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform, Texture* pTarget = nullptr);
 	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget = nullptr);
@@ -174,11 +174,11 @@ namespace GraphicsCommon
 		ResourceFormat::R8_UNORM
 	};
 
-	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
-	extern RefCountPtr<CommandSignature> pIndirectDrawIndexedSignature;
-	extern RefCountPtr<CommandSignature> pIndirectDispatchSignature;
-	extern RefCountPtr<CommandSignature> pIndirectDispatchMeshSignature;
+	extern Ref<CommandSignature> pIndirectDrawSignature;
+	extern Ref<CommandSignature> pIndirectDrawIndexedSignature;
+	extern Ref<CommandSignature> pIndirectDispatchSignature;
+	extern Ref<CommandSignature> pIndirectDispatchMeshSignature;
 
-	RefCountPtr<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName = nullptr);
-	RefCountPtr<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName = nullptr);
+	Ref<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName = nullptr);
+	Ref<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName = nullptr);
 }

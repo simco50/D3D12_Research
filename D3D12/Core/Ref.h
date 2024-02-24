@@ -1,14 +1,14 @@
 #pragma once
 
 template <typename T>
-class RefCountPtr
+class Ref
 {
 public:
 	using InterfaceType = T;
 
 protected:
 	InterfaceType* ptr_;
-	template<class U> friend class RefCountPtr;
+	template<class U> friend class Ref;
 
 	void InternalAddRef() const noexcept
 	{
@@ -30,24 +30,24 @@ protected:
 
 public:
 
-	RefCountPtr() noexcept
+	Ref() noexcept
 		: ptr_(nullptr)
 	{
 	}
 
-	RefCountPtr(std::nullptr_t) noexcept
+	Ref(std::nullptr_t) noexcept
 		: ptr_(nullptr)
 	{
 	}
 
 	template<class U>
-	RefCountPtr(U* other) noexcept
+	Ref(U* other) noexcept
 		: ptr_(other)
 	{
 		InternalAddRef();
 	}
 
-	RefCountPtr(const RefCountPtr& other) noexcept
+	Ref(const Ref& other) noexcept
 		: ptr_(other.ptr_)
 	{
 		InternalAddRef();
@@ -55,17 +55,17 @@ public:
 
 	// copy ctor that allows to instanatiate class when U* is convertible to T*
 	template<class U>
-	RefCountPtr(const RefCountPtr<U>& other, typename std::enable_if<std::is_convertible<U*, T*>::value, void*>::type* = nullptr) noexcept
+	Ref(const Ref<U>& other, typename std::enable_if<std::is_convertible<U*, T*>::value, void*>::type* = nullptr) noexcept
 		: ptr_(other.ptr_)
 
 	{
 		InternalAddRef();
 	}
 
-	RefCountPtr(RefCountPtr&& other) noexcept
+	Ref(Ref&& other) noexcept
 		: ptr_(nullptr)
 	{
-		if (this != reinterpret_cast<RefCountPtr*>(&reinterpret_cast<unsigned char&>(other)))
+		if (this != reinterpret_cast<Ref*>(&reinterpret_cast<unsigned char&>(other)))
 		{
 			Swap(other);
 		}
@@ -73,76 +73,76 @@ public:
 
 	// Move ctor that allows instantiation of a class when U* is convertible to T*
 	template<class U>
-	RefCountPtr(RefCountPtr<U>&& other, typename std::enable_if<std::is_convertible<U*, T*>::value, void*>::type* = nullptr) noexcept
+	Ref(Ref<U>&& other, typename std::enable_if<std::is_convertible<U*, T*>::value, void*>::type* = nullptr) noexcept
 		: 	ptr_(other.ptr_)
 	{
 		other.ptr_ = nullptr;
 	}
 
-	~RefCountPtr() noexcept
+	~Ref() noexcept
 	{
 		InternalRelease();
 	}
 
-	RefCountPtr& operator=(std::nullptr_t) noexcept
+	Ref& operator=(std::nullptr_t) noexcept
 	{
 		InternalRelease();
 		return *this;
 	}
 
-	RefCountPtr& operator=(T* other) noexcept
+	Ref& operator=(T* other) noexcept
 	{
 		if (ptr_ != other)
 		{
-			RefCountPtr(other).Swap(*this);
+			Ref(other).Swap(*this);
 		}
 		return *this;
 	}
 
 	template <typename U>
-	RefCountPtr& operator=(U* other) noexcept
+	Ref& operator=(U* other) noexcept
 	{
-		RefCountPtr(other).Swap(*this);
+		Ref(other).Swap(*this);
 		return *this;
 	}
 
-	RefCountPtr& operator=(const RefCountPtr& other) noexcept
+	Ref& operator=(const Ref& other) noexcept
 	{
 		if (ptr_ != other.ptr_)
 		{
-			RefCountPtr(other).Swap(*this);
+			Ref(other).Swap(*this);
 		}
 		return *this;
 	}
 
 	template<class U>
-	RefCountPtr& operator=(const RefCountPtr<U>& other) noexcept
+	Ref& operator=(const Ref<U>& other) noexcept
 	{
-		RefCountPtr(other).Swap(*this);
+		Ref(other).Swap(*this);
 		return *this;
 	}
 
-	RefCountPtr& operator=(RefCountPtr&& other) noexcept
+	Ref& operator=(Ref&& other) noexcept
 	{
-		RefCountPtr(static_cast<RefCountPtr&&>(other)).Swap(*this);
+		Ref(static_cast<Ref&&>(other)).Swap(*this);
 		return *this;
 	}
 
 	template<class U>
-	RefCountPtr& operator=(RefCountPtr<U>&& other) noexcept
+	Ref& operator=(Ref<U>&& other) noexcept
 	{
-		RefCountPtr(static_cast<RefCountPtr<U>&&>(other)).Swap(*this);
+		Ref(static_cast<Ref<U>&&>(other)).Swap(*this);
 		return *this;
 	}
 
-	void Swap(RefCountPtr&& r) noexcept
+	void Swap(Ref&& r) noexcept
 	{
 		T* tmp = ptr_;
 		ptr_ = r.ptr_;
 		r.ptr_ = tmp;
 	}
 
-	void Swap(RefCountPtr& r) noexcept
+	void Swap(Ref& r) noexcept
 	{
 		T* tmp = ptr_;
 		ptr_ = r.ptr_;
@@ -165,7 +165,7 @@ public:
 	}
 
 	template<typename K>
-	bool As(RefCountPtr<K>* pTarget)
+	bool As(Ref<K>* pTarget)
 	{
 		static_assert(std::is_base_of_v<IUnknown, K> && std::is_base_of_v<IUnknown, T>, "Type must inherit from IUnknown to support As()");
 		return SUCCEEDED(ptr_->QueryInterface(IID_PPV_ARGS(pTarget->ReleaseAndGetAddressOf())));
@@ -192,30 +192,6 @@ public:
 		T* ptr = ptr_;
 		ptr_ = nullptr;
 		return ptr;
-	}
-
-	// Set the pointer while keeping the object's reference count unchanged
-	void Attach(InterfaceType* other)
-	{
-		if (ptr_ != nullptr)
-		{
-			auto ref = ptr_->Release();
-			(void)ref;
-
-			// Attaching to the same object only works if duplicate references are being coalesced. Otherwise
-			// re-attaching will cause the pointer to be released and may cause a crash on a subsequent dereference.
-			assert(ref != 0 || ptr_ != other);
-		}
-
-		ptr_ = other;
-	}
-
-	// Create a wrapper around a raw object while keeping the object's reference count unchanged
-	static RefCountPtr<T> Create(T* other)
-	{
-		RefCountPtr<T> Ptr;
-		Ptr.Attach(other);
-		return Ptr;
 	}
 
 	void Reset()

@@ -19,15 +19,15 @@ public:
 
 private:
 	GraphicsDevice* m_pDevice;
-	RefCountPtr<RootSignature> m_pForwardRS;
+	Ref<RootSignature> m_pForwardRS;
 
 	// Clustered
-	RefCountPtr<PipelineState> m_pClusteredForwardPSO;
-	RefCountPtr<PipelineState> m_pClusteredForwardMaskedPSO;
-	RefCountPtr<PipelineState> m_pClusteredForwardAlphaBlendPSO;
+	Ref<PipelineState> m_pClusteredForwardPSO;
+	Ref<PipelineState> m_pClusteredForwardMaskedPSO;
+	Ref<PipelineState> m_pClusteredForwardAlphaBlendPSO;
 
 	// Tiled
-	RefCountPtr<PipelineState> m_pTiledForwardPSO;
-	RefCountPtr<PipelineState> m_pTiledForwardMaskedPSO;
-	RefCountPtr<PipelineState> m_pTiledForwardAlphaBlendPSO;
+	Ref<PipelineState> m_pTiledForwardPSO;
+	Ref<PipelineState> m_pTiledForwardMaskedPSO;
+	Ref<PipelineState> m_pTiledForwardAlphaBlendPSO;
 };

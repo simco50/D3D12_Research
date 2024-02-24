@@ -15,15 +15,15 @@ public:
 private:
 	void ProcessCompaction(CommandContext& context);
 
-	RefCountPtr<Buffer> m_pTLAS;
-	RefCountPtr<Buffer> m_pScratch;
-	RefCountPtr<Buffer> m_pBLASInstancesTargetBuffer;
-	RefCountPtr<Buffer> m_pBLASInstancesSourceBuffer;
+	Ref<Buffer> m_pTLAS;
+	Ref<Buffer> m_pScratch;
+	Ref<Buffer> m_pBLASInstancesTargetBuffer;
+	Ref<Buffer> m_pBLASInstancesSourceBuffer;
 
 	// Compaction
-	RefCountPtr<Buffer> m_pPostBuildInfoBuffer;
-	RefCountPtr<Buffer> m_pPostBuildInfoReadbackBuffer;
+	Ref<Buffer> m_pPostBuildInfoBuffer;
+	Ref<Buffer> m_pPostBuildInfoReadbackBuffer;
 	SyncPoint m_PostBuildInfoFence;
-	std::vector<RefCountPtr<Buffer>*> m_QueuedRequests;
-	std::vector<RefCountPtr<Buffer>*> m_ActiveRequests;
+	std::vector<Ref<Buffer>*> m_QueuedRequests;
+	std::vector<Ref<Buffer>*> m_ActiveRequests;
 };

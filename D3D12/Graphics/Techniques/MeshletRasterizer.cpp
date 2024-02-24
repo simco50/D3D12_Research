@@ -162,7 +162,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	m_pPrintStatsPSO =				pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 }
 
-RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, RefCountPtr<Texture>* pPreviousHZB)
+RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, Ref<Texture>* pPreviousHZB)
 	: Mode(mode), pDepth(pDepth), pPreviousHZB(pPreviousHZB)
 {
 	/// Must be kept in sync with shader! See "VisibilityBuffer.hlsli"

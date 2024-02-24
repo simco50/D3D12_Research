@@ -30,7 +30,7 @@
 #include "Core/Console.h"
 #include "Core/StringHash.h"
 #include "Core/Delegates.h"
-#include "Core/RefCountPtr.h"
+#include "Core/Ref.h"
 #include "Core/Span.h"
 #include "Math/MathTypes.h"
 #include "Math/Math.h"

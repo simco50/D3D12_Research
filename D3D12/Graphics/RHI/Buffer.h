@@ -149,8 +149,8 @@ public:
 
 
 private:
-	RefCountPtr<UnorderedAccessView> m_pUAV;
-	RefCountPtr<ShaderResourceView> m_pSRV;
+	Ref<UnorderedAccessView> m_pUAV;
+	Ref<ShaderResourceView> m_pSRV;
 	
 	const BufferDesc m_Desc;
 };

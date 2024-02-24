@@ -212,10 +212,10 @@ GraphicsDevice::DRED::~DRED()
 
 GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
 {
-	RefCountPtr<IDXGIDebug1> pDXGIDebug;
+	Ref<IDXGIDebug1> pDXGIDebug;
 	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pDXGIDebug.GetAddressOf()))))
 	{
-		RefCountPtr<IDXGIInfoQueue> pInfoQueue;
+		Ref<IDXGIInfoQueue> pInfoQueue;
 		VERIFY_HR(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pInfoQueue.GetAddressOf())));
 		pInfoQueue->ClearStoredMessages(DXGI_DEBUG_ALL);
 
@@ -238,7 +238,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 	if (options.UseDebugDevice)
 	{
-		RefCountPtr<ID3D12Debug> pDebugController;
+		Ref<ID3D12Debug> pDebugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->EnableDebugLayer();
@@ -248,7 +248,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 	if (options.UseDRED)
 	{
-		RefCountPtr<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
+		Ref<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDredSettings.GetAddressOf()))))
 		{
 			// Turn on auto-breadcrumbs and page fault reporting.
@@ -261,7 +261,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 	if (options.UseGPUValidation)
 	{
-		RefCountPtr<ID3D12Debug1> pDebugController;
+		Ref<ID3D12Debug1> pDebugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
@@ -277,8 +277,8 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		}
 	}
 
-	RefCountPtr<IDXGIAdapter4> pAdapter;
-	RefCountPtr<ID3D12Device> pDevice;
+	Ref<IDXGIAdapter4> pAdapter;
+	Ref<ID3D12Device> pDevice;
 	if (!options.UseWarp)
 	{
 		uint32 adapterIndex = 0;
@@ -291,10 +291,10 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 			E_LOG(Info, "\t%s - %f GB", UNICODE_TO_MULTIBYTE(desc.Description), (float)desc.DedicatedVideoMemory * Math::BytesToGigaBytes);
 
 			uint32 outputIndex = 0;
-			RefCountPtr<IDXGIOutput> pOutput;
+			Ref<IDXGIOutput> pOutput;
 			while (pAdapter->EnumOutputs(outputIndex++, pOutput.ReleaseAndGetAddressOf()) == S_OK)
 			{
-				RefCountPtr<IDXGIOutput6> pOutput1;
+				Ref<IDXGIOutput6> pOutput1;
 				if (pOutput.As<IDXGIOutput6>(&pOutput1))
 				{
 					DXGI_OUTPUT_DESC1 outputDesc;
@@ -351,7 +351,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		m_pDRED = std::make_unique<DRED>(this);
 	}
 
-	RefCountPtr<ID3D12InfoQueue> pInfoQueue;
+	Ref<ID3D12InfoQueue> pInfoQueue;
 	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
 	{
 		// Suppress whole categories of messages
@@ -387,7 +387,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 		pInfoQueue->PushStorageFilter(&NewFilter);
 
-		RefCountPtr<ID3D12InfoQueue1> pInfoQueue1;
+		Ref<ID3D12InfoQueue1> pInfoQueue1;
 		if (pInfoQueue.As(&pInfoQueue1))
 		{
 			auto MessageCallback = [](
@@ -440,7 +440,7 @@ GraphicsDevice::~GraphicsDevice()
 	IdleGPU();
 
 	// Disable break on validation before destroying to not make live-leak detection break each time.
-	RefCountPtr<ID3D12InfoQueue> pInfoQueue;
+	Ref<ID3D12InfoQueue> pInfoQueue;
 	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
 	{
 		pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, FALSE);
@@ -465,7 +465,7 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 		}
 		else
 		{
-			RefCountPtr<ID3D12CommandList> pCommandList;
+			Ref<ID3D12CommandList> pCommandList;
 			VERIFY_HR(m_pDevice->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled %s Commandlist %d", D3D::CommandlistTypeToString(type), m_CommandListPool[typeIndex].size()).c_str());
 			pContext = m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, pCommandList, type, m_pGlobalViewHeap, m_pScratchAllocationManager));
@@ -529,12 +529,12 @@ void GraphicsDevice::UnregisterGlobalResourceView(DescriptorHandle& handle)
 	}
 }
 
-RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData)
+Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData)
 {
 	return CreateTexture(desc, nullptr, 0, pName, initData);
 }
 
-RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData)
+Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData)
 {
 	auto GetResourceDesc = [](const TextureDesc& textureDesc)
 	{
@@ -662,7 +662,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D
 	return pTexture;
 }
 
-RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index)
+Ref<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index)
 {
 	D3D12_RESOURCE_DESC resourceDesc = pSwapchainResource->GetDesc();
 	TextureDesc desc;
@@ -684,7 +684,7 @@ RefCountPtr<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* p
 	return pTexture;
 }
 
-RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData)
+Ref<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData)
 {
 	auto GetResourceDesc = [](const BufferDesc& bufferDesc)
 	{
@@ -778,7 +778,7 @@ RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12H
 	return pBuffer;
 }
 
-RefCountPtr<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData)
+Ref<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData)
 {
 	return CreateBuffer(desc, nullptr, 0, pName, pInitData);
 }
@@ -791,7 +791,7 @@ void GraphicsDevice::DeferReleaseObject(ID3D12Object* pObject)
 	}
 }
 
-RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+Ref<PipelineState> GraphicsDevice::CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
 	PipelineStateInitializer desc;
 	desc.SetRootSignature(pRootSignature);
@@ -800,20 +800,20 @@ RefCountPtr<PipelineState> GraphicsDevice::CreateComputePipeline(RootSignature* 
 	return CreatePipeline(desc);
 }
 
-RefCountPtr<PipelineState> GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
+Ref<PipelineState> GraphicsDevice::CreatePipeline(const PipelineStateInitializer& psoDesc)
 {
-	RefCountPtr<PipelineState> pPSO = new PipelineState(this, psoDesc);
+	Ref<PipelineState> pPSO = new PipelineState(this, psoDesc);
 	if (CommandLine::GetBool("immediate_pso"))
 		pPSO->CreateInternal();
 	return pPSO;
 }
 
-RefCountPtr<StateObject> GraphicsDevice::CreateStateObject(const StateObjectInitializer& stateDesc)
+Ref<StateObject> GraphicsDevice::CreateStateObject(const StateObjectInitializer& stateDesc)
 {
 	return new StateObject(this, stateDesc);
 }
 
-RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)
+Ref<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)
 {
 	check(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
@@ -859,7 +859,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const
 	return new ShaderResourceView(pBuffer, descriptor, gpuDescriptor);
 }
 
-RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc)
+Ref<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc)
 {
 	check(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
@@ -892,7 +892,7 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, cons
 	return new UnorderedAccessView(pBuffer, descriptor, gpuDescriptor);
 }
 
-RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& desc)
+Ref<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& desc)
 {
 	check(pTexture);
 	const TextureDesc& textureDesc = pTexture->GetDesc();
@@ -994,7 +994,7 @@ RefCountPtr<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, con
 	return new ShaderResourceView(pTexture, descriptor, gpuDescriptor);
 }
 
-RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, const TextureUAVDesc& desc)
+Ref<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, const TextureUAVDesc& desc)
 {
 	check(pTexture);
 	const TextureDesc& textureDesc = pTexture->GetDesc();
@@ -1046,21 +1046,21 @@ RefCountPtr<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, co
 	return new UnorderedAccessView(pTexture, descriptor, gpuDescriptor);
 }
 
-RefCountPtr<CommandSignature> GraphicsDevice::CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature)
+Ref<CommandSignature> GraphicsDevice::CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature)
 {
-	RefCountPtr<ID3D12CommandSignature> pCmdSignature;
+	Ref<ID3D12CommandSignature> pCmdSignature;
 	D3D12_COMMAND_SIGNATURE_DESC desc = signatureDesc.GetDesc();
 	VERIFY_HR_EX(GetParent()->GetDevice()->CreateCommandSignature(&desc, pRootSignature ? pRootSignature->GetRootSignature() : nullptr, IID_PPV_ARGS(pCmdSignature.GetAddressOf())), m_pDevice);
 	D3D::SetObjectName(pCmdSignature.Get(), pName);
 	return new CommandSignature(this, pCmdSignature);
 }
 
-ShaderResult GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
+ShaderResult GraphicsDevice::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, Span<ShaderDefine> defines /*= {}*/)
 {
 	return m_pShaderManager->GetShader(pShaderPath, shaderType, pEntryPoint, defines);
 }
 
-ShaderResult GraphicsDevice::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/)
+ShaderResult GraphicsDevice::GetLibrary(const char* pShaderPath, Span<ShaderDefine> defines /*= {}*/)
 {
 	return m_pShaderManager->GetShader(pShaderPath, ShaderType::MAX, nullptr, defines);
 }
@@ -1312,8 +1312,8 @@ void SwapChain::SetUseWaitableSwapChain(bool enabled)
 
 bool SwapChain::DisplaySupportsHDR() const
 {
-	RefCountPtr<IDXGIOutput> pOutput;
-	RefCountPtr<IDXGIOutput6> pOutput6;
+	Ref<IDXGIOutput> pOutput;
+	Ref<IDXGIOutput6> pOutput6;
 	if (SUCCEEDED(m_pSwapchain->GetContainingOutput(pOutput.GetAddressOf())))
 	{
 		if (SUCCEEDED(pOutput->QueryInterface(pOutput6.GetAddressOf())))
@@ -1373,7 +1373,7 @@ void SwapChain::RecreateSwapChain()
 	m_pSwapchain.Reset();
 
 	CommandQueue* pPresentQueue = pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	RefCountPtr<IDXGISwapChain1> swapChain;
+	Ref<IDXGISwapChain1> swapChain;
 
 	VERIFY_HR(pDevice->GetFactory()->CreateSwapChainForHwnd(
 		pPresentQueue->GetCommandQueue(),

@@ -44,7 +44,7 @@ public:
 	GraphicsResource* GetPhysical() const { return pPhysicalResource; }
 
 protected:
-	void SetResource(RefCountPtr<GraphicsResource> resource)
+	void SetResource(Ref<GraphicsResource> resource)
 	{
 		pResourceReference = resource;
 		pPhysicalResource = resource;
@@ -61,7 +61,7 @@ protected:
 	bool IsImported;
 	bool IsExported = false;
 	RGResourceType Type;
-	RefCountPtr<GraphicsResource> pResourceReference;
+	Ref<GraphicsResource> pResourceReference;
 	GraphicsResource* pPhysicalResource = nullptr;
 	const RGPass* pFirstAccess = nullptr;
 	const RGPass* pLastAccess = nullptr;

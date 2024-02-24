@@ -12,7 +12,7 @@
 #include "StateObject.h"
 #include "Core/Profiler.h"
 
-CommandContext::CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pScratchAllocationManager)
+CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pScratchAllocationManager)
 	: GraphicsObject(pParent),
 	m_ShaderResourceDescriptorAllocator(pDescriptorHeap),
 	m_ScratchAllocator(pScratchAllocationManager),
@@ -54,7 +54,7 @@ SyncPoint CommandContext::Execute()
 	return Execute({ this });
 }
 
-SyncPoint CommandContext::Execute(const Span<CommandContext* const>& contexts)
+SyncPoint CommandContext::Execute(Span<CommandContext* const> contexts)
 {
 	check(contexts.GetSize() > 0);
 	CommandQueue* pQueue = contexts[0]->GetParent()->GetCommandQueue(contexts[0]->GetType());
@@ -256,7 +256,7 @@ void CommandContext::WriteBuffer(const Buffer* pResource, const void* pData, uin
 	CopyBuffer(allocation.pBackingResource, pResource, dataSize, allocation.Offset, offset);
 }
 
-void CommandContext::WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOURCE_DATA>& subResourceDatas, uint32 firstSubResource)
+void CommandContext::WriteTexture(Texture* pResource, Span<D3D12_SUBRESOURCE_DATA> subResourceDatas, uint32 firstSubResource)
 {
 	FlushResourceBarriers();
 	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceDatas.GetSize());
@@ -410,7 +410,7 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 	}
 }
 
-void CommandContext::BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset)
+void CommandContext::BindResources(uint32 rootIndex, Span<const ResourceView*> pViews, uint32 offset)
 {
 	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, pViews);
 }
@@ -711,7 +711,7 @@ void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)
 	m_pCommandList->IASetPrimitiveTopology(type);
 }
 
-void CommandContext::SetVertexBuffers(const Span<VertexBufferView>& buffers)
+void CommandContext::SetVertexBuffers(Span<VertexBufferView> buffers)
 {
 	constexpr uint32 MAX_VERTEX_BUFFERS = 4;
 	check(buffers.GetSize() < MAX_VERTEX_BUFFERS, "VertexBuffer count (%d) exceeds the maximum (%d)", buffers.GetSize(), MAX_VERTEX_BUFFERS);

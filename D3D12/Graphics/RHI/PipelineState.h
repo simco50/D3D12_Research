@@ -36,7 +36,7 @@ public:
 
 	void SetName(const char* pName);
 	void SetDepthOnlyTarget(ResourceFormat dsvFormat, uint32 msaa);
-	void SetRenderTargetFormats(const Span<ResourceFormat>& rtvFormats, ResourceFormat dsvFormat, uint32 msaa);
+	void SetRenderTargetFormats(Span<ResourceFormat> rtvFormats, ResourceFormat dsvFormat, uint32 msaa);
 
 	//BlendState
 	void SetBlendMode(const BlendMode& blendMode, bool alphaToCoverage);
@@ -53,7 +53,7 @@ public:
 	void SetLineAntialias(bool lineAntiAlias);
 	void SetDepthBias(int depthBias, float depthBiasClamp, float slopeScaledDepthBias);
 
-	void SetInputLayout(const Span<VertexElementDesc>& layout);
+	void SetInputLayout(Span<VertexElementDesc> layout);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology);
 
 	void SetRootSignature(RootSignature* pRootSignature);
@@ -66,11 +66,11 @@ public:
 	};
 
 	//Shaders
-	void SetVertexShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	void SetPixelShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	void SetComputeShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	void SetMeshShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
+	void SetVertexShader(const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	void SetPixelShader(const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	void SetComputeShader(const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	void SetMeshShader(const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
 
 private:
 #pragma warning(push)
@@ -134,7 +134,7 @@ private:
 
 	void CreateInternal();
 	void OnShaderReloaded(Shader* pShader);
-	RefCountPtr<ID3D12PipelineState> m_pPipelineState;
+	Ref<ID3D12PipelineState> m_pPipelineState;
 
 	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
 	PipelineStateInitializer m_Desc;

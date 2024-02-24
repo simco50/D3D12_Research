@@ -2,7 +2,7 @@
 
 class FileWatcher;
 
-using ShaderBlob = RefCountPtr<ID3DBlob>;
+using ShaderBlob = Ref<ID3DBlob>;
 
 enum class ShaderType
 {
@@ -120,7 +120,7 @@ public:
 	void ConditionallyReloadShaders();
 	void AddIncludeDir(const std::string& includeDir);
 
-	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines = {});
+	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, Span<ShaderDefine> defines = {});
 
 	DECLARE_MULTICAST_DELEGATE(OnShaderEdited, Shader* /*pShader*/);
 	OnShaderEdited& OnShaderEditedEvent() { return m_OnShaderEditedEvent; }
@@ -128,7 +128,7 @@ public:
 private:
 	using ShaderStringHash = TStringHash<false>;
 
-	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, const Span<ShaderDefine>& defines);
+	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, Span<ShaderDefine> defines);
 
 	void RecompileFromFileChange(const std::string& filePath);
 

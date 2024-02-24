@@ -12,7 +12,7 @@ public:
 
 private:
 
-	RefCountPtr<ID3D12DescriptorHeap> m_pHeap;
+	Ref<ID3D12DescriptorHeap> m_pHeap;
 	FreeList m_FreeList;
 	uint32 m_NumDescriptors;
 	uint32 m_DescriptorSize = 0;

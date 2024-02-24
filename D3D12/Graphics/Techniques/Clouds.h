@@ -12,7 +12,7 @@ public:
 	RGTexture* Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView);
 
 private:
-	RefCountPtr<Texture> m_pShapeNoise;
-	RefCountPtr<Texture> m_pDetailNoise;
-	RefCountPtr<Texture> m_pCloudHeightDensityLUT;
+	Ref<Texture> m_pShapeNoise;
+	Ref<Texture> m_pDetailNoise;
+	Ref<Texture> m_pCloudHeightDensityLUT;
 };

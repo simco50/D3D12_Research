@@ -13,10 +13,10 @@ enum class RasterMode
 
 struct RasterContext
 {
-	RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, RefCountPtr<Texture>* pPreviousHZB);
+	RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, Ref<Texture>* pPreviousHZB);
 
 	RGTexture* pDepth = nullptr;
-	RefCountPtr<Texture>* pPreviousHZB = nullptr;
+	Ref<Texture>* pPreviousHZB = nullptr;
 	bool EnableDebug = false;
 	bool EnableOcclusionCulling = false;
 	RasterMode Mode;
@@ -58,33 +58,33 @@ private:
 		AlphaMasked,
 		Count,
 	};
-	using PipelineStateBinSet = std::array<RefCountPtr<PipelineState>, (int)PipelineBin::Count>;
+	using PipelineStateBinSet = std::array<Ref<PipelineState>, (int)PipelineBin::Count>;
 
 	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
 	void CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
 
-	RefCountPtr<RootSignature> m_pCommonRS;
+	Ref<RootSignature> m_pCommonRS;
 	
-	RefCountPtr<PipelineState> m_pCullInstancesPSO[2];
-	RefCountPtr<PipelineState> m_pCullInstancesNoOcclusionPSO;
-	RefCountPtr<PipelineState> m_pBuildMeshletCullArgsPSO[2];
-	RefCountPtr<PipelineState> m_pBuildCullArgsPSO;
-	RefCountPtr<PipelineState> m_pPrintStatsPSO;
+	Ref<PipelineState> m_pCullInstancesPSO[2];
+	Ref<PipelineState> m_pCullInstancesNoOcclusionPSO;
+	Ref<PipelineState> m_pBuildMeshletCullArgsPSO[2];
+	Ref<PipelineState> m_pBuildCullArgsPSO;
+	Ref<PipelineState> m_pPrintStatsPSO;
 
-	RefCountPtr<PipelineState> m_pCullMeshletsPSO[2];
-	RefCountPtr<PipelineState> m_pCullMeshletsNoOcclusionPSO;
+	Ref<PipelineState> m_pCullMeshletsPSO[2];
+	Ref<PipelineState> m_pCullMeshletsNoOcclusionPSO;
 
 	PipelineStateBinSet m_pDrawMeshletsPSO;
 	PipelineStateBinSet m_pDrawMeshletsDebugModePSO;
 	PipelineStateBinSet m_pDrawMeshletsDepthOnlyPSO;
 
-	RefCountPtr<PipelineState> m_pMeshletBinPrepareArgs;
-	RefCountPtr<PipelineState> m_pMeshletClassify;
-	RefCountPtr<PipelineState> m_pMeshletAllocateBinRanges;
-	RefCountPtr<PipelineState> m_pMeshletWriteBins;
+	Ref<PipelineState> m_pMeshletBinPrepareArgs;
+	Ref<PipelineState> m_pMeshletClassify;
+	Ref<PipelineState> m_pMeshletAllocateBinRanges;
+	Ref<PipelineState> m_pMeshletWriteBins;
 
-	RefCountPtr<PipelineState> m_pHZBInitializePSO;
-	RefCountPtr<PipelineState> m_pHZBCreatePSO;
+	Ref<PipelineState> m_pHZBInitializePSO;
+	Ref<PipelineState> m_pHZBCreatePSO;
 };

@@ -14,15 +14,15 @@ namespace ShaderCompiler
 	constexpr const char* pCompilerPath = "dxcompiler.dll";
 	constexpr const char* pShaderSymbolsPath = "Saved/ShaderSymbols/";
 
-	static RefCountPtr<IDxcUtils> pUtils;
-	static RefCountPtr<IDxcCompiler3> pCompiler3;
-	static RefCountPtr<IDxcValidator> pValidator;
-	static RefCountPtr<IDxcIncludeHandler> pDefaultIncludeHandler;
+	static Ref<IDxcUtils> pUtils;
+	static Ref<IDxcCompiler3> pCompiler3;
+	static Ref<IDxcValidator> pValidator;
+	static Ref<IDxcIncludeHandler> pDefaultIncludeHandler;
 	static std::mutex IncludeCacheMutex;
 
 	struct CachedFile
 	{
-		RefCountPtr<IDxcBlobEncoding> pBlob;
+		Ref<IDxcBlobEncoding> pBlob;
 		uint64 Timestamp;
 	};
 	static std::unordered_map<StringHash, CachedFile> IncludeCache;
@@ -46,7 +46,7 @@ namespace ShaderCompiler
 
 		std::string ErrorMessage;
 		ShaderBlob pBlob;
-		RefCountPtr<IUnknown> pReflection;
+		Ref<IUnknown> pReflection;
 		std::vector<std::string> Includes;
 		uint64 ShaderHash[2];
 		bool IsDebug;
@@ -217,7 +217,7 @@ namespace ShaderCompiler
 		return output;
 	}
 
-	static HRESULT TryLoadFile(const char* pFileName, RefCountPtr<IDxcBlobEncoding>* pOutFile)
+	static HRESULT TryLoadFile(const char* pFileName, Ref<IDxcBlobEncoding>* pOutFile)
 	{
 		HRESULT hr = E_FAIL;
 		if (!Paths::FileExists(pFileName))
@@ -288,7 +288,7 @@ namespace ShaderCompiler
 		}
 
 		Utils::TimeScope timer;
-		RefCountPtr<IDxcBlobEncoding> pSource;
+		Ref<IDxcBlobEncoding> pSource;
 		std::string fullPath;
 		if (!ResolveFilePath(compileJob, fullPath))
 		{
@@ -404,7 +404,7 @@ namespace ShaderCompiler
 		public:
 			HRESULT STDMETHODCALLTYPE LoadSource(_In_ LPCWSTR pFilename, _COM_Outptr_result_maybenull_ IDxcBlob** ppIncludeSource) override
 			{
-				RefCountPtr<IDxcBlobEncoding> pEncoding;
+				Ref<IDxcBlobEncoding> pEncoding;
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
 				check(Paths::ResolveRelativePaths(path));
 
@@ -439,13 +439,13 @@ namespace ShaderCompiler
 		if (CommandLine::GetBool("dumpshaders"))
 		{
 			// Preprocessed source
-			RefCountPtr<IDxcResult> pPreprocessOutput;
+			Ref<IDxcResult> pPreprocessOutput;
 			CompileArguments preprocessArgs = arguments;
 			preprocessArgs.AddArgument("-P", ".");
 			CustomIncludeHandler preprocessIncludeHandler;
 			if (SUCCEEDED(pCompiler3->Compile(&sourceBuffer, preprocessArgs.GetArguments(), (uint32)preprocessArgs.GetNumArguments(), &preprocessIncludeHandler, IID_PPV_ARGS(pPreprocessOutput.GetAddressOf()))))
 			{
-				RefCountPtr<IDxcBlobUtf8> pHLSL;
+				Ref<IDxcBlobUtf8> pHLSL;
 				if (SUCCEEDED(pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr)))
 				{
 					std::string filePathBase = Paths::GetFileNameWithoutExtension(cachePath);
@@ -467,10 +467,10 @@ namespace ShaderCompiler
 		}
 
 		CustomIncludeHandler includeHandler;
-		RefCountPtr<IDxcResult> pCompileResult;
+		Ref<IDxcResult> pCompileResult;
 		VERIFY_HR(pCompiler3->Compile(&sourceBuffer, arguments.GetArguments(), (uint32)arguments.GetNumArguments(), &includeHandler, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
 
-		RefCountPtr<IDxcBlobUtf8> pErrors;
+		Ref<IDxcBlobUtf8> pErrors;
 		if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr)))
 		{
 			if (pErrors && pErrors->GetStringLength())
@@ -490,14 +490,14 @@ namespace ShaderCompiler
 
 		//Validation
 		{
-			RefCountPtr<IDxcOperationResult> pResult;
+			Ref<IDxcOperationResult> pResult;
 			VERIFY_HR(pValidator->Validate((IDxcBlob*)result.pBlob.Get(), DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
 			HRESULT validationResult;
 			pResult->GetStatus(&validationResult);
 			if (validationResult != S_OK)
 			{
-				RefCountPtr<IDxcBlobEncoding> pPrintBlob;
-				RefCountPtr<IDxcBlobUtf8> pPrintBlobUtf8;
+				Ref<IDxcBlobEncoding> pPrintBlob;
+				Ref<IDxcBlobUtf8> pPrintBlobUtf8;
 				pResult->GetErrorBuffer(pPrintBlob.GetAddressOf());
 				pUtils->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlobUtf8.GetAddressOf());
 				result.ErrorMessage = pPrintBlobUtf8->GetStringPointer();
@@ -507,7 +507,7 @@ namespace ShaderCompiler
 
 		// Hash
 		{
-			RefCountPtr<IDxcBlob> pHash;
+			Ref<IDxcBlob> pHash;
 			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_SHADER_HASH, IID_PPV_ARGS(pHash.GetAddressOf()), nullptr)))
 			{
 				DxcShaderHash* pHashBuf = (DxcShaderHash*)pHash->GetBufferPointer();
@@ -518,11 +518,11 @@ namespace ShaderCompiler
 		//Symbols
 #if 0
 		{
-			RefCountPtr<IDxcBlobUtf16> pDebugDataPath;
-			RefCountPtr<IDxcBlob> pSymbolsBlob;
+			Ref<IDxcBlobUtf16> pDebugDataPath;
+			Ref<IDxcBlob> pSymbolsBlob;
 			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf())))
 			{
-				RefCountPtr<IDxcBlobUtf8> pDebugDataPathUTF8;
+				Ref<IDxcBlobUtf8> pDebugDataPathUTF8;
 				pUtils->GetBlobAsUtf8(pDebugDataPath.Get(), pDebugDataPathUTF8.GetAddressOf());
 				std::string symbolsPath = Sprintf("%s%s", Paths::ShaderCacheDir().c_str(), pDebugDataPathUTF8->GetStringPointer());
 				FileStream stream;
@@ -534,7 +534,7 @@ namespace ShaderCompiler
 
 		//Reflection
 		{
-			RefCountPtr<IDxcBlob> pReflectionData;
+			Ref<IDxcBlob> pReflectionData;
 			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(pReflectionData.GetAddressOf()), nullptr)))
 			{
 				DxcBuffer reflectionBuffer;
@@ -556,7 +556,7 @@ namespace ShaderCompiler
 	}
 }
 
-ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEntryPoint, const Span<ShaderDefine>& defines)
+ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEntryPoint, Span<ShaderDefine> defines)
 {
 	ShaderStringHash hash(pEntryPoint);
 	for (const ShaderDefine& define : defines)
@@ -634,7 +634,7 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 	}
 }
 
-ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/)
+ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, Span<ShaderDefine> defines /*= {}*/)
 {
 	std::lock_guard lock(m_CompileMutex);
 

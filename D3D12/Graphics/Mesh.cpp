@@ -246,7 +246,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, float uniformSca
 					const cgltf_image* pImage = texture.texture->image;
 					auto it = textureMap.find(pImage);
 					const char* pName = pImage->uri ? pImage->uri : "Material Texture";
-					RefCountPtr<Texture> pTex;
+					Ref<Texture> pTex;
 					if (it == textureMap.end())
 					{
 						Image image;

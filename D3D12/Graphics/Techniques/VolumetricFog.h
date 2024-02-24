@@ -9,7 +9,7 @@ struct LightCull3DData;
 
 struct VolumetricFogData
 {
-	RefCountPtr<Texture> pFogHistory;
+	Ref<Texture> pFogHistory;
 };
 
 class VolumetricFog
@@ -23,9 +23,9 @@ public:
 private:
 	GraphicsDevice* m_pDevice;
 
-	RefCountPtr<RootSignature> m_pCommonRS;
+	Ref<RootSignature> m_pCommonRS;
 
 	//Volumetric Fog
-	RefCountPtr<PipelineState> m_pInjectVolumeLightPSO;
-	RefCountPtr<PipelineState> m_pAccumulateVolumeLightPSO;
+	Ref<PipelineState> m_pInjectVolumeLightPSO;
+	Ref<PipelineState> m_pAccumulateVolumeLightPSO;
 };

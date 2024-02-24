@@ -16,8 +16,8 @@ protected:
 	virtual void OnWindowResized(uint32 width, uint32 height) {}
 
 protected:
-	RefCountPtr<GraphicsDevice> m_pDevice;
-	RefCountPtr<SwapChain> m_pSwapchain;
+	Ref<GraphicsDevice> m_pDevice;
+	Ref<SwapChain> m_pSwapchain;
 	Window m_Window;
 
 	void Init_Internal();

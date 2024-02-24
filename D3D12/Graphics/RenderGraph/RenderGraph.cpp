@@ -188,8 +188,8 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 	}
 
 	// Go through all resources accesses and allocate on first access and de-allocate on last access
-	// It's important to make the distinction between the RefCountPtr allocation and the Raw resource itself.
-	// A de-allocate returns the resource back to the pool by resetting the RefCountPtr however the Raw resource keeps a reference to it to use during execution.
+	// It's important to make the distinction between the Ref allocation and the Raw resource itself.
+	// A de-allocate returns the resource back to the pool by resetting the Ref however the Raw resource keeps a reference to it to use during execution.
 	// This is how we can "alias" resources (exact match only for now) and allocate our resources during compilation so that execution is thread-safe.
 	for (const RGPass* pPass : m_RenderPasses)
 	{
@@ -240,13 +240,13 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
 		check(exportResource.pTexture->pPhysicalResource);
-		RefCountPtr<Texture> pTexture = exportResource.pTexture->Get();
+		Ref<Texture> pTexture = exportResource.pTexture->Get();
 		*exportResource.pTarget = pTexture;
 	}
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
 		check(exportResource.pBuffer->pPhysicalResource);
-		RefCountPtr<Buffer> pBuffer = exportResource.pBuffer->Get();
+		Ref<Buffer> pBuffer = exportResource.pBuffer->Get();
 		*exportResource.pTarget = pBuffer;
 	}
 
@@ -281,7 +281,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 	check(eventsToStart.empty());
 }
 
-void RGGraph::Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget, TextureFlag additionalFlags)
+void RGGraph::Export(RGTexture* pTexture, Ref<Texture>* pTarget, TextureFlag additionalFlags)
 {
 	auto it = std::find_if(m_ExportTextures.begin(), m_ExportTextures.end(), [&](const ExportedTexture& tex) { return tex.pTarget == pTarget; });
 	check(it == m_ExportTextures.end(), "Texture '%s' is exported to a target that has already been exported to by another texture ('%s').", pTexture->GetName(), it->pTexture->GetName());
@@ -290,7 +290,7 @@ void RGGraph::Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget, Texture
 	m_ExportTextures.push_back({ pTexture, pTarget });
 }
 
-void RGGraph::Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget, BufferFlag additionalFlags)
+void RGGraph::Export(RGBuffer* pBuffer, Ref<Buffer>* pTarget, BufferFlag additionalFlags)
 {
 	auto it = std::find_if(m_ExportBuffers.begin(), m_ExportBuffers.end(), [&](const ExportedBuffer& buff) { return buff.pTarget == pTarget; });
 	check(it == m_ExportBuffers.end(), "Buffer '%s' is exported to a target that has already been exported to by another texture ('%s').", pBuffer->GetName(), it->pBuffer->GetName());
@@ -512,11 +512,11 @@ RenderPassInfo RGPassResources::GetRenderPassInfo() const
 	return passInfo;
 }
 
-RefCountPtr<Texture> RGResourcePool::Allocate(const char* pName, const TextureDesc& desc)
+Ref<Texture> RGResourcePool::Allocate(const char* pName, const TextureDesc& desc)
 {
 	for (PooledTexture& texture : m_TexturePool)
 	{
-		RefCountPtr<Texture>& pTexture = texture.pResource;
+		Ref<Texture>& pTexture = texture.pResource;
 		if (pTexture->GetNumRefs() == 1 && pTexture->GetDesc().IsCompatible(desc))
 		{
 			texture.LastUsedFrame = m_FrameIndex;
@@ -527,11 +527,11 @@ RefCountPtr<Texture> RGResourcePool::Allocate(const char* pName, const TextureDe
 	return m_TexturePool.emplace_back(PooledTexture{ GetParent()->CreateTexture(desc, pName), m_FrameIndex }).pResource;
 }
 
-RefCountPtr<Buffer> RGResourcePool::Allocate(const char* pName, const BufferDesc& desc)
+Ref<Buffer> RGResourcePool::Allocate(const char* pName, const BufferDesc& desc)
 {
 	for (PooledBuffer& buffer : m_BufferPool)
 	{
-		RefCountPtr<Buffer>& pBuffer = buffer.pResource;
+		Ref<Buffer>& pBuffer = buffer.pResource;
 		if (pBuffer->GetNumRefs() == 1 && pBuffer->GetDesc().IsCompatible(desc))
 		{
 			buffer.LastUsedFrame = m_FrameIndex;
@@ -594,7 +594,7 @@ namespace RGUtils
 			.RenderTarget(pSource, RenderPassColorFlags::None, pTarget);
 	}
 
-	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport)
+	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool doExport)
 	{
 		check(pStorageTarget);
 		RGBuffer* pBuffer = nullptr;
@@ -612,7 +612,7 @@ namespace RGUtils
 		return pBuffer;
 	}
 
-	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport)
+	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool doExport)
 	{
 		check(pStorageTarget);
 		RGTexture* pTexture = nullptr;

@@ -21,7 +21,7 @@ template<typename T>
 class GlobalResource
 {
 public:
-	GlobalResource& operator=(RefCountPtr<T>&& pResource)
+	GlobalResource& operator=(Ref<T>&& pResource)
 	{
 		static_assert(std::is_base_of_v<GraphicsObject, T>);
 		check(pResource);
@@ -80,9 +80,9 @@ private:
 
 	WindowHandle m_Window;
 	DisplayMode m_DesiredDisplayMode;
-	RefCountPtr<Fence> m_pPresentFence;
-	std::vector<RefCountPtr<Texture>> m_Backbuffers;
-	RefCountPtr<IDXGISwapChain4> m_pSwapchain;
+	Ref<Fence> m_pPresentFence;
+	std::vector<Ref<Texture>> m_Backbuffers;
+	Ref<IDXGISwapChain4> m_pSwapchain;
 	ResourceFormat m_Format;
 	uint32 m_CurrentImage;
 	uint32 m_Width = 0;
@@ -150,26 +150,26 @@ public:
 	DescriptorHandle RegisterGlobalResourceView(D3D12_CPU_DESCRIPTOR_HANDLE view);
 	void UnregisterGlobalResourceView(DescriptorHandle& handle);
 
-	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData = {});
-	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const Span<D3D12_SUBRESOURCE_DATA>& initData = {});
-	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index);
-	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData = nullptr);
-	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
+	Ref<Texture> CreateTexture(const TextureDesc& desc, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
+	Ref<Texture> CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
+	Ref<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index);
+	Ref<Buffer> CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData = nullptr);
+	Ref<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
 	void DeferReleaseObject(ID3D12Object* pObject);
 
-	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
-	RefCountPtr<PipelineState> CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	RefCountPtr<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
-	RefCountPtr<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
-	RefCountPtr<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
-	RefCountPtr<ShaderResourceView> CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
-	RefCountPtr<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
-	RefCountPtr<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
+	Ref<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
+	Ref<PipelineState> CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	Ref<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
+	Ref<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
+	Ref<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
+	Ref<ShaderResourceView> CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
+	Ref<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
+	Ref<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
 
-	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	ShaderResult GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
+	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	ShaderResult GetLibrary(const char* pShaderPath, Span<ShaderDefine> defines = {});
 
-	void RegisterGlobalResource(RefCountPtr<GraphicsObject>&& pResource)
+	void RegisterGlobalResource(Ref<GraphicsObject>&& pResource)
 	{
 		m_GlobalResources.push_back(std::move(pResource));
 	}
@@ -191,8 +191,8 @@ private:
 
 	GraphicsCapabilities m_Capabilities;
 
-	RefCountPtr<IDXGIFactory6> m_pFactory;
-	RefCountPtr<ID3D12Device5> m_pDevice;
+	Ref<IDXGIFactory6> m_pFactory;
+	Ref<ID3D12Device5> m_pDevice;
 
 	class DRED
 	{
@@ -200,20 +200,20 @@ private:
 		DRED(GraphicsDevice* pDevice);
 		~DRED();
 
-		RefCountPtr<Fence> m_pFence;
+		Ref<Fence> m_pFence;
 		HANDLE m_WaitHandle;
 	};
 	std::unique_ptr<DRED> m_pDRED;
 
-	RefCountPtr<Fence> m_pFrameFence;
+	Ref<Fence> m_pFrameFence;
 	std::array<uint64, NUM_BUFFERS> m_FrameFenceValues{};
 	uint32 m_FrameIndex = 0;
 
-	RefCountPtr<GPUDescriptorHeap> m_pGlobalViewHeap;
-	RefCountPtr<GPUDescriptorHeap> m_pGlobalSamplerHeap;
+	Ref<GPUDescriptorHeap> m_pGlobalViewHeap;
+	Ref<GPUDescriptorHeap> m_pGlobalSamplerHeap;
 
-	std::array<RefCountPtr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	std::array<std::vector<RefCountPtr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
+	std::array<Ref<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	std::array<std::vector<Ref<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 
 	class DeferredDeleteQueue : public GraphicsObject
@@ -241,11 +241,11 @@ private:
 	DeferredDeleteQueue m_DeleteQueue;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
-	RefCountPtr<CPUDescriptorHeap> m_pCPUResourceViewHeap;
-	RefCountPtr<ScratchAllocationManager> m_pScratchAllocationManager;
-	RefCountPtr<RingBufferAllocator> m_pRingBufferAllocator;
+	Ref<CPUDescriptorHeap> m_pCPUResourceViewHeap;
+	Ref<ScratchAllocationManager> m_pScratchAllocationManager;
+	Ref<RingBufferAllocator> m_pRingBufferAllocator;
 
-	std::vector<RefCountPtr<GraphicsObject>> m_GlobalResources;
+	std::vector<Ref<GraphicsObject>> m_GlobalResources;
 
 	std::mutex m_ContextAllocationMutex;
 };

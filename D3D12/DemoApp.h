@@ -66,11 +66,11 @@ private:
 
 	uint32 m_Frame = 0;
 
-	RefCountPtr<Texture> m_pColorHistory;
-	RefCountPtr<Texture> m_pHZB;
-	RefCountPtr<Texture> m_pColorOutput;
-	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
-	std::vector<RefCountPtr<Texture>> m_ShadowHZBs;
+	Ref<Texture> m_pColorHistory;
+	Ref<Texture> m_pHZB;
+	Ref<Texture> m_pColorOutput;
+	std::vector<Ref<Texture>> m_ShadowMaps;
+	std::vector<Ref<Texture>> m_ShadowHZBs;
 
 	std::unique_ptr<VolumetricFog> m_pVolumetricFog;
 	std::unique_ptr<ForwardRenderer> m_pForwardRenderer;
@@ -97,51 +97,51 @@ private:
 	World m_World;
 	SceneView m_SceneData;
 
-	RefCountPtr<RootSignature> m_pCommonRS;
+	Ref<RootSignature> m_pCommonRS;
 
 	//Shadow mapping
-	RefCountPtr<PipelineState> m_pShadowsOpaquePSO;
-	RefCountPtr<PipelineState> m_pShadowsAlphaMaskPSO;
+	Ref<PipelineState> m_pShadowsOpaquePSO;
+	Ref<PipelineState> m_pShadowsAlphaMaskPSO;
 
 	//Depth Prepass
-	RefCountPtr<PipelineState> m_pDepthPrepassOpaquePSO;
-	RefCountPtr<PipelineState> m_pDepthPrepassAlphaMaskPSO;
+	Ref<PipelineState> m_pDepthPrepassOpaquePSO;
+	Ref<PipelineState> m_pDepthPrepassAlphaMaskPSO;
 
 	//Tonemapping
-	RefCountPtr<PipelineState> m_pToneMapPSO;
-	RefCountPtr<Texture> m_pLensDirtTexture;
+	Ref<PipelineState> m_pToneMapPSO;
+	Ref<Texture> m_pLensDirtTexture;
 	Vector3 m_LensDirtTint = Vector3::One;
 
 	// Eye adaptation
-	RefCountPtr<Buffer> m_pAverageLuminance;
-	RefCountPtr<Texture> m_pDebugHistogramTexture;
-	RefCountPtr<PipelineState> m_pDownsampleColorPSO;
-	RefCountPtr<PipelineState> m_pLuminanceHistogramPSO;
-	RefCountPtr<PipelineState> m_pAverageLuminancePSO;
-	RefCountPtr<PipelineState> m_pDrawHistogramPSO;
+	Ref<Buffer> m_pAverageLuminance;
+	Ref<Texture> m_pDebugHistogramTexture;
+	Ref<PipelineState> m_pDownsampleColorPSO;
+	Ref<PipelineState> m_pLuminanceHistogramPSO;
+	Ref<PipelineState> m_pAverageLuminancePSO;
+	Ref<PipelineState> m_pDrawHistogramPSO;
 
 	//Depth Reduction
-	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO;
-	RefCountPtr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
-	RefCountPtr<PipelineState> m_pReduceDepthPSO;
-	std::array<RefCountPtr<Buffer>, GraphicsDevice::NUM_BUFFERS> m_ReductionReadbackTargets;
+	Ref<PipelineState> m_pPrepareReduceDepthPSO;
+	Ref<PipelineState> m_pPrepareReduceDepthMsaaPSO;
+	Ref<PipelineState> m_pReduceDepthPSO;
+	std::array<Ref<Buffer>, GraphicsDevice::NUM_BUFFERS> m_ReductionReadbackTargets;
 
 	//Camera motion
-	RefCountPtr<PipelineState> m_pCameraMotionPSO;
+	Ref<PipelineState> m_pCameraMotionPSO;
 
-	RefCountPtr<PipelineState> m_pTemporalResolvePSO;
+	Ref<PipelineState> m_pTemporalResolvePSO;
 
 	//Sky
-	RefCountPtr<PipelineState> m_pSkyboxPSO;
-	RefCountPtr<PipelineState> m_pRenderSkyPSO;
+	Ref<PipelineState> m_pSkyboxPSO;
+	Ref<PipelineState> m_pRenderSkyPSO;
 
 	//Bloom
-	RefCountPtr<PipelineState> m_pBloomDownsamplePSO;
-	RefCountPtr<PipelineState> m_pBloomDownsampleKarisAveragePSO;
-	RefCountPtr<PipelineState> m_pBloomUpsamplePSO;
+	Ref<PipelineState> m_pBloomDownsamplePSO;
+	Ref<PipelineState> m_pBloomDownsampleKarisAveragePSO;
+	Ref<PipelineState> m_pBloomUpsamplePSO;
 
 	// Visibility buffer
-	RefCountPtr<PipelineState> m_pVisibilityShadingGraphicsPSO;
-	RefCountPtr<PipelineState> m_pVisibilityDebugRenderPSO;
+	Ref<PipelineState> m_pVisibilityShadingGraphicsPSO;
+	Ref<PipelineState> m_pVisibilityDebugRenderPSO;
 	uint32 m_VisibilityDebugRenderMode = 0;
 };

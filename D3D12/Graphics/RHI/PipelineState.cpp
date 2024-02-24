@@ -25,7 +25,7 @@ void PipelineStateInitializer::SetDepthOnlyTarget(ResourceFormat dsvFormat, uint
 	SetRenderTargetFormats({}, dsvFormat, msaa);
 }
 
-void PipelineStateInitializer::SetRenderTargetFormats(const Span<ResourceFormat>& rtvFormats, ResourceFormat dsvFormat, uint32 msaa)
+void PipelineStateInitializer::SetRenderTargetFormats(Span<ResourceFormat> rtvFormats, ResourceFormat dsvFormat, uint32 msaa)
 {
 	D3D12_RT_FORMAT_ARRAY& formatArray = m_Stream.RTFormats;
 	// Validation layer bug - Throws error about RT Format even if NumRenderTargets == 0.
@@ -190,7 +190,7 @@ void PipelineStateInitializer::SetDepthBias(int depthBias, float depthBiasClamp,
 	rasterDesc.DepthBiasClamp = depthBiasClamp;
 }
 
-void PipelineStateInitializer::SetInputLayout(const Span<VertexElementDesc>& layout)
+void PipelineStateInitializer::SetInputLayout(Span<VertexElementDesc> layout)
 {
 	D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Stream.InputLayout;
 
@@ -221,27 +221,27 @@ void PipelineStateInitializer::SetRootSignature(RootSignature* pRootSignature)
 	m_Stream.pRootSignature = pRootSignature->GetRootSignature();
 }
 
-void PipelineStateInitializer::SetVertexShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetVertexShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
 	m_ShaderDescs[(int)ShaderType::Vertex] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetPixelShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetPixelShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
 	m_ShaderDescs[(int)ShaderType::Pixel] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetComputeShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetComputeShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
 	m_ShaderDescs[(int)ShaderType::Compute] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetMeshShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetMeshShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
 	m_ShaderDescs[(int)ShaderType::Mesh] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
 	m_ShaderDescs[(int)ShaderType::Amplification] = { pShaderPath, entryPoint, defines.Copy() };
 }

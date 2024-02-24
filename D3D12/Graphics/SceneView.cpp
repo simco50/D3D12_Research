@@ -236,7 +236,7 @@ namespace Renderer
 		pView->NumLights = (uint32)pWorld->Lights.size();
 
 		GraphicsDevice* pDevice = context.GetParent();
-		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, RefCountPtr<Buffer>& pTarget)
+		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, Ref<Buffer>& pTarget)
 		{
 			uint32 desiredElements = Math::AlignUp(Math::Max(1u, numElements), 8u);
 			if (!pTarget || desiredElements > pTarget->GetNumElements())
@@ -259,7 +259,7 @@ namespace Renderer
 		DrawScene(context, pView->Batches, pView->VisibilityMask, blendModes);
 	}
 
-	void DrawScene(CommandContext& context, const Span<Batch>& batches, const VisibilityMask& visibility, Batch::Blending blendModes)
+	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes)
 	{
 		PROFILE_CPU_SCOPE();
 		PROFILE_GPU_SCOPE(context.GetCommandList());
@@ -279,11 +279,11 @@ namespace Renderer
 
 namespace GraphicsCommon
 {
-	static std::array<RefCountPtr<Texture>, (uint32)DefaultTexture::MAX> DefaultTextures;
+	static std::array<Ref<Texture>, (uint32)DefaultTexture::MAX> DefaultTextures;
 
-	RefCountPtr<CommandSignature> pIndirectDrawSignature;
-	RefCountPtr<CommandSignature> pIndirectDispatchSignature;
-	RefCountPtr<CommandSignature> pIndirectDispatchMeshSignature;
+	Ref<CommandSignature> pIndirectDrawSignature;
+	Ref<CommandSignature> pIndirectDispatchSignature;
+	Ref<CommandSignature> pIndirectDispatchMeshSignature;
 
 	void Create(GraphicsDevice* pDevice)
 	{
@@ -293,7 +293,7 @@ namespace GraphicsCommon
 			data.pData = pData;
 			data.RowPitch = RHI::GetRowPitch(desc.Format, desc.Width);
 			data.SlicePitch = RHI::GetSlicePitch(desc.Format, desc.Width, desc.Height);
-			RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName, data);
+			Ref<Texture> pTexture = pDevice->CreateTexture(desc, pName, data);
 			DefaultTextures[(int)type] = pTexture;
 		};
 
@@ -361,7 +361,7 @@ namespace GraphicsCommon
 		return DefaultTextures[(int)type];
 	}
 
-	RefCountPtr<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName)
+	Ref<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName)
 	{
 		TextureDesc desc;
 		desc.Width = image.GetWidth();
@@ -393,11 +393,11 @@ namespace GraphicsCommon
 			}
 			pImg = pImg->GetNextImage();
 		}
-		RefCountPtr<Texture> pTexture = pDevice->CreateTexture(desc, pName ? pName : "", subResourceData);
+		Ref<Texture> pTexture = pDevice->CreateTexture(desc, pName ? pName : "", subResourceData);
 		return pTexture;
 	}
 
-	RefCountPtr<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName)
+	Ref<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName)
 	{
 		Image image;
 		if (image.Load(pFilePath))

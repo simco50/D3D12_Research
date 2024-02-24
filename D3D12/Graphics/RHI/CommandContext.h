@@ -100,11 +100,11 @@ namespace ComputeUtils
 class CommandContext : public GraphicsObject
 {
 public:
-	CommandContext(GraphicsDevice* pParent, RefCountPtr<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pDynamicMemoryManager);
+	CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pDynamicMemoryManager);
 
 	void Reset();
 	SyncPoint Execute();
-	static SyncPoint Execute(const Span<CommandContext* const>& contexts);
+	static SyncPoint Execute(Span<CommandContext* const> contexts);
 	void Free(const SyncPoint& syncPoint);
 	void ClearState();
 
@@ -118,7 +118,7 @@ public:
 	void CopyTexture(const Texture* pSource, const Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubregion = 0, uint32 destinationSubregion = 0);
 	void CopyBuffer(const Buffer* pSource, const Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
 	void WriteBuffer(const Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
-	void WriteTexture(Texture* pResource, const Span<D3D12_SUBRESOURCE_DATA>& subResourceDatas, uint32 firstSubResource);
+	void WriteTexture(Texture* pResource, Span<D3D12_SUBRESOURCE_DATA> subResourceDatas, uint32 firstSubResource);
 
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const Vector3i& groupCounts);
@@ -141,7 +141,7 @@ public:
 	void SetPipelineState(StateObject* pStateObject);
 
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
-	void SetVertexBuffers(const Span<VertexBufferView>& buffers);
+	void SetVertexBuffers(Span<VertexBufferView> buffers);
 	void SetIndexBuffer(const IndexBufferView& indexBuffer);
 	void SetViewport(const FloatRect& rect, float minDepth = 0.0f, float maxDepth = 1.0f);
 	void SetScissorRect(const FloatRect& rect);
@@ -155,7 +155,7 @@ public:
 
 	void BindDynamicVertexBuffer(uint32 slot, uint32 elementCount, uint32 elementSize, const void* pData);
 	void BindDynamicIndexBuffer(uint32 elementCount, const void* pData, ResourceFormat format);
-	void BindResources(uint32 rootIndex, const Span<const ResourceView*>& pViews, uint32 offset = 0);
+	void BindResources(uint32 rootIndex, Span<const ResourceView*> pViews, uint32 offset = 0);
 	void BindRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void BindRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void BindRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize);
@@ -195,12 +195,12 @@ private:
 	DynamicGPUDescriptorAllocator m_ShaderResourceDescriptorAllocator;
 	ScratchAllocator m_ScratchAllocator;
 
-	RefCountPtr<ID3D12GraphicsCommandList6> m_pCommandList;
-	RefCountPtr<ID3D12CommandAllocator> m_pAllocator;
+	Ref<ID3D12GraphicsCommandList6> m_pCommandList;
+	Ref<ID3D12CommandAllocator> m_pAllocator;
 
-	RefCountPtr<ID3D12DescriptorHeap> m_pRTVHeap;
+	Ref<ID3D12DescriptorHeap> m_pRTVHeap;
 	uint32 m_RTVSize = 0;
-	RefCountPtr<ID3D12DescriptorHeap> m_pDSVHeap;
+	Ref<ID3D12DescriptorHeap> m_pDSVHeap;
 
 	static constexpr uint32 MaxNumBatchedBarriers = 64;
 	std::array<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers> m_BatchedBarriers{};
@@ -246,5 +246,5 @@ public:
 	CommandSignature(GraphicsDevice* pParent, ID3D12CommandSignature* pCmdSignature);
 	ID3D12CommandSignature* GetCommandSignature() const { return m_pCommandSignature.Get(); }
 private:
-	RefCountPtr<ID3D12CommandSignature> m_pCommandSignature;
+	Ref<ID3D12CommandSignature> m_pCommandSignature;
 };

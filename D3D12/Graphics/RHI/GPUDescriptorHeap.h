@@ -40,7 +40,7 @@ private:
 	void CleanupPersistent();
 	void CleanupDynamic();
 
-	RefCountPtr<ID3D12DescriptorHeap> m_pHeap;
+	Ref<ID3D12DescriptorHeap> m_pHeap;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 	uint32 m_DescriptorSize = 0;
 	DescriptorHandle m_StartHandle;

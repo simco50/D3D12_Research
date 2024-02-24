@@ -10,9 +10,9 @@ struct CBTData
 	uint32 SplitMode = 0;
 	RGBuffer* pCBT = nullptr;
 
-	RefCountPtr<Buffer> pCBTBuffer;
-	RefCountPtr<Buffer> pCBTIndirectArgs;
-	RefCountPtr<Texture> pDebugVisualizeTexture;
+	Ref<Buffer> pCBTBuffer;
+	Ref<Buffer> pCBTIndirectArgs;
+	Ref<Texture> pDebugVisualizeTexture;
 };
 
 class CBTTessellation
@@ -30,13 +30,13 @@ private:
 	GraphicsDevice* m_pDevice;
 	CBTData m_CBTData;
 
-	RefCountPtr<RootSignature> m_pCBTRS;
-	RefCountPtr<PipelineState> m_pCBTIndirectArgsPSO;
-	RefCountPtr<PipelineState> m_pCBTCacheBitfieldPSO;
-	RefCountPtr<PipelineState> m_pCBTSumReductionPSO;
-	RefCountPtr<PipelineState> m_pCBTUpdatePSO;
-	RefCountPtr<PipelineState> m_pCBTDebugVisualizePSO;
-	RefCountPtr<PipelineState> m_pCBTRenderPSO;
-	RefCountPtr<PipelineState> m_pCBTShadePSO;
-	RefCountPtr<PipelineState> m_pCBTRenderMeshShaderPSO;
+	Ref<RootSignature> m_pCBTRS;
+	Ref<PipelineState> m_pCBTIndirectArgsPSO;
+	Ref<PipelineState> m_pCBTCacheBitfieldPSO;
+	Ref<PipelineState> m_pCBTSumReductionPSO;
+	Ref<PipelineState> m_pCBTUpdatePSO;
+	Ref<PipelineState> m_pCBTDebugVisualizePSO;
+	Ref<PipelineState> m_pCBTRenderPSO;
+	Ref<PipelineState> m_pCBTShadePSO;
+	Ref<PipelineState> m_pCBTRenderMeshShaderPSO;
 };

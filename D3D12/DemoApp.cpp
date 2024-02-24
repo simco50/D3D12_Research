@@ -274,14 +274,14 @@ void DemoApp::Update()
 			TaskQueue::Execute([this](uint32)
 				{
 					CommandContext* pScreenshotContext = m_pDevice->AllocateCommandContext();
-					RefCountPtr<Texture> pSource = m_pColorOutput;
+					Ref<Texture> pSource = m_pColorOutput;
 					uint32 width = pSource->GetWidth();
 					uint32 height = pSource->GetHeight();
 
 					D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
 					D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
 					m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
-					RefCountPtr<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
+					Ref<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
 					pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_COPY_SOURCE);
 					pScreenshotContext->InsertResourceBarrier(pScreenshotBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
 					pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
@@ -1624,7 +1624,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 			light.MatrixIndex = shadowIndex;
 		if (shadowIndex >= (int32)m_ShadowMaps.size())
 			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::Create2D(resolution, resolution, GraphicsCommon::ShadowFormat, 1, TextureFlag::DepthStencil | TextureFlag::ShaderResource, ClearBinding(0.0f, 0)), Sprintf("Shadow Map %d", (uint32)m_ShadowMaps.size()).c_str()));
-		RefCountPtr<Texture> pTarget = m_ShadowMaps[shadowIndex];
+		Ref<Texture> pTarget = m_ShadowMaps[shadowIndex];
 
 		light.ShadowMaps.resize(Math::Max(shadowMapLightIndex + 1, (uint32)light.ShadowMaps.size()));
 		light.ShadowMaps[shadowMapLightIndex] = pTarget;
