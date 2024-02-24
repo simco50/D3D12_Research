@@ -106,7 +106,6 @@ struct FormatInfo
 	bool IsDepth : 1;
 	bool IsStencil : 1;
 	bool IsSigned : 1;
-	bool IsSRGB : 1;
 	bool IsBC : 1;
 };
 
