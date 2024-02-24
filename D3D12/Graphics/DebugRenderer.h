@@ -4,6 +4,7 @@
 
 struct Light;
 struct SceneView;
+struct Transform;
 
 struct IntColor
 {
@@ -64,7 +65,7 @@ public:
 	void AddWireCylinder(const Vector3& position, const Quaternion& rotation, float height, float radius, int segments, const IntColor& color);
 	void AddCone(const Vector3& position, const Quaternion& rotation, float height, float angle, int segments, const IntColor& color, bool solid = false);
 	void AddBone(const Matrix& matrix, float length, const IntColor& color);
-	void AddLight(const Light& light, const IntColor& color = Colors::Yellow);
+	void AddLight(const Transform& transform, const Light& light, const IntColor& color = Colors::Yellow);
 
 private:
 	constexpr static uint32 MaxLines = 1024 * 16;

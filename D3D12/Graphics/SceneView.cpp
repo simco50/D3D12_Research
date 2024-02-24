@@ -193,47 +193,49 @@ namespace Renderer
 		std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
 		if (Tweakables::g_EnableDDGI)
 		{
-			ddgiVolumes.reserve(pWorld->DDGIVolumes.size());
-			for (const DDGIVolume& ddgiVolume : pWorld->DDGIVolumes)
-			{
-				ShaderInterop::DDGIVolume& ddgi = ddgiVolumes.emplace_back();
-				ddgi.BoundsMin = ddgiVolume.Origin - ddgiVolume.Extents;
-				ddgi.ProbeSize = 2 * ddgiVolume.Extents / (Vector3((float)ddgiVolume.NumProbes.x, (float)ddgiVolume.NumProbes.y, (float)ddgiVolume.NumProbes.z) - Vector3::One);
-				ddgi.ProbeVolumeDimensions = Vector3u(ddgiVolume.NumProbes.x, ddgiVolume.NumProbes.y, ddgiVolume.NumProbes.z);
-				ddgi.IrradianceIndex = ddgiVolume.pIrradianceHistory ? ddgiVolume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-				ddgi.DepthIndex = ddgiVolume.pDepthHistory ? ddgiVolume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-				ddgi.ProbeOffsetIndex = ddgiVolume.pProbeOffset ? ddgiVolume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-				ddgi.ProbeStatesIndex = ddgiVolume.pProbeStates ? ddgiVolume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-				ddgi.NumRaysPerProbe = ddgiVolume.NumRays;
-				ddgi.MaxRaysPerProbe = ddgiVolume.MaxNumRays;
-			}
+			auto ddgi_view = pWorld->Registry.view<Transform, DDGIVolume>();
+			ddgi_view.each([&](const Transform& transform, const DDGIVolume& volume)
+				{
+					ShaderInterop::DDGIVolume& ddgi = ddgiVolumes.emplace_back();
+					ddgi.BoundsMin = transform.Position - volume.Extents;
+					ddgi.ProbeSize = 2 * volume.Extents / (Vector3((float)volume.NumProbes.x, (float)volume.NumProbes.y, (float)volume.NumProbes.z) - Vector3::One);
+					ddgi.ProbeVolumeDimensions = Vector3u(volume.NumProbes.x, volume.NumProbes.y, volume.NumProbes.z);
+					ddgi.IrradianceIndex = volume.pIrradianceHistory ? volume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.DepthIndex = volume.pDepthHistory ? volume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.ProbeOffsetIndex = volume.pProbeOffset ? volume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.ProbeStatesIndex = volume.pProbeStates ? volume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.NumRaysPerProbe = volume.NumRays;
+					ddgi.MaxRaysPerProbe = volume.MaxNumRays;
+				});
 		}
 		pView->NumDDGIVolumes = (uint32)ddgiVolumes.size();
 
 		std::vector<ShaderInterop::Light> lightData;
-		lightData.reserve(pWorld->Lights.size());
-		for (const Light& light : pWorld->Lights)
-		{
-			ShaderInterop::Light& data = lightData.emplace_back();
-			data.Position = light.Position;
-			data.Direction = Vector3::Transform(Vector3::Forward, light.Rotation);
-			data.SpotlightAngles.x = cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-			data.SpotlightAngles.y = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-			data.Color = Math::Pack_RGBA8_UNORM(light.Colour);
-			data.Intensity = light.Intensity;
-			data.Range = light.Range;
-			data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-			data.MaskTexture = light.pLightTexture ? light.pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-			data.MatrixIndex = light.MatrixIndex;
-			data.InvShadowSize = 1.0f / light.ShadowMapSize;
-			data.IsEnabled = light.Intensity > 0 ? 1 : 0;
-			data.IsVolumetric = light.VolumetricLighting;
-			data.CastShadows = light.ShadowMaps.size() && light.CastShadows;
-			data.IsPoint = light.Type == LightType::Point;
-			data.IsSpot = light.Type == LightType::Spot;
-			data.IsDirectional = light.Type == LightType::Directional;
-		}
-		pView->NumLights = (uint32)pWorld->Lights.size();
+
+		auto light_view = pWorld->Registry.view<const Transform, const Light>();
+		light_view.each([&](const Transform& transform, const Light& light)
+			{
+				ShaderInterop::Light& data = lightData.emplace_back();
+				data.Position = transform.Position;
+				data.Direction = Vector3::Transform(Vector3::Forward, transform.Rotation);
+				data.SpotlightAngles.x = cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+				data.SpotlightAngles.y = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+				data.Color = Math::Pack_RGBA8_UNORM(light.Colour);
+				data.Intensity = light.Intensity;
+				data.Range = light.Range;
+				data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+				data.MaskTexture = light.pLightTexture ? light.pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+				data.MatrixIndex = light.MatrixIndex;
+				data.InvShadowSize = 1.0f / light.ShadowMapSize;
+				data.IsEnabled = light.Intensity > 0 ? 1 : 0;
+				data.IsVolumetric = light.VolumetricLighting;
+				data.CastShadows = light.ShadowMaps.size() && light.CastShadows;
+				data.IsPoint = light.Type == LightType::Point;
+				data.IsSpot = light.Type == LightType::Spot;
+				data.IsDirectional = light.Type == LightType::Directional;
+			});
+
+		pView->NumLights = (uint32)lightData.size();
 
 		GraphicsDevice* pDevice = context.GetParent();
 		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, Ref<Buffer>& pTarget)

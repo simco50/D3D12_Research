@@ -8,6 +8,8 @@
 #include "Techniques/ShaderDebugRenderer.h"
 #include "Techniques/DDGI.h"
 
+#include "External/EnTT/entt.hpp"
+
 class Mesh;
 class Image;
 struct SubMesh;
@@ -24,11 +26,26 @@ enum class StencilBit : uint8
 };
 DECLARE_BITMASK_TYPE(StencilBit);
 
+struct Transform
+{
+	Vector3 Position = Vector3::Zero;
+	Quaternion Rotation = Quaternion::Identity;
+	Vector3 Scale = Vector3::One;
+
+	Matrix GetTransform() const
+	{
+		return Matrix::CreateScale(Scale) *
+			Matrix::CreateFromQuaternion(Rotation) *
+			Matrix::CreateTranslation(Position);
+	}
+};
+
 struct World
 {
-	std::vector<Light> Lights;
 	std::vector<std::unique_ptr<Mesh>> Meshes;
-	std::vector<DDGIVolume> DDGIVolumes;
+
+	entt::registry Registry;
+	entt::entity Sunlight;
 };
 
 struct ViewTransform

@@ -155,36 +155,58 @@ void DemoApp::SetupScene()
 
 	LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", m_World);
 
+
 	{
-		Light sunLight = Light::Directional(Vector3::Zero, Vector3::Down, 10);
+		entt::entity entity = m_World.Registry.create();
+		Transform& transform = m_World.Registry.emplace<Transform>(entity);
+
+		Light& sunLight = m_World.Registry.emplace<Light>(entity);
+		sunLight.Intensity = 10;
 		sunLight.CastShadows = true;
 		sunLight.VolumetricLighting = true;
-		m_World.Lights.push_back(sunLight);
+		sunLight.Type = LightType::Directional;
+		m_World.Sunlight = entity;
 	}
 
 	{
-		Light spot = Light::Spot(Vector3(0, 0, 0), 4.0f, Vector3::Down, 70.0f, 50.0f, 100.0f);
+		Light spot;
+		spot.Range = 4;
+		spot.UmbraAngleDegrees = 70.0f;
+		spot.PenumbraAngleDegrees = 50.0f;
+		spot.Intensity = 100.0f;
 		spot.CastShadows = true;
 		spot.VolumetricLighting = true;
 		spot.pLightTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LightProjector.png", false, "Light Cookie");
+		spot.Type = LightType::Spot;
 
-		spot.Position = Vector3(9.5, 3, 3.5);
-		m_World.Lights.push_back(spot);
-		spot.Position = Vector3(-9.5, 3, 3.5);
-		m_World.Lights.push_back(spot);
-		spot.Position = Vector3(9.5, 3, -3.5);
-		m_World.Lights.push_back(spot);
-		spot.Position = Vector3(-9.5, 3, -3.5);
-		m_World.Lights.push_back(spot);
+		Vector3 positions[] = {
+			Vector3(9.5, 3, 3.5),
+			Vector3(-9.5, 3, 3.5),
+			Vector3(9.5, 3, -3.5),
+			Vector3(-9.5, 3, -3.5),
+		};
+
+		for(Vector3 v : positions)
+		{
+			entt::entity entity = m_World.Registry.create();
+			Transform& transform = m_World.Registry.emplace<Transform>(entity);
+			transform.Rotation = Quaternion::LookRotation(Vector3::Down, Vector3::Right);
+			transform.Position = v;
+			m_World.Registry.emplace<Light>(entity, spot);;
+		}
 	}
 	{
-		DDGIVolume& volume = m_World.DDGIVolumes.emplace_back();
-		volume.Origin = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
+		entt::entity entity = m_World.Registry.create();
+		Transform& transform = m_World.Registry.emplace<Transform>(entity);
+		transform.Position = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
+
+		DDGIVolume& volume = m_World.Registry.emplace<DDGIVolume>(entity);
 		volume.Extents = Vector3(14.8834171f, 6.22350454f, 9.15293312f);
 		volume.NumProbes = Vector3i(16, 12, 14);
 		volume.NumRays = 128;
 		volume.MaxNumRays = 512;
 	}
+
 
 	m_pLensDirtTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LensDirt.dds", true, "Lens Dirt");
 }
@@ -236,25 +258,27 @@ void DemoApp::Update()
 			}
 		}
 
-		Light& sun = m_World.Lights.front();
-		sun.Rotation = Quaternion::CreateFromYawPitchRoll(-Tweakables::g_SunOrientation, Tweakables::g_SunInclination * Math::PI_DIV_2, 0);
-		sun.Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
-		sun.Intensity = Tweakables::g_SunIntensity;
+		Light& sunLight = m_World.Registry.get<Light>(m_World.Sunlight);
+		Transform& sunTransform = m_World.Registry.get<Transform>(m_World.Sunlight);
+		sunTransform.Rotation = Quaternion::CreateFromYawPitchRoll(-Tweakables::g_SunOrientation, Tweakables::g_SunInclination * Math::PI_DIV_2, 0);
+		sunLight.Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
+		sunLight.Intensity = Tweakables::g_SunIntensity;
 
 		if (Tweakables::g_VisualizeLights)
 		{
-			for (const Light& light : m_World.Lights)
-			{
-				DebugRenderer::Get()->AddLight(light);
-			}
+			auto light_view = m_World.Registry.view<const Transform, const Light>();
+			light_view.each([&](const Transform& transform, const Light& light)
+				{
+					DebugRenderer::Get()->AddLight(transform, light);
+				});
 		}
 
-		if (m_World.DDGIVolumes.size() > 0)
-		{
-			DDGIVolume& volume = m_World.DDGIVolumes[0];
-			volume.Origin = m_SceneData.SceneAABB.Center;
-			volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
-		}
+		auto ddgi_view = m_World.Registry.view<Transform, DDGIVolume>();
+		ddgi_view.each([&](Transform& transform, DDGIVolume& volume)
+			{
+				transform.Position = m_SceneData.SceneAABB.Center;
+				volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
+			});
 
 		m_pCamera->SetJitter(Tweakables::g_TAA && m_RenderPath != RenderPath::PathTracing);
 		m_pCamera->Update();
@@ -1358,7 +1382,7 @@ void DemoApp::UpdateImGui()
 		float cascadeImageSize = 256.0f;
 		ImVec2 cursor = viewportOrigin + ImVec2(5, viewportExtents.y - cascadeImageSize - 5);
 
-		const Light& sunLight = m_World.Lights[0];
+		const Light& sunLight = m_World.Registry.get<Light>(m_World.Sunlight);
 		for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 		{
 			if (i < sunLight.ShadowMaps.size())
@@ -1555,8 +1579,11 @@ void DemoApp::UpdateImGui()
 				ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
 				ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
 				ImGui::Checkbox("DDGI", &Tweakables::g_EnableDDGI.Get());
-				if (m_World.DDGIVolumes.size() > 0)
-					ImGui::SliderInt("DDGI RayCount", &m_World.DDGIVolumes.front().NumRays, 1, m_World.DDGIVolumes.front().MaxNumRays);
+				auto ddgi_view = m_World.Registry.view<DDGIVolume>();
+				ddgi_view.each([&](DDGIVolume& volume)
+					{
+						ImGui::SliderInt("DDGI RayCount", &volume.NumRays, 1, volume.MaxNumRays);
+					});
 				ImGui::Checkbox("Visualize DDGI", &Tweakables::g_VisualizeDDGI.Get());
 				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
 			}
@@ -1637,13 +1664,13 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		shadowIndex++;
 	};
 
-	for (size_t lightIndex = 0; lightIndex < world.Lights.size(); ++lightIndex)
+	auto light_view = m_World.Registry.view<const Transform, Light>();
+	light_view.each([&](const Transform& transform, Light& light)
 	{
-		Light& light = world.Lights[lightIndex];
 		light.ShadowMaps.clear();
 
 		if (!light.CastShadows)
-			continue;
+			return;
 
 		if (light.Type == LightType::Directional)
 		{
@@ -1660,7 +1687,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				Vector3::Transform(Vector3(1, -1, 0), vpInverse),
 			};
 
-			const Matrix lightView = Matrix::CreateFromQuaternion(light.Rotation).Invert();
+			const Matrix lightView = transform.GetTransform().Invert();
 			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
 				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
@@ -1723,12 +1750,12 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		}
 		else if (light.Type == LightType::Spot)
 		{
-			BoundingBox box(light.Position, Vector3(light.Range));
+			BoundingBox box(transform.Position, Vector3(light.Range));
 			if (!viewTransform.PerspectiveFrustum.Contains(box))
-				continue;
+				return;
 
 			const Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.01f);
-			const Matrix lightView = (Matrix::CreateFromQuaternion(light.Rotation) * Matrix::CreateTranslation(light.Position)).Invert();
+			const Matrix lightView = transform.GetTransform().Invert();
 
 			ShadowView shadowView;
 			ViewTransform& shadowViewTransform = shadowView.View;
@@ -1740,17 +1767,17 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		}
 		else if (light.Type == LightType::Point)
 		{
-			BoundingSphere sphere(light.Position, light.Range);
+			BoundingSphere sphere(transform.Position, light.Range);
 			if (!viewTransform.PerspectiveFrustum.Contains(sphere))
-				continue;
+				return;
 
 			Matrix viewMatrices[] = {
-				Math::CreateLookToMatrix(light.Position, Vector3::Right,	Vector3::Up),
-				Math::CreateLookToMatrix(light.Position, Vector3::Left,		Vector3::Up),
-				Math::CreateLookToMatrix(light.Position, Vector3::Up,		Vector3::Forward),
-				Math::CreateLookToMatrix(light.Position, Vector3::Down,		Vector3::Backward),
-				Math::CreateLookToMatrix(light.Position, Vector3::Backward, Vector3::Up),
-				Math::CreateLookToMatrix(light.Position, Vector3::Forward,	Vector3::Up),
+				Math::CreateLookToMatrix(transform.Position, Vector3::Right,	Vector3::Up),
+				Math::CreateLookToMatrix(transform.Position, Vector3::Left,		Vector3::Up),
+				Math::CreateLookToMatrix(transform.Position, Vector3::Up,		Vector3::Forward),
+				Math::CreateLookToMatrix(transform.Position, Vector3::Down,		Vector3::Backward),
+				Math::CreateLookToMatrix(transform.Position, Vector3::Backward, Vector3::Up),
+				Math::CreateLookToMatrix(transform.Position, Vector3::Forward,	Vector3::Up),
 			};
 			Matrix projection = Math::CreatePerspectiveMatrix(Math::PI_DIV_2, 1, light.Range, 0.01f);
 
@@ -1765,7 +1792,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				AddShadowView(light, shadowView, 512, i);
 			}
 		}
-	}
+	});
 
 	m_ShadowHZBs.resize(shadowIndex);
 }

@@ -88,18 +88,19 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
 				const Matrix& viewMatrix = pView->MainView.View;
-				for (const Light& light : pView->pWorld->Lights)
-				{
-					PrecomputedLightData& data = *pLightData++;
-					data.ViewSpacePosition = Vector3::Transform(light.Position, viewMatrix);
-					data.ViewSpaceDirection = Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, light.Rotation), viewMatrix);
-					data.SpotCosAngle = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-					data.SpotSinAngle = sin(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-					data.Range = light.Range;
-					data.IsSpot = light.Type == LightType::Spot;
-					data.IsPoint = light.Type == LightType::Point;
-					data.IsDirectional = light.Type == LightType::Directional;
-				}
+				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();
+				light_view.each([&](const Transform& transform, const Light& light)
+					{
+						PrecomputedLightData& data = *pLightData++;
+						data.ViewSpacePosition = Vector3::Transform(transform.Position, viewMatrix);
+						data.ViewSpaceDirection = Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, transform.Rotation), viewMatrix);
+						data.SpotCosAngle = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+						data.SpotSinAngle = sin(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+						data.Range = light.Range;
+						data.IsSpot = light.Type == LightType::Spot;
+						data.IsPoint = light.Type == LightType::Point;
+						data.IsDirectional = light.Type == LightType::Directional;
+					});
 				context.CopyBuffer(allocation.pBackingResource, pPrecomputeData->Get(), precomputedLightDataSize, allocation.Offset, 0);
 			});
 
@@ -171,28 +172,28 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
 				const Matrix& viewMatrix = pView->MainView.View;
-				for (uint32 i = 0; i < (uint32)pView->pWorld->Lights.size(); ++i)
-				{
-					const Light& light = pView->pWorld->Lights[i];
-					PrecomputedLightData& data = *pLightData++;
-					if (light.Type == LightType::Directional)
+				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();
+				light_view.each([&](const Transform& transform, const Light& light)
 					{
-						data.SphereRadius = FLT_MAX;
-						data.SphereViewPosition = Vector3::Zero;
-					}
-					else if (light.Type == LightType::Point)
-					{
-						data.SphereRadius = light.Range;
-						data.SphereViewPosition = Vector3::Transform(light.Position, viewMatrix);
-					}
-					else if (light.Type == LightType::Spot)
-					{
-						float cosAngle = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+						PrecomputedLightData& data = *pLightData++;
+						if (light.Type == LightType::Directional)
+						{
+							data.SphereRadius = FLT_MAX;
+							data.SphereViewPosition = Vector3::Zero;
+						}
+						else if (light.Type == LightType::Point)
+						{
+							data.SphereRadius = light.Range;
+							data.SphereViewPosition = Vector3::Transform(transform.Position, viewMatrix);
+						}
+						else if (light.Type == LightType::Spot)
+						{
+							float cosAngle = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
 
-						data.SphereRadius = light.Range * 0.5f / powf(cosAngle, 2);
-						data.SphereViewPosition = Vector3::Transform(light.Position, viewMatrix) + Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, light.Rotation), viewMatrix) * light.Range;
-					}
-				}
+							data.SphereRadius = light.Range * 0.5f / powf(cosAngle, 2);
+							data.SphereViewPosition = Vector3::Transform(transform.Position, viewMatrix) + Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, transform.Rotation), viewMatrix) * light.Range;
+						}
+					});
 				context.CopyBuffer(allocation.pBackingResource, pPrecomputeData->Get(), precomputedLightDataSize, allocation.Offset, 0);
 			});
 

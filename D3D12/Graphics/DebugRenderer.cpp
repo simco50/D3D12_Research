@@ -353,19 +353,19 @@ void DebugRenderer::AddBone(const Matrix& matrix, float length, const IntColor& 
 	AddTriangle(c, tip, b, color, false);
 }
 
-void DebugRenderer::AddLight(const Light& light, const IntColor& color /*= Colors::Yellow*/)
+void DebugRenderer::AddLight(const Transform& transform, const Light& light, const IntColor& color /*= Colors::Yellow*/)
 {
 	switch (light.Type)
 	{
 	case LightType::Directional:
-		AddWireCylinder(light.Position, light.Rotation, 4.0f, 2.0f, 10, color);
-		AddAxisSystem(Matrix::CreateFromQuaternion(light.Rotation) * Matrix::CreateTranslation(light.Position), 1.0f);
+		AddWireCylinder(transform.Position, transform.Rotation, 4.0f, 2.0f, 10, color);
+		AddAxisSystem(Matrix::CreateFromQuaternion(transform.Rotation) * Matrix::CreateTranslation(transform.Position), 1.0f);
 		break;
 	case LightType::Point:
-		AddSphere(light.Position, light.Range, 8, 8, color, false);
+		AddSphere(transform.Position, light.Range, 8, 8, color, false);
 		break;
 	case LightType::Spot:
-		AddCone(light.Position, light.Rotation, light.Range, light.UmbraAngleDegrees, 10, color);
+		AddCone(transform.Position, transform.Rotation, light.Range, light.UmbraAngleDegrees, 10, color);
 		break;
 	default:
 		break;

@@ -10,7 +10,6 @@ struct SceneTextures;
 
 struct DDGIVolume
 {
-	Vector3 Origin;
 	Vector3 Extents;
 	Vector3i NumProbes;
 	int32 MaxNumRays;
