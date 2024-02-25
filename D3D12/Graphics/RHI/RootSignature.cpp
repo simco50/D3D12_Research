@@ -7,7 +7,7 @@ static D3D12_DESCRIPTOR_RANGE_FLAGS sDefaultTableRangeFlags = D3D12_DESCRIPTOR_R
 static D3D12_ROOT_DESCRIPTOR_FLAGS sDefaultRootDescriptorFlags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
 
 RootSignature::RootSignature(GraphicsDevice* pParent)
-	: GraphicsObject(pParent),
+	: DeviceObject(pParent),
 	m_NumParameters(0)
 {
 }

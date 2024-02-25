@@ -64,7 +64,7 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	if (it != Accesses.end())
 	{
 		check(!EnumHasAllFlags(it->Access, state), "Redundant state set on resource '%s'", pResource->GetName());
-		check(!ResourceState::HasWriteResourceState(it->Access) || !ResourceState::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->GetName());
+		check(!D3D::HasWriteResourceState(it->Access) || !D3D::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->GetName());
 		it->Access |= state;
 	}
 	else
@@ -94,7 +94,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 		{
 			for (RGPass::ResourceAccess& access : pPass->Accesses)
 			{
-				if (access.pResource == pResource && ResourceState::HasWriteResourceState(access.Access))
+				if (access.pResource == pResource && D3D::HasWriteResourceState(access.Access))
 					return true;
 			}
 			return false;
@@ -112,7 +112,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 			{
 				for (RGPass::ResourceAccess access : pPass->Accesses)
 				{
-					if (access.pResource->IsImported && ResourceState::HasWriteResourceState(access.Access))
+					if (access.pResource->IsImported && D3D::HasWriteResourceState(access.Access))
 					{
 						cullStack.push_back(pPass);
 						break;

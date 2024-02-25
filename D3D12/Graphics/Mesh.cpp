@@ -509,7 +509,7 @@ bool Mesh::Load(const char* pFilePath, GraphicsDevice* pDevice, float uniformSca
 	}
 
 	check(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
-	m_pGeometryData = pDevice->CreateBuffer(BufferDesc::CreateBuffer(bufferSize, BufferFlag::ShaderResource | BufferFlag::ByteAddress), "Geometry Buffer");
+	m_pGeometryData = pDevice->CreateBuffer(BufferDesc{ .Size = bufferSize, .Flags = BufferFlag::ShaderResource | BufferFlag::ByteAddress }, "Geometry Buffer");
 
 	RingBufferAllocation allocation;
 	pDevice->GetRingBuffer()->Allocate((uint32)bufferSize, allocation);

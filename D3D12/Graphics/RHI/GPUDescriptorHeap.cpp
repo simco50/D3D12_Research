@@ -6,7 +6,7 @@
 #include "CommandQueue.h"
 
 GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicPageSize, uint32 numDescriptors)
-	: GraphicsObject(pParent), m_Type(type), m_DynamicPageSize(dynamicPageSize), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2), m_PersistentHandles(numDescriptors / 2)
+	: DeviceObject(pParent), m_Type(type), m_DynamicPageSize(dynamicPageSize), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2), m_PersistentHandles(numDescriptors / 2)
 {
 	check(dynamicPageSize >= 32, "Page size must be at least 128 (is %d)", dynamicPageSize);
 	check(m_NumDynamicDescriptors % dynamicPageSize == 0, "Number of descriptors must be a multiple of Page Size (%d)", dynamicPageSize);
@@ -112,7 +112,7 @@ void GPUDescriptorHeap::CleanupPersistent()
 }
 
 DynamicGPUDescriptorAllocator::DynamicGPUDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap)
-	: GraphicsObject(pGlobalHeap->GetParent()), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
+	: DeviceObject(pGlobalHeap->GetParent()), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
 {
 }
 

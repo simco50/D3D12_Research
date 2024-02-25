@@ -1,7 +1,7 @@
 #pragma once
 #include "GraphicsResource.h"
 
-class Fence : public GraphicsObject
+class Fence : public DeviceObject
 {
 public:
 	Fence(GraphicsDevice* pParent, const char* pName, uint64 fenceValue = 0);

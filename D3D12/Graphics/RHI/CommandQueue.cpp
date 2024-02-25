@@ -6,7 +6,7 @@
 #include "Core/Profiler.h"
 
 CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type)
-	: GraphicsObject(pParent),
+	: DeviceObject(pParent),
 	m_Type(type)
 {
 	D3D12_COMMAND_QUEUE_DESC desc = {};

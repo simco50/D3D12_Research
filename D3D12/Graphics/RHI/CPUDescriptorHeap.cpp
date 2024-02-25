@@ -3,7 +3,7 @@
 #include "Graphics.h"
 
 CPUDescriptorHeap::CPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors)
-	: GraphicsObject(pParent), m_FreeList(numDescriptors), m_NumDescriptors(numDescriptors), m_Type(type)
+	: DeviceObject(pParent), m_FreeList(numDescriptors), m_NumDescriptors(numDescriptors), m_Type(type)
 {
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 

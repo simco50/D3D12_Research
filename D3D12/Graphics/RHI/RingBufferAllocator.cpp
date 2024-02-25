@@ -5,9 +5,9 @@
 #include "CommandContext.h"
 
 RingBufferAllocator::RingBufferAllocator(GraphicsDevice* pDevice, uint32 size)
-	: GraphicsObject(pDevice), m_pQueue(pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)), m_Size(size), m_ConsumeOffset(0), m_ProduceOffset(0)
+	: DeviceObject(pDevice), m_pQueue(pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)), m_Size(size), m_ConsumeOffset(0), m_ProduceOffset(0)
 {
-	m_pBuffer = pDevice->CreateBuffer(BufferDesc::CreateBuffer(size, BufferFlag::Upload), "RingBuffer");
+	m_pBuffer = pDevice->CreateBuffer(BufferDesc{ .Size = size, .Flags = BufferFlag::Upload }, "RingBuffer");
 }
 
 RingBufferAllocator::~RingBufferAllocator()

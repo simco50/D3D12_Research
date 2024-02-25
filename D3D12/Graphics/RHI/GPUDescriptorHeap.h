@@ -18,7 +18,7 @@ struct DescriptorHeapPage
 	SyncPoint SyncPoint;
 };
 
-class GPUDescriptorHeap : public GraphicsObject
+class GPUDescriptorHeap : public DeviceObject
 {
 public:
 	GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicPageSize, uint32 numDescriptors);
@@ -58,7 +58,7 @@ private:
 	std::queue<std::pair<uint32, uint64>> m_PersistentDeletionQueue;
 };
 
-class DynamicGPUDescriptorAllocator : public GraphicsObject
+class DynamicGPUDescriptorAllocator : public DeviceObject
 {
 public:
 	DynamicGPUDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap);

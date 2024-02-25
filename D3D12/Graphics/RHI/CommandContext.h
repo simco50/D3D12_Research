@@ -97,7 +97,7 @@ namespace ComputeUtils
 	}
 }
 
-class CommandContext : public GraphicsObject
+class CommandContext : public DeviceObject
 {
 public:
 	CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pDynamicMemoryManager);
@@ -108,12 +108,12 @@ public:
 	void Free(const SyncPoint& syncPoint);
 	void ClearState();
 
-	void InsertResourceBarrier(GraphicsResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
-	void InsertAliasingBarrier(const GraphicsResource* pResource);
-	void InsertUAVBarrier(const GraphicsResource* pResource = nullptr);
+	void InsertResourceBarrier(DeviceResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+	void InsertAliasingBarrier(const DeviceResource* pResource);
+	void InsertUAVBarrier(const DeviceResource* pResource = nullptr);
 	void FlushResourceBarriers();
 
-	void CopyResource(const GraphicsResource* pSource, const GraphicsResource* pTarget);
+	void CopyResource(const DeviceResource* pSource, const DeviceResource* pTarget);
 	void CopyTexture(const Texture* pSource, const Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubregion = 0, uint32 destinationOffset = 0);
 	void CopyTexture(const Texture* pSource, const Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubregion = 0, uint32 destinationSubregion = 0);
 	void CopyBuffer(const Buffer* pSource, const Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
@@ -178,8 +178,7 @@ private:
 	void PrepareDraw();
 	void AddBarrier(const D3D12_RESOURCE_BARRIER& barrier);
 
-	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state);
-	D3D12_RESOURCE_STATES GetLocalResourceState(const GraphicsResource* pResource, uint32 subResource) const
+	D3D12_RESOURCE_STATES GetLocalResourceState(const DeviceResource* pResource, uint32 subResource) const
 	{
 		auto it = m_ResourceStates.find(pResource);
 		check(it != m_ResourceStates.end());
@@ -187,7 +186,7 @@ private:
 	}
 	struct PendingBarrier
 	{
-		GraphicsResource* pResource;
+		DeviceResource* pResource;
 		ResourceState State;
 		uint32 Subresource;
 	};
@@ -206,7 +205,7 @@ private:
 	std::array<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers> m_BatchedBarriers{};
 	uint32 m_NumBatchedBarriers = 0;
 	std::vector<PendingBarrier> m_PendingBarriers;
-	std::unordered_map<const GraphicsResource*, ResourceState> m_ResourceStates;
+	std::unordered_map<const DeviceResource*, ResourceState> m_ResourceStates;
 
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	CommandListContext m_CurrentCommandContext = CommandListContext::Invalid;
@@ -240,7 +239,7 @@ private:
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_ArgumentDesc;
 };
 
-class CommandSignature : public GraphicsObject
+class CommandSignature : public DeviceObject
 {
 public:
 	CommandSignature(GraphicsDevice* pParent, ID3D12CommandSignature* pCmdSignature);

@@ -18,94 +18,58 @@ DECLARE_BITMASK_TYPE(BufferFlag)
 
 struct BufferDesc
 {
-	BufferDesc() = default;
-	BufferDesc(uint32 elements, uint32 elementSize, BufferFlag flags = BufferFlag::None)
-		: Size((uint64)elements * elementSize), ElementSize(elementSize), Flags(flags)
-	{}
-
-	static BufferDesc CreateBuffer(uint64 sizeInBytes, BufferFlag flags = BufferFlag::None)
+	static BufferDesc CreateIndexBuffer(uint32 elements, ResourceFormat format, BufferFlag flags = BufferFlag::None)
 	{
-		BufferDesc desc;
-		desc.Size = sizeInBytes;
-		desc.ElementSize = 1;
-		desc.Flags = flags;
-		return desc;
-	}
-
-	static BufferDesc CreateIndexBuffer(uint32 elements, bool smallIndices, BufferFlag flags = BufferFlag::None)
-	{
-		return BufferDesc(elements, smallIndices ? 2 : 4, flags);
+		check(format == ResourceFormat::R32_UINT || format == ResourceFormat::R16_UINT);
+		const FormatInfo& info = RHI::GetFormatInfo(format);
+		return { .Size = elements * info.BytesPerBlock, .ElementSize = info.BytesPerBlock, .Flags = flags };
 	}
 
 	static BufferDesc CreateVertexBuffer(uint32 elements, uint32 vertexSize, BufferFlag flags = BufferFlag::None)
 	{
-		return BufferDesc(elements, vertexSize, flags);
+		return { .Size = elements * vertexSize, .ElementSize = vertexSize, .Flags = flags };
 	}
 
-	static BufferDesc CreateReadback(uint64 size)
+	static BufferDesc CreateReadback(uint64 bytes)
 	{
-		return CreateBuffer(size, BufferFlag::Readback | BufferFlag::NoBindless);
+		check(bytes % 4 == 0);
+		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::Readback | BufferFlag::NoBindless };
 	}
 
 	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag flags = BufferFlag::None)
 	{
 		check(bytes % 4 == 0);
-		BufferDesc desc;
-		desc.Size = bytes;
-		desc.ElementSize = 4;
-		desc.Flags = flags | BufferFlag::ShaderResource | BufferFlag::ByteAddress;
-		return desc;
+		return { .Size = bytes, .ElementSize = 4, .Flags = flags | BufferFlag::ShaderResource | BufferFlag::ByteAddress };
 	}
 
 	static BufferDesc CreateBLAS(uint64 bytes)
 	{
 		check(bytes % 4 == 0);
-		BufferDesc desc;
-		desc.Size = bytes;
-		desc.ElementSize = 4;
-		desc.Flags = desc.Flags | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess | BufferFlag::NoBindless;
-		return desc;
+		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess | BufferFlag::NoBindless };
 	}
 
 	static BufferDesc CreateTLAS(uint64 bytes)
 	{
 		check(bytes % 4 == 0);
-		BufferDesc desc;
-		desc.Size = bytes;
-		desc.ElementSize = 4;
-		desc.Flags = desc.Flags | BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess;
-		return desc;
+		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess };
 	}
 
 	static BufferDesc CreateStructured(uint32 elementCount, uint32 elementSize, BufferFlag flags = BufferFlag::None)
 	{
-		BufferDesc desc;
-		desc.ElementSize = elementSize;
-		desc.Size = (uint64)elementCount * desc.ElementSize;
-		desc.Flags = flags | BufferFlag::ShaderResource;
-		return desc;
+		return { .Size = (uint64)elementCount * elementSize, .ElementSize = elementSize, .Flags = flags | BufferFlag::ShaderResource };
 	}
 
 	static BufferDesc CreateTyped(uint32 elementCount, ResourceFormat format, BufferFlag flags = BufferFlag::None)
 	{
 		const FormatInfo& info = RHI::GetFormatInfo(format);
 		check(!info.IsBC);
-		BufferDesc desc;
-		desc.ElementSize = info.BytesPerBlock;
-		desc.Size = (uint64)elementCount * desc.ElementSize;
-		desc.Format = format;
-		desc.Flags = flags | BufferFlag::ShaderResource;
-		return desc;
+		return { .Size = (uint64)elementCount * info.BytesPerBlock, .ElementSize = info.BytesPerBlock, .Flags = flags | BufferFlag::ShaderResource, .Format = format };
 	}
 
 	template<typename IndirectParameters>
 	static BufferDesc CreateIndirectArguments(uint32 elements = 1, BufferFlag flags = BufferFlag::None)
 	{
-		BufferDesc desc;
-		desc.ElementSize = sizeof(IndirectParameters);
-		desc.Size = (uint64)elements * desc.ElementSize;
-		desc.Flags = flags | BufferFlag::ShaderResource | BufferFlag::IndirectArguments;
-		return desc;
+		return { .Size = (uint64)elements * sizeof(IndirectParameters), .ElementSize = sizeof(IndirectParameters), .Flags = flags | BufferFlag::ShaderResource | BufferFlag::IndirectArguments };
 	}
 
 	uint32 NumElements() const { return (uint32)(Size / ElementSize); }
@@ -132,7 +96,7 @@ struct BufferDesc
 	ResourceFormat Format = ResourceFormat::Unknown;
 };
 
-class Buffer : public GraphicsResource
+class Buffer : public DeviceResource
 {
 public:
 	friend class GraphicsDevice;
@@ -146,12 +110,13 @@ public:
 	ShaderResourceView* GetSRV() const { return m_pSRV; }
 	uint32 GetUAVIndex() const;
 	uint32 GetSRVIndex() const;
-
+	void* GetMappedData() const { check(m_pMappedData); return m_pMappedData; }
 
 private:
 	Ref<UnorderedAccessView> m_pUAV;
 	Ref<ShaderResourceView> m_pSRV;
-	
+	void* m_pMappedData = nullptr;
+
 	const BufferDesc m_Desc;
 };
 

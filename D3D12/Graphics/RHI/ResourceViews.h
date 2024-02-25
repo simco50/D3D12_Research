@@ -60,17 +60,17 @@ struct TextureUAVDesc
 	}
 };
 
-class ResourceView : public GraphicsObject
+class ResourceView : public DeviceObject
 {
 public:
-	ResourceView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor);
+	ResourceView(DeviceResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor);
 	virtual ~ResourceView();
-	GraphicsResource* GetResource() const { return m_pResource; }
+	DeviceResource* GetResource() const { return m_pResource; }
 	D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptor() const { return m_Descriptor; }
 	const DescriptorHandle& GetGPUDescriptor() const { return m_GpuDescriptor; }
 	uint32 GetHeapIndex() const { return m_GpuDescriptor.HeapIndex; }
 protected:
-	GraphicsResource* m_pResource = nullptr;
+	DeviceResource* m_pResource = nullptr;
 	D3D12_CPU_DESCRIPTOR_HANDLE m_Descriptor = {};
 	DescriptorHandle m_GpuDescriptor;
 };
@@ -78,11 +78,11 @@ protected:
 class ShaderResourceView : public ResourceView
 {
 public:
-	ShaderResourceView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor);
+	ShaderResourceView(DeviceResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor);
 };
 
 class UnorderedAccessView : public ResourceView
 {
 public:
-	UnorderedAccessView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor);
+	UnorderedAccessView(DeviceResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor);
 };

@@ -15,7 +15,7 @@ struct RingBufferAllocation
 	void* pMappedMemory = nullptr;
 };
 
-class RingBufferAllocator : public GraphicsObject
+class RingBufferAllocator : public DeviceObject
 {
 public:
 	RingBufferAllocator(GraphicsDevice* pDevice, uint32 size);

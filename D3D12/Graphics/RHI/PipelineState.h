@@ -119,7 +119,7 @@ private:
 	std::array<ShaderDesc, (int)ShaderType::MAX> m_ShaderDescs{};
 };
 
-class PipelineState : public GraphicsObject
+class PipelineState : public DeviceObject
 {
 public:
 	PipelineState(GraphicsDevice* pParent, const PipelineStateInitializer& initializer);

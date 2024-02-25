@@ -41,7 +41,7 @@ private:
 };
 
 StateObject::StateObject(GraphicsDevice* pParent, const StateObjectInitializer& initializer)
-	: GraphicsObject(pParent), m_Desc(initializer)
+	: DeviceObject(pParent), m_Desc(initializer)
 {
 	m_ReloadHandle = pParent->GetShaderManager()->OnShaderEditedEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
 }

@@ -226,7 +226,7 @@ GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
 }
 
 GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
-	: GraphicsObject(this), m_DeleteQueue(this)
+	: DeviceObject(this), m_DeleteQueue(this)
 {
 	UINT flags = 0;
 	if (options.UseDebugDevice)
@@ -1066,7 +1066,7 @@ ShaderResult GraphicsDevice::GetLibrary(const char* pShaderPath, Span<ShaderDefi
 }
 
 GraphicsDevice::DeferredDeleteQueue::DeferredDeleteQueue(GraphicsDevice* pParent)
-	: GraphicsObject(pParent)
+	: DeviceObject(pParent)
 {
 }
 
@@ -1213,7 +1213,7 @@ ResourceFormat GetSwapchainFormat(DisplayMode displayMode)
 }
 
 SwapChain::SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, uint32 numFrames, WindowHandle pNativeWindow)
-	: GraphicsObject(pDevice), m_Window(pNativeWindow), m_DesiredDisplayMode(displayMode), m_Format(GetSwapchainFormat(displayMode)), m_CurrentImage(0), m_NumFrames(numFrames)
+	: DeviceObject(pDevice), m_Window(pNativeWindow), m_DesiredDisplayMode(displayMode), m_Format(GetSwapchainFormat(displayMode)), m_CurrentImage(0), m_NumFrames(numFrames)
 {
 	m_pPresentFence = new Fence(pDevice, "Present Fence");
 

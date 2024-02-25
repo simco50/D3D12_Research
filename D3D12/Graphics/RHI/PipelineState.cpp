@@ -247,7 +247,7 @@ void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, c
 }
 
 PipelineState::PipelineState(GraphicsDevice* pParent, const PipelineStateInitializer& initializer)
-	: GraphicsObject(pParent), m_Desc(initializer)
+	: DeviceObject(pParent), m_Desc(initializer)
 {
 	m_ReloadHandle = pParent->GetShaderManager()->OnShaderEditedEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
 }

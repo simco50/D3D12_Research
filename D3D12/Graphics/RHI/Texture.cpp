@@ -3,7 +3,7 @@
 #include "Graphics.h"
 
 Texture::Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12Resource* pResource)
-	: GraphicsResource(pParent, pResource), m_Desc(desc)
+	: DeviceResource(pParent, pResource), m_Desc(desc)
 {
 }
 

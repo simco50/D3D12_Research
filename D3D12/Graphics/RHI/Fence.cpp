@@ -5,7 +5,7 @@
 #include "Graphics.h"
 
 Fence::Fence(GraphicsDevice* pParent, const char* pName, uint64 fenceValue)
-	: GraphicsObject(pParent), m_CurrentValue(fenceValue + 1), m_LastSignaled(0), m_LastCompleted(fenceValue)
+	: DeviceObject(pParent), m_CurrentValue(fenceValue + 1), m_LastSignaled(0), m_LastCompleted(fenceValue)
 {
 	VERIFY_HR_EX(pParent->GetDevice()->CreateFence(m_LastCompleted, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_pFence.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pFence.Get(), pName);

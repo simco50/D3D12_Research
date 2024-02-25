@@ -232,11 +232,11 @@ private:
 	IRGPassCallback*				pExecuteCallback = nullptr;
 };
 
-class RGResourcePool : public GraphicsObject
+class RGResourcePool : public DeviceObject
 {
 public:
 	RGResourcePool(GraphicsDevice* pDevice)
-		: GraphicsObject(pDevice)
+		: DeviceObject(pDevice)
 	{}
 
 	NO_DISCARD Ref<Texture> Allocate(const char* pName, const TextureDesc& desc);

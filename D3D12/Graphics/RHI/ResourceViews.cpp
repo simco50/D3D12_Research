@@ -5,8 +5,8 @@
 #include "Texture.h"
 #include "CPUDescriptorHeap.h"
 
-ResourceView::ResourceView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor)
-	: GraphicsObject(pParent->GetParent()), m_pResource(pParent), m_Descriptor(cpuDescriptor), m_GpuDescriptor(gpuDescriptor)
+ResourceView::ResourceView(DeviceResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor)
+	: DeviceObject(pParent->GetParent()), m_pResource(pParent), m_Descriptor(cpuDescriptor), m_GpuDescriptor(gpuDescriptor)
 {
 }
 
@@ -19,12 +19,12 @@ ResourceView::~ResourceView()
 	}
 }
 
-ShaderResourceView::ShaderResourceView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor)
+ShaderResourceView::ShaderResourceView(DeviceResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor)
 	: ResourceView(pParent, cpuDescriptor, gpuDescriptor)
 {
 }
 
-UnorderedAccessView::UnorderedAccessView(GraphicsResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor)
+UnorderedAccessView::UnorderedAccessView(DeviceResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor)
 	: ResourceView(pParent, cpuDescriptor, gpuDescriptor)
 {
 }

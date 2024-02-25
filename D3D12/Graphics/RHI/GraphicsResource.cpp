@@ -3,12 +3,12 @@
 #include "ResourceViews.h"
 #include "Graphics.h"
 
-GraphicsResource::GraphicsResource(GraphicsDevice* pParent, ID3D12Resource* pResource)
-	: GraphicsObject(pParent), m_pResource(pResource)
+DeviceResource::DeviceResource(GraphicsDevice* pParent, ID3D12Resource* pResource)
+	: DeviceObject(pParent), m_pResource(pResource)
 {
 }
 
-GraphicsResource::~GraphicsResource()
+DeviceResource::~DeviceResource()
 {
 	if (m_pResource)
 	{
@@ -24,7 +24,7 @@ GraphicsResource::~GraphicsResource()
 	}
 }
 
-void GraphicsResource::SetName(const char* pName)
+void DeviceResource::SetName(const char* pName)
 {
 	D3D::SetObjectName(m_pResource, pName);
 	m_Name = pName;

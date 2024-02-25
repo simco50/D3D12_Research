@@ -17,7 +17,7 @@ struct ScratchAllocation
 	}
 };
 
-class ScratchAllocationManager : public GraphicsObject
+class ScratchAllocationManager : public DeviceObject
 {
 public:
 	ScratchAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags, uint64 pageSize);

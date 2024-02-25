@@ -13,7 +13,7 @@
 #include "Core/Profiler.h"
 
 CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pScratchAllocationManager)
-	: GraphicsObject(pParent),
+	: DeviceObject(pParent),
 	m_ShaderResourceDescriptorAllocator(pDescriptorHeap),
 	m_ScratchAllocator(pScratchAllocationManager),
 	m_Type(type)
@@ -127,17 +127,17 @@ bool NeedsTransition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES& after,
 		return before != D3D12_RESOURCE_STATE_COMMON;
 
 	//Combine already transitioned bits
-	if (ResourceState::CanCombineResourceState(before, after) && !EnumHasAllFlags(before, after))
+	if (D3D::CanCombineResourceState(before, after) && !EnumHasAllFlags(before, after))
 		after |= before;
 
 	return true;
 }
 
-void CommandContext::InsertResourceBarrier(GraphicsResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
+void CommandContext::InsertResourceBarrier(DeviceResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
 	check(!m_InRenderPass);
 	check(pResource && pResource->GetResource());
-	check(IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
+	check(D3D::IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 	check(pResource->UseStateTracking());
 
 	ResourceState& resourceState = m_ResourceStates[pResource];
@@ -155,7 +155,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pResource, D3D12_RE
 	{
 		if (NeedsTransition(beforeState, state, true))
 		{
-			check(IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
+			check(D3D::IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 			
 			if (m_NumBatchedBarriers > 0)
 			{
@@ -164,7 +164,7 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pResource, D3D12_RE
 				if (last.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
 					&& last.Transition.pResource == pResource->GetResource()
 					&& last.Transition.StateBefore == beforeState
-					&& ResourceState::CanCombineResourceState(state, last.Transition.StateAfter))
+					&& D3D::CanCombineResourceState(state, last.Transition.StateAfter))
 				{
 					last.Transition.StateAfter |= state;
 					return;
@@ -182,12 +182,12 @@ void CommandContext::InsertResourceBarrier(GraphicsResource* pResource, D3D12_RE
 	}
 }
 
-void CommandContext::InsertAliasingBarrier(const GraphicsResource* pResource)
+void CommandContext::InsertAliasingBarrier(const DeviceResource* pResource)
 {
 	AddBarrier(CD3DX12_RESOURCE_BARRIER::Aliasing(nullptr, pResource->GetResource()));
 }
 
-void CommandContext::InsertUAVBarrier(const GraphicsResource* pResource /*= nullptr*/)
+void CommandContext::InsertUAVBarrier(const DeviceResource* pResource /*= nullptr*/)
 {
 	AddBarrier(CD3DX12_RESOURCE_BARRIER::UAV(pResource ? pResource->GetResource() : nullptr));
 }
@@ -201,7 +201,7 @@ void CommandContext::FlushResourceBarriers()
 	}
 }
 
-void CommandContext::CopyResource(const GraphicsResource* pSource, const GraphicsResource* pTarget)
+void CommandContext::CopyResource(const DeviceResource* pSource, const DeviceResource* pTarget)
 {
 	check(pSource && pSource->GetResource(), "Source is invalid");
 	check(pTarget && pTarget->GetResource(), "Target is invalid");
@@ -430,45 +430,19 @@ ScratchAllocation CommandContext::AllocateScratch(uint64 size, uint32 alignment 
 	return m_ScratchAllocator.Allocate(size, alignment);
 }
 
-bool CommandContext::IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
-{
-	constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES =
-		D3D12_RESOURCE_STATE_COMMON
-		| D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-		| D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-		| D3D12_RESOURCE_STATE_COPY_DEST
-		| D3D12_RESOURCE_STATE_COPY_SOURCE
-		| D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
-
-	constexpr int VALID_COPY_QUEUE_RESOURCE_STATES =
-		D3D12_RESOURCE_STATE_COMMON
-		| D3D12_RESOURCE_STATE_COPY_DEST
-		| D3D12_RESOURCE_STATE_COPY_SOURCE;
-
-	if (commandlistType == D3D12_COMMAND_LIST_TYPE_COMPUTE)
-	{
-		return (state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state;
-	}
-	else if (commandlistType == D3D12_COMMAND_LIST_TYPE_COPY)
-	{
-		return (state & VALID_COPY_QUEUE_RESOURCE_STATES) == state;
-	}
-	return true;
-}
-
 void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 {
 	PROFILE_GPU_SCOPE(resolveContext.GetCommandList());
 	PROFILE_CPU_SCOPE();
 
-	for (const CommandContext::PendingBarrier& pending : m_PendingBarriers)
+	for (const PendingBarrier& pending : m_PendingBarriers)
 	{
 		uint32 subResource = pending.Subresource;
-		GraphicsResource* pResource = pending.pResource;
+		DeviceResource* pResource = pending.pResource;
 
 		// Retrieve the last known resource state
 		D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
-		check(CommandContext::IsTransitionAllowed(m_Type, beforeState),
+		check(D3D::IsTransitionAllowed(m_Type, beforeState),
 			"Resource (%s) can not be transitioned from this state (%s) on this queue (%s). Insert a barrier on another queue before executing this one.",
 			pResource->GetName(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
 
@@ -798,7 +772,7 @@ void CommandContext::AddBarrier(const D3D12_RESOURCE_BARRIER& barrier)
 }
 
 CommandSignature::CommandSignature(GraphicsDevice* pParent, ID3D12CommandSignature* pCmdSignature)
-	: GraphicsObject(pParent), m_pCommandSignature(pCmdSignature)
+	: DeviceObject(pParent), m_pCommandSignature(pCmdSignature)
 {
 }
 

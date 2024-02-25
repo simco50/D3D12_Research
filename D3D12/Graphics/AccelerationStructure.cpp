@@ -256,7 +256,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 		if (!m_pPostBuildInfoBuffer)
 		{
 			uint32 requiredSize = Tweakables::gMaxNumCompactionsPerFrame * sizeof(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC);
-			m_pPostBuildInfoBuffer = context.GetParent()->CreateBuffer(BufferDesc::CreateBuffer(requiredSize, BufferFlag::UnorderedAccess), "BLASCompaction.PostBuildInfo");
+			m_pPostBuildInfoBuffer = context.GetParent()->CreateBuffer(BufferDesc{ .Size = requiredSize, .Flags = BufferFlag::UnorderedAccess }, "BLASCompaction.PostBuildInfo");
 			m_pPostBuildInfoReadbackBuffer = context.GetParent()->CreateBuffer(BufferDesc::CreateReadback(requiredSize), "BLASCompaction.PostBuildInfoReadback");
 		}
 

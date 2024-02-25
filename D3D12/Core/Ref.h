@@ -199,3 +199,29 @@ public:
 		InternalRelease();
 	}
 };
+
+
+template<typename T>
+class RefCounted
+{
+public:
+	void AddRef()
+	{
+		m_RefCount.fetch_add(1);
+	}
+
+	void Release()
+	{
+		uint32 count_prev = m_RefCount.fetch_sub(1);
+		check(count_prev >= 1);
+		if (count_prev == 1)
+			Destroy();
+	}
+
+	uint32 GetNumRefs() const { return m_RefCount; }
+
+private:
+	void Destroy() { delete static_cast<T*>(this); }
+
+	std::atomic<uint32> m_RefCount = 0;
+};

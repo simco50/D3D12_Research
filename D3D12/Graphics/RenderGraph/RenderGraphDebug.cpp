@@ -103,7 +103,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 		cursor += ImVec2(0.0f, passNameHeight);
 		ImVec2 resourceAccessPos = cursor + ImVec2(resourceNameWidth, 0.0f);
 
-		std::unordered_map<GraphicsResource*, int> resourceToIndex;
+		std::unordered_map<DeviceResource*, int> resourceToIndex;
 		for (const RGResource* pResource : m_Resources)
 		{
 			if (pResource->GetPhysical() == nullptr)
@@ -167,7 +167,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				{
 					isActivePass = true;
 					const RGPass::ResourceAccess& access = *it;
-					if (ResourceState::HasWriteResourceState(access.Access))
+					if (D3D::HasWriteResourceState(access.Access))
 						boxColor = ImColor(1.0f, 0.5f, 0.1f, 0.8f);
 					else
 						boxColor = ImColor(0.0f, 0.9f, 0.3f, 0.8f);
@@ -349,7 +349,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 				stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
 			}
 
-			if (ResourceState::HasWriteResourceState(access.Access))
+			if (D3D::HasWriteResourceState(access.Access))
 			{
 				++resourceVersions[pResource];
 				resourceVersion++;

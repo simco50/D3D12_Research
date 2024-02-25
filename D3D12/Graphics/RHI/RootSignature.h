@@ -7,7 +7,7 @@
 	A root index maps to a shader register (eg. b0, t4, u2, ...)
 */
 
-class RootSignature : public GraphicsObject
+class RootSignature : public DeviceObject
 {
 public:
 	static constexpr int sMaxNumParameters = 8;

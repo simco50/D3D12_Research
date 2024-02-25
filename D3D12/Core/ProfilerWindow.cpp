@@ -603,8 +603,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 							float time = TicksToMs * (float)(event.TicksEnd - event.TicksBegin);
 							eventTimes.push_back(time);
 							pName = event.pName;
-							if (i == context.SelectedEventFrame)
-								eventTime = time;
+							eventTime = time;
 						}
 					}
 				}
@@ -622,8 +621,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 							float time = TicksToMs * (float)(event.TicksEnd - event.TicksBegin);
 							eventTimes.push_back(time);
 							pName = event.pName;
-							if (i == context.SelectedEventFrame)
-								eventTime = time;
+							eventTime = time;
 						}
 					}
 				}

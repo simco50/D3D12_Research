@@ -35,16 +35,16 @@ public:
 	friend class RGGraph;
 	friend class RGPass;
 
-	RGResource(const char* pName, int id, RGResourceType type, GraphicsResource* pPhysicalResource = nullptr)
+	RGResource(const char* pName, int id, RGResourceType type, DeviceResource* pPhysicalResource = nullptr)
 		: pName(pName), ID(id), IsImported(!!pPhysicalResource), Type(type), pResourceReference(pPhysicalResource), pPhysicalResource(pPhysicalResource)
 	{
 	}
 
 	const char* GetName() const { return pName; }
-	GraphicsResource* GetPhysical() const { return pPhysicalResource; }
+	DeviceResource* GetPhysical() const { return pPhysicalResource; }
 
 protected:
-	void SetResource(Ref<GraphicsResource> resource)
+	void SetResource(Ref<DeviceResource> resource)
 	{
 		pResourceReference = resource;
 		pPhysicalResource = resource;
@@ -61,8 +61,8 @@ protected:
 	bool IsImported;
 	bool IsExported = false;
 	RGResourceType Type;
-	Ref<GraphicsResource> pResourceReference;
-	GraphicsResource* pPhysicalResource = nullptr;
+	Ref<DeviceResource> pResourceReference;
+	DeviceResource* pPhysicalResource = nullptr;
 	const RGPass* pFirstAccess = nullptr;
 	const RGPass* pLastAccess = nullptr;
 };

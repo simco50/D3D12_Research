@@ -23,7 +23,7 @@ class GlobalResource
 public:
 	GlobalResource& operator=(Ref<T>&& pResource)
 	{
-		static_assert(std::is_base_of_v<GraphicsObject, T>);
+		static_assert(std::is_base_of_v<DeviceObject, T>);
 		check(pResource);
 		check(m_pResource == nullptr);
 		m_pResource = pResource.Get();
@@ -48,7 +48,7 @@ enum class DisplayMode
 	HDR_scRGB,
 };
 
-class SwapChain : public GraphicsObject
+class SwapChain : public DeviceObject
 {
 public:
 	SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, uint32 numFrames, WindowHandle pNativeWindow);
@@ -130,7 +130,7 @@ private:
 	CD3DX12FeatureSupport m_FeatureSupport;
 };
 
-class GraphicsDevice : public GraphicsObject
+class GraphicsDevice : public DeviceObject
 {
 public:
 	static const uint32 NUM_BUFFERS = 2;
@@ -169,7 +169,7 @@ public:
 	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", Span<ShaderDefine> defines = {});
 	ShaderResult GetLibrary(const char* pShaderPath, Span<ShaderDefine> defines = {});
 
-	void RegisterGlobalResource(Ref<GraphicsObject>&& pResource)
+	void RegisterGlobalResource(Ref<DeviceObject>&& pResource)
 	{
 		m_GlobalResources.push_back(std::move(pResource));
 	}
@@ -216,7 +216,7 @@ private:
 	std::array<std::vector<Ref<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 
-	class DeferredDeleteQueue : public GraphicsObject
+	class DeferredDeleteQueue : public DeviceObject
 	{
 	private:
 		struct FencedObject
@@ -245,7 +245,7 @@ private:
 	Ref<ScratchAllocationManager> m_pScratchAllocationManager;
 	Ref<RingBufferAllocator> m_pRingBufferAllocator;
 
-	std::vector<Ref<GraphicsObject>> m_GlobalResources;
+	std::vector<Ref<DeviceObject>> m_GlobalResources;
 
 	std::mutex m_ContextAllocationMutex;
 };

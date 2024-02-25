@@ -80,8 +80,6 @@ struct ClearBinding
 
 struct TextureDesc
 {
-	TextureDesc() = default;
-
 	uint32 Width						= 1;
 	uint32 Height						= 1;
 	uint32 DepthOrArraySize				= 1;
@@ -178,7 +176,7 @@ struct TextureDesc
 	}
 };
 
-class Texture : public GraphicsResource
+class Texture : public DeviceResource
 {
 public:
 	friend class GraphicsDevice;

@@ -2,7 +2,7 @@
 #include "GraphicsResource.h"
 #include "Fence.h"
 
-class CommandQueue : public GraphicsObject
+class CommandQueue : public DeviceObject
 {
 public:
 	CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type);

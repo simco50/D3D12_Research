@@ -56,7 +56,7 @@ private:
 	std::vector<StateObject*> m_Collections;
 };
 
-class StateObject : public GraphicsObject
+class StateObject : public DeviceObject
 {
 public:
 	StateObject(GraphicsDevice* pParent, const StateObjectInitializer& initializer);
