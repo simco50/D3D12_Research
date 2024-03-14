@@ -79,11 +79,11 @@ struct PSOut
 	float Roughness : SV_Target2;
 };
 
-void VisibilityShadingCommon(uint2 texel, out PSOut output)
+bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 {
 	uint candidateIndex, primitiveID;
 	if(!UnpackVisBuffer(tVisibilityTexture[texel], candidateIndex, primitiveID))
-		return;
+		return false;
 
 	float2 uv = (0.5f + texel) * cView.ViewportDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, uv, 0);
@@ -122,6 +122,7 @@ void VisibilityShadingCommon(uint2 texel, out PSOut output)
 	output.Color = float4(outRadiance, surface.Opacity);
 	output.Normal = EncodeNormalOctahedron(surface.Normal);
 	output.Roughness = reflectivity;
+	return true;
 }
 
 void ShadePS(
@@ -142,9 +143,10 @@ void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 	uint2 texel = threadId.xy;
 
 	PSOut output;
-	VisibilityShadingCommon(texel, output);
-
-	uColorTarget[texel] = output.Color;
-	uNormalsTarget[texel] = output.Normal;
-	uRoughnessTarget[texel] = output.Roughness;
+	if(VisibilityShadingCommon(texel, output))
+	{
+		uColorTarget[texel] = output.Color;
+		uNormalsTarget[texel] = output.Normal;
+		uRoughnessTarget[texel] = output.Roughness;
+	}
 }

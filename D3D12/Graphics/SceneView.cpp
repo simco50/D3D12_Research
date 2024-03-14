@@ -68,19 +68,19 @@ namespace Renderer
 		parameters.FrameIndex = pView->FrameIndex;
 		parameters.NumInstances = (uint32)pView->Batches.size();
 		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
-		parameters.LightCount = pView->NumLights;
+		parameters.LightCount = pView->LightBuffer.Count;
 		parameters.CascadeDepths = pView->ShadowCascadeDepths;
 		parameters.NumCascades = pView->NumShadowCascades;
 
 		parameters.TLASIndex = pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.MeshesIndex = pView->pMeshBuffer->GetSRVIndex();
-		parameters.MaterialsIndex = pView->pMaterialBuffer->GetSRVIndex();
-		parameters.InstancesIndex = pView->pInstanceBuffer->GetSRVIndex();
-		parameters.LightsIndex = pView->pLightBuffer->GetSRVIndex();
-		parameters.LightMatricesIndex = pView->pLightMatricesBuffer->GetSRVIndex();
+		parameters.MeshesIndex = pView->MeshBuffer.pBuffer->GetSRVIndex();
+		parameters.MaterialsIndex = pView->MaterialBuffer.pBuffer->GetSRVIndex();
+		parameters.InstancesIndex = pView->InstanceBuffer.pBuffer->GetSRVIndex();
+		parameters.LightsIndex = pView->LightBuffer.pBuffer->GetSRVIndex();
+		parameters.LightMatricesIndex = pView->LightMatricesBuffer.pBuffer->GetSRVIndex();
 		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.DDGIVolumesIndex = pView->pDDGIVolumesBuffer->GetSRVIndex();
-		parameters.NumDDGIVolumes = pView->NumDDGIVolumes;
+		parameters.DDGIVolumesIndex = pView->DDGIVolumesBuffer.pBuffer->GetSRVIndex();
+		parameters.NumDDGIVolumes = pView->DDGIVolumesBuffer.Count;
 
 		parameters.FontDataIndex = pView->DebugRenderData.FontDataSRV;
 		parameters.DebugRenderDataIndex = pView->DebugRenderData.RenderDataUAV;
@@ -99,83 +99,104 @@ namespace Renderer
 		PROFILE_CPU_SCOPE();
 		PROFILE_GPU_SCOPE(context.GetCommandList());
 
-		std::vector<ShaderInterop::MaterialData> materials;
-		materials.reserve(128);
-		std::vector<ShaderInterop::MeshData> meshes;
-		meshes.reserve(128);
-		std::vector<ShaderInterop::InstanceData> meshInstances;
-		meshInstances.reserve(pView->Batches.size());
+		GraphicsDevice* pDevice = context.GetParent();
+		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, SceneView::SceneBuffer& target)
+			{
+				uint32 desiredElements = Math::AlignUp(Math::Max(1u, numElements), 8u);
+				if (!target.pBuffer || desiredElements > target.pBuffer->GetNumElements())
+					target.pBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(desiredElements, stride, BufferFlag::ShaderResource), pName);
+				ScratchAllocation alloc = context.AllocateScratch(numElements * stride);
+				memcpy(alloc.pMappedMemory, pSource, numElements * stride);
+				context.CopyBuffer(alloc.pBackingResource, target.pBuffer, alloc.Size, alloc.Offset, 0);
+				target.Count = numElements;
+			};
+
+
 		std::vector<Batch> sceneBatches;
-		sceneBatches.reserve(pView->Batches.size());
 		uint32 instanceID = 0;
 
-		for (const auto& pMesh : pWorld->Meshes)
+		// Instances
 		{
-			for (const SubMeshInstance& node : pMesh->GetMeshInstances())
+			std::vector<ShaderInterop::InstanceData> meshInstances;
+
+			auto view = pWorld->Registry.view<Transform, Model>();
+			view.each([&](const Transform& transform, const Model& model)
+				{
+					const Mesh& mesh = pWorld->Meshes[model.MeshIndex];
+					const Material& meshMaterial = pWorld->Materials[mesh.MaterialId];
+
+					auto GetBlendMode = [](MaterialAlphaMode mode) {
+						switch (mode)
+						{
+						case MaterialAlphaMode::Blend: return Batch::Blending::AlphaBlend;
+						case MaterialAlphaMode::Opaque: return Batch::Blending::Opaque;
+						case MaterialAlphaMode::Masked: return Batch::Blending::AlphaMask;
+						}
+						return Batch::Blending::Opaque;
+						};
+
+					Batch& batch = sceneBatches.emplace_back();
+					batch.InstanceID		= instanceID;
+					batch.pMesh				= &mesh;
+					batch.BlendMode			= GetBlendMode(meshMaterial.AlphaMode);
+					batch.WorldMatrix		= transform.World;
+					batch.Radius			= Vector3(batch.Bounds.Extents).Length();
+					mesh.Bounds.Transform(batch.Bounds, batch.WorldMatrix);
+
+					ShaderInterop::InstanceData& meshInstance = meshInstances.emplace_back();
+					meshInstance.ID						= instanceID;
+					meshInstance.MeshIndex				= model.MeshIndex;
+					meshInstance.MaterialIndex			= mesh.MaterialId;
+					meshInstance.LocalToWorld			= transform.World;
+					meshInstance.LocalToWorldPrev		= transform.World; //#todo
+					meshInstance.LocalBoundsOrigin		= mesh.Bounds.Center;
+					meshInstance.LocalBoundsExtents		= mesh.Bounds.Extents;
+
+					++instanceID;
+				});
+			CopyBufferData((uint32)meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Instances", meshInstances.data(), pView->InstanceBuffer);
+		}
+
+		// Meshes
+		{
+			std::vector<ShaderInterop::MeshData> meshes;
+			meshes.reserve(pWorld->Meshes.size());
+			for(const Mesh& mesh : pWorld->Meshes)
 			{
-				SubMesh& parentMesh = pMesh->GetMesh(node.MeshIndex);
-				const Material& meshMaterial = pMesh->GetMaterial(parentMesh.MaterialId);
+				ShaderInterop::MeshData& meshData = meshes.emplace_back();
+				meshData.BufferIndex			= mesh.pBuffer->GetSRVIndex();
+				meshData.IndexByteSize			= mesh.IndicesLocation.Stride();
+				meshData.IndicesOffset			= (uint32)mesh.IndicesLocation.OffsetFromStart;
+				meshData.PositionsOffset		= (uint32)mesh.PositionStreamLocation.OffsetFromStart;
+				meshData.NormalsOffset			= (uint32)mesh.NormalStreamLocation.OffsetFromStart;
+				meshData.ColorsOffset			= (uint32)mesh.ColorsStreamLocation.OffsetFromStart;
+				meshData.UVsOffset				= (uint32)mesh.UVStreamLocation.OffsetFromStart;
 
-				auto GetBlendMode = [](MaterialAlphaMode mode) {
-					switch (mode)
-					{
-					case MaterialAlphaMode::Blend: return Batch::Blending::AlphaBlend;
-					case MaterialAlphaMode::Opaque: return Batch::Blending::Opaque;
-					case MaterialAlphaMode::Masked: return Batch::Blending::AlphaMask;
-					}
-					return Batch::Blending::Opaque;
-				};
-
-				Batch& batch = sceneBatches.emplace_back();
-				batch.InstanceID = instanceID;
-				batch.pMesh = &parentMesh;
-				batch.BlendMode = GetBlendMode(meshMaterial.AlphaMode);
-				batch.WorldMatrix = node.Transform;
-				parentMesh.Bounds.Transform(batch.Bounds, batch.WorldMatrix);
-				batch.Radius = Vector3(batch.Bounds.Extents).Length();
-
-				ShaderInterop::InstanceData& meshInstance = meshInstances.emplace_back();
-				meshInstance.ID = instanceID;
-				meshInstance.MeshIndex = (uint32)meshes.size() + node.MeshIndex;
-				meshInstance.MaterialIndex = (uint32)materials.size() + parentMesh.MaterialId;
-				meshInstance.LocalToWorld = node.Transform;
-				meshInstance.LocalToWorldPrev = node.Transform; //#todo
-				meshInstance.LocalBoundsOrigin = parentMesh.Bounds.Center;
-				meshInstance.LocalBoundsExtents = parentMesh.Bounds.Extents;
-
-				++instanceID;
+				meshData.MeshletOffset			= mesh.MeshletsLocation;
+				meshData.MeshletVertexOffset	= mesh.MeshletVerticesLocation;
+				meshData.MeshletTriangleOffset	= mesh.MeshletTrianglesLocation;
+				meshData.MeshletBoundsOffset	= mesh.MeshletBoundsLocation;
+				meshData.MeshletCount			= mesh.NumMeshlets;
 			}
+			CopyBufferData((uint32)meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->MeshBuffer);
+		}
 
-			for (const SubMesh& subMesh : pMesh->GetMeshes())
-			{
-				ShaderInterop::MeshData& mesh = meshes.emplace_back();
-				mesh.BufferIndex = pMesh->GetData()->GetSRVIndex();
-				mesh.IndexByteSize = subMesh.IndicesLocation.Stride();
-				mesh.IndicesOffset = (uint32)subMesh.IndicesLocation.OffsetFromStart;
-				mesh.PositionsOffset = (uint32)subMesh.PositionStreamLocation.OffsetFromStart;
-				mesh.NormalsOffset = (uint32)subMesh.NormalStreamLocation.OffsetFromStart;
-				mesh.ColorsOffset = (uint32)subMesh.ColorsStreamLocation.OffsetFromStart;
-				mesh.UVsOffset = (uint32)subMesh.UVStreamLocation.OffsetFromStart;
-
-				mesh.MeshletOffset = subMesh.MeshletsLocation;
-				mesh.MeshletVertexOffset = subMesh.MeshletVerticesLocation;
-				mesh.MeshletTriangleOffset = subMesh.MeshletTrianglesLocation;
-				mesh.MeshletBoundsOffset = subMesh.MeshletBoundsLocation;
-				mesh.MeshletCount = subMesh.NumMeshlets;
-			}
-
-			for (const Material& material : pMesh->GetMaterials())
+		// Materials
+		{
+			std::vector<ShaderInterop::MaterialData> materials;
+			materials.reserve(pWorld->Materials.size());
+			for (const Material& material : pWorld->Materials)
 			{
 				ShaderInterop::MaterialData& materialData = materials.emplace_back();
-				materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRVIndex() : -1;
-				materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRVIndex() : -1;
+				materialData.Diffuse			= material.pDiffuseTexture ? material.pDiffuseTexture->GetSRVIndex() : -1;
+				materialData.Normal				= material.pNormalTexture ? material.pNormalTexture->GetSRVIndex() : -1;
 				materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRVIndex() : -1;
-				materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRVIndex() : -1;
-				materialData.BaseColorFactor = material.BaseColorFactor;
-				materialData.MetalnessFactor = material.MetalnessFactor;
-				materialData.RoughnessFactor = material.RoughnessFactor;
-				materialData.EmissiveFactor = material.EmissiveFactor;
-				materialData.AlphaCutoff = material.AlphaCutoff;
+				materialData.Emissive			= material.pEmissiveTexture ? material.pEmissiveTexture->GetSRVIndex() : -1;
+				materialData.BaseColorFactor	= material.BaseColorFactor;
+				materialData.MetalnessFactor	= material.MetalnessFactor;
+				materialData.RoughnessFactor	= material.RoughnessFactor;
+				materialData.EmissiveFactor		= material.EmissiveFactor;
+				materialData.AlphaCutoff		= material.AlphaCutoff;
 				switch (material.AlphaMode)
 				{
 				case MaterialAlphaMode::Blend:	materialData.RasterBin = 0xFFFFFFFF;	break;
@@ -183,77 +204,65 @@ namespace Renderer
 				case MaterialAlphaMode::Masked: materialData.RasterBin = 1;				break;
 				}
 			}
+			CopyBufferData((uint32)materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->MaterialBuffer);
 		}
-		sceneBatches.swap(pView->Batches);
 
-		std::vector<Matrix> lightMatrices(pView->ShadowViews.size());
-		for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
-			lightMatrices[i] = pView->ShadowViews[i].View.ViewProjection;
-
-		std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
+		// DDGI
 		if (Tweakables::g_EnableDDGI)
 		{
+			std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
 			auto ddgi_view = pWorld->Registry.view<Transform, DDGIVolume>();
 			ddgi_view.each([&](const Transform& transform, const DDGIVolume& volume)
 				{
 					ShaderInterop::DDGIVolume& ddgi = ddgiVolumes.emplace_back();
-					ddgi.BoundsMin = transform.Position - volume.Extents;
-					ddgi.ProbeSize = 2 * volume.Extents / (Vector3((float)volume.NumProbes.x, (float)volume.NumProbes.y, (float)volume.NumProbes.z) - Vector3::One);
-					ddgi.ProbeVolumeDimensions = Vector3u(volume.NumProbes.x, volume.NumProbes.y, volume.NumProbes.z);
-					ddgi.IrradianceIndex = volume.pIrradianceHistory ? volume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.DepthIndex = volume.pDepthHistory ? volume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.ProbeOffsetIndex = volume.pProbeOffset ? volume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.ProbeStatesIndex = volume.pProbeStates ? volume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.NumRaysPerProbe = volume.NumRays;
-					ddgi.MaxRaysPerProbe = volume.MaxNumRays;
+					ddgi.BoundsMin				= transform.Position - volume.Extents;
+					ddgi.ProbeSize				= 2 * volume.Extents / (Vector3((float)volume.NumProbes.x, (float)volume.NumProbes.y, (float)volume.NumProbes.z) - Vector3::One);
+					ddgi.ProbeVolumeDimensions	= Vector3u(volume.NumProbes.x, volume.NumProbes.y, volume.NumProbes.z);
+					ddgi.IrradianceIndex		= volume.pIrradianceHistory ? volume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.DepthIndex				= volume.pDepthHistory ? volume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.ProbeOffsetIndex		= volume.pProbeOffset ? volume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.ProbeStatesIndex		= volume.pProbeStates ? volume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.NumRaysPerProbe		= volume.NumRays;
+					ddgi.MaxRaysPerProbe		= volume.MaxNumRays;
 				});
+			CopyBufferData((uint32)ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->DDGIVolumesBuffer);
 		}
-		pView->NumDDGIVolumes = (uint32)ddgiVolumes.size();
 
-		std::vector<ShaderInterop::Light> lightData;
-
-		auto light_view = pWorld->Registry.view<const Transform, const Light>();
-		light_view.each([&](const Transform& transform, const Light& light)
-			{
-				ShaderInterop::Light& data = lightData.emplace_back();
-				data.Position = transform.Position;
-				data.Direction = Vector3::Transform(Vector3::Forward, transform.Rotation);
-				data.SpotlightAngles.x = cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-				data.SpotlightAngles.y = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-				data.Color = Math::Pack_RGBA8_UNORM(light.Colour);
-				data.Intensity = light.Intensity;
-				data.Range = light.Range;
-				data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-				data.MaskTexture = light.pLightTexture ? light.pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-				data.MatrixIndex = light.MatrixIndex;
-				data.InvShadowSize = 1.0f / light.ShadowMapSize;
-				data.IsEnabled = light.Intensity > 0 ? 1 : 0;
-				data.IsVolumetric = light.VolumetricLighting;
-				data.CastShadows = light.ShadowMaps.size() && light.CastShadows;
-				data.IsPoint = light.Type == LightType::Point;
-				data.IsSpot = light.Type == LightType::Spot;
-				data.IsDirectional = light.Type == LightType::Directional;
-			});
-
-		pView->NumLights = (uint32)lightData.size();
-
-		GraphicsDevice* pDevice = context.GetParent();
-		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, Ref<Buffer>& pTarget)
+		// Lights
 		{
-			uint32 desiredElements = Math::AlignUp(Math::Max(1u, numElements), 8u);
-			if (!pTarget || desiredElements > pTarget->GetNumElements())
-			{
-				pTarget = pDevice->CreateBuffer(BufferDesc::CreateStructured(desiredElements, stride, BufferFlag::ShaderResource), pName);
-			}
-			context.WriteBuffer(pTarget, pSource, numElements * stride);
-		};
+			std::vector<ShaderInterop::Light> lightData;
+			auto light_view = pWorld->Registry.view<const Transform, const Light>();
+			light_view.each([&](const Transform& transform, const Light& light)
+				{
+					ShaderInterop::Light& data = lightData.emplace_back();
+					data.Position			= transform.Position;
+					data.Direction			= Vector3::Transform(Vector3::Forward, transform.Rotation);
+					data.SpotlightAngles.x	= cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+					data.SpotlightAngles.y	= cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+					data.Color				= Math::Pack_RGBA8_UNORM(light.Colour);
+					data.Intensity			= light.Intensity;
+					data.Range				= light.Range;
+					data.ShadowMapIndex		= light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					data.MaskTexture		= light.pLightTexture ? light.pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					data.MatrixIndex		= light.MatrixIndex;
+					data.InvShadowSize		= 1.0f / light.ShadowMapSize;
+					data.IsEnabled			= light.Intensity > 0 ? 1 : 0;
+					data.IsVolumetric		= light.VolumetricLighting;
+					data.CastShadows		= light.ShadowMaps.size() && light.CastShadows;
+					data.IsPoint			= light.Type == LightType::Point;
+					data.IsSpot				= light.Type == LightType::Spot;
+					data.IsDirectional		= light.Type == LightType::Directional;
+				});
+			CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->LightBuffer);
+		}
+		{
+			std::vector<Matrix> lightMatrices(pView->ShadowViews.size());
+			for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
+				lightMatrices[i] = pView->ShadowViews[i].View.ViewProjection;
+			CopyBufferData((uint32)lightMatrices.size(), sizeof(Matrix), "Light Matrices", lightMatrices.data(), pView->LightMatricesBuffer);
+		}
 
-		CopyBufferData((uint32)ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->pDDGIVolumesBuffer);
-		CopyBufferData((uint32)meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->pMeshBuffer);
-		CopyBufferData((uint32)meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Instances", meshInstances.data(), pView->pInstanceBuffer);
-		CopyBufferData((uint32)materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->pMaterialBuffer);
-		CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->pLightBuffer);
-		CopyBufferData((uint32)lightMatrices.size(), sizeof(Matrix), "Light Matrices", lightMatrices.data(), pView->pLightMatricesBuffer);
+		sceneBatches.swap(pView->Batches);
 	}
 
 	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes)

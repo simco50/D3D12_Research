@@ -117,8 +117,6 @@ public:
 	void CopyTexture(const Texture* pSource, const Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubregion = 0, uint32 destinationOffset = 0);
 	void CopyTexture(const Texture* pSource, const Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubregion = 0, uint32 destinationSubregion = 0);
 	void CopyBuffer(const Buffer* pSource, const Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
-	void WriteBuffer(const Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset = 0);
-	void WriteTexture(Texture* pResource, Span<D3D12_SUBRESOURCE_DATA> subResourceDatas, uint32 firstSubResource);
 
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
 	void Dispatch(const Vector3i& groupCounts);

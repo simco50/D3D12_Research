@@ -631,10 +631,43 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 	{
 		check(initData.GetSize() == desc.DepthOrArraySize * desc.Mips);
 
-		uint64 requiredSize = GetRequiredIntermediateSize(pTexture->GetResource(), 0, initData.GetSize());
+		uint64 requiredSize = 0;
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layouts[16];
+		uint32 numRows[16];
+		uint64 rowSizes[16];
+		m_pDevice->GetCopyableFootprints(&resourceDesc, 0, initData.GetSize(), 0, layouts, numRows, rowSizes, &requiredSize);
 		RingBufferAllocation allocation;
 		m_pRingBufferAllocator->Allocate((uint32)requiredSize, allocation);
-		UpdateSubresources(allocation.pContext->GetCommandList(), pTexture->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, 0, initData.GetSize(), initData.GetData());
+
+		for (uint32 subResource = 0; subResource < initData.GetSize(); ++subResource)
+		{
+			const D3D12_SUBRESOURCE_DATA& srcData = initData[subResource];
+			D3D12_PLACED_SUBRESOURCE_FOOTPRINT& dstLayout = layouts[subResource];
+
+			D3D12_MEMCPY_DEST dest =
+			{
+				.pData = (char*)allocation.pMappedMemory + dstLayout.Offset,
+				.RowPitch = dstLayout.Footprint.RowPitch,
+				.SlicePitch = (uint64)dstLayout.Footprint.RowPitch * numRows[subResource]
+			};
+
+			for (uint32 z = 0; z < dstLayout.Footprint.Depth; ++z)
+			{
+				char* pDest = (char*)dest.pData + dest.SlicePitch * z;
+				const char* pSrc = (char*)srcData.pData + srcData.SlicePitch * z;
+				for (uint32 y = 0; y < numRows[subResource]; ++y)
+				{
+					memcpy(pDest + y * dest.RowPitch, pSrc + y * srcData.RowPitch, rowSizes[subResource]);
+				}
+			}
+
+			dstLayout.Offset += allocation.Offset;
+
+			const CD3DX12_TEXTURE_COPY_LOCATION dst(pTexture->GetResource(), subResource);
+			const CD3DX12_TEXTURE_COPY_LOCATION src(allocation.pBackingResource->GetResource(), dstLayout);
+			allocation.pContext->GetCommandList()->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+		}
+
 		m_pRingBufferAllocator->Free(allocation);
 	}
 

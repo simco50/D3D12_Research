@@ -10,9 +10,10 @@
 
 #include "External/EnTT/entt.hpp"
 
-class Mesh;
+class LoadedScene;
+struct Mesh;
 class Image;
-struct SubMesh;
+struct Material;
 struct Light;
 
 enum class StencilBit : uint8
@@ -28,21 +29,19 @@ DECLARE_BITMASK_TYPE(StencilBit);
 
 struct Transform
 {
-	Vector3 Position = Vector3::Zero;
+	Vector3 Position	= Vector3::Zero;
 	Quaternion Rotation = Quaternion::Identity;
-	Vector3 Scale = Vector3::One;
+	Vector3 Scale		= Vector3::One;
 
-	Matrix GetTransform() const
-	{
-		return Matrix::CreateScale(Scale) *
-			Matrix::CreateFromQuaternion(Rotation) *
-			Matrix::CreateTranslation(Position);
-	}
+	Matrix World		= Matrix::Identity;
 };
 
 struct World
 {
-	std::vector<std::unique_ptr<Mesh>> Meshes;
+	std::vector<Ref<Buffer>> GeometryData;
+	std::vector<Ref<Texture>> Textures;
+	std::vector<Mesh> Meshes;
+	std::vector<Material> Materials;
 
 	entt::registry Registry;
 	entt::entity Sunlight;
@@ -88,7 +87,7 @@ struct Batch
 	};
 	uint32 InstanceID;
 	Blending BlendMode = Blending::Opaque;
-	SubMesh* pMesh;
+	const Mesh* pMesh;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 	float Radius;
@@ -110,12 +109,19 @@ struct SceneView
 {
 	const World* pWorld = nullptr;
 	std::vector<Batch> Batches;
-	Ref<Buffer> pLightBuffer;
-	Ref<Buffer> pMaterialBuffer;
-	Ref<Buffer> pMeshBuffer;
-	Ref<Buffer> pInstanceBuffer;
-	Ref<Buffer> pDDGIVolumesBuffer;
-	Ref<Buffer> pLightMatricesBuffer;
+
+	struct SceneBuffer
+	{
+		uint32 Count;
+		Ref<Buffer> pBuffer;
+	};
+
+	SceneBuffer LightBuffer;
+	SceneBuffer MaterialBuffer;
+	SceneBuffer MeshBuffer;
+	SceneBuffer InstanceBuffer;
+	SceneBuffer DDGIVolumesBuffer;
+	SceneBuffer LightMatricesBuffer;
 	Ref<Texture> pSky;
 	AccelerationStructure AccelerationStructure;
 	GPUDebugRenderData DebugRenderData;
@@ -129,8 +135,6 @@ struct SceneView
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
 
-	uint32 NumLights = 0;
-	uint32 NumDDGIVolumes = 0;
 	int FrameIndex = 0;
 	bool CameraCut = false;
 
@@ -142,13 +146,13 @@ struct SceneView
 
 struct SceneTextures
 {
-	RGTexture* pPreviousColor = nullptr;
-	RGTexture* pRoughness = nullptr;
-	RGTexture* pColorTarget = nullptr;
-	RGTexture* pDepth = nullptr;
-	RGTexture* pNormals = nullptr;
-	RGTexture* pVelocity = nullptr;
-	RGTexture* pAmbientOcclusion = nullptr;
+	RGTexture* pPreviousColor		= nullptr;
+	RGTexture* pRoughness			= nullptr;
+	RGTexture* pColorTarget			= nullptr;
+	RGTexture* pDepth				= nullptr;
+	RGTexture* pNormals				= nullptr;
+	RGTexture* pVelocity			= nullptr;
+	RGTexture* pAmbientOcclusion	= nullptr;
 };
 
 namespace Renderer

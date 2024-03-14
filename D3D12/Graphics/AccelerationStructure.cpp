@@ -59,15 +59,14 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 
 		for (const Batch& batch : view.Batches)
 		{
-			SubMesh* pMesh = batch.pMesh;
-			Mesh* pParentMesh = pMesh->pParent;
+			Mesh* pMesh = const_cast<Mesh*>(batch.pMesh);
 
 			if (!pMesh->pBLAS && numBLASBuiltVertices < Tweakables::gMaxNumBLASVerticesPerFrame)
 			{
 				numBLASBuiltVertices += pMesh->PositionStreamLocation.Elements;
 				++numBuiltBLAS;
 
-				const Material& material = pParentMesh->GetMaterial(pMesh->MaterialId);
+				const Material& material = view.pWorld->Materials[pMesh->MaterialId];
 				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 				geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
@@ -174,7 +173,11 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			if (!blasInstances.empty())
 			{
 				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
-				context.WriteBuffer(m_pBLASInstancesSourceBuffer, blasInstances.data(), sizeof(BLASInstance) * blasInstances.size());
+
+				ScratchAllocation alloc = context.AllocateScratch(sizeof(BLASInstance) * blasInstances.size());
+				memcpy(alloc.pMappedMemory, blasInstances.data(), sizeof(BLASInstance)* blasInstances.size());
+				context.CopyBuffer(alloc.pBackingResource, m_pBLASInstancesSourceBuffer, alloc.Size, alloc.Offset, 0);
+
 				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 

@@ -249,21 +249,6 @@ void CommandContext::CopyBuffer(const Buffer* pSource, const Buffer* pTarget, ui
 	m_pCommandList->CopyBufferRegion(pTarget->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }
 
-void CommandContext::WriteBuffer(const Buffer* pResource, const void* pData, uint64 dataSize, uint64 offset)
-{
-	ScratchAllocation allocation = AllocateScratch(dataSize, 1);
-	memcpy(allocation.pMappedMemory, pData, dataSize);
-	CopyBuffer(allocation.pBackingResource, pResource, dataSize, allocation.Offset, offset);
-}
-
-void CommandContext::WriteTexture(Texture* pResource, Span<D3D12_SUBRESOURCE_DATA> subResourceDatas, uint32 firstSubResource)
-{
-	FlushResourceBarriers();
-	uint64 requiredSize = GetRequiredIntermediateSize(pResource->GetResource(), firstSubResource, subResourceDatas.GetSize());
-	ScratchAllocation allocation = AllocateScratch(requiredSize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-	UpdateSubresources(m_pCommandList, pResource->GetResource(), allocation.pBackingResource->GetResource(), allocation.Offset, firstSubResource, subResourceDatas.GetSize(), subResourceDatas.GetData());
-}
-
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
 {
 	check(m_pCurrentPSO);

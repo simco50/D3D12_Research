@@ -77,9 +77,9 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 		uint32 IsPoint : 1;
 		uint32 IsDirectional : 1;
 	};
-	uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->NumLights;
+	uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->LightBuffer.Count;
 
-	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->NumLights, sizeof(PrecomputedLightData)));
+	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->LightBuffer.Count, sizeof(PrecomputedLightData)));
 	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
 		.Write(pPrecomputeData)
 		.Bind([=](CommandContext& context)
@@ -162,12 +162,12 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 		float SphereRadius;
 	};
 
-	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->NumLights, sizeof(PrecomputedLightData)));
+	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->LightBuffer.Count, sizeof(PrecomputedLightData)));
 	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
 		.Write(pPrecomputeData)
 		.Bind([=](CommandContext& context)
 			{
-				uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->NumLights;
+				uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->LightBuffer.Count;
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 

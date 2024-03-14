@@ -11,6 +11,7 @@
 #include "Graphics/RHI/PipelineState.h"
 #include "Graphics/RHI/ShaderBindingTable.h"
 #include "Graphics/RHI/StateObject.h"
+#include "Graphics/RHI/RingBufferAllocator.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/Techniques/GpuParticles.h"
 #include "Graphics/Techniques/RTAO.h"
@@ -153,7 +154,7 @@ void DemoApp::SetupScene()
 	m_pCamera->SetPosition(Vector3(-1.3f, 12.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
-	LoadMesh("Resources/Scenes/Sponza/Sponza.gltf", m_World);
+	SceneLoader::Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice, m_World, 1.0f);
 
 
 	{
@@ -283,6 +284,10 @@ void DemoApp::Update()
 		m_pCamera->SetJitter(Tweakables::g_TAA && m_RenderPath != RenderPath::PathTracing);
 		m_pCamera->Update();
 
+		m_World.Registry.sort<Light>([](const Light& a, const Light& b) {
+			return (int)a.Type < (int)b.Type;
+			});
+
 		CreateShadowViews(m_SceneData, m_World);
 		m_SceneData.MainView = m_pCamera->GetViewTransform();
 		m_SceneData.FrameIndex = m_Frame;
@@ -334,12 +339,29 @@ void DemoApp::Update()
 		SceneView* pViewMut = &m_SceneData;
 		World* pWorldMut = &m_World;
 
+		auto view = pWorldMut->Registry.view<Transform>();
+		view.each([&](Transform& transform)
+			{
+				transform.World = Matrix::CreateScale(transform.Scale) *
+					Matrix::CreateFromQuaternion(transform.Rotation) *
+					Matrix::CreateTranslation(transform.Position);
+			});
+
 		{
-			PROFILE_CPU_SCOPE("Update GPU Scene");
 			CommandContext* pContext = m_pDevice->AllocateCommandContext();
-			Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
-			pViewMut->AccelerationStructure.Build(*pContext, *pView);
+			{
+				PROFILE_GPU_SCOPE(pContext->GetCommandList(), "Update GPU Scene");
+				Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
+				pViewMut->AccelerationStructure.Build(*pContext, *pView);
+			}
 			pContext->Execute();
+		}
+
+		{
+			PROFILE_CPU_SCOPE("Flush GPU uploads");
+			SyncPoint uploadSync = m_pDevice->GetRingBuffer()->Flush();
+			if (uploadSync.IsValid())
+				m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWait(uploadSync);
 		}
 
 		{
@@ -1283,8 +1305,7 @@ void DemoApp::UpdateImGui()
 
 				if (GetOpenFileNameA(&ofn) == TRUE)
 				{
-					m_World.Meshes.clear();
-					LoadMesh(ofn.lpstrFile, m_World);
+					SceneLoader::Load(ofn.lpstrFile, m_pDevice, m_World, 1.0f);
 				}
 			}
 			ImGui::EndMenu();
@@ -1592,12 +1613,6 @@ void DemoApp::UpdateImGui()
 	ImGui::End();
 }
 
-void DemoApp::LoadMesh(const std::string& filePath, World& world)
-{
-	std::unique_ptr<Mesh> pMesh = std::make_unique<Mesh>();
-	pMesh->Load(filePath.c_str(), m_pDevice, 1.0f);
-	world.Meshes.push_back(std::move(pMesh));
-}
 
 void DemoApp::CreateShadowViews(SceneView& view, World& world)
 {
@@ -1687,7 +1702,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				Vector3::Transform(Vector3(1, -1, 0), vpInverse),
 			};
 
-			const Matrix lightView = transform.GetTransform().Invert();
+			const Matrix lightView = transform.World.Invert();
 			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
 			{
 				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
@@ -1755,7 +1770,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				return;
 
 			const Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.01f);
-			const Matrix lightView = transform.GetTransform().Invert();
+			const Matrix lightView = transform.World.Invert();
 
 			ShadowView shadowView;
 			ViewTransform& shadowViewTransform = shadowView.View;

@@ -63,7 +63,10 @@ bool RingBufferAllocator::Allocate(uint32 size, RingBufferAllocation& allocation
 	if (offset == InvalidOffset)
 		return false;
 
-	allocation.pContext = GetParent()->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+	if (!m_pContext)
+		m_pContext = GetParent()->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
+
+	allocation.pContext = m_pContext;
 	allocation.Offset = offset;
 	allocation.Size = size;
 	allocation.GpuHandle = m_pBuffer->GetGpuHandle() + offset;
@@ -75,7 +78,6 @@ bool RingBufferAllocator::Allocate(uint32 size, RingBufferAllocation& allocation
 void RingBufferAllocator::Free(RingBufferAllocation& allocation)
 {
 	std::lock_guard lock(m_Lock);
-	m_LastSync = allocation.pContext->Execute();
 
 	RetiredAllocation retired;
 	retired.Offset = allocation.Offset;
@@ -88,10 +90,13 @@ void RingBufferAllocator::Free(RingBufferAllocation& allocation)
 	allocation.pMappedMemory = nullptr;
 }
 
-void RingBufferAllocator::SyncQueue(CommandQueue* pQueue)
+SyncPoint RingBufferAllocator::Flush()
 {
-	if (m_LastSync.IsValid())
+	if (m_pContext)
 	{
-		pQueue->InsertWait(m_LastSync);
+		CommandContext* pContext = m_pContext;
+		m_pContext = nullptr;
+		return pContext->Execute();
 	}
+	return SyncPoint();
 }

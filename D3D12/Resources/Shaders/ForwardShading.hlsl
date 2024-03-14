@@ -22,13 +22,13 @@ ConstantBuffer<PerViewData> cPass : register(b1);
 
 struct InterpolantsVSToPS
 {
-	float4 Position : SV_Position;
-	float2 UV : TEXCOORD;
+	float4 	Position 	: SV_Position;
+	float2 	UV 			: TEXCOORD0;
 #ifndef DEPTH_ONLY
-	float3 PositionWS : POSITION_WS;
-	float3 Normal : NORMAL;
-	float4 Tangent : TANGENT;
-	uint Color : TEXCOORD1;
+	float3 	PositionWS 	: POSITION_WS;
+	float3 	Normal 		: NORMAL;
+	float4 	Tangent 	: TANGENT;
+	uint 	Color 		: COLOR;
 #endif
 };
 
@@ -110,7 +110,7 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 
 #endif
 
-InterpolantsVSToPS FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
+InterpolantsVSToPS LoadVertex(MeshData mesh, float4x4 world, uint vertexId)
 {
 	InterpolantsVSToPS result;
 	float3 position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
@@ -190,7 +190,7 @@ void MSMain(
 	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
 		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
-		InterpolantsVSToPS result = FetchVertexAttributes(mesh, instance.LocalToWorld, vertexId);
+		InterpolantsVSToPS result = LoadVertex(mesh, instance.LocalToWorld, vertexId);
 		verts[i] = result;
 	}
 

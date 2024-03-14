@@ -178,7 +178,9 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				{
 					CBT cbt;
 					cbt.InitBare(CBTSettings::CBTDepth, 1);
-					context.WriteBuffer(pCBTBuffer->Get(), cbt.GetData(), size);
+					ScratchAllocation alloc = context.AllocateScratch(size);
+					memcpy(alloc.pMappedMemory, cbt.GetData(), size);
+					context.CopyBuffer(alloc.pBackingResource, pCBTBuffer->Get(), alloc.Size, alloc.Offset, 0);
 				});
 	}
 	m_CBTData.pCBT = pCBTBuffer;

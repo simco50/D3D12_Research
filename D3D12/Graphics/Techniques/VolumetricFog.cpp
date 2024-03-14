@@ -14,10 +14,6 @@
 #include "Graphics/Techniques/LightCulling.h"
 #include "Core/ConsoleVariables.h"
 
-static constexpr int gLightClusterTexelSize = 64;
-static constexpr int gLightClustersNumZ = 32;
-static constexpr int gMaxLightsPerCluster = 32;
-
 static constexpr int gVolumetricFroxelTexelSize = 8;
 static constexpr int gVolumetricNumZSlices = 128;
 
@@ -78,7 +74,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
 				constexpr Math::HaltonSequence<32, 2> halton;
 				params.Jitter = halton[pView->FrameIndex & 31];
-				params.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / gLightClusterTexelSize;
+				params.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / lightCullData.ClusterSize;
 				params.LightGridParams = lightCullData.LightGridParams;
 				params.LightClusterDimensions = Vector2i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
 				params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;

@@ -7,7 +7,6 @@
 #include "Graphics/Techniques/VolumetricFog.h"
 #include "App.h"
 
-class Mesh;
 class Camera;
 class RTAO;
 class RTReflections;
@@ -28,7 +27,6 @@ class VisualizeTexture;
 class VolumetricFog;
 class ForwardRenderer;
 class LightCulling;
-struct SubMesh;
 struct Material;
 
 enum class RenderPath
@@ -59,7 +57,6 @@ private:
 
 	void UpdateImGui();
 
-	void LoadMesh(const std::string& filePath, World& world);
 	void CreateShadowViews(SceneView& view, World& world);
 	
 	std::unique_ptr<RGResourcePool> m_RenderGraphPool;

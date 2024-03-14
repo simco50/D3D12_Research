@@ -91,7 +91,7 @@ struct BufferDesc
 	}
 
 	uint64 Size = 0;
-	uint32 ElementSize = 0;
+	uint32 ElementSize = 1;
 	BufferFlag Flags = BufferFlag::None;
 	ResourceFormat Format = ResourceFormat::Unknown;
 };
