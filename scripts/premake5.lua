@@ -91,6 +91,7 @@ workspace (ENGINE_NAME)
 		includedirs "$(SolutionDir)Libraries/D3D12/include"
 		runtimeDependency("D3D12/bin/D3D12Core.dll", "D3D12")
 		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll", "D3D12")
+		runtimeDependency("D3D12/bin/d3d10warp.dll", "")
 		links {	"d3d12.lib", "dxgi", "dxguid" }
 
 		-- Pix
