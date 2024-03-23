@@ -294,8 +294,6 @@ void DemoApp::Update()
 		m_SceneData.pWorld = &m_World;
 	}
 	{
-		RGGraph graph;
-
 		if (Tweakables::g_Screenshot)
 		{
 			Tweakables::g_Screenshot = false;
@@ -347,21 +345,16 @@ void DemoApp::Update()
 					Matrix::CreateTranslation(transform.Position);
 			});
 
-		{
-			CommandContext* pContext = m_pDevice->AllocateCommandContext();
-			{
-				PROFILE_GPU_SCOPE(pContext->GetCommandList(), "Update GPU Scene");
-				Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
-				pViewMut->AccelerationStructure.Build(*pContext, *pView);
-			}
-			pContext->Execute();
-		}
 
 		{
 			PROFILE_CPU_SCOPE("Flush GPU uploads");
-			SyncPoint uploadSync = m_pDevice->GetRingBuffer()->Flush();
-			if (uploadSync.IsValid())
-				m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWait(uploadSync);
+			SyncPoint sync = m_pDevice->GetRingBuffer()->Flush();
+			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWait(sync);
+		}
+		{
+			CommandContext* pContext = m_pDevice->AllocateCommandContext();
+			Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
+			pContext->Execute();
 		}
 
 		{
@@ -428,8 +421,16 @@ void DemoApp::Update()
 			TaskQueue::Join(taskContext);
 		}
 
+		RGGraph graph;
+
 		{
 			PROFILE_CPU_SCOPE("Record RenderGraph");
+
+			graph.AddPass("Build Acceleration Structures", RGPassFlag::Compute | RGPassFlag::NeverCull)
+				.Bind([=](CommandContext& context)
+					{
+						pViewMut->AccelerationStructure.Build(context, *pView);
+					});
 
 			const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
