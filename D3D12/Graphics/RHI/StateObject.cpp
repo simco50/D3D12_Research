@@ -46,8 +46,9 @@ StateObject::StateObject(GraphicsDevice* pParent, const StateObjectInitializer& 
 	m_ReloadHandle = pParent->GetShaderManager()->OnShaderEditedEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
 }
 
-D3D12_PROGRAM_IDENTIFIER StateObject::GetIdentifier() const
+D3D12_PROGRAM_IDENTIFIER StateObject::GetIdentifier()
 {
+	ConditionallyReload();
 	Ref<ID3D12StateObjectProperties1> pProps2;
 	m_pStateObject->QueryInterface(pProps2.GetAddressOf());
 	return pProps2->GetProgramIdentifier(MULTIBYTE_TO_UNICODE(m_Desc.Name.c_str()));

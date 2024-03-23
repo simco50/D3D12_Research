@@ -437,8 +437,6 @@ void DemoApp::Update()
 
 			const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
-			Tweakables::VisualizeTextureName = "Depth Stencil";
-
 			SceneTextures sceneTextures;
 			sceneTextures.pDepth			= graph.Create("Depth Stencil",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
 			sceneTextures.pColorTarget		= graph.Create("Color Target",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[0]));
@@ -1083,6 +1081,14 @@ void DemoApp::Update()
 					});
 
 			sceneTextures.pColorTarget = pTonemapTarget;
+#endif
+
+			sceneTextures.pColorTarget = graph.Create("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
+
+			graph.AddPass("Clear", RGPassFlag::Raster)
+				.RenderTarget(sceneTextures.pColorTarget, RenderPassColorFlags::Clear)
+				.Bind([=](CommandContext& context)
+					{});
 
 			/*
 				Debug Views
@@ -1125,13 +1131,6 @@ void DemoApp::Update()
 			}
 
 			DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
-#endif
-			sceneTextures.pColorTarget = graph.Create("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
-
-			graph.AddPass("Clear", RGPassFlag::Raster)
-				.RenderTarget(sceneTextures.pColorTarget, RenderPassColorFlags::Clear)
-				.Bind([=](CommandContext& context)
-					{});
 
 			m_pShaderDebugRenderer->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 

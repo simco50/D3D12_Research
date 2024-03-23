@@ -172,13 +172,6 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 			uCandidateMeshlets[meshletCandidateOffset + elementOffset + i] = meshlet;
 		}
     }
-
-#if VISUALIZE_OCCLUDED
-	if(wasOccluded)
-	{
-		DrawOBB(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, Colors::Green);
-	}
-#endif
 }
 
 [numthreads(1, 1, 1)]

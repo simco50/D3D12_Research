@@ -113,18 +113,27 @@ void CullInstancesCS(
 	uint threadID : SV_DispatchThreadID
 	)
 {
+#if OCCLUSION_FIRST_PASS
 	uint numInstances = cView.NumInstances;
+#else
+	uint numInstances = tCounter_PhaseTwoInstances[0];
+#endif
 
 	if(threadID >= numInstances)
         return;
 
 	uint instanceIndex = threadID;
+#if !OCCLUSION_FIRST_PASS
+	instanceIndex = tPhaseTwoInstances[instanceIndex];
+#endif
 
 	InstanceData instance = GetInstance(instanceIndex);
 
+#if OCCLUSION_FIRST_PASS
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	if(material.RasterBin == 0xFFFFFFFF)
 		return;
+#endif
 
     MeshData mesh = GetMesh(instance.MeshIndex);
 
@@ -133,31 +142,43 @@ void CullInstancesCS(
 	bool isVisible = cullData.IsVisible;
 	bool wasOccluded = false;
 
-	uint num_meshlets = 0;
+	#if OCCLUSION_CULL
+	if(isVisible)
+	{
+#if OCCLUSION_FIRST_PASS
+		// Frustum test instance against the *previous* view to determine if it was visible last frame
+		FrustumCullData prevCullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
+		if (prevCullData.IsVisible)
+		{
+			// Occlusion test instance against the HZB
+			wasOccluded = !HZBCull(prevCullData, tHZB, cCullParams.HZBDimensions);
+		}
+
+		// If the instance was occluded the previous frame, we can't be sure it's still occluded this frame.
+		// Add it to the list to re-test in the second phase.
+		if(wasOccluded)
+		{
+			uint elementOffset = 0;
+			InterlockedAdd_WaveOps(uCounter_PhaseTwoInstances, 0, 1, elementOffset);
+			if(elementOffset < MAX_NUM_INSTANCES)
+				uPhaseTwoInstances[elementOffset] = instance.ID;
+		}
+#else
+		// Occlusion test instance against the updated HZB
+		isVisible = HZBCull(cullData, tHZB, cCullParams.HZBDimensions);
+#endif
+	}
+#endif
 
 	// If instance is visible and wasn't occluded in the previous frame, submit it
-    if(isVisible && !wasOccluded)
-    {
-		// Limit meshlet count to how large our buffer is
-		num_meshlets = mesh.MeshletCount;
-
-
-		uint globalMeshletIndex;
-        InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_CANDIDATE_MESHLETS, mesh.MeshletCount, globalMeshletIndex);
-		int clampedNumMeshlets = min(globalMeshletIndex + mesh.MeshletCount, MAX_NUM_MESHLETS);
-		int numMeshletsToAdd = max(clampedNumMeshlets - (int)globalMeshletIndex, 0);
-
-		// Add all meshlets of current instance to the candidate meshlets
-		uint elementOffset;
-		InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, MeshletCounterIndex, numMeshletsToAdd, elementOffset);
-    }
-
-	ThreadNodeOutputRecords<MeshletCullData> outputs = CullMeshletsCS.GetThreadNodeOutputRecords(1);
-	outputs[0].InstanceID = instance.ID;
-	outputs[0].GridSize = DivideAndRoundUp(num_meshlets, NUM_CULL_INSTANCES_THREADS);
+	uint num_records = isVisible && !wasOccluded ? 1 : 0;
+	ThreadNodeOutputRecords<MeshletCullData> outputs = CullMeshletsCS.GetThreadNodeOutputRecords(num_records);
+	if(num_records)
+	{
+		outputs[0].InstanceID = instanceIndex;
+		outputs[0].GridSize = DivideAndRoundUp(mesh.MeshletCount, NUM_CULL_INSTANCES_THREADS);
+	}
 	outputs.OutputComplete();
-
-	DrawOBB(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, Colors::Green);
 }
 
 /*
@@ -189,12 +210,47 @@ void CullMeshletsCS(
 	bool isVisible = cullData.IsVisible;
 	bool wasOccluded = false;
 
+#if OCCLUSION_CULL
+		if(isVisible)
+		{
+#if OCCLUSION_FIRST_PASS
+			// Frustum test meshlet against the *previous* view to determine if it was visible last frame
+			FrustumCullData prevCullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
+			if(prevCullData.IsVisible)
+			{
+				// Occlusion test meshlet against the HZB
+				wasOccluded = !HZBCull(prevCullData, tHZB, cCullParams.HZBDimensions);
+			}
+
+			// If the meshlet was occluded the previous frame, we can't be sure it's still occluded this frame.
+			// Add it to the list to re-test in the second phase.
+			if(wasOccluded)
+			{
+				// Limit how many meshlets we're writing based on the buffer size
+				uint globalMeshletIndex;
+        		InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_CANDIDATE_MESHLETS, 1, globalMeshletIndex);
+				if(globalMeshletIndex < MAX_NUM_MESHLETS)
+				{
+					uint elementOffset;
+					InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_PHASE2_CANDIDATE_MESHLETS, 1, elementOffset);
+					uCandidateMeshlets[elementOffset] = candidate;
+				}
+			}
+#else
+			// Occlusion test meshlet against the updated HZB
+			isVisible = HZBCull(cullData, tHZB, cCullParams.HZBDimensions);
+#endif
+		}
+#endif
+
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	if(isVisible && !wasOccluded)
 	{
 		uint elementOffset;
 		InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, VisibleMeshletCounter, 1, elementOffset);
-
+#if !OCCLUSION_FIRST_PASS
+			elementOffset += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
+#endif
 		uVisibleMeshlets[elementOffset] = candidate;
 	}
 }
