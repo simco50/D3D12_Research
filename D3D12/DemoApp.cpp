@@ -79,7 +79,8 @@ namespace Tweakables
 	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 1.0f * Math::DegreesToRadians);
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
 	ConsoleVariable g_RenderTerrain("r.Terrain", true);
-	ConsoleVariable g_OcclusionCulling("r.OcclusionCulling", true);
+	ConsoleVariable g_OcclusionCulling("r.OcclusionCulling", false);
+	ConsoleVariable g_WorkGraph("r.WorkGraph", true);
 
 	// Misc
 	ConsoleVariable CullDebugStats("r.CullingStats", false);
@@ -163,7 +164,7 @@ void DemoApp::SetupScene()
 
 		Light& sunLight = m_World.Registry.emplace<Light>(entity);
 		sunLight.Intensity = 10;
-		sunLight.CastShadows = true;
+		sunLight.CastShadows = false;
 		sunLight.VolumetricLighting = true;
 		sunLight.Type = LightType::Directional;
 		m_World.Sunlight = entity;
@@ -175,7 +176,7 @@ void DemoApp::SetupScene()
 		spot.UmbraAngleDegrees = 70.0f;
 		spot.PenumbraAngleDegrees = 50.0f;
 		spot.Intensity = 100.0f;
-		spot.CastShadows = true;
+		spot.CastShadows = false;
 		spot.VolumetricLighting = true;
 		spot.pLightTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LightProjector.png", false, "Light Cookie");
 		spot.Type = LightType::Spot;
@@ -426,13 +427,17 @@ void DemoApp::Update()
 		{
 			PROFILE_CPU_SCOPE("Record RenderGraph");
 
+			/*
 			graph.AddPass("Build Acceleration Structures", RGPassFlag::Compute | RGPassFlag::NeverCull)
 				.Bind([=](CommandContext& context)
 					{
 						pViewMut->AccelerationStructure.Build(context, *pView);
 					});
+					*/
 
 			const Vector2u viewDimensions = m_SceneData.GetDimensions();
+
+			Tweakables::VisualizeTextureName = "Depth Stencil";
 
 			SceneTextures sceneTextures;
 			sceneTextures.pDepth			= graph.Create("Depth Stencil",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
@@ -444,8 +449,9 @@ void DemoApp::Update()
 
 			LightCull2DData lightCull2DData;
 			LightCull3DData lightCull3DData;
-
+			
 			RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
+			/*
 			if (Tweakables::g_Sky)
 			{
 				pSky = graph.Create("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
@@ -466,13 +472,16 @@ void DemoApp::Update()
 				graph.AddPass("Transition Sky", RGPassFlag::Raster)
 					.Read(pSky);
 			}
+			*/
 
 			// Export makes sure the target texture is filled in during pass execution.
 			graph.Export(pSky, &pViewMut->pSky, TextureFlag::ShaderResource);
 
+
 			RasterResult rasterResult;
 			if (m_RenderPath != RenderPath::PathTracing)
 			{
+#if 0
 				{
 					RG_GRAPH_SCOPE("Shadow Depths", graph);
 					for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
@@ -528,6 +537,7 @@ void DemoApp::Update()
 						}
 					}
 				}
+#endif
 
 				const bool doPrepass = true;
 				const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility;
@@ -539,6 +549,7 @@ void DemoApp::Update()
 						RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
 						rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
 						rasterContext.EnableOcclusionCulling = Tweakables::g_OcclusionCulling;
+						rasterContext.WorkGraph = Tweakables::g_WorkGraph;
 						m_pMeshletRasterizer->Render(graph, pView, &pView->MainView, rasterContext, rasterResult);
 						if (Tweakables::CullDebugStats)
 							m_pMeshletRasterizer->PrintStats(graph, Vector2(20, 20), pView, rasterContext);
@@ -566,10 +577,11 @@ void DemoApp::Update()
 								});
 					}
 
-					if (Tweakables::g_RenderTerrain.GetBool())
-						m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
+					//if (Tweakables::g_RenderTerrain.GetBool())
+					//	m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
 				}
 
+#if 0
 				if (Tweakables::g_SDSM)
 				{
 					RG_GRAPH_SCOPE("Depth Reduce", graph);
@@ -793,6 +805,7 @@ void DemoApp::Update()
 				{
 					m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures);
 				}
+#endif
 			}
 			else
 			{
@@ -801,6 +814,7 @@ void DemoApp::Update()
 
 			graph.Export(sceneTextures.pColorTarget, &m_pColorHistory, TextureFlag::ShaderResource);
 
+#if 0
 			/*
 				Post Processing
 			*/
@@ -1111,6 +1125,14 @@ void DemoApp::Update()
 			}
 
 			DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
+#endif
+			sceneTextures.pColorTarget = graph.Create("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
+
+			graph.AddPass("Clear", RGPassFlag::Raster)
+				.RenderTarget(sceneTextures.pColorTarget, RenderPassColorFlags::Clear)
+				.Bind([=](CommandContext& context)
+					{});
+
 			m_pShaderDebugRenderer->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 
 			if (!Tweakables::VisualizeTextureName.empty())
@@ -1498,6 +1520,7 @@ void DemoApp::UpdateImGui()
 				ImGui::Combo("VisBuffer Debug View", (int*)&m_VisibilityDebugRenderMode, pDebugViewNames, ARRAYSIZE(pDebugViewNames));
 
 				ImGui::Checkbox("Cull statistics", &Tweakables::CullDebugStats.Get());
+				ImGui::Checkbox("Work Graph", &Tweakables::g_WorkGraph.Get());
 			}
 
 			if (m_pCamera)

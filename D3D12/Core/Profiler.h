@@ -436,6 +436,7 @@ private:
 	std::unordered_map<ID3D12CommandQueue*, uint32>		m_QueueIndexMap;	// Map from command queue to index
 	GPUProfilerCallbacks								m_EventCallback;
 
+	bool						m_IsInitialized			= false;
 	bool						m_IsPaused				= false;
 	bool						m_PauseQueued			= false;
 };
@@ -614,6 +615,7 @@ private:
 	std::atomic<uint32>		m_EventIndex		= 0;		// The current event index
 	bool					m_Paused			= false;	// The current pause state
 	bool					m_QueuedPaused		= false;	// The queued pause state
+	bool					m_IsInitialized		= false;
 };
 
 

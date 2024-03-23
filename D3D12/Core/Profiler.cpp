@@ -75,6 +75,8 @@ void GPUProfiler::Initialize(
 		QueryData& queryData = m_pQueryData[i];
 		queryData.Ranges.resize(maxNumEvents + maxNumCopyEvents);
 	}
+
+	m_IsInitialized = true;
 }
 
 void GPUProfiler::Shutdown()
@@ -89,6 +91,9 @@ void GPUProfiler::Shutdown()
 
 void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName, const char* pFilePath, uint32 lineNumber)
 {
+	if (!m_IsInitialized)
+		return;
+
 	if (m_EventCallback.OnEventBegin)
 		m_EventCallback.OnEventBegin(pName, pCmd, m_EventCallback.pUserData);
 
@@ -126,6 +131,9 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 
 void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 {
+	if (!m_IsInitialized)
+		return;
+
 	if (m_EventCallback.OnEventEnd)
 		m_EventCallback.OnEventEnd(pCmd, m_EventCallback.pUserData);
 
@@ -142,6 +150,9 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 
 void GPUProfiler::Tick()
 {
+	if (!m_IsInitialized)
+		return;
+
 	for (ActiveEventStack& stack : m_QueueEventStack)
 	{
 		check(stack.GetSize() == 0, "Forgot to End %d Events", stack.GetSize());
@@ -228,6 +239,9 @@ void GPUProfiler::Tick()
 
 void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12CommandList*> commandLists)
 {
+	if (!m_IsInitialized)
+		return;
+
 	if (m_IsPaused)
 		return;
 
@@ -363,6 +377,8 @@ void CPUProfiler::Initialize(uint32 historySize, uint32 maxEvents)
 
 	for (uint32 i = 0; i < historySize; ++i)
 		m_pEventData[i].Events.resize(maxEvents);
+
+	m_IsInitialized = true;
 }
 
 
@@ -374,6 +390,9 @@ void CPUProfiler::Shutdown()
 
 void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint32 lineNumber)
 {
+	if (!m_IsInitialized)
+		return;
+
 	if(m_EventCallback.OnEventBegin)
 		m_EventCallback.OnEventBegin(pName, m_EventCallback.pUserData);
 
@@ -401,6 +420,9 @@ void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint32 li
 // End and pop the last pushed event on the current thread
 void CPUProfiler::EndEvent()
 {
+	if (!m_IsInitialized)
+		return;
+
 	if (m_EventCallback.OnEventEnd)
 		m_EventCallback.OnEventEnd(m_EventCallback.pUserData);
 
@@ -414,8 +436,11 @@ void CPUProfiler::EndEvent()
 
 void CPUProfiler::Tick()
 {
+	if (!m_IsInitialized)
+		return;
+
 	m_Paused = m_QueuedPaused;
-	if (m_Paused)
+	if (m_Paused || !m_pEventData)
 		return;
 
 	if (m_FrameIndex)

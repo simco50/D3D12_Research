@@ -68,6 +68,8 @@ public:
 
 	ID3D12StateObject* GetStateObject() const { return m_pStateObject; }
 	ID3D12StateObjectProperties* GetStateObjectProperties() const { return m_pStateObjectProperties.Get(); }
+	D3D12_PROGRAM_IDENTIFIER GetIdentifier() const;
+	uint64 GetWorkgraphBufferSize() const;
 
 private:
 	void CreateInternal();

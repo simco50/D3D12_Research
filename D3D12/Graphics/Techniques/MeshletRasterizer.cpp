@@ -3,6 +3,7 @@
 #include "Core/ConsoleVariables.h"
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/RHI/PipelineState.h"
+#include "Graphics/RHI/StateObject.h"
 #include "Graphics/RHI/RootSignature.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Core/Profiler.h"
@@ -56,6 +57,7 @@ namespace Tweakables
 }
 
 MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
+	: m_pDevice(pDevice)
 {
 	if (!pDevice->GetCapabilities().SupportsMeshShading())
 		return;
@@ -160,6 +162,17 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 
 	// Debug PSOs
 	m_pPrintStatsPSO =				pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
+
+	if (m_pDevice->GetCapabilities().SupportsWorkGraphs())
+	{
+		StateObjectInitializer so;
+		so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
+		so.pGlobalRootSignature = m_pCommonRS;
+		so.AddLibrary("MeshletCullWG.hlsl", {}, *defines);
+		so.Name = "WG";
+		m_pWorkGraphSO = pDevice->CreateStateObject(so);
+		m_pWorkGraphSO->ConditionallyReload();
+	}
 }
 
 RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, Ref<Texture>* pPreviousHZB)
@@ -233,109 +246,171 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				});
 	}
 
-	// Process instances and output meshlets of each visible instance.
-	// In Phase 1, also output instances which are occluded according to the previous frame's HZB, and have to be retested in Phase 2.
-	// In Phase 2, outputs visible meshlets which were considered occluded before, but are not based on the updated HZB created in Phase 1.
-	RGPass& cullInstancePass = graph.AddPass("Cull Instances", RGPassFlag::Compute)
-		.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter })
-		.Bind([=](CommandContext& context)
-			{
-				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(pCullInstancePSO);
+	if (rasterContext.WorkGraph && m_pDevice->GetCapabilities().SupportsWorkGraphs())
+	{
+		RGBuffer* pWorkGraphBuffer = graph.Create("Work Graph Buffer", BufferDesc::CreateByteAddress(m_pWorkGraphSO->GetWorkgraphBufferSize(), BufferFlag::UnorderedAccess));
 
-				struct
+		RGPass& wgPass = graph.AddPass("Work Graph Cull", RGPassFlag::Compute)
+			.Write({ pWorkGraphBuffer, rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
+			.Bind([=](CommandContext& context)
 				{
-					Vector2u HZBDimensions;
-				} params;
-				params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
+					context.SetComputeRootSignature(m_pCommonRS);
 
-				context.BindRootCBV(0, params);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
-				context.BindResources(2, {
-					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
-					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
-					rasterContext.pOccludedInstances->Get()->GetUAV(),
-					rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
-					});
-				context.BindResources(3, {
-					rasterContext.pOccludedInstances->Get()->GetSRV(),
-					rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
-					rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
-					});
+					Ref<ID3D12GraphicsCommandList10> pCmd;
+					context.GetCommandList()->QueryInterface(pCmd.GetAddressOf());
 
-				if (rasterContext.EnableOcclusionCulling)
-					context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
+					D3D12_SET_PROGRAM_DESC programDesc{};
+					programDesc.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH;
+					programDesc.WorkGraph.BackingMemory.StartAddress = pWorkGraphBuffer->Get()->GetGpuHandle();
+					programDesc.WorkGraph.BackingMemory.SizeInBytes = pWorkGraphBuffer->Get()->GetSize();
+					programDesc.WorkGraph.ProgramIdentifier = m_pWorkGraphSO->GetIdentifier();
+					programDesc.WorkGraph.Flags = D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE;
+					pCmd->SetProgram(&programDesc);
 
-				if (rasterPhase == RasterPhase::Phase1)
-					context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
-				else
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pInstanceCullArgs->Get());
-			});
-	// In Phase 2, use the indirect arguments built before.
-	if (rasterPhase == RasterPhase::Phase2)
-		cullInstancePass.Read(pInstanceCullArgs);
-	if (rasterContext.EnableOcclusionCulling)
-		cullInstancePass.Read(pSourceHZB);
+					struct
+					{
+						Vector2u HZBDimensions;
+					} params;
+					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
-	// Build indirect arguments for the next pass, based on the visible list of meshlets.
-	RGBuffer* pMeshletCullArgs = graph.Create("GPURender.MeshletCullArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
-	graph.AddPass("Build Meshlet Cull Arguments", RGPassFlag::Compute)
-		.Read(rasterContext.pCandidateMeshletsCounter)
-		.Write(pMeshletCullArgs)
-		.Bind([=](CommandContext& context)
-			{
-				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(m_pBuildMeshletCullArgsPSO[psoPhaseIndex]);
+					context.BindRootCBV(0, params);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
+					context.BindResources(2, {
+						rasterContext.pCandidateMeshlets->Get()->GetUAV(),
+						rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
+						rasterContext.pOccludedInstances->Get()->GetUAV(),
+						rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
+						rasterContext.pVisibleMeshlets->Get()->GetUAV(),
+						rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
+						});
+					context.BindResources(3, {
+						rasterContext.pOccludedInstances->Get()->GetSRV(),
+						rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
+						rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
+						});
 
-				context.BindResources(2, pMeshletCullArgs->Get()->GetUAV());
-				context.BindResources(3, rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(), 1);
-				context.Dispatch(1);
-			});
 
-	// Process the list of meshlets and output a list of visible meshlets.
-	// In Phase 1, also output meshlets which were occluded according to the previous frame's HZB, and have to be retested in Phase 2.
-	// In Phase 2, outputs visible meshlets which were considered occluded before, but are not based on the updated HZB created in Phase 1.
-	RGPass& meshletCullPass = graph.AddPass("Cull Meshlets", RGPassFlag::Compute)
-		.Read({ pMeshletCullArgs })
-		.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
-		.Bind([=](CommandContext& context)
-			{
-				context.SetComputeRootSignature(m_pCommonRS);
-				context.SetPipelineState(pCullMeshletPSO);
+					context.PrepareDraw();
 
-				struct
+					uint32 num_thread_groups = Math::DivideAndRoundUp(pView->Batches.size(), 64);
+
+					D3D12_DISPATCH_GRAPH_DESC graphDesc{};
+					graphDesc.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT;
+					graphDesc.NodeCPUInput.EntrypointIndex = 0;
+					graphDesc.NodeCPUInput.NumRecords = 1;
+					graphDesc.NodeCPUInput.pRecords = &num_thread_groups;
+					graphDesc.NodeCPUInput.RecordStrideInBytes = sizeof(uint32);
+					pCmd->DispatchGraph(&graphDesc);
+				});
+	}
+	else
+	{
+
+		// Process instances and output meshlets of each visible instance.
+		// In Phase 1, also output instances which are occluded according to the previous frame's HZB, and have to be retested in Phase 2.
+		// In Phase 2, outputs visible meshlets which were considered occluded before, but are not based on the updated HZB created in Phase 1.
+		RGPass& cullInstancePass = graph.AddPass("Cull Instances", RGPassFlag::Compute)
+			.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter })
+			.Bind([=](CommandContext& context)
 				{
-					Vector2u HZBDimensions;
-				} params;
-				params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(pCullInstancePSO);
 
-				context.BindRootCBV(0, params);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
-				context.BindResources(2, {
-					rasterContext.pCandidateMeshlets->Get()->GetUAV(),
-					rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
-					rasterContext.pOccludedInstances->Get()->GetUAV(),
-					rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
-					rasterContext.pVisibleMeshlets->Get()->GetUAV(),
-					rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
-					});
-				if (rasterContext.EnableOcclusionCulling)
-					context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
+					struct
+					{
+						Vector2u HZBDimensions;
+					} params;
+					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pMeshletCullArgs->Get());
-			});
-	if (rasterContext.EnableOcclusionCulling)
-		meshletCullPass.Read(pSourceHZB);
-	/*
-		Visible meshlets are output in a single list and in an unordered fashion.
-		Each of these meshlets can want a different PSO.
-		The following passes perform classification and binning based on desired PSO.
-		With these bins, we build a set of indirect dispatch arguments for each PSO
-		so we can switch PSOs in between each bin.
+					context.BindRootCBV(0, params);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
+					context.BindResources(2, {
+						rasterContext.pCandidateMeshlets->Get()->GetUAV(),
+						rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
+						rasterContext.pOccludedInstances->Get()->GetUAV(),
+						rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
+						});
+					context.BindResources(3, {
+						rasterContext.pOccludedInstances->Get()->GetSRV(),
+						rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
+						rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
+						});
 
-		The output of the following passes is a buffer with an 'Offset' and 'Size' of each bin,
-		together with an indirection list to retrieve the actual meshlet data.
-	*/
+					if (rasterContext.EnableOcclusionCulling)
+						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
+
+					if (rasterPhase == RasterPhase::Phase1)
+						context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
+					else
+						context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pInstanceCullArgs->Get());
+				});
+		// In Phase 2, use the indirect arguments built before.
+		if (rasterPhase == RasterPhase::Phase2)
+			cullInstancePass.Read(pInstanceCullArgs);
+		if (rasterContext.EnableOcclusionCulling)
+			cullInstancePass.Read(pSourceHZB);
+
+		// Build indirect arguments for the next pass, based on the visible list of meshlets.
+		RGBuffer* pMeshletCullArgs = graph.Create("GPURender.MeshletCullArgs", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
+		graph.AddPass("Build Meshlet Cull Arguments", RGPassFlag::Compute)
+			.Read(rasterContext.pCandidateMeshletsCounter)
+			.Write(pMeshletCullArgs)
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(m_pBuildMeshletCullArgsPSO[psoPhaseIndex]);
+
+					context.BindResources(2, pMeshletCullArgs->Get()->GetUAV());
+					context.BindResources(3, rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(), 1);
+					context.Dispatch(1);
+				});
+
+		// Process the list of meshlets and output a list of visible meshlets.
+		// In Phase 1, also output meshlets which were occluded according to the previous frame's HZB, and have to be retested in Phase 2.
+		// In Phase 2, outputs visible meshlets which were considered occluded before, but are not based on the updated HZB created in Phase 1.
+		RGPass& meshletCullPass = graph.AddPass("Cull Meshlets", RGPassFlag::Compute)
+			.Read({ pMeshletCullArgs })
+			.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetPipelineState(pCullMeshletPSO);
+
+					struct
+					{
+						Vector2u HZBDimensions;
+					} params;
+					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
+
+					context.BindRootCBV(0, params);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
+					context.BindResources(2, {
+						rasterContext.pCandidateMeshlets->Get()->GetUAV(),
+						rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
+						rasterContext.pOccludedInstances->Get()->GetUAV(),
+						rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
+						rasterContext.pVisibleMeshlets->Get()->GetUAV(),
+						rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
+						});
+					if (rasterContext.EnableOcclusionCulling)
+						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
+
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pMeshletCullArgs->Get());
+				});
+		if (rasterContext.EnableOcclusionCulling)
+			meshletCullPass.Read(pSourceHZB);
+		/*
+			Visible meshlets are output in a single list and in an unordered fashion.
+			Each of these meshlets can want a different PSO.
+			The following passes perform classification and binning based on desired PSO.
+			With these bins, we build a set of indirect dispatch arguments for each PSO
+			so we can switch PSOs in between each bin.
+
+			The output of the following passes is a buffer with an 'Offset' and 'Size' of each bin,
+			together with an indirection list to retrieve the actual meshlet data.
+		*/
+
+	}
 
 	// #todo: Hardcode number of bins. Only implemented 2 PSOs (ie. Opaque and alpha masked)
 	constexpr uint32 numBins = 2;

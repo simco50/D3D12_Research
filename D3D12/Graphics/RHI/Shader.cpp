@@ -272,9 +272,12 @@ namespace ShaderCompiler
 		StringHash hash(defineKey.c_str());
 
 		std::string cachePath = Sprintf(
-			"%s%s_%s_%x%s.bin",
+			"%s%s_%s_%d_%d_%s_%x%s.bin",
 			Paths::ShaderCacheDir().c_str(),
 			Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(),
+			compileJob.Target.c_str(),
+			(int)compileJob.MajVersion,
+			(int)compileJob.MinVersion,
 			compileJob.EntryPoint.c_str(),
 			hash.m_Hash,
 			compileJob.EnableDebugMode ? "_DEBUG" : ""

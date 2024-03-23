@@ -171,9 +171,9 @@ public:
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 	const PipelineState* GetCurrentPSO() const { return m_pCurrentPSO; }
 	void ResolvePendingBarriers(CommandContext& resolveContext);
+	void PrepareDraw();
 
 private:
-	void PrepareDraw();
 	void AddBarrier(const D3D12_RESOURCE_BARRIER& barrier);
 
 	D3D12_RESOURCE_STATES GetLocalResourceState(const DeviceResource* pResource, uint32 subResource) const

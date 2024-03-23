@@ -19,6 +19,7 @@ struct RasterContext
 	Ref<Texture>* pPreviousHZB = nullptr;
 	bool EnableDebug = false;
 	bool EnableOcclusionCulling = false;
+	bool WorkGraph = false;
 	RasterMode Mode;
 
 	RGBuffer* pCandidateMeshlets = nullptr;
@@ -65,6 +66,7 @@ private:
 
 	void CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
 
+	GraphicsDevice* m_pDevice;
 	Ref<RootSignature> m_pCommonRS;
 	
 	Ref<PipelineState> m_pCullInstancesPSO[2];
@@ -87,4 +89,6 @@ private:
 
 	Ref<PipelineState> m_pHZBInitializePSO;
 	Ref<PipelineState> m_pHZBCreatePSO;
+
+	Ref<StateObject> m_pWorkGraphSO;
 };
