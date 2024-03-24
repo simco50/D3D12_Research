@@ -28,15 +28,15 @@ struct BinningParameters
 };
 ConstantBuffer<BinningParameters> cBinningParams 				: register(b0);
 
-RWBuffer<uint> uMeshletCounts 									: register(u0);
+RWStructuredBuffer<uint> uMeshletCounts 						: register(u0);
 RWStructuredBuffer<uint4> uMeshletOffsetAndCounts 				: register(u0);
-RWBuffer<uint> uGlobalMeshletCounter 							: register(u1);
+RWStructuredBuffer<uint> uGlobalMeshletCounter 					: register(u1);
 RWStructuredBuffer<uint> uBinnedMeshlets 						: register(u1);
 RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : register(u2);
 
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets 			: register(t0);
-Buffer<uint> tCounter_VisibleMeshlets 							: register(t1);
-Buffer<uint> tMeshletCounts 									: register(t0);
+StructuredBuffer<uint> tCounter_VisibleMeshlets 				: register(t1);
+StructuredBuffer<uint> tMeshletCounts 							: register(t0);
 
 uint GetNumMeshlets()
 {

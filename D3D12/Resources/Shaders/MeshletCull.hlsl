@@ -62,17 +62,17 @@ struct CullParams
 ConstantBuffer<CullParams> cCullParams								: register(b0);
 
 RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets 			: register(u0);	// List of meshlets to process
-RWBuffer<uint> uCounter_CandidateMeshlets 							: register(u1);	// Number of meshlets to process
+RWStructuredBuffer<uint> uCounter_CandidateMeshlets 				: register(u1);	// Number of meshlets to process
 RWStructuredBuffer<uint> uPhaseTwoInstances 						: register(u2);	// List of instances which need to be tested in Phase 2
-RWBuffer<uint> uCounter_PhaseTwoInstances 							: register(u3);	// Number of instances which need to be tested in Phase 2
+RWStructuredBuffer<uint> uCounter_PhaseTwoInstances 				: register(u3);	// Number of instances which need to be tested in Phase 2
 RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets 				: register(u4);	// List of meshlets to rasterize
-RWBuffer<uint> uCounter_VisibleMeshlets 							: register(u5);	// Number of meshlets to rasterize
+RWStructuredBuffer<uint> uCounter_VisibleMeshlets 					: register(u5);	// Number of meshlets to rasterize
 
 RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments 	: register(u0); // General purpose dispatch args
 
-Buffer<uint> tCounter_CandidateMeshlets 							: register(t0);	// Number of meshlets to process
-Buffer<uint> tCounter_PhaseTwoInstances 							: register(t1);	// Number of instances which need to be tested in Phase 2
-Buffer<uint> tCounter_VisibleMeshlets 								: register(t2);	// List of meshlets to rasterize
+StructuredBuffer<uint> tCounter_CandidateMeshlets 					: register(t0);	// Number of meshlets to process
+StructuredBuffer<uint> tCounter_PhaseTwoInstances 					: register(t1);	// Number of instances which need to be tested in Phase 2
+StructuredBuffer<uint> tCounter_VisibleMeshlets 					: register(t2);	// List of meshlets to rasterize
 Texture2D<float> tHZB 												: register(t2);	// Current HZB texture
 
 StructuredBuffer<uint4> tBinnedMeshletOffsetAndCounts[2] 			: register(t3);
@@ -82,6 +82,20 @@ StructuredBuffer<uint4> tBinnedMeshletOffsetAndCounts[2] 			: register(t3);
 uint GetCandidateMeshletOffset(bool phase2)
 {
 	return phase2 ? uCounter_CandidateMeshlets[COUNTER_PHASE1_CANDIDATE_MESHLETS] : 0u;
+}
+
+
+[numthreads(1, 1, 1)]
+void ClearCountersCS()
+{
+	uCounter_CandidateMeshlets[0] = 0;
+	uCounter_CandidateMeshlets[1] = 0;
+	uCounter_CandidateMeshlets[2] = 0;
+
+	uCounter_PhaseTwoInstances[0] = 0;
+
+	uCounter_VisibleMeshlets[0] = 0;
+	uCounter_VisibleMeshlets[1] = 0;
 }
 
 /*

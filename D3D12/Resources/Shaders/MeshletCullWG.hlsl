@@ -69,21 +69,21 @@ struct Phase2Args
 	uint MeshletCullRecords;
 };
 
-ConstantBuffer<CullParams> cCullParams								: register(b0);
+ConstantBuffer<CullParams> cCullParams						: register(b0);
 
-RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets 			: register(u0);	// List of meshlets to process
-RWBuffer<uint> uCounter_CandidateMeshlets 							: register(u1);	// Number of meshlets to process
-RWStructuredBuffer<uint> uPhaseTwoInstances 						: register(u2);	// List of instances which need to be tested in Phase 2
-RWBuffer<uint> uCounter_PhaseTwoInstances 							: register(u3);	// Number of instances which need to be tested in Phase 2
-RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets 				: register(u4);	// List of meshlets to rasterize
-RWBuffer<uint> uCounter_VisibleMeshlets 							: register(u5);	// Number of meshlets to rasterize
+RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets 	: register(u0);	// List of meshlets to process
+RWStructuredBuffer<uint> uCounter_CandidateMeshlets 		: register(u1);	// Number of meshlets to process
+RWStructuredBuffer<uint> uPhaseTwoInstances 				: register(u2);	// List of instances which need to be tested in Phase 2
+RWStructuredBuffer<uint> uCounter_PhaseTwoInstances 		: register(u3);	// Number of instances which need to be tested in Phase 2
+RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets 		: register(u4);	// List of meshlets to rasterize
+RWStructuredBuffer<uint> uCounter_VisibleMeshlets 			: register(u5);	// Number of meshlets to rasterize
 
-RWStructuredBuffer<Phase2Args> uWorkGraphArguments					: register(u6);
+RWStructuredBuffer<Phase2Args> uWorkGraphArguments			: register(u6);
 
-Buffer<uint> tCounter_CandidateMeshlets 							: register(t0);	// Number of meshlets to process
-Buffer<uint> tCounter_PhaseTwoInstances 							: register(t1);	// Number of instances which need to be tested in Phase 2
-Buffer<uint> tCounter_VisibleMeshlets 								: register(t2);	// List of meshlets to rasterize
-Texture2D<float> tHZB 												: register(t2);	// Current HZB texture
+StructuredBuffer<uint> tCounter_CandidateMeshlets 			: register(t0);	// Number of meshlets to process
+StructuredBuffer<uint> tCounter_PhaseTwoInstances 			: register(t1);	// Number of instances which need to be tested in Phase 2
+StructuredBuffer<uint> tCounter_VisibleMeshlets 			: register(t2);	// List of meshlets to rasterize
+Texture2D<float> tHZB 										: register(t2);	// Current HZB texture
 
 struct EntryRecord
 {
@@ -192,7 +192,7 @@ void CullInstancesCS(
 [Shader("node")]
 [NodeLaunch("broadcasting")]
 [NodeMaxDispatchGrid(128, 1, 1)]
-[numthreads(NUM_CULL_MESHLETS_THREADS,1,1)]
+[numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsCS(
 	DispatchNodeInputRecord<MeshletCullData> meshletRecords,
 	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
@@ -278,7 +278,7 @@ void CullMeshletsCS(
 [NodeLaunch("broadcasting")]
 [NodeMaxDispatchGrid(128, 1, 1)]
 [NodeIsProgramEntry]
-[numthreads(NUM_CULL_MESHLETS_THREADS,1,1)]
+[numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsPhase2CS(
 	DispatchNodeInputRecord<EntryRecord> input,
 	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
@@ -355,7 +355,7 @@ void RenderMeshlet(MeshletCandidate candidate, bool isOpaque)
 [Shader("node")]
 [NodeID("MeshShaderNodes", 0)]
 [NodeLaunch("broadcasting")]
-[NodeDispatchGrid(1,1,1)]
+[NodeDispatchGrid(1, 1, 1)]
 [numthreads(1, 1, 1)]
 void ShadeMeshOpaque(DispatchNodeInputRecord<MeshletCandidate> inputData)
 {
@@ -365,7 +365,7 @@ void ShadeMeshOpaque(DispatchNodeInputRecord<MeshletCandidate> inputData)
 [Shader("node")]
 [NodeID("MeshShaderNodes", 1)]
 [NodeLaunch("broadcasting")]
-[NodeDispatchGrid(1,1,1)]
+[NodeDispatchGrid(1, 1, 1)]
 [numthreads(1, 1, 1)]
 void ShadeMeshAlphaMask(DispatchNodeInputRecord<MeshletCandidate> inputData)
 {

@@ -152,7 +152,7 @@ void DynamicGPUDescriptorAllocator::BindStagedDescriptors(CommandContext& contex
 		DescriptorHandle handle = Allocate((uint32)table.Descriptors.size());
 		for (int i = table.StartIndex; i < table.Descriptors.size(); ++i)
 		{
-			if (table.Descriptors[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr)
+			if (table.Descriptors[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr && table.Descriptors[i].ptr != 0)
 			{
 				DescriptorHandle target = handle.Offset(i, m_pHeapAllocator->GetDescriptorSize());
 				GetParent()->GetDevice()->CopyDescriptorsSimple(1, target.CpuHandle, table.Descriptors[i], m_Type);

@@ -72,13 +72,16 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	m_pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
 	m_pCommonRS->Finalize("Common");
 
+
 	ShaderDefineHelper defines;
 	defines.Set("MAX_NUM_MESHLETS", Tweakables::MaxNumMeshlets);
 	defines.Set("MAX_NUM_INSTANCES", Tweakables::MaxNumInstances);
 	defines.Set("NUM_CULL_INSTANCES_THREADS", Tweakables::CullInstanceThreadGroupSize);
 	defines.Set("NUM_CULL_MESHLETS_THREADS", Tweakables::CullMeshletThreadGroupSize);
 	defines.Set("NUM_RASTER_BINS", (int)PipelineBin::Count);
-	
+
+	m_pClearCountersPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "ClearCountersCS", *defines);
+
 	m_pBuildCullArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
 
 	// Raster PSOs for visibility buffer
@@ -231,12 +234,12 @@ RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode,
 	pVisibleMeshlets			= graph.Create("GPURender.VisibleMeshlets",				BufferDesc::CreateStructured(Tweakables::MaxNumMeshlets, sizeof(MeshletCandidate)));
 
 	pOccludedInstances			= graph.Create("GPURender.OccludedInstances",			BufferDesc::CreateStructured(Tweakables::MaxNumInstances, sizeof(uint32)));
-	pOccludedInstancesCounter	= graph.Create("GPURender.OccludedInstances.Counter",	BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	pOccludedInstancesCounter	= graph.Create("GPURender.OccludedInstances.Counter",	BufferDesc::CreateStructured(1, sizeof(uint32)));
 
 	// 0: Num Total | 1: Num Phase 1 | 2: Num Phase 2
-	pCandidateMeshletsCounter	= graph.Create("GPURender.CandidateMeshlets.Counter",	BufferDesc::CreateTyped(3, ResourceFormat::R32_UINT));
+	pCandidateMeshletsCounter	= graph.Create("GPURender.CandidateMeshlets.Counter",	BufferDesc::CreateStructured(3, sizeof(uint32)));
 	// 0: Num Phase 1 | 1: Num Phase 2
-	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter",		BufferDesc::CreateTyped(2, ResourceFormat::R32_UINT));
+	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter",		BufferDesc::CreateStructured(2, sizeof(uint32)));
 }
 
 void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, RasterContext& rasterContext, RasterResult& outResult)
@@ -538,8 +541,8 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	{
 		RG_GRAPH_SCOPE("Classify Shader Types", graph);
 
-		RGBuffer* pMeshletCounts	= graph.Create("GPURender.Classify.MeshletCounts", BufferDesc::CreateTyped(numBins, ResourceFormat::R32_UINT));
-		RGBuffer* pGlobalCount		= graph.Create("GPURender.Classify.GlobalCount", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+		RGBuffer* pMeshletCounts	= graph.Create("GPURender.Classify.MeshletCounts", BufferDesc::CreateStructured(numBins, sizeof(uint32)));
+		RGBuffer* pGlobalCount		= graph.Create("GPURender.Classify.GlobalCount", BufferDesc::CreateStructured(1, sizeof(uint32)));
 		RGBuffer* pClassifyArgs		= graph.Create("GPURender.Classify.Args", BufferDesc::CreateIndirectArguments<D3D12_DISPATCH_ARGUMENTS>(1));
 
 		struct ClassifyParams
@@ -729,9 +732,15 @@ void MeshletRasterizer::Render(RGGraph& graph, const SceneView* pView, const Vie
 			{
 				if (outResult.pDebugData)
 					context.ClearUAVu(outResult.pDebugData->Get()->GetUAV());
-				context.ClearUAVu(rasterContext.pCandidateMeshletsCounter->Get()->GetUAV());
-				context.ClearUAVu(rasterContext.pOccludedInstancesCounter->Get()->GetUAV());
-				context.ClearUAVu(rasterContext.pVisibleMeshletsCounter->Get()->GetUAV());
+
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pClearCountersPSO);
+
+				context.BindResources(2, rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(), 1);
+				context.BindResources(2, rasterContext.pOccludedInstancesCounter->Get()->GetUAV(), 3);
+				context.BindResources(2, rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(), 5);
+
+				context.Dispatch(1);
 				context.InsertUAVBarrier();
 			});
 	if (outResult.pDebugData)
@@ -822,13 +831,14 @@ void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(hzbDimensions.x, 16, hzbDimensions.y, 16));
 			});
 
-	RGBuffer* pSPDCounter = graph.Create("SPD.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
+	RGBuffer* pSPDCounter = graph.Create("SPD.Counter", BufferDesc::CreateStructured(1, sizeof(uint32)));
 
 	graph.AddPass("HZB Mips", RGPassFlag::Compute)
 		.Write({ pHZB, pSPDCounter })
 		.Bind([=](CommandContext& context)
 			{
-				context.ClearUAVu(pSPDCounter->Get()->GetUAV());
+				Ref<UnorderedAccessView> pUAV = m_pDevice->CreateUAV(pSPDCounter->Get(), BufferUAVDesc(ResourceFormat::R32_UINT));
+				context.ClearUAVu(pUAV);
 				context.InsertUAVBarrier();
 
 				context.SetComputeRootSignature(m_pCommonRS);
