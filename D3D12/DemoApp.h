@@ -140,5 +140,4 @@ private:
 	// Visibility buffer
 	Ref<PipelineState> m_pVisibilityShadingGraphicsPSO;
 	Ref<PipelineState> m_pVisibilityDebugRenderPSO;
-	uint32 m_VisibilityDebugRenderMode = 0;
 };

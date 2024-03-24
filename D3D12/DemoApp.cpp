@@ -47,7 +47,7 @@ namespace Tweakables
 	ConsoleVariable g_Tau("r.Exposure.Tau", 2.0f);
 	ConsoleVariable g_DrawHistogram("vis.Histogram", false);
 	ConsoleVariable g_ToneMapper("r.Tonemapper", 2);
-	ConsoleVariable g_TAA("r.Taa", true);
+	ConsoleVariable g_TAA("r.Taa", false);
 
 	// Shadows
 	ConsoleVariable g_SDSM("r.Shadows.SDSM", false);
@@ -83,7 +83,8 @@ namespace Tweakables
 	ConsoleVariable g_WorkGraph("r.WorkGraph", true);
 
 	// Misc
-	ConsoleVariable CullDebugStats("r.CullingStats", false);
+	ConsoleVariable g_VisibilityDebugMode("r.Raster.VisibilityDebug", 2);
+	ConsoleVariable CullDebugStats("r.CullingStats", true);
 	ConsoleVariable RenderGraphJobify("r.RenderGraph.Jobify", true);
 
 	bool g_DumpRenderGraph = false;
@@ -545,7 +546,7 @@ void DemoApp::Update()
 					if (needVisibilityBuffer)
 					{
 						RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
-						rasterContext.EnableDebug = m_VisibilityDebugRenderMode > 0;
+						rasterContext.EnableDebug = Tweakables::g_VisibilityDebugMode > 0;
 						rasterContext.EnableOcclusionCulling = Tweakables::g_OcclusionCulling;
 						rasterContext.WorkGraph = Tweakables::g_WorkGraph;
 						m_pMeshletRasterizer->Render(graph, pView, &pView->MainView, rasterContext, rasterResult);
@@ -1104,7 +1105,7 @@ void DemoApp::Update()
 						sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull2DData);
 				}
 
-				if (m_RenderPath == RenderPath::Visibility && m_VisibilityDebugRenderMode > 0)
+				if (m_RenderPath == RenderPath::Visibility && Tweakables::g_VisibilityDebugMode > 0)
 				{
 					graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
 						.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, rasterResult.pDebugData })
@@ -1116,7 +1117,7 @@ void DemoApp::Update()
 								context.SetComputeRootSignature(m_pCommonRS);
 								context.SetPipelineState(m_pVisibilityDebugRenderPSO);
 
-								uint32 mode = m_VisibilityDebugRenderMode;
+								uint32 mode = Tweakables::g_VisibilityDebugMode;
 								context.BindRootCBV(0, mode);
 								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
 								context.BindResources(2, pColorTarget->GetUAV());
@@ -1516,7 +1517,7 @@ void DemoApp::UpdateImGui()
 					"PrimitiveID",
 					"Overdraw",
 				};
-				ImGui::Combo("VisBuffer Debug View", (int*)&m_VisibilityDebugRenderMode, pDebugViewNames, ARRAYSIZE(pDebugViewNames));
+				ImGui::Combo("VisBuffer Debug View", &Tweakables::g_VisibilityDebugMode.Get(), pDebugViewNames, ARRAYSIZE(pDebugViewNames));
 
 				ImGui::Checkbox("Cull statistics", &Tweakables::CullDebugStats.Get());
 				ImGui::Checkbox("Work Graph", &Tweakables::g_WorkGraph.Get());

@@ -669,8 +669,11 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				}
 			});
 
-	if(outResult.pVisibilityBuffer)
-		drawPass.RenderTarget(outResult.pVisibilityBuffer);
+	if (outResult.pVisibilityBuffer)
+	{
+		const RenderPassColorFlags colorFlags = rasterPhase == RasterPhase::Phase1 ? RenderPassColorFlags::Clear : RenderPassColorFlags::None;
+		drawPass.RenderTarget(outResult.pVisibilityBuffer, colorFlags);
+	}
 
 	// Build the HZB, this HZB must be persistent across frames for this system to work.
 	// In Phase 1, the HZB is built so it can be used in Phase 2 for accurrate occlusion culling.
