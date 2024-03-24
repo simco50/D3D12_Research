@@ -77,8 +77,10 @@ RWStructuredBuffer<uint> uPhaseTwoInstances 				: register(u2);	// List of insta
 RWStructuredBuffer<uint> uCounter_PhaseTwoInstances 		: register(u3);	// Number of instances which need to be tested in Phase 2
 RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets 		: register(u4);	// List of meshlets to rasterize
 RWStructuredBuffer<uint> uCounter_VisibleMeshlets 			: register(u5);	// Number of meshlets to rasterize
+RWStructuredBuffer<uint4> uMeshletOffsetAndCounts 			: register(u6);
+RWStructuredBuffer<uint> uBinnedMeshlets 					: register(u7);
 
-RWStructuredBuffer<Phase2Args> uWorkGraphArguments			: register(u6);
+RWStructuredBuffer<Phase2Args> uWorkGraphArguments			: register(u8);
 
 StructuredBuffer<uint> tCounter_CandidateMeshlets 			: register(t0);	// Number of meshlets to process
 StructuredBuffer<uint> tCounter_PhaseTwoInstances 			: register(t1);	// Number of instances which need to be tested in Phase 2
@@ -256,13 +258,6 @@ void CullMeshletsCS(
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	if(add_meshlet)
 	{
-		uint elementOffset;
-		InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, VisibleMeshletCounter, 1, elementOffset);
-#if !OCCLUSION_FIRST_PASS
-		elementOffset += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
-#endif
-		uVisibleMeshlets[elementOffset] = candidate;
-
 		meshShaderRecord.Get() = candidate;
 	}
 
@@ -315,13 +310,6 @@ void CullMeshletsPhase2CS(
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	if(add_meshlet)
 	{
-		uint elementOffset;
-		InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, VisibleMeshletCounter, 1, elementOffset);
-#if !OCCLUSION_FIRST_PASS
-		elementOffset += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
-#endif
-		uVisibleMeshlets[elementOffset] = candidate;
-
 		meshShaderRecord.Get() = candidate;
 	}
 
@@ -336,20 +324,32 @@ void PreparePhase2Args()
 {
 	uWorkGraphArguments[0].InstanceCullRecords = DivideAndRoundUp(tCounter_PhaseTwoInstances[0], NUM_CULL_INSTANCES_THREADS);
 	uWorkGraphArguments[0].MeshletCullRecords = DivideAndRoundUp(tCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS], NUM_CULL_MESHLETS_THREADS);
+
+	for(int i = 0; i < NUM_RASTER_BINS; ++i)
+	{
+		// Hack, hardcoded offset
+		uint binOffset = (MAX_NUM_MESHLETS / NUM_RASTER_BINS) * i;
+		uMeshletOffsetAndCounts[i] = uint4(0, 1, 1, binOffset);
+	}
 }
 
 
-void RenderMeshlet(MeshletCandidate candidate, bool isOpaque)
+// Obviously this is very stupid, but since there are no mesh nodes yet,
+// do this just to hook it up to the existing mesh shaders as a test
+void RenderMeshlet(MeshletCandidate candidate, uint pipelineBin)
 {
-	if(candidate.InstanceID == 10)
-	{
-		InstanceData instance = GetInstance(candidate.InstanceID);
-		MeshData mesh = GetMesh(instance.MeshIndex);
+	uint meshletIndex;
+	InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, VisibleMeshletCounter, 1, meshletIndex);
+#if !OCCLUSION_FIRST_PASS
+	meshletIndex += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
+#endif
+	uVisibleMeshlets[meshletIndex] = candidate;
 
-		Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
+	uint binOffset = uMeshletOffsetAndCounts[pipelineBin].w;
 
-		DrawOBB(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, isOpaque ? Colors::Red : Colors::Blue);
-	}
+	uint binnedMeshletIndex;
+	InterlockedAdd(uMeshletOffsetAndCounts[pipelineBin].x, 1, binnedMeshletIndex);
+	uBinnedMeshlets[binOffset + binnedMeshletIndex] = meshletIndex;
 }
 
 [Shader("node")]
@@ -359,7 +359,7 @@ void RenderMeshlet(MeshletCandidate candidate, bool isOpaque)
 [numthreads(1, 1, 1)]
 void ShadeMeshOpaque(DispatchNodeInputRecord<MeshletCandidate> inputData)
 {
-	RenderMeshlet(inputData.Get(), true);
+	RenderMeshlet(inputData.Get(), 0);
 }
 
 [Shader("node")]
@@ -369,5 +369,5 @@ void ShadeMeshOpaque(DispatchNodeInputRecord<MeshletCandidate> inputData)
 [numthreads(1, 1, 1)]
 void ShadeMeshAlphaMask(DispatchNodeInputRecord<MeshletCandidate> inputData)
 {
-	RenderMeshlet(inputData.Get(), false);
+	RenderMeshlet(inputData.Get(), 1);
 }
