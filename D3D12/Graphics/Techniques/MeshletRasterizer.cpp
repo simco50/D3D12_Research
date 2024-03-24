@@ -172,7 +172,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 			StateObjectInitializer so;
 			so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
 			so.pGlobalRootSignature = m_pCommonRS;
-			so.AddLibrary("MeshletCullWG.hlsl", {}, *defines);
+			so.AddLibrary("MeshletCullWG.hlsl", { "CullInstancesCS", "CullMeshletsCS" }, *defines);
 			so.Name = "WG";
 			m_pWorkGraphSO[0] = pDevice->CreateStateObject(so);
 		}
@@ -183,9 +183,20 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 			StateObjectInitializer so;
 			so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
 			so.pGlobalRootSignature = m_pCommonRS;
-			so.AddLibrary("MeshletCullWG.hlsl", {}, *defines);
+			so.AddLibrary("MeshletCullWG.hlsl", { "CullInstancesCS", "CullMeshletsCS", "CullMeshletsPhase2CS" }, *defines);
 			so.Name = "WG";
 			m_pWorkGraphSO[1] = pDevice->CreateStateObject(so);
+		}
+		{
+			defines.Set("OCCLUSION_FIRST_PASS", true);
+			defines.Set("OCCLUSION_CULL", false);
+
+			StateObjectInitializer so;
+			so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
+			so.pGlobalRootSignature = m_pCommonRS;
+			so.AddLibrary("MeshletCullWG.hlsl", { "CullInstancesCS", "CullMeshletsCS" }, *defines);
+			so.Name = "WG";
+			m_pWorkGraphNoOcclusionSO = pDevice->CreateStateObject(so);
 		}
 
 		m_pWorkGraphArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "WorkGraphArgs.hlsl", "PreparePhase2Args");
@@ -240,6 +251,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	{
 		pCullInstancePSO = m_pCullInstancesNoOcclusionPSO;
 		pCullMeshletPSO = m_pCullMeshletsNoOcclusionPSO;
+		pCullWorkGraphSO = m_pWorkGraphNoOcclusionSO;
 	}
 
 	if (rasterContext.Mode == RasterMode::Shadows)
@@ -251,7 +263,6 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		Ref<ID3D12WorkGraphProperties> pProps;
 		pCullWorkGraphSO->GetStateObject()->QueryInterface(pProps.GetAddressOf());
 		uint32 cull_instances_entry = pProps->GetEntrypointIndex(0, { L"CullInstancesCS", 0 });
-		uint32 cull_meshlets_entry = pProps->GetEntrypointIndex(0, { L"CullMeshletsPhase2CS", 0 });
 
 		struct Phase2Args
 		{
@@ -266,6 +277,8 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 		if (rasterPhase == RasterPhase::Phase2)
 		{
+			uint32 cull_meshlets_entry = pProps->GetEntrypointIndex(0, { L"CullMeshletsPhase2CS", 0 });
+
 			graph.AddPass("Copy Setup", RGPassFlag::Copy)
 				.Write(pDispatchGraphArgs)
 				.Bind([=](CommandContext& context)
@@ -386,6 +399,8 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	}
 	else
 	{
+		RG_GRAPH_SCOPE("Instance/Meshlet Culling", graph);
+
 		// In Phase 2, build the indirect arguments based on the instance culling results of Phase 1.
 		// These are the list of instances which within the frustum, but were considered occluded by Phase 1.
 		if (rasterPhase == RasterPhase::Phase2)
