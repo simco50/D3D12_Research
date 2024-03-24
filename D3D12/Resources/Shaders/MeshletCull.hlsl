@@ -70,14 +70,12 @@ RWBuffer<uint> uCounter_VisibleMeshlets 							: register(u5);	// Number of mesh
 
 RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments 	: register(u0); // General purpose dispatch args
 
-StructuredBuffer<uint> tPhaseTwoInstances 							: register(t0);	// List of instances which need to be tested in Phase 2
-Buffer<uint> tCounter_CandidateMeshlets 							: register(t1);	// Number of meshlets to process
-Buffer<uint> tCounter_PhaseTwoInstances 							: register(t2);	// Number of instances which need to be tested in Phase 2
-Buffer<uint> tCounter_VisibleMeshlets 								: register(t3);	// List of meshlets to rasterize
-StructuredBuffer<MeshletCandidate> tVisibleMeshlets 				: register(t4);	// List of meshlets to rasterize
-Texture2D<float> tHZB 												: register(t3);	// Current HZB texture
+Buffer<uint> tCounter_CandidateMeshlets 							: register(t0);	// Number of meshlets to process
+Buffer<uint> tCounter_PhaseTwoInstances 							: register(t1);	// Number of instances which need to be tested in Phase 2
+Buffer<uint> tCounter_VisibleMeshlets 								: register(t2);	// List of meshlets to rasterize
+Texture2D<float> tHZB 												: register(t2);	// Current HZB texture
 
-StructuredBuffer<uint4> tBinnedMeshletOffsetAndCounts[2] 			: register(t4);
+StructuredBuffer<uint4> tBinnedMeshletOffsetAndCounts[2] 			: register(t3);
 
 
 // Returns the offset in the candidate meshlet buffer for the current phase
@@ -95,7 +93,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 #if OCCLUSION_FIRST_PASS
 	uint numInstances = cView.NumInstances;
 #else
-	uint numInstances = tCounter_PhaseTwoInstances[0];
+	uint numInstances = uCounter_PhaseTwoInstances[0];
 #endif
 
 	if(threadID >= numInstances)
@@ -103,7 +101,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 
 	uint instanceIndex = threadID;
 #if !OCCLUSION_FIRST_PASS
-	instanceIndex = tPhaseTwoInstances[instanceIndex];
+	instanceIndex = uPhaseTwoInstances[instanceIndex];
 #endif
 
 	InstanceData instance = GetInstance(instanceIndex);

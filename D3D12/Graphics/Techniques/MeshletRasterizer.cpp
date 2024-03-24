@@ -316,7 +316,6 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 							}, 6);
 
 						context.BindResources(3, {
-							rasterContext.pOccludedInstances->Get()->GetSRV(),
 							rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
 							rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
 							});
@@ -360,14 +359,9 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						rasterContext.pVisibleMeshlets->Get()->GetUAV(),
 						rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
 						});
-					context.BindResources(3, {
-						rasterContext.pOccludedInstances->Get()->GetSRV(),
-						rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
-						rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
-						});
 
 					if (rasterContext.EnableOcclusionCulling)
-						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
+						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 2);
 
 					D3D12_DISPATCH_GRAPH_DESC graphDesc{};
 					if (rasterPhase == RasterPhase::Phase1)
@@ -417,7 +411,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						context.SetPipelineState(m_pBuildCullArgsPSO);
 
 						context.BindResources(2, pInstanceCullArgs->Get()->GetUAV());
-						context.BindResources(3, rasterContext.pOccludedInstancesCounter->Get()->GetSRV(), 2);
+						context.BindResources(3, rasterContext.pOccludedInstancesCounter->Get()->GetSRV(), 1);
 						context.Dispatch(1);
 					});
 		}
@@ -446,14 +440,9 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						rasterContext.pOccludedInstances->Get()->GetUAV(),
 						rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
 						});
-					context.BindResources(3, {
-						rasterContext.pOccludedInstances->Get()->GetSRV(),
-						rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
-						rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
-						});
 
 					if (rasterContext.EnableOcclusionCulling)
-						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
+						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 2);
 
 					if (rasterPhase == RasterPhase::Phase1)
 						context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), Tweakables::CullInstanceThreadGroupSize));
@@ -477,7 +466,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.SetPipelineState(m_pBuildMeshletCullArgsPSO[psoPhaseIndex]);
 
 					context.BindResources(2, pMeshletCullArgs->Get()->GetUAV());
-					context.BindResources(3, rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(), 1);
+					context.BindResources(3, rasterContext.pCandidateMeshletsCounter->Get()->GetSRV());
 					context.Dispatch(1);
 				});
 
@@ -509,7 +498,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
 						});
 					if (rasterContext.EnableOcclusionCulling)
-						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
+						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 2);
 
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pMeshletCullArgs->Get());
 				});
@@ -780,7 +769,7 @@ void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, cons
 					rasterContext.pVisibleMeshletsCounter->Get()->GetSRV(),
 					pBins0->Get()->GetSRV(),
 					pBins1->Get()->GetSRV(),
-					}, 1);
+					});
 				context.Dispatch(1);
 			});
 }
