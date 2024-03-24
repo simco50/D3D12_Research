@@ -36,6 +36,8 @@
 #define OCCLUSION_CULL 1
 #endif
 
+static const int MAX_MATERIAL_TYPES = 2;
+
 // Element index of counter for total amount of candidate meshlets.
 static const int COUNTER_TOTAL_CANDIDATE_MESHLETS 	= 0;
 // Element index of counter for amount of candidate meshlets in Phase 1.
@@ -177,6 +179,13 @@ void CullInstancesCS(
 		outputs.Get().GridSize = DivideAndRoundUp(mesh.MeshletCount, NUM_CULL_INSTANCES_THREADS);
 	}
 	outputs.OutputComplete();
+
+#if VISUALIZE_OCCLUDED
+	if(wasOccluded)
+	{
+		DrawOBB(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, Colors::Green);
+	}
+#endif
 }
 
 /*
@@ -188,6 +197,7 @@ void CullInstancesCS(
 [numthreads(NUM_CULL_MESHLETS_THREADS,1,1)]
 void CullMeshletsCS(
 	DispatchNodeInputRecord<MeshletCullData> meshletRecords,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(MAX_MATERIAL_TYPES)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	MeshletCandidate candidate;
@@ -240,8 +250,13 @@ void CullMeshletsCS(
 	}
 #endif
 
+	MaterialData material = GetMaterial(instance.MaterialIndex);
+
+	bool add_meshlet = isVisible && !wasOccluded;
+	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshShaderNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
+
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
-	if(isVisible && !wasOccluded)
+	if(add_meshlet)
 	{
 		uint elementOffset;
 		InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, VisibleMeshletCounter, 1, elementOffset);
@@ -249,7 +264,11 @@ void CullMeshletsCS(
 		elementOffset += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 #endif
 		uVisibleMeshlets[elementOffset] = candidate;
+
+		meshShaderRecord.Get() = candidate;
 	}
+
+	meshShaderRecord.OutputComplete();
 }
 
 
@@ -264,6 +283,7 @@ void CullMeshletsCS(
 [numthreads(NUM_CULL_MESHLETS_THREADS,1,1)]
 void CullMeshletsPhase2CS(
 	DispatchNodeInputRecord<EntryRecord> input,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(MAX_MATERIAL_TYPES)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	uint numMeshlets = uCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];
@@ -289,8 +309,13 @@ void CullMeshletsPhase2CS(
 	}
 #endif
 
+	MaterialData material = GetMaterial(instance.MaterialIndex);
+
+	bool add_meshlet = isVisible && !wasOccluded;
+	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshShaderNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
+
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
-	if(isVisible && !wasOccluded)
+	if(add_meshlet)
 	{
 		uint elementOffset;
 		InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, VisibleMeshletCounter, 1, elementOffset);
@@ -298,7 +323,11 @@ void CullMeshletsPhase2CS(
 		elementOffset += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 #endif
 		uVisibleMeshlets[elementOffset] = candidate;
+
+		meshShaderRecord.Get() = candidate;
 	}
+
+	meshShaderRecord.OutputComplete();
 }
 
 
@@ -309,4 +338,38 @@ void PreparePhase2Args()
 {
 	uWorkGraphArguments[0].InstanceCullRecords = DivideAndRoundUp(tCounter_PhaseTwoInstances[0], NUM_CULL_INSTANCES_THREADS);
 	uWorkGraphArguments[0].MeshletCullRecords = DivideAndRoundUp(tCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS], NUM_CULL_MESHLETS_THREADS);
+}
+
+
+void RenderMeshlet(MeshletCandidate candidate, bool isOpaque)
+{
+	if(candidate.InstanceID == 10)
+	{
+		InstanceData instance = GetInstance(candidate.InstanceID);
+		MeshData mesh = GetMesh(instance.MeshIndex);
+
+		Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
+
+		DrawOBB(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, isOpaque ? Colors::Red : Colors::Blue);
+	}
+}
+
+[Shader("node")]
+[NodeID("MeshShaderNodes", 0)]
+[NodeLaunch("broadcasting")]
+[NodeDispatchGrid(1,1,1)]
+[numthreads(1, 1, 1)]
+void ShadeMeshOpaque(DispatchNodeInputRecord<MeshletCandidate> inputData)
+{
+	RenderMeshlet(inputData.Get(), true);
+}
+
+[Shader("node")]
+[NodeID("MeshShaderNodes", 1)]
+[NodeLaunch("broadcasting")]
+[NodeDispatchGrid(1,1,1)]
+[numthreads(1, 1, 1)]
+void ShadeMeshAlphaMask(DispatchNodeInputRecord<MeshletCandidate> inputData)
+{
+	RenderMeshlet(inputData.Get(), false);
 }

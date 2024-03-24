@@ -170,6 +170,14 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 
 	if (m_pDevice->GetCapabilities().SupportsWorkGraphs())
 	{
+		const char* pNodeNames[] = {
+			"CullInstancesCS",
+			"CullMeshletsCS",
+			"CullMeshletsPhase2CS",
+			"ShadeMeshOpaque",
+			"ShadeMeshAlphaMask",
+		};
+
 		{
 			defines.Set("OCCLUSION_FIRST_PASS", true);
 			defines.Set("OCCLUSION_CULL", true);
@@ -177,7 +185,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 			StateObjectInitializer so;
 			so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
 			so.pGlobalRootSignature = m_pCommonRS;
-			so.AddLibrary("MeshletCullWG.hlsl", { "CullInstancesCS", "CullMeshletsCS" }, *defines);
+			so.AddLibrary("MeshletCullWG.hlsl", pNodeNames, *defines);
 			so.Name = "WG";
 			m_pWorkGraphSO[0] = pDevice->CreateStateObject(so);
 		}
@@ -188,7 +196,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 			StateObjectInitializer so;
 			so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
 			so.pGlobalRootSignature = m_pCommonRS;
-			so.AddLibrary("MeshletCullWG.hlsl", { "CullInstancesCS", "CullMeshletsCS", "CullMeshletsPhase2CS" }, *defines);
+			so.AddLibrary("MeshletCullWG.hlsl", pNodeNames, *defines);
 			so.Name = "WG";
 			m_pWorkGraphSO[1] = pDevice->CreateStateObject(so);
 		}
@@ -199,7 +207,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 			StateObjectInitializer so;
 			so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
 			so.pGlobalRootSignature = m_pCommonRS;
-			so.AddLibrary("MeshletCullWG.hlsl", { "CullInstancesCS", "CullMeshletsCS" }, *defines);
+			so.AddLibrary("MeshletCullWG.hlsl", pNodeNames, *defines);
 			so.Name = "WG";
 			m_pWorkGraphNoOcclusionSO = pDevice->CreateStateObject(so);
 		}

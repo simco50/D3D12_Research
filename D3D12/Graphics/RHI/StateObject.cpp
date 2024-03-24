@@ -108,12 +108,12 @@ void StateObjectInitializer::AddHitGroup(const std::string& name, const std::str
 	m_HitGroups.push_back(definition);
 }
 
-void StateObjectInitializer::AddLibrary(const char* pShaderPath, const std::vector<std::string>& exports, Span<ShaderDefine> defines)
+void StateObjectInitializer::AddLibrary(const char* pShaderPath, Span<const char*> exports, Span<ShaderDefine> defines)
 {
 	LibraryExports library;
 	library.Path = pShaderPath;
 	library.Defines = defines.Copy();
-	library.Exports = exports;
+	library.Exports = exports.Copy();
 	m_Libraries.push_back(library);
 }
 
