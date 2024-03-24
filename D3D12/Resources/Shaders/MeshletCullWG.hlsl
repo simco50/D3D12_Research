@@ -36,8 +36,6 @@
 #define OCCLUSION_CULL 1
 #endif
 
-static const int MAX_MATERIAL_TYPES = 2;
-
 // Element index of counter for total amount of candidate meshlets.
 static const int COUNTER_TOTAL_CANDIDATE_MESHLETS 	= 0;
 // Element index of counter for amount of candidate meshlets in Phase 1.
@@ -197,7 +195,7 @@ void CullInstancesCS(
 [numthreads(NUM_CULL_MESHLETS_THREADS,1,1)]
 void CullMeshletsCS(
 	DispatchNodeInputRecord<MeshletCullData> meshletRecords,
-	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(MAX_MATERIAL_TYPES)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	MeshletCandidate candidate;
@@ -283,7 +281,7 @@ void CullMeshletsCS(
 [numthreads(NUM_CULL_MESHLETS_THREADS,1,1)]
 void CullMeshletsPhase2CS(
 	DispatchNodeInputRecord<EntryRecord> input,
-	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(MAX_MATERIAL_TYPES)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	uint numMeshlets = uCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];

@@ -77,6 +77,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	defines.Set("MAX_NUM_INSTANCES", Tweakables::MaxNumInstances);
 	defines.Set("NUM_CULL_INSTANCES_THREADS", Tweakables::CullInstanceThreadGroupSize);
 	defines.Set("NUM_CULL_MESHLETS_THREADS", Tweakables::CullMeshletThreadGroupSize);
+	defines.Set("NUM_RASTER_BINS", (int)PipelineBin::Count);
 	
 	m_pBuildCullArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
 
