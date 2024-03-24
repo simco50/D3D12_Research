@@ -234,24 +234,15 @@ bool StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 	}
 	else if (Type == D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE)
 	{
-		D3D12_RAYTRACING_SHADER_CONFIG* pDesc = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_SHADER_CONFIG>();
-		pDesc->MaxPayloadSizeInBytes = MaxPayloadSize;
-		pDesc->MaxAttributeSizeInBytes = MaxAttributeSize;
-		AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG);
+		D3D12_RAYTRACING_SHADER_CONFIG* pShaderConfig = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_SHADER_CONFIG>();
+		pShaderConfig->MaxPayloadSizeInBytes = MaxPayloadSize;
+		pShaderConfig->MaxAttributeSizeInBytes = MaxAttributeSize;
+		AddStateObject(pShaderConfig, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG);
 
-		if (Flags != D3D12_RAYTRACING_PIPELINE_FLAG_NONE)
-		{
-			D3D12_RAYTRACING_PIPELINE_CONFIG1* pDesc = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_PIPELINE_CONFIG1>();
-			pDesc->MaxTraceRecursionDepth = MaxRecursion;
-			pDesc->Flags = Flags;
-			AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1);
-		}
-		else
-		{
-			D3D12_RAYTRACING_PIPELINE_CONFIG* pDesc = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_PIPELINE_CONFIG>();
-			pDesc->MaxTraceRecursionDepth = MaxRecursion;
-			AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG);
-		}
+		D3D12_RAYTRACING_PIPELINE_CONFIG1* pRTConfig = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_PIPELINE_CONFIG1>();
+		pRTConfig->MaxTraceRecursionDepth = MaxRecursion;
+		pRTConfig->Flags = Flags;
+		AddStateObject(pRTConfig, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1);
 	}
 
 	D3D12_GLOBAL_ROOT_SIGNATURE* pRs = stateObjectStream.ContentData.Allocate<D3D12_GLOBAL_ROOT_SIGNATURE>();

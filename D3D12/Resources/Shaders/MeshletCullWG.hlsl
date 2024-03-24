@@ -169,8 +169,8 @@ void CullInstancesCS(
 	ThreadNodeOutputRecords<MeshletCullData> outputs = CullMeshletsCS.GetThreadNodeOutputRecords(num_records);
 	if(num_records)
 	{
-		outputs[0].InstanceID = instanceIndex;
-		outputs[0].GridSize = DivideAndRoundUp(mesh.MeshletCount, NUM_CULL_INSTANCES_THREADS);
+		outputs.Get().InstanceID = instanceIndex;
+		outputs.Get().GridSize = DivideAndRoundUp(mesh.MeshletCount, NUM_CULL_INSTANCES_THREADS);
 	}
 	outputs.OutputComplete();
 }
