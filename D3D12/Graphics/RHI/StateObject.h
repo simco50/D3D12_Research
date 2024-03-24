@@ -67,8 +67,7 @@ public:
 	const StateObjectInitializer& GetDesc() const { return m_Desc; }
 
 	ID3D12StateObject* GetStateObject() const { return m_pStateObject; }
-	ID3D12StateObjectProperties* GetStateObjectProperties() const { return m_pStateObjectProperties.Get(); }
-	D3D12_PROGRAM_IDENTIFIER GetIdentifier();
+	ID3D12StateObjectProperties1* GetStateObjectProperties() const { return m_pStateObjectProperties.Get(); }
 	uint64 GetWorkgraphBufferSize() const;
 
 private:
@@ -77,7 +76,7 @@ private:
 
 	bool m_NeedsReload = false;
 	Ref<ID3D12StateObject> m_pStateObject;
-	Ref<ID3D12StateObjectProperties> m_pStateObjectProperties;
+	Ref<ID3D12StateObjectProperties1> m_pStateObjectProperties;
 	StateObjectInitializer m_Desc;
 	DelegateHandle m_ReloadHandle;
 };

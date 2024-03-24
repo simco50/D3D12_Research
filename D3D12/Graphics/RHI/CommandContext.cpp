@@ -632,6 +632,13 @@ void CommandContext::DispatchRays(ShaderBindingTable& table, uint32 width /*= 1*
 	m_pCommandList->DispatchRays(&desc);
 }
 
+void CommandContext::DispatchGraph(const D3D12_DISPATCH_GRAPH_DESC& graphDesc)
+{
+	check(m_CurrentCommandContext == CommandListContext::Compute);
+	PrepareDraw();
+	m_pCommandList->DispatchGraph(&graphDesc);
+}
+
 void CommandContext::ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, ResourceFormat format)
 {
 	FlushResourceBarriers();
@@ -663,6 +670,11 @@ void CommandContext::SetPipelineState(StateObject* pStateObject)
 		m_pCommandList->SetPipelineState1(pStateObject->GetStateObject());
 		m_pCurrentSO = pStateObject;
 	}
+}
+
+void CommandContext::SetProgram(const D3D12_SET_PROGRAM_DESC& programDesc)
+{
+	m_pCommandList->SetProgram(&programDesc);
 }
 
 void CommandContext::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type)

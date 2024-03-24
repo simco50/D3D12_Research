@@ -126,6 +126,7 @@ public:
 	void Draw(uint32 vertexStart, uint32 vertexCount, uint32 instances = 1, uint32 instanceStart = 0);
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
+	void DispatchGraph(const D3D12_DISPATCH_GRAPH_DESC& graphDesc);
 
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, ResourceFormat format);
 
@@ -137,6 +138,7 @@ public:
 
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
+	void SetProgram(const D3D12_SET_PROGRAM_DESC& programDesc);
 
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
 	void SetVertexBuffers(Span<VertexBufferView> buffers);
@@ -166,7 +168,7 @@ public:
 
 	ScratchAllocation AllocateScratch(uint64 size, uint32 alignment = 16u);
 
-	ID3D12GraphicsCommandList6* GetCommandList() const { return m_pCommandList; }
+	ID3D12GraphicsCommandList10* GetCommandList() const { return m_pCommandList; }
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
 	const PipelineState* GetCurrentPSO() const { return m_pCurrentPSO; }
@@ -192,7 +194,7 @@ private:
 	DynamicGPUDescriptorAllocator m_ShaderResourceDescriptorAllocator;
 	ScratchAllocator m_ScratchAllocator;
 
-	Ref<ID3D12GraphicsCommandList6> m_pCommandList;
+	Ref<ID3D12GraphicsCommandList10> m_pCommandList;
 	Ref<ID3D12CommandAllocator> m_pAllocator;
 
 	Ref<ID3D12DescriptorHeap> m_pRTVHeap;

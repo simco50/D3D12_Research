@@ -54,6 +54,9 @@ namespace Tweakables
 	constexpr uint32 MaxNumMeshlets = 1 << 20u;
 	// ~ 16.000 instances x Instance (4 bytes) == 64KB
 	constexpr uint32 MaxNumInstances = 1 << 14u;
+
+	constexpr uint32 CullInstanceThreadGroupSize = 64;
+	constexpr uint32 CullMeshletThreadGroupSize = 64;
 }
 
 MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
@@ -72,6 +75,8 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	ShaderDefineHelper defines;
 	defines.Set("MAX_NUM_MESHLETS", Tweakables::MaxNumMeshlets);
 	defines.Set("MAX_NUM_INSTANCES", Tweakables::MaxNumInstances);
+	defines.Set("NUM_CULL_INSTANCES_THREADS", Tweakables::CullInstanceThreadGroupSize);
+	defines.Set("NUM_CULL_MESHLETS_THREADS", Tweakables::CullMeshletThreadGroupSize);
 	
 	m_pBuildCullArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
 
@@ -199,7 +204,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 			m_pWorkGraphNoOcclusionSO = pDevice->CreateStateObject(so);
 		}
 
-		m_pWorkGraphArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "WorkGraphArgs.hlsl", "PreparePhase2Args");
+		m_pWorkGraphArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCullWG.hlsl", "PreparePhase2Args", *defines);
 	}
 }
 
@@ -308,7 +313,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 
 						context.BindResources(2, {
 							pDispatchGraphArgs->Get()->GetUAV()
-							});
+							}, 6);
 
 						context.BindResources(3, {
 							rasterContext.pOccludedInstances->Get()->GetSRV(),
@@ -328,17 +333,16 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
 
-					Ref<ID3D12GraphicsCommandList10> pCmd;
-					context.GetCommandList()->QueryInterface(pCmd.GetAddressOf());
-
 					D3D12_SET_PROGRAM_DESC programDesc{};
 					programDesc.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH;
 					programDesc.WorkGraph.BackingMemory.StartAddress = pWorkGraphBuffer->Get()->GetGpuHandle();
 					programDesc.WorkGraph.BackingMemory.SizeInBytes = pWorkGraphBuffer->Get()->GetSize();
-					programDesc.WorkGraph.ProgramIdentifier = pCullWorkGraphSO->GetIdentifier();
+					programDesc.WorkGraph.ProgramIdentifier = pCullWorkGraphSO->GetStateObjectProperties()->GetProgramIdentifier(L"WG");
 					programDesc.WorkGraph.NodeLocalRootArgumentsTable = {};
-					programDesc.WorkGraph.Flags = D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE;
-					pCmd->SetProgram(&programDesc);
+					programDesc.WorkGraph.Flags = pWorkGraphBuffer->Get() != m_pWorkGraphMemory ? D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE : D3D12_SET_WORK_GRAPH_FLAG_NONE;
+					context.SetProgram(programDesc);
+
+					m_pWorkGraphMemory = pWorkGraphBuffer->Get();
 
 					struct
 					{
@@ -365,12 +369,10 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					if (rasterContext.EnableOcclusionCulling)
 						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
 
-					context.PrepareDraw();
-
 					D3D12_DISPATCH_GRAPH_DESC graphDesc{};
 					if (rasterPhase == RasterPhase::Phase1)
 					{
-						uint32 num_thread_groups = Math::DivideAndRoundUp((uint32)pView->Batches.size(), 64);
+						uint32 num_thread_groups = Math::DivideAndRoundUp((uint32)pView->Batches.size(), Tweakables::CullInstanceThreadGroupSize);
 
 						graphDesc.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT;
 						graphDesc.NodeCPUInput.EntrypointIndex = cull_instances_entry;
@@ -383,7 +385,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						graphDesc.Mode = D3D12_DISPATCH_MODE_MULTI_NODE_GPU_INPUT;
 						graphDesc.MultiNodeGPUInput = pDispatchGraphArgs->Get()->GetGpuHandle();
 					}
-					pCmd->DispatchGraph(&graphDesc);
+					context.DispatchGraph(graphDesc);
 				});
 
 		// In Phase 2, use the indirect arguments built before.
@@ -454,7 +456,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 3);
 
 					if (rasterPhase == RasterPhase::Phase1)
-						context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), 64));
+						context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), Tweakables::CullInstanceThreadGroupSize));
 					else
 						context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pInstanceCullArgs->Get());
 				});

@@ -90,6 +90,7 @@ private:
 	Ref<PipelineState> m_pHZBInitializePSO;
 	Ref<PipelineState> m_pHZBCreatePSO;
 
+	Buffer* m_pWorkGraphMemory = nullptr;
 	Ref<StateObject> m_pWorkGraphSO[2];
 	Ref<StateObject> m_pWorkGraphNoOcclusionSO;
 	Ref<PipelineState> m_pWorkGraphArgsPSO;

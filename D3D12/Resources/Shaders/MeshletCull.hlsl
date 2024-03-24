@@ -35,8 +35,6 @@
 #define OCCLUSION_CULL 1
 #endif
 
-#define NUM_CULL_INSTANCES_THREADS 64
-
 // Element index of counter for total amount of candidate meshlets.
 static const int COUNTER_TOTAL_CANDIDATE_MESHLETS 	= 0;
 // Element index of counter for amount of candidate meshlets in Phase 1.
@@ -179,7 +177,7 @@ void BuildMeshletCullIndirectArgs()
 {
     uint numMeshlets = tCounter_CandidateMeshlets[MeshletCounterIndex];
     D3D12_DISPATCH_ARGUMENTS args;
-    args.ThreadGroupCount = uint3(DivideAndRoundUp(numMeshlets, NUM_CULL_INSTANCES_THREADS), 1, 1);
+    args.ThreadGroupCount = uint3(DivideAndRoundUp(numMeshlets, NUM_CULL_MESHLETS_THREADS), 1, 1);
     uDispatchArguments[0] = args;
 }
 
@@ -195,7 +193,7 @@ void BuildInstanceCullIndirectArgs()
 /*
 	Per-meshlet culling
 */
-[numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
+[numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 {
 	if(threadID < uCounter_CandidateMeshlets[MeshletCounterIndex])

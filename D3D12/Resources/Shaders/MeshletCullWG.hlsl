@@ -36,8 +36,6 @@
 #define OCCLUSION_CULL 1
 #endif
 
-#define NUM_CULL_INSTANCES_THREADS 64
-
 // Element index of counter for total amount of candidate meshlets.
 static const int COUNTER_TOTAL_CANDIDATE_MESHLETS 	= 0;
 // Element index of counter for amount of candidate meshlets in Phase 1.
@@ -62,6 +60,15 @@ struct CullParams
 	uint2 HZBDimensions;
 };
 
+struct Phase2Args
+{
+	D3D12_MULTI_NODE_GPU_INPUT Header;
+	D3D12_NODE_GPU_INPUT InstanceCullInput;
+	D3D12_NODE_GPU_INPUT MeshletCullInput;
+	uint InstanceCullRecords;
+	uint MeshletCullRecords;
+};
+
 ConstantBuffer<CullParams> cCullParams								: register(b0);
 
 RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets 			: register(u0);	// List of meshlets to process
@@ -72,7 +79,7 @@ RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets 				: register(u4);	// Lis
 RWBuffer<uint> uCounter_VisibleMeshlets 							: register(u5);	// Number of meshlets to rasterize
 
 RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments 	: register(u0); // General purpose dispatch args
-RWStructuredBuffer<D3D12_NODE_GPU_INPUT> uWorkGraphArguments		: register(u0);
+RWStructuredBuffer<Phase2Args> uWorkGraphArguments					: register(u6);
 
 StructuredBuffer<uint> tPhaseTwoInstances 							: register(t0);	// List of instances which need to be tested in Phase 2
 Buffer<uint> tCounter_CandidateMeshlets 							: register(t1);	// Number of meshlets to process
@@ -181,7 +188,7 @@ void CullInstancesCS(
 [Shader("node")]
 [NodeLaunch("broadcasting")]
 [NodeMaxDispatchGrid(128, 1, 1)]
-[numthreads(NUM_CULL_INSTANCES_THREADS,1,1)]
+[numthreads(NUM_CULL_MESHLETS_THREADS,1,1)]
 void CullMeshletsCS(
 	DispatchNodeInputRecord<MeshletCullData> meshletRecords,
 	uint threadIndex : SV_DispatchThreadID)
@@ -257,7 +264,7 @@ void CullMeshletsCS(
 [NodeLaunch("broadcasting")]
 [NodeMaxDispatchGrid(128, 1, 1)]
 [NodeIsProgramEntry]
-[numthreads(NUM_CULL_INSTANCES_THREADS,1,1)]
+[numthreads(NUM_CULL_MESHLETS_THREADS,1,1)]
 void CullMeshletsPhase2CS(
 	DispatchNodeInputRecord<EntryRecord> input,
 	uint threadIndex : SV_DispatchThreadID)
@@ -295,4 +302,14 @@ void CullMeshletsPhase2CS(
 #endif
 		uVisibleMeshlets[elementOffset] = candidate;
 	}
+}
+
+
+
+[shader("compute")]
+[numthreads(1, 1, 1)]
+void PreparePhase2Args()
+{
+	uWorkGraphArguments[0].InstanceCullRecords = DivideAndRoundUp(tCounter_PhaseTwoInstances[0], NUM_CULL_INSTANCES_THREADS);
+	uWorkGraphArguments[0].MeshletCullRecords = DivideAndRoundUp(tCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS], NUM_CULL_MESHLETS_THREADS);
 }
