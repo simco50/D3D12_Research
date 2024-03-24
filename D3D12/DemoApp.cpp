@@ -79,7 +79,7 @@ namespace Tweakables
 	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 1.0f * Math::DegreesToRadians);
 	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
 	ConsoleVariable g_RenderTerrain("r.Terrain", true);
-	ConsoleVariable g_OcclusionCulling("r.OcclusionCulling", false);
+	ConsoleVariable g_OcclusionCulling("r.OcclusionCulling", true);
 	ConsoleVariable g_WorkGraph("r.WorkGraph", true);
 
 	// Misc

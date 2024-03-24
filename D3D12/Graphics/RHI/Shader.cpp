@@ -674,7 +674,7 @@ ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shader
 
 	if (!result.Success())
 	{
-		std::string error = Sprintf("Failed to compile shader \"%s:%s\": %s", pShaderPath, pEntryPoint, result.ErrorMessage.c_str());
+		std::string error = Sprintf("Failed to compile shader %s_%d_%d \"%s:%s\": %s", job.Target, job.MajVersion, job.MinVersion, pShaderPath, pEntryPoint, result.ErrorMessage.c_str());
 		E_LOG(Warning, "%s", error);
 		return { nullptr, error };
 	}

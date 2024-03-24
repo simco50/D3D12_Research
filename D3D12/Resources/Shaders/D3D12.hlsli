@@ -1,6 +1,11 @@
 #pragma once
 
 // Should reflect d3d12.h
+struct D3D12_UINT64
+{
+	uint LowPart;
+	uint HighPart;
+};
 
 struct D3D12_GPU_VIRTUAL_ADDRESS
 {
@@ -38,4 +43,24 @@ struct D3D12_DRAW_INDEXED_ARGUMENTS
 	uint StartIndexLocation;
 	int BaseVertexLocation;
 	uint StartInstanceLocation;
+};
+
+struct D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE
+{
+    D3D12_GPU_VIRTUAL_ADDRESS StartAddress;
+    D3D12_UINT64 StrideInBytes;
+};
+
+struct D3D12_NODE_GPU_INPUT
+{
+    uint EntrypointIndex;
+    uint NumRecords;
+    D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE Records;
+};
+
+struct D3D12_MULTI_NODE_GPU_INPUT
+{
+    uint NumNodeInputs;
+	uint padding;
+    D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE NodeInputs;
 };

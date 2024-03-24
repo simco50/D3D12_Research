@@ -90,5 +90,6 @@ private:
 	Ref<PipelineState> m_pHZBInitializePSO;
 	Ref<PipelineState> m_pHZBCreatePSO;
 
-	Ref<StateObject> m_pWorkGraphSO;
+	Ref<StateObject> m_pWorkGraphSO[2];
+	Ref<PipelineState> m_pWorkGraphArgsPSO;
 };
