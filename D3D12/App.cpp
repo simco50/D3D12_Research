@@ -28,12 +28,12 @@ struct LivePPAgent
 	LivePPAgent()
 	{
 		// create a default agent, loading the Live++ agent from the given path, e.g. "ThirdParty/LivePP"
-		Agent = lpp::LppCreateDefaultAgent(LIVE_PP_PATH);
+		Agent = lpp::LppCreateDefaultAgent(nullptr, LIVE_PP_PATH);
 		// bail out in case the agent is not valid
 		if (lpp::LppIsValidDefaultAgent(&Agent))
 		{
 			// enable Live++ for all loaded modules
-			Agent.EnableModule(lpp::LppGetCurrentModulePath(), lpp::LPP_MODULES_OPTION_ALL_IMPORT_MODULES);
+			Agent.EnableModule(lpp::LppGetCurrentModulePath(), lpp::LPP_MODULES_OPTION_ALL_IMPORT_MODULES, nullptr, nullptr);
 		}
 	}
 

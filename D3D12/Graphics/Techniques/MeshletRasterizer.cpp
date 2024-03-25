@@ -298,7 +298,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 			uint32 MeshletCullRecords;
 		};
 
-		RGBuffer* pDispatchGraphArgs = graph.Create("Dispatch Graph Args", BufferDesc{ .Size = sizeof(Phase2Args), .Flags = BufferFlag::UnorderedAccess });
+		RGBuffer* pDispatchGraphArgs = graph.Create("Dispatch Graph Args", BufferDesc::CreateStructured(1, sizeof(Phase2Args), BufferFlag::UnorderedAccess));
 
 		if (rasterPhase == RasterPhase::Phase2)
 		{
@@ -312,6 +312,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						Phase2Args* data = (Phase2Args*)alloc.pMappedMemory;
 						uint64 gpuAddress = pDispatchGraphArgs->Get()->GetGpuHandle();
 
+						memset(data, 0, sizeof(Phase2Args));
 						data->Header.NumNodeInputs = 2;
 						data->Header.NodeInputs = { gpuAddress + offsetof(Phase2Args, InstanceCullInput), sizeof(D3D12_NODE_GPU_INPUT) };
 						data->InstanceCullInput.EntrypointIndex = cull_instances_entry;
@@ -325,8 +326,8 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		}
 
 		graph.AddPass("Setup Dispatch Graph Args & Clear Bins", RGPassFlag::Compute)
-			.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter, pMeshletOffsetAndCounts })
-			.Write(pDispatchGraphArgs)
+			.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter })
+			.Write({ pDispatchGraphArgs, pMeshletOffsetAndCounts })
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -348,7 +349,11 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		RGBuffer* pWorkGraphBuffer = graph.Create("Work Graph Buffer", BufferDesc::CreateByteAddress(pCullWorkGraphSO->GetWorkgraphBufferSize(), BufferFlag::UnorderedAccess));
 
 		RGPass& wgPass = graph.AddPass("Work Graph", RGPassFlag::Compute)
-			.Write({ pWorkGraphBuffer, pBinnedMeshlets, pMeshletOffsetAndCounts, rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
+			.Write({ pWorkGraphBuffer })
+			.Write({ pBinnedMeshlets, pMeshletOffsetAndCounts })
+			.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter })
+			.Write({ rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter })
+			.Write({ rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
@@ -403,6 +408,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						graphDesc.MultiNodeGPUInput = pDispatchGraphArgs->Get()->GetGpuHandle();
 					}
 					context.DispatchGraph(graphDesc);
+					context.InsertUAVBarrier();
 				});
 
 		// In Phase 2, use the indirect arguments built before.

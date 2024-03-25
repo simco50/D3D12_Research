@@ -197,7 +197,7 @@ void CullInstancesCS(
 [numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsCS(
 	DispatchNodeInputRecord<MeshletCullData> meshletRecords,
-	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	MeshletCandidate candidate;
@@ -253,7 +253,7 @@ void CullMeshletsCS(
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 
 	bool add_meshlet = isVisible && !wasOccluded;
-	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshShaderNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
+	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
 
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	if(add_meshlet)
@@ -276,7 +276,7 @@ void CullMeshletsCS(
 [numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsPhase2CS(
 	DispatchNodeInputRecord<EntryRecord> input,
-	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshShaderNodes,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	uint numMeshlets = uCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];
@@ -305,7 +305,7 @@ void CullMeshletsPhase2CS(
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 
 	bool add_meshlet = isVisible && !wasOccluded;
-	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshShaderNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
+	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
 
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	if(add_meshlet)
@@ -352,8 +352,9 @@ void RenderMeshlet(MeshletCandidate candidate, uint pipelineBin)
 	uBinnedMeshlets[binOffset + binnedMeshletIndex] = meshletIndex;
 }
 
+
 [Shader("node")]
-[NodeID("MeshShaderNodes", 0)]
+[NodeID("MeshNodes", 0)]
 [NodeLaunch("broadcasting")]
 [NodeDispatchGrid(1, 1, 1)]
 [numthreads(1, 1, 1)]
@@ -362,8 +363,9 @@ void ShadeMeshOpaque(DispatchNodeInputRecord<MeshletCandidate> inputData)
 	RenderMeshlet(inputData.Get(), 0);
 }
 
+
 [Shader("node")]
-[NodeID("MeshShaderNodes", 1)]
+[NodeID("MeshNodes", 1)]
 [NodeLaunch("broadcasting")]
 [NodeDispatchGrid(1, 1, 1)]
 [numthreads(1, 1, 1)]
