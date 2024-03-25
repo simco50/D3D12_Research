@@ -288,7 +288,7 @@ void KickPhase2NodesCS(
 {
 	// Kick per-instance culling
 	{
-		uint num_instances = DivideAndRoundUp(uCounter_PhaseTwoInstances[0], NUM_CULL_INSTANCES_THREADS);
+		uint num_instances = uCounter_PhaseTwoInstances[0];
 		ThreadNodeOutputRecords<EntryRecord> record = CullInstancesCS.GetThreadNodeOutputRecords(num_instances > 0 ? 1 : 0);
 		if(num_instances > 0)
 			record.Get().GridSize = DivideAndRoundUp(num_instances, NUM_CULL_INSTANCES_THREADS);
@@ -297,7 +297,7 @@ void KickPhase2NodesCS(
 
 	// Kick per-meshlet culling
 	{
-		uint num_meshlets = DivideAndRoundUp(uCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS], NUM_CULL_MESHLETS_THREADS);
+		uint num_meshlets = uCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];
 		ThreadNodeOutputRecords<EntryRecord> record = CullMeshletsPhase2CS.GetThreadNodeOutputRecords(num_meshlets > 0 ? 1 : 0);
 		if(num_meshlets > 0)
 			record.Get().GridSize = DivideAndRoundUp(num_meshlets, NUM_CULL_MESHLETS_THREADS);
