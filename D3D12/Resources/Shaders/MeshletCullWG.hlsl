@@ -171,27 +171,17 @@ void CullInstancesCS(
 #endif
 }
 
+
 /*
 	Per-meshlet culling
 */
-[Shader("node")]
-[NodeLaunch("broadcasting")]
-[NodeMaxDispatchGrid(128, 1, 1)]
-[numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
-void CullMeshletsCS(
-	DispatchNodeInputRecord<MeshletCullData> meshletRecords,
-	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshNodes,
-	uint threadIndex : SV_DispatchThreadID)
+bool MeshletCull(MeshletCandidate candidate)
 {
-	MeshletCandidate candidate;
-	candidate.InstanceID = meshletRecords.Get().InstanceID;
-	candidate.MeshletIndex = threadIndex;
-
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
 
 	if(candidate.MeshletIndex >= mesh.MeshletCount)
-		return;
+		return false;
 
 	// Frustum test meshlet against the current view
 	Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
@@ -233,21 +223,34 @@ void CullMeshletsCS(
 	}
 #endif
 
-	MaterialData material = GetMaterial(instance.MaterialIndex);
+	return isVisible && !wasOccluded;
+}
+
+
+[Shader("node")]
+[NodeLaunch("broadcasting")]
+[NodeMaxDispatchGrid(128, 1, 1)]
+[numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
+void CullMeshletsCS(
+	DispatchNodeInputRecord<MeshletCullData> meshletRecords,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshNodes,
+	uint threadIndex : SV_DispatchThreadID)
+{
+	MeshletCandidate candidate;
+	candidate.InstanceID = meshletRecords.Get().InstanceID;
+	candidate.MeshletIndex = threadIndex;
+
+	bool visible = MeshletCull(candidate);
 
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
-	bool add_meshlet = isVisible && !wasOccluded;
-	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
-	if(add_meshlet)
+	InstanceData instance = GetInstance(candidate.InstanceID);
+	MaterialData material = GetMaterial(instance.MaterialIndex);
+	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(visible ? 1 : 0);
+	if(visible)
 		meshShaderRecord.Get() = candidate;
 	meshShaderRecord.OutputComplete();
 }
 
-
-
-/*
-	Per-meshlet culling
-*/
 [Shader("node")]
 [NodeLaunch("broadcasting")]
 [NodeMaxDispatchGrid(128, 1, 1)]
@@ -262,28 +265,14 @@ void CullMeshletsPhase2CS(
 		return;
 
 	MeshletCandidate candidate = uCandidateMeshlets[threadIndex];
-	InstanceData instance = GetInstance(candidate.InstanceID);
-	MeshData mesh = GetMesh(instance.MeshIndex);
 
-	// Frustum test meshlet against the current view
-	Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
-
-	FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.ViewProjection);
-	bool isVisible = cullData.IsVisible;
-	bool wasOccluded = false;
-
-#if OCCLUSION_CULL
-	// Occlusion test meshlet against the updated HZB
-	if(isVisible)
-		isVisible = HZBCull(cullData, tHZB, cCullParams.HZBDimensions);
-#endif
-
-	MaterialData material = GetMaterial(instance.MaterialIndex);
+	bool visible = MeshletCull(candidate);
 
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
-	bool add_meshlet = isVisible && !wasOccluded;
-	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
-	if(add_meshlet)
+	InstanceData instance = GetInstance(candidate.InstanceID);
+	MaterialData material = GetMaterial(instance.MaterialIndex);
+	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(visible ? 1 : 0);
+	if(visible)
 		meshShaderRecord.Get() = candidate;
 	meshShaderRecord.OutputComplete();
 }
@@ -334,7 +323,7 @@ void ClearRasterBins()
 void RenderMeshlet(MeshletCandidate candidate, uint pipelineBin)
 {
 	uint meshletIndex;
-	InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, VisibleMeshletCounter, 1, meshletIndex);
+	InterlockedAdd(uCounter_VisibleMeshlets[VisibleMeshletCounter], 1, meshletIndex);
 #if !OCCLUSION_FIRST_PASS
 	meshletIndex += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 #endif

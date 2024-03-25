@@ -301,7 +301,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.InsertUAVBarrier();
 				});
 
-		RGBuffer* pWorkGraphBuffer = graph.Create("Work Graph Buffer", BufferDesc::CreateByteAddress(pCullWorkGraphSO->GetWorkgraphBufferSize()));
+		RGBuffer* pWorkGraphBuffer = graph.Create("Work Graph Buffer", BufferDesc{ .Size = pCullWorkGraphSO->GetWorkgraphBufferSize() });
 
 		RGPass& wgPass = graph.AddPass("Work Graph", RGPassFlag::Compute)
 			.Write({ pWorkGraphBuffer })
@@ -348,7 +348,6 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					if (rasterContext.EnableOcclusionCulling)
 						context.BindResources(3, pSourceHZB->Get()->GetSRV());
 
-					pCullWorkGraphSO->ConditionallyReload();
 					Ref<ID3D12WorkGraphProperties> pProps;
 					pCullWorkGraphSO->GetStateObject()->QueryInterface(pProps.GetAddressOf());
 
