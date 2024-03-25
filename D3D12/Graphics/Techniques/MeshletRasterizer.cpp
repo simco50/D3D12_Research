@@ -180,6 +180,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 			"CullMeshletsPhase2CS",
 			"ShadeMeshOpaque",
 			"ShadeMeshAlphaMask",
+			"KickPhase2NodesCS"
 		};
 
 		{
@@ -216,7 +217,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 			m_pWorkGraphNoOcclusionSO = pDevice->CreateStateObject(so);
 		}
 
-		m_pWorkGraphArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCullWG.hlsl", "PreparePhase2Args", *defines);
+		m_pClearRasterBins = pDevice->CreateComputePipeline(m_pCommonRS, "MeshletCullWG.hlsl", "ClearRasterBins", *defines);
 	}
 }
 
@@ -275,7 +276,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		pRasterPSOs = &m_pDrawMeshletsDepthOnlyPSO;
 
 	constexpr uint32 numBins = (int)PipelineBin::Count;
-	RGBuffer* pMeshletOffsetAndCounts = graph.Create("GPURender.Classify.MeshletOffsetAndCounts", BufferDesc::CreateStructured(numBins, sizeof(Vector4u), BufferFlag::UnorderedAccess | BufferFlag::ShaderResource | BufferFlag::IndirectArguments));
+	RGBuffer* pMeshletOffsetAndCounts = graph.Create("GPURender.Classify.MeshletOffsetAndCounts", BufferDesc::CreateStructured(numBins, sizeof(Vector4u), BufferFlag::IndirectArguments));
 	constexpr uint32 maxNumMeshlets = Tweakables::MaxNumMeshlets;
 	RGBuffer* pBinnedMeshlets = graph.Create("GPURender.Classify.BinnedMeshlets", BufferDesc::CreateStructured(maxNumMeshlets, sizeof(uint32)));
 
@@ -285,68 +286,22 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 	if (rasterContext.WorkGraph && m_pDevice->GetCapabilities().SupportsWorkGraphs())
 	{
 		pCullWorkGraphSO->ConditionallyReload();
-		Ref<ID3D12WorkGraphProperties> pProps;
-		pCullWorkGraphSO->GetStateObject()->QueryInterface(pProps.GetAddressOf());
-		uint32 cull_instances_entry = pProps->GetEntrypointIndex(0, { L"CullInstancesCS", 0 });
 
-		struct Phase2Args
-		{
-			D3D12_MULTI_NODE_GPU_INPUT Header;
-			D3D12_NODE_GPU_INPUT InstanceCullInput;
-			D3D12_NODE_GPU_INPUT MeshletCullInput;
-			uint32 InstanceCullRecords;
-			uint32 MeshletCullRecords;
-		};
-
-		RGBuffer* pDispatchGraphArgs = graph.Create("Dispatch Graph Args", BufferDesc::CreateStructured(1, sizeof(Phase2Args), BufferFlag::UnorderedAccess));
-
-		if (rasterPhase == RasterPhase::Phase2)
-		{
-			uint32 cull_meshlets_entry = pProps->GetEntrypointIndex(0, { L"CullMeshletsPhase2CS", 0 });
-
-			graph.AddPass("CPU Setup Dispatch Args", RGPassFlag::Copy)
-				.Write(pDispatchGraphArgs)
-				.Bind([=](CommandContext& context)
-					{
-						ScratchAllocation alloc = context.AllocateScratch(pDispatchGraphArgs->Get()->GetSize());
-						Phase2Args* data = (Phase2Args*)alloc.pMappedMemory;
-						uint64 gpuAddress = pDispatchGraphArgs->Get()->GetGpuHandle();
-
-						memset(data, 0, sizeof(Phase2Args));
-						data->Header.NumNodeInputs = 2;
-						data->Header.NodeInputs = { gpuAddress + offsetof(Phase2Args, InstanceCullInput), sizeof(D3D12_NODE_GPU_INPUT) };
-						data->InstanceCullInput.EntrypointIndex = cull_instances_entry;
-						data->InstanceCullInput.NumRecords = 1;
-						data->InstanceCullInput.Records = { gpuAddress + offsetof(Phase2Args, InstanceCullRecords), sizeof(uint32) };
-						data->MeshletCullInput.EntrypointIndex = cull_meshlets_entry;
-						data->MeshletCullInput.NumRecords = 1;
-						data->MeshletCullInput.Records = { gpuAddress + offsetof(Phase2Args, MeshletCullRecords), sizeof(uint32) };
-						context.CopyBuffer(alloc.pBackingResource, pDispatchGraphArgs->Get(), sizeof(Phase2Args), alloc.Offset, 0);
-					});
-		}
-
-		graph.AddPass("Setup Dispatch Graph Args & Clear Bins", RGPassFlag::Compute)
+		graph.AddPass("Clear Raster Bins", RGPassFlag::Compute)
 			.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter })
-			.Write({ pDispatchGraphArgs, pMeshletOffsetAndCounts })
+			.Write({ pMeshletOffsetAndCounts })
 			.Bind([=](CommandContext& context)
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
-					context.SetPipelineState(m_pWorkGraphArgsPSO);
+					context.SetPipelineState(m_pClearRasterBins);
 
 					context.BindResources(2, pMeshletOffsetAndCounts->Get()->GetUAV(), 6);
-					context.BindResources(2, pDispatchGraphArgs->Get()->GetUAV(), 8);
-
-					context.BindResources(3, {
-						rasterContext.pCandidateMeshletsCounter->Get()->GetSRV(),
-						rasterContext.pOccludedInstancesCounter->Get()->GetSRV(),
-						});
-						
 					context.Dispatch(1);
 
 					context.InsertUAVBarrier();
 				});
 
-		RGBuffer* pWorkGraphBuffer = graph.Create("Work Graph Buffer", BufferDesc::CreateByteAddress(pCullWorkGraphSO->GetWorkgraphBufferSize(), BufferFlag::UnorderedAccess));
+		RGBuffer* pWorkGraphBuffer = graph.Create("Work Graph Buffer", BufferDesc::CreateByteAddress(pCullWorkGraphSO->GetWorkgraphBufferSize()));
 
 		RGPass& wgPass = graph.AddPass("Work Graph", RGPassFlag::Compute)
 			.Write({ pWorkGraphBuffer })
@@ -358,13 +313,15 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				{
 					context.SetComputeRootSignature(m_pCommonRS);
 
-					D3D12_SET_PROGRAM_DESC programDesc{};
-					programDesc.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH;
-					programDesc.WorkGraph.BackingMemory.StartAddress = pWorkGraphBuffer->Get()->GetGpuHandle();
-					programDesc.WorkGraph.BackingMemory.SizeInBytes = pWorkGraphBuffer->Get()->GetSize();
-					programDesc.WorkGraph.ProgramIdentifier = pCullWorkGraphSO->GetStateObjectProperties()->GetProgramIdentifier(L"WG");
-					programDesc.WorkGraph.NodeLocalRootArgumentsTable = {};
-					programDesc.WorkGraph.Flags = pWorkGraphBuffer->Get() != m_pWorkGraphMemory ? D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE : D3D12_SET_WORK_GRAPH_FLAG_NONE;
+					D3D12_SET_PROGRAM_DESC programDesc{
+						.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH,
+						.WorkGraph {
+							.ProgramIdentifier				= pCullWorkGraphSO->GetStateObjectProperties()->GetProgramIdentifier(L"WG"),
+							.Flags							= pWorkGraphBuffer->Get() != m_pWorkGraphMemory ? D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE : D3D12_SET_WORK_GRAPH_FLAG_NONE,
+							.BackingMemory					= { pWorkGraphBuffer->Get()->GetGpuHandle(), pWorkGraphBuffer->Get()->GetSize() },
+							.NodeLocalRootArgumentsTable	= {},
+						}
+					};
 					context.SetProgram(programDesc);
 
 					m_pWorkGraphMemory = pWorkGraphBuffer->Get();
@@ -389,38 +346,31 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						});
 
 					if (rasterContext.EnableOcclusionCulling)
-						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 2);
+						context.BindResources(3, pSourceHZB->Get()->GetSRV());
 
-					D3D12_DISPATCH_GRAPH_DESC graphDesc{};
-					if (rasterPhase == RasterPhase::Phase1)
-					{
-						uint32 num_thread_groups = Math::DivideAndRoundUp((uint32)pView->Batches.size(), Tweakables::CullInstanceThreadGroupSize);
+					pCullWorkGraphSO->ConditionallyReload();
+					Ref<ID3D12WorkGraphProperties> pProps;
+					pCullWorkGraphSO->GetStateObject()->QueryInterface(pProps.GetAddressOf());
 
-						graphDesc.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT;
-						graphDesc.NodeCPUInput.EntrypointIndex = cull_instances_entry;
-						graphDesc.NodeCPUInput.NumRecords = 1;
-						graphDesc.NodeCPUInput.pRecords = &num_thread_groups;
-						graphDesc.NodeCPUInput.RecordStrideInBytes = sizeof(uint32);
-					}
-					else
-					{
-						graphDesc.Mode = D3D12_DISPATCH_MODE_MULTI_NODE_GPU_INPUT;
-						graphDesc.MultiNodeGPUInput = pDispatchGraphArgs->Get()->GetGpuHandle();
-					}
+					const char* pEntryPoint = rasterPhase == RasterPhase::Phase1 ? "CullInstancesCS" : "KickPhase2NodesCS";
+					uint32 gridSize = rasterPhase == RasterPhase::Phase1 ? Math::DivideAndRoundUp((uint32)pView->Batches.size(), Tweakables::CullInstanceThreadGroupSize) : 1;
+
+					D3D12_DISPATCH_GRAPH_DESC graphDesc{
+						.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT,
+						.NodeCPUInput {
+							.EntrypointIndex		= pProps->GetEntrypointIndex(0, { MULTIBYTE_TO_UNICODE(pEntryPoint), 0 }),
+							.NumRecords				= 1,
+							.pRecords				= &gridSize,
+							.RecordStrideInBytes	= sizeof(uint32),
+						},
+					};
+
 					context.DispatchGraph(graphDesc);
 					context.InsertUAVBarrier();
 				});
 
-		// In Phase 2, use the indirect arguments built before.
-		if (rasterPhase == RasterPhase::Phase2)
-		{
-			wgPass.Read(pDispatchGraphArgs);
-			wgPass.Read(pInstanceCullArgs);
-		}
 		if (rasterContext.EnableOcclusionCulling)
-		{
 			wgPass.Read(pSourceHZB);
-		}
 	}
 	else
 	{

@@ -95,5 +95,5 @@ private:
 	Buffer* m_pWorkGraphMemory = nullptr;
 	Ref<StateObject> m_pWorkGraphSO[2];
 	Ref<StateObject> m_pWorkGraphNoOcclusionSO;
-	Ref<PipelineState> m_pWorkGraphArgsPSO;
+	Ref<PipelineState> m_pClearRasterBins;
 };

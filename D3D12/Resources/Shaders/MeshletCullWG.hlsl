@@ -1,6 +1,5 @@
 #include "Common.hlsli"
 #include "HZB.hlsli"
-#include "D3D12.hlsli"
 #include "VisibilityBuffer.hlsli"
 #include "WaveOps.hlsli"
 #include "ShaderDebugRender.hlsli"
@@ -48,25 +47,14 @@ static const int COUNTER_PHASE1_VISIBLE_MESHLETS 	= 0;
 static const int COUNTER_PHASE2_VISIBLE_MESHLETS 	= 1;
 
 #if OCCLUSION_FIRST_PASS
-static const int MeshletCounterIndex = COUNTER_PHASE1_CANDIDATE_MESHLETS;	// Index of counter for candidate meshlets in current phase.
 static const int VisibleMeshletCounter = COUNTER_PHASE1_VISIBLE_MESHLETS;	// Index of counter for visible meshlets in current phase.
 #else
-static const int MeshletCounterIndex = COUNTER_PHASE2_CANDIDATE_MESHLETS;	// Index of counter for candidate meshlets in current phase.
 static const int VisibleMeshletCounter = COUNTER_PHASE2_VISIBLE_MESHLETS;	// Index of counter for visible meshlets in current phase.
 #endif
 
 struct CullParams
 {
 	uint2 HZBDimensions;
-};
-
-struct Phase2Args
-{
-	D3D12_MULTI_NODE_GPU_INPUT Header;
-	D3D12_NODE_GPU_INPUT InstanceCullInput;
-	D3D12_NODE_GPU_INPUT MeshletCullInput;
-	uint InstanceCullRecords;
-	uint MeshletCullRecords;
 };
 
 ConstantBuffer<CullParams> cCullParams						: register(b0);
@@ -80,12 +68,7 @@ RWStructuredBuffer<uint> uCounter_VisibleMeshlets 			: register(u5);	// Number o
 RWStructuredBuffer<uint4> uMeshletOffsetAndCounts 			: register(u6);
 RWStructuredBuffer<uint> uBinnedMeshlets 					: register(u7);
 
-RWStructuredBuffer<Phase2Args> uWorkGraphArguments			: register(u8);
-
-StructuredBuffer<uint> tCounter_CandidateMeshlets 			: register(t0);	// Number of meshlets to process
-StructuredBuffer<uint> tCounter_PhaseTwoInstances 			: register(t1);	// Number of instances which need to be tested in Phase 2
-StructuredBuffer<uint> tCounter_VisibleMeshlets 			: register(t2);	// List of meshlets to rasterize
-Texture2D<float> tHZB 										: register(t2);	// Current HZB texture
+Texture2D<float> tHZB 										: register(t0);	// Current HZB texture
 
 struct EntryRecord
 {
@@ -252,15 +235,11 @@ void CullMeshletsCS(
 
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 
+	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	bool add_meshlet = isVisible && !wasOccluded;
 	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
-
-	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	if(add_meshlet)
-	{
 		meshShaderRecord.Get() = candidate;
-	}
-
 	meshShaderRecord.OutputComplete();
 }
 
@@ -272,7 +251,6 @@ void CullMeshletsCS(
 [Shader("node")]
 [NodeLaunch("broadcasting")]
 [NodeMaxDispatchGrid(128, 1, 1)]
-[NodeIsProgramEntry]
 [numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsPhase2CS(
 	DispatchNodeInputRecord<EntryRecord> input,
@@ -295,36 +273,53 @@ void CullMeshletsPhase2CS(
 	bool wasOccluded = false;
 
 #if OCCLUSION_CULL
+	// Occlusion test meshlet against the updated HZB
 	if(isVisible)
-	{
-		// Occlusion test meshlet against the updated HZB
 		isVisible = HZBCull(cullData, tHZB, cCullParams.HZBDimensions);
-	}
 #endif
 
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 
+	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	bool add_meshlet = isVisible && !wasOccluded;
 	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(add_meshlet ? 1 : 0);
-
-	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	if(add_meshlet)
-	{
 		meshShaderRecord.Get() = candidate;
-	}
-
 	meshShaderRecord.OutputComplete();
 }
 
+[Shader("node")]
+[NodeLaunch("broadcasting")]
+[NodeDispatchGrid(1, 1, 1)]
+[NodeIsProgramEntry]
+[numthreads(1, 1, 1)]
+void KickPhase2NodesCS(
+	[MaxRecords(1)] NodeOutput<EntryRecord> CullMeshletsPhase2CS,
+	[MaxRecords(1)] NodeOutput<EntryRecord> CullInstancesCS)
+{
+	// Kick per-instance culling
+	{
+		uint num_instances = DivideAndRoundUp(uCounter_PhaseTwoInstances[0], NUM_CULL_INSTANCES_THREADS);
+		ThreadNodeOutputRecords<EntryRecord> record = CullInstancesCS.GetThreadNodeOutputRecords(num_instances > 0 ? 1 : 0);
+		if(num_instances > 0)
+			record.Get().GridSize = DivideAndRoundUp(num_instances, NUM_CULL_INSTANCES_THREADS);
+		record.OutputComplete();
+	}
 
+	// Kick per-meshlet culling
+	{
+		uint num_meshlets = DivideAndRoundUp(uCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS], NUM_CULL_MESHLETS_THREADS);
+		ThreadNodeOutputRecords<EntryRecord> record = CullMeshletsPhase2CS.GetThreadNodeOutputRecords(num_meshlets > 0 ? 1 : 0);
+		if(num_meshlets > 0)
+			record.Get().GridSize = DivideAndRoundUp(num_meshlets, NUM_CULL_MESHLETS_THREADS);
+		record.OutputComplete();
+	}
+}
 
 [shader("compute")]
 [numthreads(1, 1, 1)]
-void PreparePhase2Args()
+void ClearRasterBins()
 {
-	uWorkGraphArguments[0].InstanceCullRecords = DivideAndRoundUp(tCounter_PhaseTwoInstances[0], NUM_CULL_INSTANCES_THREADS);
-	uWorkGraphArguments[0].MeshletCullRecords = DivideAndRoundUp(tCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS], NUM_CULL_MESHLETS_THREADS);
-
 	for(int i = 0; i < NUM_RASTER_BINS; ++i)
 	{
 		// Hack, hardcoded offset
