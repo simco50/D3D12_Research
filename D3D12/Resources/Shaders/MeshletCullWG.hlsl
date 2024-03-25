@@ -81,6 +81,11 @@ struct MeshletCullData
 	uint GridSize : SV_DispatchGrid;
 };
 
+struct VisibleMeshlet
+{
+	MeshletCandidate Candidate;
+	uint VisibleIndex;
+};
 
 /*
 	Per-instance culling
@@ -175,13 +180,16 @@ void CullInstancesCS(
 /*
 	Per-meshlet culling
 */
-bool MeshletCull(MeshletCandidate candidate)
+bool MeshletCull(MeshletCandidate candidate, out uint visibleMeshletIndex)
 {
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
 
 	if(candidate.MeshletIndex >= mesh.MeshletCount)
+	{
+		visibleMeshletIndex = 0;
 		return false;
+	}
 
 	// Frustum test meshlet against the current view
 	Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
@@ -216,6 +224,8 @@ bool MeshletCull(MeshletCandidate candidate)
 				uCandidateMeshlets[elementOffset] = candidate;
 			}
 		}
+
+		isVisible = !wasOccluded;
 #else
 		// Occlusion test meshlet against the updated HZB
 		isVisible = HZBCull(cullData, tHZB, cCullParams.HZBDimensions);
@@ -223,7 +233,19 @@ bool MeshletCull(MeshletCandidate candidate)
 	}
 #endif
 
-	return isVisible && !wasOccluded;
+	if(isVisible)
+	{
+		uint index;
+		InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, 0, 1, index);
+		uVisibleMeshlets[index] = candidate;
+		visibleMeshletIndex = index;
+	}
+	else
+	{
+		visibleMeshletIndex = 0;
+	}
+
+	return isVisible;
 }
 
 
@@ -233,21 +255,25 @@ bool MeshletCull(MeshletCandidate candidate)
 [numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsCS(
 	DispatchNodeInputRecord<MeshletCullData> meshletRecords,
-	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshNodes,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<VisibleMeshlet> MeshNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	MeshletCandidate candidate;
 	candidate.InstanceID = meshletRecords.Get().InstanceID;
 	candidate.MeshletIndex = threadIndex;
 
-	bool visible = MeshletCull(candidate);
+	uint visibleMeshletIndex;
+	bool visible = MeshletCull(candidate, visibleMeshletIndex);
 
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
-	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(visible ? 1 : 0);
+	ThreadNodeOutputRecords<VisibleMeshlet> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(visible ? 1 : 0);
 	if(visible)
-		meshShaderRecord.Get() = candidate;
+	{
+		meshShaderRecord.Get().Candidate = candidate;
+		meshShaderRecord.Get().VisibleIndex = visibleMeshletIndex;
+	}
 	meshShaderRecord.OutputComplete();
 }
 
@@ -255,9 +281,9 @@ void CullMeshletsCS(
 [NodeLaunch("broadcasting")]
 [NodeMaxDispatchGrid(128, 1, 1)]
 [numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
-void CullMeshletsPhase2CS(
+void CullMeshletsEntryCS(
 	DispatchNodeInputRecord<EntryRecord> input,
-	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<MeshletCandidate> MeshNodes,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<VisibleMeshlet> MeshNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	uint numMeshlets = uCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];
@@ -266,14 +292,18 @@ void CullMeshletsPhase2CS(
 
 	MeshletCandidate candidate = uCandidateMeshlets[threadIndex];
 
-	bool visible = MeshletCull(candidate);
+	uint visibleMeshletIndex;
+	bool visible = MeshletCull(candidate, visibleMeshletIndex);
 
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
-	ThreadNodeOutputRecords<MeshletCandidate> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(visible ? 1 : 0);
+	ThreadNodeOutputRecords<VisibleMeshlet> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(visible ? 1 : 0);
 	if(visible)
-		meshShaderRecord.Get() = candidate;
+	{
+		meshShaderRecord.Get().Candidate = candidate;
+		meshShaderRecord.Get().VisibleIndex = visibleMeshletIndex;
+	}
 	meshShaderRecord.OutputComplete();
 }
 
@@ -283,7 +313,7 @@ void CullMeshletsPhase2CS(
 [NodeIsProgramEntry]
 [numthreads(1, 1, 1)]
 void KickPhase2NodesCS(
-	[MaxRecords(1)] NodeOutput<EntryRecord> CullMeshletsPhase2CS,
+	[MaxRecords(1)] NodeOutput<EntryRecord> CullMeshletsEntryCS,
 	[MaxRecords(1)] NodeOutput<EntryRecord> CullInstancesCS)
 {
 	// Kick per-instance culling
@@ -298,7 +328,7 @@ void KickPhase2NodesCS(
 	// Kick per-meshlet culling
 	{
 		uint num_meshlets = uCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];
-		ThreadNodeOutputRecords<EntryRecord> record = CullMeshletsPhase2CS.GetThreadNodeOutputRecords(num_meshlets > 0 ? 1 : 0);
+		ThreadNodeOutputRecords<EntryRecord> record = CullMeshletsEntryCS.GetThreadNodeOutputRecords(num_meshlets > 0 ? 1 : 0);
 		if(num_meshlets > 0)
 			record.Get().GridSize = DivideAndRoundUp(num_meshlets, NUM_CULL_MESHLETS_THREADS);
 		record.OutputComplete();
@@ -320,20 +350,13 @@ void ClearRasterBins()
 
 // Obviously this is very stupid, but since there are no mesh nodes yet,
 // do this just to hook it up to the existing mesh shaders as a test
-void RenderMeshlet(MeshletCandidate candidate, uint pipelineBin)
+void RenderMeshlet(VisibleMeshlet meshlet, uint pipelineBin)
 {
-	uint meshletIndex;
-	InterlockedAdd(uCounter_VisibleMeshlets[VisibleMeshletCounter], 1, meshletIndex);
-#if !OCCLUSION_FIRST_PASS
-	meshletIndex += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
-#endif
-	uVisibleMeshlets[meshletIndex] = candidate;
-
 	uint binOffset = uMeshletOffsetAndCounts[pipelineBin].w;
 
 	uint binnedMeshletIndex;
 	InterlockedAdd(uMeshletOffsetAndCounts[pipelineBin].x, 1, binnedMeshletIndex);
-	uBinnedMeshlets[binOffset + binnedMeshletIndex] = meshletIndex;
+	uBinnedMeshlets[binOffset + binnedMeshletIndex] = meshlet.VisibleIndex;
 }
 
 
@@ -342,7 +365,7 @@ void RenderMeshlet(MeshletCandidate candidate, uint pipelineBin)
 [NodeLaunch("broadcasting")]
 [NodeDispatchGrid(1, 1, 1)]
 [numthreads(1, 1, 1)]
-void ShadeMeshOpaque(DispatchNodeInputRecord<MeshletCandidate> inputData)
+void ShadeMeshOpaque(DispatchNodeInputRecord<VisibleMeshlet> inputData)
 {
 	RenderMeshlet(inputData.Get(), 0);
 }
@@ -353,7 +376,7 @@ void ShadeMeshOpaque(DispatchNodeInputRecord<MeshletCandidate> inputData)
 [NodeLaunch("broadcasting")]
 [NodeDispatchGrid(1, 1, 1)]
 [numthreads(1, 1, 1)]
-void ShadeMeshAlphaMask(DispatchNodeInputRecord<MeshletCandidate> inputData)
+void ShadeMeshAlphaMask(DispatchNodeInputRecord<VisibleMeshlet> inputData)
 {
 	RenderMeshlet(inputData.Get(), 1);
 }
