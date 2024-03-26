@@ -110,9 +110,10 @@ void CullInstancesCS(
 	if(threadID >= numInstances)
         return;
 
+#if OCCLUSION_FIRST_PASS
 	uint instanceIndex = threadID;
-#if !OCCLUSION_FIRST_PASS
-	instanceIndex = uPhaseTwoInstances[instanceIndex];
+#else
+	uint instanceIndex = uPhaseTwoInstances[threadID];
 #endif
 
 	InstanceData instance = GetInstance(instanceIndex);
@@ -180,16 +181,13 @@ void CullInstancesCS(
 /*
 	Per-meshlet culling
 */
-bool MeshletCull(MeshletCandidate candidate, out uint visibleMeshletIndex)
+void MeshletCull(MeshletCandidate candidate, NodeOutputArray<VisibleMeshlet> meshOutputNodes)
 {
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
 
 	if(candidate.MeshletIndex >= mesh.MeshletCount)
-	{
-		visibleMeshletIndex = 0;
-		return false;
-	}
+		return;
 
 	// Frustum test meshlet against the current view
 	Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
@@ -233,19 +231,19 @@ bool MeshletCull(MeshletCandidate candidate, out uint visibleMeshletIndex)
 	}
 #endif
 
+	// If meshlet is visible and wasn't occluded in the previous frame, submit it
+	MaterialData material = GetMaterial(instance.MaterialIndex);
+	ThreadNodeOutputRecords<VisibleMeshlet> meshShaderRecord = meshOutputNodes[material.RasterBin].GetThreadNodeOutputRecords(isVisible ? 1 : 0);
 	if(isVisible)
 	{
-		uint index;
-		InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, 0, 1, index);
-		uVisibleMeshlets[index] = candidate;
-		visibleMeshletIndex = index;
-	}
-	else
-	{
-		visibleMeshletIndex = 0;
-	}
+		uint visibleIndex;
+		InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, 0, 1, visibleIndex);
+		uVisibleMeshlets[visibleIndex] = candidate;
 
-	return isVisible;
+		meshShaderRecord.Get().Candidate = candidate;
+		meshShaderRecord.Get().VisibleIndex = visibleIndex;
+	}
+	meshShaderRecord.OutputComplete();
 }
 
 
@@ -261,20 +259,7 @@ void CullMeshletsCS(
 	MeshletCandidate candidate;
 	candidate.InstanceID = meshletRecords.Get().InstanceID;
 	candidate.MeshletIndex = threadIndex;
-
-	uint visibleMeshletIndex;
-	bool visible = MeshletCull(candidate, visibleMeshletIndex);
-
-	// If meshlet is visible and wasn't occluded in the previous frame, submit it
-	InstanceData instance = GetInstance(candidate.InstanceID);
-	MaterialData material = GetMaterial(instance.MaterialIndex);
-	ThreadNodeOutputRecords<VisibleMeshlet> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(visible ? 1 : 0);
-	if(visible)
-	{
-		meshShaderRecord.Get().Candidate = candidate;
-		meshShaderRecord.Get().VisibleIndex = visibleMeshletIndex;
-	}
-	meshShaderRecord.OutputComplete();
+	MeshletCull(candidate, MeshNodes);
 }
 
 [Shader("node")]
@@ -291,20 +276,7 @@ void CullMeshletsEntryCS(
 		return;
 
 	MeshletCandidate candidate = uCandidateMeshlets[threadIndex];
-
-	uint visibleMeshletIndex;
-	bool visible = MeshletCull(candidate, visibleMeshletIndex);
-
-	// If meshlet is visible and wasn't occluded in the previous frame, submit it
-	InstanceData instance = GetInstance(candidate.InstanceID);
-	MaterialData material = GetMaterial(instance.MaterialIndex);
-	ThreadNodeOutputRecords<VisibleMeshlet> meshShaderRecord = MeshNodes[material.RasterBin].GetThreadNodeOutputRecords(visible ? 1 : 0);
-	if(visible)
-	{
-		meshShaderRecord.Get().Candidate = candidate;
-		meshShaderRecord.Get().VisibleIndex = visibleMeshletIndex;
-	}
-	meshShaderRecord.OutputComplete();
+	MeshletCull(candidate, MeshNodes);
 }
 
 [Shader("node")]
