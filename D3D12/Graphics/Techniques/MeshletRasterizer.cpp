@@ -282,7 +282,6 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		pCullWorkGraphSO->ConditionallyReload();
 
 		graph.AddPass("Clear Raster Bins", RGPassFlag::Compute)
-			.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter })
 			.Write({ pMeshletOffsetAndCounts })
 			.Bind([=](CommandContext& context)
 				{
