@@ -38,6 +38,8 @@
 #include <External/Imgui/imgui_internal.h>
 #include <External/FontAwesome/IconsFontAwesome4.h>
 
+#define MINI_MODE 1
+
 namespace Tweakables
 {
 	// Post processing
@@ -165,7 +167,7 @@ void DemoApp::SetupScene()
 
 		Light& sunLight = m_World.Registry.emplace<Light>(entity);
 		sunLight.Intensity = 10;
-		sunLight.CastShadows = false;
+		sunLight.CastShadows = true;
 		sunLight.VolumetricLighting = true;
 		sunLight.Type = LightType::Directional;
 		m_World.Sunlight = entity;
@@ -177,7 +179,7 @@ void DemoApp::SetupScene()
 		spot.UmbraAngleDegrees = 70.0f;
 		spot.PenumbraAngleDegrees = 50.0f;
 		spot.Intensity = 100.0f;
-		spot.CastShadows = false;
+		spot.CastShadows = true;
 		spot.VolumetricLighting = true;
 		spot.pLightTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LightProjector.png", false, "Light Cookie");
 		spot.Type = LightType::Spot;
@@ -428,13 +430,13 @@ void DemoApp::Update()
 		{
 			PROFILE_CPU_SCOPE("Record RenderGraph");
 
-			/*
+#if !MINI_MODE
 			graph.AddPass("Build Acceleration Structures", RGPassFlag::Compute | RGPassFlag::NeverCull)
 				.Bind([=](CommandContext& context)
 					{
 						pViewMut->AccelerationStructure.Build(context, *pView);
 					});
-					*/
+#endif
 
 			const Vector2u viewDimensions = m_SceneData.GetDimensions();
 
@@ -450,7 +452,7 @@ void DemoApp::Update()
 			LightCull3DData lightCull3DData;
 			
 			RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
-			/*
+#if !MINI_MODE
 			if (Tweakables::g_Sky)
 			{
 				pSky = graph.Create("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
@@ -471,7 +473,7 @@ void DemoApp::Update()
 				graph.AddPass("Transition Sky", RGPassFlag::Raster)
 					.Read(pSky);
 			}
-			*/
+#endif
 
 			// Export makes sure the target texture is filled in during pass execution.
 			graph.Export(pSky, &pViewMut->pSky, TextureFlag::ShaderResource);
@@ -480,7 +482,7 @@ void DemoApp::Update()
 			RasterResult rasterResult;
 			if (m_RenderPath != RenderPath::PathTracing)
 			{
-#if 0
+#if !MINI_MODE
 				{
 					RG_GRAPH_SCOPE("Shadow Depths", graph);
 					for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
@@ -576,11 +578,13 @@ void DemoApp::Update()
 								});
 					}
 
-					//if (Tweakables::g_RenderTerrain.GetBool())
-					//	m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
+#if !MINI_MODE
+					if (Tweakables::g_RenderTerrain.GetBool())
+						m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
+#endif
 				}
 
-#if 0
+#if !MINI_MODE
 				if (Tweakables::g_SDSM)
 				{
 					RG_GRAPH_SCOPE("Depth Reduce", graph);
@@ -813,7 +817,7 @@ void DemoApp::Update()
 
 			graph.Export(sceneTextures.pColorTarget, &m_pColorHistory, TextureFlag::ShaderResource);
 
-#if 0
+#if !MINI_MODE
 			/*
 				Post Processing
 			*/
@@ -1084,12 +1088,14 @@ void DemoApp::Update()
 			sceneTextures.pColorTarget = pTonemapTarget;
 #endif
 
+#if MINI_MODE
 			sceneTextures.pColorTarget = graph.Create("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
 
 			graph.AddPass("Clear", RGPassFlag::Raster)
 				.RenderTarget(sceneTextures.pColorTarget, RenderPassColorFlags::Clear)
 				.Bind([=](CommandContext& context)
 					{});
+#endif
 
 			/*
 				Debug Views
