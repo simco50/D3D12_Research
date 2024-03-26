@@ -255,6 +255,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 				context.SetPipelineState(m_pCBTCacheBitfieldPSO);
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
+				context.InsertUAVBarrier(pCBTBuffer->Get());
 			});
 
 	graph.AddPass("CBT Sum Reduction", RGPassFlag::Compute)
@@ -288,8 +289,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 			});
 
 	graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
-		.Read(pCBTBuffer)
-		.Write({ pIndirectArgs })
+		.Write({ pCBTBuffer, pIndirectArgs })
 		.Bind([=](CommandContext& context)
 			{
 				struct
@@ -302,14 +302,12 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				context.BindRootCBV(0, params);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
+					pCBTBuffer->Get()->GetUAV(),
 					pIndirectArgs->Get()->GetUAV(),
 					});
-				context.BindResources(4, {
-					pCBTBuffer->Get()->GetSRV(),
-					});
-
 				context.SetPipelineState(m_pCBTIndirectArgsPSO);
 				context.Dispatch(1);
+				context.InsertUAVBarrier(pCBTBuffer->Get());
 			});
 
 	// Amplification + Mesh shader variant performs subdivision used for the next frame while rendering with the subdivision state of the previous frame.
@@ -359,7 +357,8 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 		RGTexture* pVisualizeTarget = RGUtils::CreatePersistent(graph, "CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_CBTData.pDebugVisualizeTexture, true);
 		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
-			.Read({ pCBTBuffer, pIndirectArgs })
+			.Read({ pIndirectArgs })
+			.Write({ pCBTBuffer })
 			.RenderTarget(pVisualizeTarget)
 			.Bind([=](CommandContext& context)
 			{
@@ -375,8 +374,8 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 				context.BindRootCBV(0, params);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, m_CBTData.pDebugVisualizeTexture));
-				context.BindResources(4, {
-					pCBTBuffer->Get()->GetSRV(),
+				context.BindResources(3, {
+					pCBTBuffer->Get()->GetUAV(),
 					});
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, DebugDrawArgs));

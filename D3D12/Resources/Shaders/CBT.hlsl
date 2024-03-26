@@ -38,12 +38,11 @@ struct CommonParams
 };
 ConstantBuffer<CommonParams> cCommonParams : register(b1);
 
-ByteAddressBuffer tCBT : register(t0);
 Texture2D<float> tDepth : register(t0);
 Texture3D<float4> tFog : register(t1);
 
 RWByteAddressBuffer uCBT : register(u0);
-RWByteAddressBuffer uDispatchArgs : register(u0);
+RWByteAddressBuffer uDispatchArgs : register(u1);
 
 struct IndirectArgsParams
 {
@@ -86,7 +85,7 @@ void GetTerrain(float2 worldPosition, uint octaves, out float height, out float3
 [numthreads(1, 1, 1)]
 void PrepareDispatchArgsCS(uint threadID : SV_DispatchThreadID)
 {
-	ReadOnlyCBT cbt = InitializeCBT(tCBT, cIndirectArgsParams.NumCBTElements);
+	CBT cbt = InitializeCBT(uCBT, cIndirectArgsParams.NumCBTElements);
 
 	uint offset = 0;
 
@@ -153,7 +152,7 @@ static const uint SUM_REDUCTION_LUT[] = {
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV_GroupThreadID, uint groupIndex : SV_GroupID)
 {
-	ReadWriteCBT cbt = InitializeCBT(uCBT, cSumReductionParams.NumCBTElements);
+	CBT cbt = InitializeCBT(uCBT, cSumReductionParams.NumCBTElements);
 
 	uint count = 1u << cSumReductionParams.Depth;
 	uint index = threadID;
@@ -185,7 +184,7 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV
 		{
 			uint value = gsSumCache[nodeOffset + i];
 			uint bitIndex = baseBitIndex + i * nodeSize;
-			ReadWriteCBT::DataMutateArgs args = cbt.GetDataArgs(bitIndex, nodeSize);
+			CBT::DataMutateArgs args = cbt.GetDataArgs(bitIndex, nodeSize);
 
 			cbt.BitfieldSet_Single_Lockless(args.ElementIndexLSB, args.ElementOffsetLSB, args.BitCountLSB, value);
 			if(args.BitCountMSB > 0u)
@@ -199,7 +198,7 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID, uint groupThreadID : SV
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void SumReductionCS(uint threadID : SV_DispatchThreadID)
 {
-	ReadWriteCBT cbt = InitializeCBT(uCBT, cSumReductionParams.NumCBTElements);
+	CBT cbt = InitializeCBT(uCBT, cSumReductionParams.NumCBTElements);
 
 	uint count = 1u << cSumReductionParams.Depth;
 	uint index = threadID;
@@ -218,7 +217,7 @@ void SumReductionCS(uint threadID : SV_DispatchThreadID)
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void CacheBitfieldCS(uint threadID : SV_DispatchThreadID)
 {
-	ReadWriteCBT cbt = InitializeCBT(uCBT, cSumReductionParams.NumCBTElements);
+	CBT cbt = InitializeCBT(uCBT, cSumReductionParams.NumCBTElements);
 
 	uint depth = cSumReductionParams.Depth;
 	uint count = 1u << depth;
@@ -331,7 +330,7 @@ float3x3 GetVertices(uint heapIndex)
 [numthreads(COMPUTE_THREAD_GROUP_SIZE, 1, 1)]
 void UpdateCS(uint threadID : SV_DispatchThreadID)
 {
-	ReadWriteCBT cbt = InitializeCBT(uCBT, cCommonParams.NumCBTElements);
+	CBT cbt = InitializeCBT(uCBT, cCommonParams.NumCBTElements);
 
 	if(threadID < cbt.NumNodes())
 	{
@@ -392,7 +391,7 @@ groupshared ASPayload gsPayload;
 [numthreads(MESH_SHADER_THREAD_GROUP_SIZE, 1, 1)]
 void UpdateAS(uint threadID : SV_DispatchThreadID)
 {
-	ReadWriteCBT cbt = InitializeCBT(uCBT, cCommonParams.NumCBTElements);
+	CBT cbt = InitializeCBT(uCBT, cCommonParams.NumCBTElements);
 
 	bool isVisible = false;
 	uint heapIndex = 0;
@@ -469,7 +468,7 @@ void RenderMS(
 /* VERTEX SHADING TECHNIQUE */
 void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out VertexOut vertex)
 {
-	ReadWriteCBT cbt = InitializeCBT(uCBT, cCommonParams.NumCBTElements);
+	CBT cbt = InitializeCBT(uCBT, cCommonParams.NumCBTElements);
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 	float3 tri = GetVertices((heapIndex << GEOMETRY_SUBD_LEVEL) + (vertexID / 3))[vertexID % 3];
@@ -550,7 +549,7 @@ void DebugVisualizeVS(
 	out float4 pos : SV_Position,
 	out float4 color : COLOR)
 {
-	ReadOnlyCBT cbt = InitializeCBT(tCBT, cDebugVisualizeParams.NumCBTElements);
+	CBT cbt = InitializeCBT(uCBT, cDebugVisualizeParams.NumCBTElements);
 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 
