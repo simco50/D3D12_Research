@@ -33,11 +33,3 @@ static const float3x3 IDENTITY_MATRIX_3 = float3x3(1, 0, 0, 0, 1, 0, 0, 0, 1);
 static const float4x4 IDENTITY_MATRIX_4 = float4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
 
 #define _INLINE_RT (_SM_MAJ >= 6 && _SM_MIN >= 5)
-
-#if _PAYLOAD_QUALIFIERS
-#define RAYPAYLOAD [raypayload]
-#define RAYQUALIFIER(qualifiers) : qualifiers
-#else
-#define RAYPAYLOAD
-#define RAYQUALIFIER(qualifiers)
-#endif

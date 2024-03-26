@@ -185,9 +185,9 @@ RayDesc CreateLightOcclusionRay(Light light, float3 worldPosition)
 	return rayDesc;
 }
 
-struct RAYPAYLOAD OcclusionPayload
+struct [raypayload] OcclusionPayload
 {
-	float HitT RAYQUALIFIER(read(caller) : write(caller, miss));
+	float HitT 	: read(caller) : write(caller, miss);
 
 	bool IsHit() { return HitT >= 0; }
 	void SetMiss() { HitT = -1.0f; }
@@ -246,17 +246,17 @@ float TraceOcclusionRay(
 		ray, 							//Ray
 		payload 						//Payload
 	);
-	return !payload.IsMiss();
+	return payload.IsHit();
 #endif
 }
 
-struct RAYPAYLOAD MaterialRayPayload
+struct [raypayload] MaterialRayPayload
 {
-	float HitT;
-	uint PrimitiveID;
-	uint InstanceID;
-	float2 Barycentrics;
-	uint FrontFace;
+	float HitT				: read(caller) : write(caller, closesthit);
+	uint PrimitiveID		: read(caller) : write(closesthit);
+	uint InstanceID			: read(caller) : write(closesthit);
+	float2 Barycentrics		: read(caller) : write(closesthit);
+	uint FrontFace			: read(caller) : write(closesthit);
 
 	bool IsHit() { return HitT >= 0; }
 	bool IsFrontFace() { return FrontFace > 0; }

@@ -365,19 +365,6 @@ namespace ShaderCompiler
 
 		arguments.AddArgument("-HV", "2021");
 
-#if 0
-		if (majVersion >= 6 && minVersion >= 6)
-		{
-			arguments.AddArgument("-enable-payload-qualifiers");
-			arguments.AddDefine("_PAYLOAD_QUALIFIERS", "1");
-		}
-		else
-#endif
-		{
-			arguments.AddArgument("-disable-payload-qualifiers");
-			arguments.AddDefine("_PAYLOAD_QUALIFIERS", "0");
-		}
-
 		result.IsDebug = compileJob.EnableDebugMode;
 
 		arguments.AddArgument(DXC_ARG_DEBUG);
