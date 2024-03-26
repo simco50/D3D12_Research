@@ -463,11 +463,12 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					context.BindResources(2, {
 						rasterContext.pCandidateMeshlets->Get()->GetUAV(),
 						rasterContext.pCandidateMeshletsCounter->Get()->GetUAV(),
-						rasterContext.pOccludedInstances->Get()->GetUAV(),
-						rasterContext.pOccludedInstancesCounter->Get()->GetUAV(),
+						});
+					context.BindResources(2, {
 						rasterContext.pVisibleMeshlets->Get()->GetUAV(),
 						rasterContext.pVisibleMeshletsCounter->Get()->GetUAV(),
-						});
+						}, 4);
+
 					if (rasterContext.EnableOcclusionCulling)
 						context.BindResources(3, pSourceHZB->Get()->GetSRV(), 2);
 
