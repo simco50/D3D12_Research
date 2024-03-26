@@ -4,6 +4,7 @@
 #include "Graphics/RHI/CommandContext.h"
 #include "Core/Profiler.h"
 #include "Core/TaskQueue.h"
+#include "Core/CommandLine.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
@@ -187,6 +188,8 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 		}
 	}
 
+	static const bool enable_resource_reuse = !CommandLine::GetBool("-render_graph_no_reuse");
+
 	// Go through all resources accesses and allocate on first access and de-allocate on last access
 	// It's important to make the distinction between the Ref allocation and the Raw resource itself.
 	// A de-allocate returns the resource back to the pool by resetting the Ref however the Raw resource keeps a reference to it to use during execution.
@@ -211,10 +214,25 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 			check(pResource->pPhysicalResource);
 		}
 
-		for (const RGPass::ResourceAccess& access : pPass->Accesses)
+		if (enable_resource_reuse)
 		{
-			RGResource* pResource = access.pResource;
-			if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
+			for (const RGPass::ResourceAccess& access : pPass->Accesses)
+			{
+				RGResource* pResource = access.pResource;
+				if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
+				{
+					check(pResource->pPhysicalResource);
+					pResource->Release();
+				}
+			}
+		}
+	}
+
+	if (!enable_resource_reuse)
+	{
+		for (RGResource* pResource : m_Resources)
+		{
+			if (!pResource->IsImported && !pResource->IsExported && pResource->pPhysicalResource)
 			{
 				check(pResource->pPhysicalResource);
 				pResource->Release();
@@ -328,7 +346,7 @@ void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice, boo
 	if (jobify)
 	{
 		// Group passes in jobs
-		const uint32 maxPassesPerJob = 15;
+		const uint32 maxPassesPerJob = 10;
 		std::vector<Span<RGPass*>> passGroups;
 
 		// Duplicate profile events that cross the border of jobs to retain event hierarchy
