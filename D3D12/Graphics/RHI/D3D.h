@@ -19,9 +19,9 @@ namespace D3D
 	inline std::string ResourceStateToString(D3D12_RESOURCE_STATES state)
 	{
 		if (state == 0)
-		{
 			return "COMMON";
-		}
+		if (state == -1)
+			return "UNKNOWN";
 
 		char outString[1024];
 		outString[0] = '\0';

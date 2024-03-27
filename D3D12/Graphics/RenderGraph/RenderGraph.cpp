@@ -65,7 +65,8 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	if (it != Accesses.end())
 	{
 		check(!EnumHasAllFlags(it->Access, state), "Redundant state set on resource '%s'", pResource->GetName());
-		check(!D3D::HasWriteResourceState(it->Access) || !D3D::HasWriteResourceState(state), "Resource (%s) may only have 1 write state", pResource->GetName());
+		check(it->Access == state || !D3D::HasWriteResourceState(it->Access), "Resource '%s' may not have any other states when it already has a write state (%s)", pResource->GetName(), D3D::ResourceStateToString(it->Access));
+		check(it->Access == state || !D3D::HasWriteResourceState(state), "Resource '%s' may not use a write state (%s) while it already has another state (%s)", pResource->GetName(), D3D::ResourceStateToString(state), D3D::ResourceStateToString(it->Access));
 		it->Access |= state;
 	}
 	else
@@ -488,9 +489,10 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 	for (const RGPass::ResourceAccess& access : pPass->Accesses)
 	{
 		RGResource* pResource = access.pResource;
+
 		check(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
 		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
-		if(pResource->GetPhysical()->UseStateTracking())
+		if (pResource->GetPhysical()->UseStateTracking())
 			context.InsertResourceBarrier(pResource->pPhysicalResource, access.Access);
 	}
 
@@ -538,7 +540,7 @@ Ref<Texture> RGResourcePool::Allocate(const char* pName, const TextureDesc& desc
 		if (pTexture->GetNumRefs() == 1 && pTexture->GetDesc().IsCompatible(desc))
 		{
 			texture.LastUsedFrame = m_FrameIndex;
-			pTexture->SetName(pName);
+			//pTexture->SetName(pName);
 			return pTexture;
 		}
 	}
@@ -553,7 +555,7 @@ Ref<Buffer> RGResourcePool::Allocate(const char* pName, const BufferDesc& desc)
 		if (pBuffer->GetNumRefs() == 1 && pBuffer->GetDesc().IsCompatible(desc))
 		{
 			buffer.LastUsedFrame = m_FrameIndex;
-			pBuffer->SetName(pName);
+			//pBuffer->SetName(pName);
 			return pBuffer;
 		}
 	}
