@@ -2,7 +2,7 @@
 #include "RHI.h"
 #include "GraphicsResource.h"
 #include "GPUDescriptorHeap.h"
-#include "SCratchAllocator.h"
+#include "ScratchAllocator.h"
 
 struct VertexBufferView;
 struct IndexBufferView;

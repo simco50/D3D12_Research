@@ -216,6 +216,31 @@ namespace D3D
 		return out;
 	}
 
+	inline std::string BarrierToString(const D3D12_RESOURCE_BARRIER& barrier)
+	{
+		if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
+		{
+			return Sprintf("Transition | Resource: '%s' (%x) | Before %s | After %s",
+				D3D::GetObjectName(barrier.Transition.pResource),
+				barrier.Transition.pResource,
+				D3D::ResourceStateToString(barrier.Transition.StateBefore),
+				D3D::ResourceStateToString(barrier.Transition.StateAfter));
+		}
+		if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_UAV)
+		{
+			return Sprintf("UAV | Resource: '%s' (%x)",
+				D3D::GetObjectName(barrier.UAV.pResource),
+				barrier.UAV.pResource);
+		}
+		if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_UAV)
+		{
+			return Sprintf("Aliasing | Before: '%s' (%x) | After: '%s' (%x)",
+				D3D::GetObjectName(barrier.Aliasing.pResourceBefore), barrier.Aliasing.pResourceBefore,
+				D3D::GetObjectName(barrier.Aliasing.pResourceAfter), barrier.Aliasing.pResourceAfter);
+		}
+		return "[Invalid]";
+	}
+
 	constexpr static const DXGI_FORMAT gDXGIFormatMap[] =
 	{
 		DXGI_FORMAT_UNKNOWN,

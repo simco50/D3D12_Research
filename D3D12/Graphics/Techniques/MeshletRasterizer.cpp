@@ -761,9 +761,11 @@ void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 
 	const Vector2u hzbDimensions = pHZB->GetDesc().Size2D();
 
+	RGBuffer* pSPDCounter = graph.Create("SPD.Counter", BufferDesc::CreateStructured(1, sizeof(uint32)));
+
 	graph.AddPass("HZB Create", RGPassFlag::Compute)
 		.Read(pDepth)
-		.Write(pHZB)
+		.Write({ pHZB, pSPDCounter })
 		.Bind([=](CommandContext& context)
 			{
 				context.SetComputeRootSignature(m_pCommonRS);
@@ -776,21 +778,21 @@ void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 
 				parameters.DimensionsInv = Vector2(1.0f / hzbDimensions.x, 1.0f / hzbDimensions.y);
 				context.BindRootCBV(0, parameters);
-				context.BindResources(2, pHZB->Get()->GetUAV());
+				context.BindResources(2, {
+					pHZB->Get()->GetUAV(),
+					pSPDCounter->Get()->GetUAV(),
+					});
 				context.BindResources(3, pDepth->Get()->GetSRV());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(hzbDimensions.x, 16, hzbDimensions.y, 16));
+
+				context.InsertUAVBarrier();
 			});
 
-	RGBuffer* pSPDCounter = graph.Create("SPD.Counter", BufferDesc::CreateStructured(1, sizeof(uint32)));
 
 	graph.AddPass("HZB Mips", RGPassFlag::Compute)
-		.Write({ pHZB, pSPDCounter })
+		.Write({ pHZB })
 		.Bind([=](CommandContext& context)
 			{
-				Ref<UnorderedAccessView> pUAV = m_pDevice->CreateUAV(pSPDCounter->Get(), BufferUAVDesc(ResourceFormat::R32_UINT));
-				context.ClearUAVu(pUAV);
-				context.InsertUAVBarrier();
-
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pHZBCreatePSO);
 
@@ -819,7 +821,7 @@ void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				parameters.WorkGroupOffset.y = workGroupOffset[1];
 
 				context.BindRootCBV(0, parameters);
-				uint32 uavIndex = 0;
+				uint32 uavIndex = 1;
 				context.BindResources(2, pSPDCounter->Get()->GetUAV(), uavIndex++);
 				if(pHZB->GetDesc().Mips > 6)
 					context.BindResources(2, pHZB->Get()->GetUAV(6), uavIndex++);
