@@ -10,16 +10,9 @@ ConstantBuffer<PassParameters> cPass : register(b0);
 RWTexture2D<float> uHZB : register(u0);
 Texture2D<float> tSource : register(t0);
 
-globallycoherent RWStructuredBuffer<uint> uSpdGlobalAtomic : register(u1);
-globallycoherent RWTexture2D<float> uDestination6 : register(u2);
-RWTexture2D<float> uDestination[12] : register(u3);
-
 [numthreads(16, 16, 1)]
 void HZBInitCS(uint3 threadID : SV_DispatchThreadID)
 {
-	if(all(threadID == 0))
-		uSpdGlobalAtomic[0] = 0;
-
     float2 uv = ((float2)threadID.xy + 0.5f) * cPass.DimensionsInv;
     float4 depths = tSource.Gather(sPointClamp, uv);
     float minDepth = min(min(min(depths.x, depths.y), depths.z), depths.w);
@@ -27,12 +20,17 @@ void HZBInitCS(uint3 threadID : SV_DispatchThreadID)
 }
 
 // SPD HZB
+
 struct SpdConstants
 {
     uint Mips;
     uint NumWorkGroups;
     float2 WorkGroupOffset;
 };
+
+globallycoherent RWStructuredBuffer<uint> uSpdGlobalAtomic : register(u0);
+globallycoherent RWTexture2D<float> uDestination6 : register(u1);
+RWTexture2D<float> uDestination[12] : register(u2);
 
 ConstantBuffer<SpdConstants> cConstants : register(b0);
 
