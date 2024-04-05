@@ -11,8 +11,8 @@ public:
 	D3D12_DESCRIPTOR_HEAP_TYPE GetType() const { return m_Type; }
 
 private:
-
 	Ref<ID3D12DescriptorHeap> m_pHeap;
+	std::mutex m_FreeListLock;
 	FreeList m_FreeList;
 	uint32 m_NumDescriptors;
 	uint32 m_DescriptorSize = 0;

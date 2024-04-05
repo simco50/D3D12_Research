@@ -123,7 +123,6 @@ struct FreeList
 {
 public:
 	FreeList(uint32 size)
-		: m_NumAllocations(0)
 	{
 		m_FreeList.resize(size);
 		std::iota(m_FreeList.begin(), m_FreeList.end(), 0);
@@ -136,14 +135,14 @@ public:
 
 	uint32 Allocate()
 	{
-		uint32 slot = m_NumAllocations.fetch_add(1);
+		uint32 slot = m_NumAllocations++;
 		check(slot < m_FreeList.size());
 		return m_FreeList[slot];
 	}
 
 	void Free(uint32 index)
 	{
-		uint32 freed_index = m_NumAllocations.fetch_sub(1);
+		uint32 freed_index = m_NumAllocations--;
 		check(freed_index > 0);
 		m_FreeList[freed_index - 1] = index;
 	}
@@ -152,5 +151,5 @@ public:
 
 private:
 	std::vector<uint32> m_FreeList;
-	std::atomic<uint32> m_NumAllocations;
+	uint32 m_NumAllocations = 0;
 };

@@ -19,11 +19,15 @@ CPUDescriptorHeap::CPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_H
 
 CD3DX12_CPU_DESCRIPTOR_HANDLE CPUDescriptorHeap::AllocateDescriptor()
 {
+	std::lock_guard lock(m_FreeListLock);
+
 	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pHeap->GetCPUDescriptorHandleForHeapStart(), m_FreeList.Allocate(), m_DescriptorSize);
 }
 
 void CPUDescriptorHeap::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
+	std::lock_guard lock(m_FreeListLock);
+
 	check(handle.ptr != DescriptorHandle::InvalidCPUHandle.ptr);
 	uint32 elementIndex = (uint32)((handle.ptr - m_pHeap->GetCPUDescriptorHandleForHeapStart().ptr) / m_DescriptorSize);
 	m_FreeList.Free(elementIndex);
