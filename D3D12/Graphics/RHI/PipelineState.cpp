@@ -300,6 +300,9 @@ void PipelineState::CreateInternal()
 				pShader = result.pShader;
 				if (result.Error.length())
 				{
+					if (m_pPipelineState)
+						break;
+
 					bool retry = ::MessageBoxA(GetActiveWindow(), result.Error.c_str(), "Shader Compilation Failed", MB_RETRYCANCEL) == IDRETRY;
 					if (!retry)
 						break;

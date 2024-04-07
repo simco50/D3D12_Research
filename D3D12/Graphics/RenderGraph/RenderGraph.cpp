@@ -331,12 +331,91 @@ void RGGraph::PopEvent()
 		++m_RenderPasses.back()->NumEventsToEnd;
 }
 
+struct TreeNode
+{
+	const char* pName;
+	int Parent;
+	std::vector<int> Children;
+	RGPass* Pass = nullptr;
+};
+
+void RGGraph::DrawPassView(bool& enabled) const
+{
+	std::vector<TreeNode> nodes;
+	nodes.emplace_back().pName = "Root";
+	uint32 currentNode = 0;
+
+	for (RGPass* pPass : m_RenderPasses)
+	{
+		for (uint32 i : pPass->EventsToStart)
+		{
+			uint32 newIndex = nodes.size();
+			TreeNode& newNode = nodes.emplace_back();
+			nodes[currentNode].Children.push_back(newIndex);
+			newNode.pName = m_Events[i].pName;
+			newNode.Parent = currentNode;
+			currentNode = newIndex;
+		}
+
+		TreeNode& newNode = nodes.emplace_back();
+		nodes[currentNode].Children.push_back((int)nodes.size() - 1);
+		newNode.Pass = pPass;
+		newNode.pName = pPass->GetName();
+
+		for (uint32 i = 0; i < pPass->NumEventsToEnd; ++i)
+		{
+			currentNode = nodes[currentNode].Parent;
+		}
+	}
+
+	check(currentNode == 0);
+
+	if (ImGui::Begin("Passes", &enabled))
+	{
+		ImGui::PushStyleVar(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.0f, 0.5f));
+		for (uint32 it : nodes[0].Children)
+		{
+			DrawPassNode(it, nodes, 0);
+		}
+		ImGui::PopStyleVar();
+	}
+	ImGui::End();
+}
+
+void RGGraph::DrawPassNode(int node, Span<TreeNode> nodes, int depth) const
+{
+	const TreeNode& treeNode = nodes[node];
+	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth;
+	if (depth < 3 && !treeNode.Pass)
+		flags |= ImGuiTreeNodeFlags_DefaultOpen;
+
+	if (ImGui::TreeNodeEx(treeNode.pName, flags))
+	{
+		if (treeNode.Pass)
+		{
+			for (const RGPass::ResourceAccess& access : treeNode.Pass->Accesses)
+			{
+				bool write = D3D::HasWriteResourceState(access.Access);
+				ImGui::Button(Sprintf("[%s] %s", write ? "RW" : "RO", access.pResource->GetName()).c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 0));
+			}
+		}
+		for (int it : treeNode.Children)
+		{
+			DrawPassNode(it, nodes, depth + 1);
+		}
+
+		ImGui::TreePop();
+	}
+}
+
 void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice, bool jobify)
 {
 	PROFILE_CPU_SCOPE();
 
 	Compile(resourcePool);
 
+	if (m_EnablePassView)
+		DrawPassView(m_EnablePassView);
 	if (m_EnableResourceTrackerView)
 		DrawResourceTracker(m_EnableResourceTrackerView);
 	if (m_pDumpGraphPath)

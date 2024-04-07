@@ -295,6 +295,7 @@ namespace GraphicsCommon
 	Ref<CommandSignature> pIndirectDrawSignature;
 	Ref<CommandSignature> pIndirectDispatchSignature;
 	Ref<CommandSignature> pIndirectDispatchMeshSignature;
+	Ref<RootSignature> pCommonRootSignature;
 
 	void Create(GraphicsDevice* pDevice)
 	{
@@ -338,6 +339,14 @@ namespace GraphicsCommon
 		DefaultTextures[(int)DefaultTexture::ColorNoise256] = CreateTextureFromFile(pDevice, "Resources/Textures/Noise.png", false, "Noise");
 		DefaultTextures[(int)DefaultTexture::BlueNoise512] = CreateTextureFromFile(pDevice, "Resources/Textures/BlueNoise.dds", false, "Blue Noise");
 
+		pCommonRootSignature = new RootSignature(pDevice);
+		pCommonRootSignature->AddRootConstants(0, 8);
+		pCommonRootSignature->AddRootCBV(100);
+		pCommonRootSignature->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+		pCommonRootSignature->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+		pCommonRootSignature->Finalize("Common");
+
+
 		{
 			CommandSignatureInitializer sigDesc;
 			sigDesc.AddDispatch();
@@ -365,6 +374,7 @@ namespace GraphicsCommon
 		pIndirectDispatchSignature.Reset();
 		pIndirectDrawSignature.Reset();
 		pIndirectDispatchMeshSignature.Reset();
+		pCommonRootSignature.Reset();
 	}
 
 	Texture* GetDefaultTexture(DefaultTexture type)

@@ -195,6 +195,7 @@ namespace GraphicsCommon
 		ResourceFormat::R8_UNORM
 	};
 
+	extern Ref<RootSignature> pCommonRootSignature;
 	extern Ref<CommandSignature> pIndirectDrawSignature;
 	extern Ref<CommandSignature> pIndirectDrawIndexedSignature;
 	extern Ref<CommandSignature> pIndirectDispatchSignature;

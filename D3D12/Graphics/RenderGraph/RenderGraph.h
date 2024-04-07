@@ -352,6 +352,7 @@ public:
 		return nullptr;
 	}
 
+	void EnablePassView() { m_EnablePassView = true; }
 	void EnableResourceTrackerView() { m_EnableResourceTrackerView = true; }
 	void DumpGraph(const char* pPath) { m_pDumpGraphPath = m_Allocator.AllocateString(pPath); }
 
@@ -376,7 +377,11 @@ private:
 	void DumpDebugGraph(const char* pFilePath) const;
 	void DrawResourceTracker(bool& enabled) const;
 
+	void DrawPassView(bool& enabled) const;
+	void DrawPassNode(int node, Span<struct TreeNode> nodes, int depth) const;
+
 	bool m_EnableResourceTrackerView = false;
+	bool m_EnablePassView = false;
 	const char* m_pDumpGraphPath = nullptr;
 
 	std::vector<uint32> m_PendingEvents;

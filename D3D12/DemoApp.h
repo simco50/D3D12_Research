@@ -27,6 +27,7 @@ class VisualizeTexture;
 class VolumetricFog;
 class ForwardRenderer;
 class LightCulling;
+class JumpFlood;
 struct Material;
 
 enum class RenderPath
@@ -83,6 +84,7 @@ private:
 	std::unique_ptr<MeshletRasterizer> m_pMeshletRasterizer;
 	std::unique_ptr<DDGI> m_pDDGI;
 	std::unique_ptr<VisualizeTexture> m_pVisualizeTexture;
+	std::unique_ptr<JumpFlood> m_pJumpFlood;
 
 	VolumetricFogData m_FogData;
 
@@ -140,4 +142,6 @@ private:
 	// Visibility buffer
 	Ref<PipelineState> m_pVisibilityShadingGraphicsPSO;
 	Ref<PipelineState> m_pVisibilityDebugRenderPSO;
+
+	Ref<PipelineState> m_pJumpFloodApply;
 };

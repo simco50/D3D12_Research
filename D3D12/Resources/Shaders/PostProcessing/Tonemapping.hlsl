@@ -24,6 +24,7 @@ Texture2D tColor : register(t0);
 StructuredBuffer<float> tAverageLuminance : register(t1);
 Texture2D tBloom : register(t2);
 Texture2D tLensDirt : register(t3);
+Texture2D<float> tOutline : register(t4);
 
 template<typename T>
 T Reinhard(T x)
@@ -134,5 +135,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	{
 		rgb = LinearToSRGB(rgb);
 	}
+
+	rgb += tOutline[dispatchThreadId.xy] * float3(1, 1, 1);
+
 	uOutColor[dispatchThreadId.xy] = float4(rgb, 1);
 }

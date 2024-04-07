@@ -26,6 +26,7 @@
 #include "Graphics/Techniques/MeshletRasterizer.h"
 #include "Graphics/Techniques/VisualizeTexture.h"
 #include "Graphics/Techniques/LightCulling.h"
+#include "Graphics/Techniques/JumpFlood.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
@@ -38,7 +39,7 @@
 #include <External/Imgui/imgui_internal.h>
 #include <External/FontAwesome/IconsFontAwesome4.h>
 
-#define MINI_MODE 1
+#define MINI_MODE 0
 
 namespace Tweakables
 {
@@ -85,12 +86,14 @@ namespace Tweakables
 	ConsoleVariable g_WorkGraph("r.WorkGraph", true);
 
 	// Misc
-	ConsoleVariable g_VisibilityDebugMode("r.Raster.VisibilityDebug", 2);
+	ConsoleVariable g_VisibilityDebugMode("r.Raster.VisibilityDebug", 0);
+	ConsoleVariable g_JumpFloodWidth("r.JumpFloodWidth", 8);
 	ConsoleVariable CullDebugStats("r.CullingStats", true);
 	ConsoleVariable RenderGraphJobify("r.RenderGraph.Jobify", true);
 
 	bool g_DumpRenderGraph = false;
 	bool g_EnableRenderGraphResourceTracker = false;
+	bool g_EnablePassView = false;
 	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
 	bool g_Screenshot = false;
 	ConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = true; });
@@ -137,6 +140,7 @@ void DemoApp::Init()
 	m_pPathTracing			= std::make_unique<PathTracing>(m_pDevice);
 	m_pCBTTessellation		= std::make_unique<CBTTessellation>(m_pDevice);
 	m_pVisualizeTexture		= std::make_unique<VisualizeTexture>(m_pDevice);
+	m_pJumpFlood			= std::make_unique<JumpFlood>(m_pDevice);
 
 	InitializePipelines();
 
@@ -373,7 +377,7 @@ void DemoApp::Update()
 					return (int)a.BlendMode < (int)b.BlendMode;
 				return EnumHasAnyFlags(a.BlendMode, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
 			};
-			std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), CompareSort);
+			//std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), CompareSort);
 
 			TaskContext taskContext;
 			// In Visibility Buffer mode, culling is done on the GPU.
@@ -478,6 +482,7 @@ void DemoApp::Update()
 			// Export makes sure the target texture is filled in during pass execution.
 			graph.Export(pSky, &pViewMut->pSky, TextureFlag::ShaderResource);
 
+			RGTexture* pFloodFillResult = graph.Create("FloodFillResult", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::R8_UNORM));
 
 			RasterResult rasterResult;
 			if (m_RenderPath != RenderPath::PathTracing)
@@ -747,6 +752,55 @@ void DemoApp::Update()
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
 							context.Draw(0, 36);
 						});
+
+
+#if 1
+				{
+					RG_GRAPH_SCOPE("Jump Flood", graph);
+
+					RGTexture* pMask = graph.Create("DepthMask", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::D32_FLOAT, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
+					graph.AddPass("Render Mask", RGPassFlag::Raster)
+						.DepthStencil(pMask, RenderPassDepthFlags::Clear)
+						.Bind([=](CommandContext& context)
+							{
+								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+								context.SetGraphicsRootSignature(m_pCommonRS);
+								context.SetPipelineState(m_pDepthPrepassOpaquePSO);
+
+								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pMask->Get()));
+
+								const Batch& b = pView->Batches[7];
+								context.BindRootCBV(0, b.InstanceID);
+								context.DispatchMesh(Math::DivideAndRoundUp(b.pMesh->NumMeshlets, 32));
+							});
+
+					RGTexture* pResult = m_pJumpFlood->Execute(graph, pMask, Tweakables::g_JumpFloodWidth);
+
+					graph.AddPass("Jump Flood Apply", RGPassFlag::Compute)
+						.Read(pResult)
+						.Write(pFloodFillResult)
+						.Bind([=](CommandContext& context)
+							{
+								context.SetComputeRootSignature(m_pCommonRS);
+								context.SetPipelineState(m_pJumpFloodApply);
+
+								struct
+								{
+									uint32 Width;
+								} params;
+								params.Width = Tweakables::g_JumpFloodWidth;
+
+
+								context.BindRootCBV(0, params);
+								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pFloodFillResult->Get()));
+
+								context.BindResources(2, pFloodFillResult->Get()->GetUAV());
+								context.BindResources(3, pResult->Get()->GetSRV());
+
+								context.Dispatch(ComputeUtils::GetNumThreadGroups(viewDimensions.x, 8, viewDimensions.y, 8));
+							});
+				}
+#endif
 
 				if (Tweakables::g_Clouds)
 				{
@@ -1050,7 +1104,7 @@ void DemoApp::Update()
 			RGTexture* pTonemapTarget = graph.Create("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
 
 			graph.AddPass("Tonemap", RGPassFlag::Compute)
-				.Read({ sceneTextures.pColorTarget, pAverageLuminance, pBloomTexture })
+				.Read({ sceneTextures.pColorTarget, pAverageLuminance, pBloomTexture, pFloodFillResult })
 				.Write(pTonemapTarget)
 				.Bind([=](CommandContext& context)
 					{
@@ -1081,6 +1135,7 @@ void DemoApp::Update()
 							pAverageLuminance->Get()->GetSRV(),
 							pBloomTexture->Get()->GetSRV(),
 							m_pLensDirtTexture->GetSRV(),
+							pFloodFillResult->Get()->GetSRV(),
 							});
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 					});
@@ -1157,6 +1212,8 @@ void DemoApp::Update()
 		}
 		if(Tweakables::g_EnableRenderGraphResourceTracker)
 			graph.EnableResourceTrackerView();
+		if (Tweakables::g_EnablePassView)
+			graph.EnablePassView();
 
 		graph.Execute(*m_RenderGraphPool, m_pDevice, Tweakables::RenderGraphJobify);
 		
@@ -1285,6 +1342,8 @@ void DemoApp::InitializePipelines()
 		m_pVisibilityShadingGraphicsPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
+
+	m_pJumpFloodApply = m_pDevice->CreateComputePipeline(m_pCommonRS, "JumpFlood.hlsl", "JumpFloodApplyCS");
 }
 
 void DemoApp::UpdateImGui()
@@ -1366,6 +1425,10 @@ void DemoApp::UpdateImGui()
 			if (ImGui::MenuItem("RenderGraph Resource Tracker"))
 			{
 				Tweakables::g_EnableRenderGraphResourceTracker = true;
+			}
+			if (ImGui::MenuItem("RenderGraph Passes"))
+			{
+				Tweakables::g_EnablePassView = true;
 			}
 			if (ImGui::MenuItem("Screenshot"))
 			{
@@ -1621,6 +1684,7 @@ void DemoApp::UpdateImGui()
 			ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
 			ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
 			ImGui::Checkbox("Render Terrain", &Tweakables::g_RenderTerrain.Get());
+			ImGui::SliderInt("Jump Flood Width", &Tweakables::g_JumpFloodWidth.Get(), 2, 720);
 		}
 
 		if (ImGui::CollapsingHeader("Raytracing"))
