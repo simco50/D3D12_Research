@@ -256,6 +256,14 @@ struct RGEvent
 	uint32 LineNumber = 0;
 };
 
+struct RGGraphOptions
+{
+	bool ResourceAliasing		= true;
+	bool Jobify					= true;
+	bool PassCulling			= true;
+	uint32 CommandlistGroupSize = 10;
+};
+
 class RGGraph
 {
 public:
@@ -265,9 +273,9 @@ public:
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
-	void Compile(RGResourcePool& resourcePool);
+	void Compile(RGResourcePool& resourcePool, const RGGraphOptions& options);
 
-	void Execute(GraphicsDevice* pDevice, bool jobify);
+	void Execute(GraphicsDevice* pDevice);
 
 	template<typename T, typename... Args>
 	NO_DISCARD T* Allocate(Args&&... args)
@@ -365,6 +373,7 @@ private:
 	void PrepareResources(RGPass* pPass, CommandContext& context);
 	void DestroyData();
 
+	RGGraphOptions m_Options;
 	bool m_IsCompiled = false;
 	std::vector<uint32> m_PendingEvents;
 	std::vector<RGEvent> m_Events;

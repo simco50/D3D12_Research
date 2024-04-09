@@ -42,66 +42,71 @@
 namespace Tweakables
 {
 	// Post processing
-	ConsoleVariable g_WhitePoint("r.Exposure.WhitePoint", 1.0f);
-	ConsoleVariable g_MinLogLuminance("r.Exposure.MinLogLuminance", -4.0f);
-	ConsoleVariable g_MaxLogLuminance("r.Exposure.MaxLogLuminance", 20.0f);
-	ConsoleVariable g_Tau("r.Exposure.Tau", 2.0f);
-	ConsoleVariable g_DrawHistogram("vis.Histogram", false);
-	ConsoleVariable g_ToneMapper("r.Tonemapper", 2);
-	ConsoleVariable g_TAA("r.Taa", true);
+	ConsoleVariable gWhitePoint("r.Exposure.WhitePoint", 1.0f);
+	ConsoleVariable gMinLogLuminance("r.Exposure.MinLogLuminance", -4.0f);
+	ConsoleVariable gMaxLogLuminance("r.Exposure.MaxLogLuminance", 20.0f);
+	ConsoleVariable gTau("r.Exposure.Tau", 2.0f);
+	ConsoleVariable gDrawHistogram("vis.Histogram", false);
+	ConsoleVariable gToneMapper("r.Tonemapper", 2);
+	ConsoleVariable gTAA("r.Taa", true);
 
 	// Shadows
-	ConsoleVariable g_SDSM("r.Shadows.SDSM", false);
-	ConsoleVariable g_VisualizeShadowCascades("vis.ShadowCascades", false);
-	ConsoleVariable g_ShadowCascades("r.Shadows.CascadeCount", 4);
-	ConsoleVariable g_PSSMFactor("r.Shadow.PSSMFactor", 0.85f);
-	ConsoleVariable g_ShadowsGPUCull("r.Shadows.GPUCull", true);
-	ConsoleVariable g_ShadowsOcclusionCulling("r.Shadows.OcclusionCull", true);
-	ConsoleVariable g_CullShadowsDebugStats("r.Shadows.CullingStats", -1);
+	ConsoleVariable gSDSM("r.Shadows.SDSM", false);
+	ConsoleVariable gVisualizeShadowCascades("vis.ShadowCascades", false);
+	ConsoleVariable gShadowCascades("r.Shadows.CascadeCount", 4);
+	ConsoleVariable gPSSMFactor("r.Shadow.PSSMFactor", 0.85f);
+	ConsoleVariable gShadowsGPUCull("r.Shadows.GPUCull", true);
+	ConsoleVariable gShadowsOcclusionCulling("r.Shadows.OcclusionCull", true);
+	ConsoleVariable gCullShadowsDebugStats("r.Shadows.CullingStats", -1);
 
 	// Bloom
-	ConsoleVariable g_Bloom("r.Bloom", true);
-	ConsoleVariable g_BloomIntensity("r.Bloom.Intensity", 1.0f);
-	ConsoleVariable g_BloomBlendFactor("r.Bloom.BlendFactor", 0.3f);
-	ConsoleVariable g_BloomInteralBlendFactor("r.Bloom.InteralBlendFactor", 0.85f);
+	ConsoleVariable gBloom("r.Bloom", true);
+	ConsoleVariable gBloomIntensity("r.Bloom.Intensity", 1.0f);
+	ConsoleVariable gBloomBlendFactor("r.Bloom.BlendFactor", 0.3f);
+	ConsoleVariable gBloomInteralBlendFactor("r.Bloom.InteralBlendFactor", 0.85f);
 
 	// Misc Lighting
-	ConsoleVariable g_Sky("r.Sky", true);
-	ConsoleVariable g_VolumetricFog("r.VolumetricFog", true);
-	ConsoleVariable g_Clouds("r.Clouds", true);
-	ConsoleVariable g_RaytracedAO("r.Raytracing.AO", false);
-	ConsoleVariable g_VisualizeLights("vis.Lights", false);
-	ConsoleVariable g_VisualizeLightDensity("vis.LightDensity", false);
-	ConsoleVariable g_EnableDDGI("r.DDGI", true);
-	ConsoleVariable g_VisualizeDDGI("vis.DDGI", false);
-	ConsoleVariable g_RenderObjectBounds("r.vis.ObjectBounds", false);
+	ConsoleVariable gSky("r.Sky", true);
+	ConsoleVariable gVolumetricFog("r.VolumetricFog", true);
+	ConsoleVariable gClouds("r.Clouds", true);
+	ConsoleVariable gRaytracedAO("r.Raytracing.AO", false);
+	ConsoleVariable gVisualizeLights("vis.Lights", false);
+	ConsoleVariable gVisualizeLightDensity("vis.LightDensity", false);
+	ConsoleVariable gEnableDDGI("r.DDGI", true);
+	ConsoleVariable gVisualizeDDGI("vis.DDGI", false);
+	ConsoleVariable gRenderObjectBounds("r.vis.ObjectBounds", false);
 
-	ConsoleVariable g_RaytracedReflections("r.Raytracing.Reflections", false);
-	ConsoleVariable g_TLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 1.0f * Math::DegreesToRadians);
-	ConsoleVariable g_SsrSamples("r.SSRSamples", 8);
-	ConsoleVariable g_RenderTerrain("r.Terrain", true);
-	ConsoleVariable g_OcclusionCulling("r.OcclusionCulling", true);
-	ConsoleVariable g_WorkGraph("r.WorkGraph", true);
+	ConsoleVariable gRaytracedReflections("r.Raytracing.Reflections", false);
+	ConsoleVariable gTLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 1.0f * Math::DegreesToRadians);
+	ConsoleVariable gSSRSamples("r.SSRSamples", 8);
+	ConsoleVariable gRenderTerrain("r.Terrain", true);
+	ConsoleVariable gOcclusionCulling("r.OcclusionCulling", true);
+	ConsoleVariable gWorkGraph("r.WorkGraph", true);
 
 	// Misc
-	ConsoleVariable g_VisibilityDebugMode("r.Raster.VisibilityDebug", 0);
-	ConsoleVariable CullDebugStats("r.CullingStats", false);
-	ConsoleVariable RenderGraphJobify("r.RenderGraph.Jobify", true);
+	ConsoleVariable gVisibilityDebugMode("r.Raster.VisibilityDebug", 0);
+	ConsoleVariable gCullDebugStats("r.CullingStats", false);
 
-	bool g_DumpRenderGraph = false;
-	bool g_EnableRenderGraphResourceTracker = false;
-	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { g_DumpRenderGraph = true; });
-	bool g_Screenshot = false;
-	ConsoleCommand<> gScreenshot("Screenshot", []() { g_Screenshot = true; });
+	// Render Graph
+	ConsoleVariable gRenderGraphJobify("r.RenderGraph.Jobify", true);
+	ConsoleVariable gRenderGraphResourceAliasing("r.RenderGraph.Aliasing", true);
+	ConsoleVariable gRenderGraphPassCulling("r.RenderGraph.PassCulling", true);
+	ConsoleVariable gRenderGraphPassGroupSize("r.RenderGraph.PassGroupSize", 10);
+
+	bool gDumpRenderGraphNextFrame = false;
+	bool gEnableRenderGraphResourceTracker = false;
+	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { gDumpRenderGraphNextFrame = true; });
+	bool gScreenshotNextFrame = false;
+	ConsoleCommand<> gScreenshot("Screenshot", []() { gScreenshotNextFrame = true; });
 
 	std::string VisualizeTextureName = "";
 	ConsoleCommand<const char*> gVisualizeTexture("vis", [](const char* pName) { VisualizeTextureName = pName; });
 
 	// Lighting
-	float g_SunInclination = 0.79f;
-	float g_SunOrientation = -0.15f;
-	float g_SunTemperature = 5900.0f;
-	float g_SunIntensity = 5.0f;
+	float gSunInclination = 0.79f;
+	float gSunOrientation = -0.15f;
+	float gSunTemperature = 5900.0f;
+	float gSunIntensity = 5.0f;
 }
 
 
@@ -251,10 +256,10 @@ void DemoApp::Update()
 			newRenderPath = RenderPath::Clustered;
 		m_RenderPath = newRenderPath;
 
-		Tweakables::g_RaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() && Tweakables::g_RaytracedAO;
-		Tweakables::g_RaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() && Tweakables::g_RaytracedReflections;
+		Tweakables::gRaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() && Tweakables::gRaytracedAO;
+		Tweakables::gRaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() && Tweakables::gRaytracedReflections;
 
-		if (Tweakables::g_RenderObjectBounds)
+		if (Tweakables::gRenderObjectBounds)
 		{
 			for (const Batch& b : m_SceneData.Batches)
 			{
@@ -265,11 +270,11 @@ void DemoApp::Update()
 
 		Light& sunLight = m_World.Registry.get<Light>(m_World.Sunlight);
 		Transform& sunTransform = m_World.Registry.get<Transform>(m_World.Sunlight);
-		sunTransform.Rotation = Quaternion::CreateFromYawPitchRoll(-Tweakables::g_SunOrientation, Tweakables::g_SunInclination * Math::PI_DIV_2, 0);
-		sunLight.Colour = Math::MakeFromColorTemperature(Tweakables::g_SunTemperature);
-		sunLight.Intensity = Tweakables::g_SunIntensity;
+		sunTransform.Rotation = Quaternion::CreateFromYawPitchRoll(-Tweakables::gSunOrientation, Tweakables::gSunInclination * Math::PI_DIV_2, 0);
+		sunLight.Colour = Math::MakeFromColorTemperature(Tweakables::gSunTemperature);
+		sunLight.Intensity = Tweakables::gSunIntensity;
 
-		if (Tweakables::g_VisualizeLights)
+		if (Tweakables::gVisualizeLights)
 		{
 			auto light_view = m_World.Registry.view<const Transform, const Light>();
 			light_view.each([&](const Transform& transform, const Light& light)
@@ -285,7 +290,7 @@ void DemoApp::Update()
 				volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
 			});
 
-		m_pCamera->SetJitter(Tweakables::g_TAA && m_RenderPath != RenderPath::PathTracing);
+		m_pCamera->SetJitter(Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing);
 		m_pCamera->Update();
 
 		m_World.Registry.sort<Light>([](const Light& a, const Light& b) {
@@ -298,9 +303,9 @@ void DemoApp::Update()
 		m_SceneData.pWorld = &m_World;
 	}
 	{
-		if (Tweakables::g_Screenshot)
+		if (Tweakables::gScreenshotNextFrame)
 		{
-			Tweakables::g_Screenshot = false;
+			Tweakables::gScreenshotNextFrame = false;
 			TaskContext taskContext;
 			TaskQueue::Execute([this](uint32)
 				{
@@ -389,7 +394,7 @@ void DemoApp::Update()
 						}
 					}, taskContext);
 			}
-			if (!Tweakables::g_ShadowsGPUCull)
+			if (!Tweakables::gShadowsGPUCull)
 			{
 				TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
 					{
@@ -449,7 +454,7 @@ void DemoApp::Update()
 			LightCull3DData lightCull3DData;
 			
 			RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
-			if (Tweakables::g_Sky)
+			if (Tweakables::gSky)
 			{
 				pSky = graph.Create("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
 				graph.AddPass("Compute Sky", RGPassFlag::Compute)
@@ -497,13 +502,13 @@ void DemoApp::Update()
 						RGTexture* pShadowmap = graph.Import(pView->ShadowViews[i].pDepthTexture);
 
 						RG_GRAPH_SCOPE(passName.c_str(), graph);
-						if (Tweakables::g_ShadowsGPUCull)
+						if (Tweakables::gShadowsGPUCull)
 						{
 							RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
-							context.EnableOcclusionCulling = Tweakables::g_ShadowsOcclusionCulling;
+							context.EnableOcclusionCulling = Tweakables::gShadowsOcclusionCulling;
 							RasterResult result;
 							m_pMeshletRasterizer->Render(graph, pView, &shadowView.View, context, result);
-							if(Tweakables::g_CullShadowsDebugStats == (int)i)
+							if(Tweakables::gCullShadowsDebugStats == (int)i)
 								m_pMeshletRasterizer->PrintStats(graph, Vector2(400, 20), pView, context);
 						}
 						else
@@ -541,11 +546,11 @@ void DemoApp::Update()
 					if (needVisibilityBuffer)
 					{
 						RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
-						rasterContext.EnableDebug = Tweakables::g_VisibilityDebugMode > 0;
-						rasterContext.EnableOcclusionCulling = Tweakables::g_OcclusionCulling;
-						rasterContext.WorkGraph = Tweakables::g_WorkGraph;
+						rasterContext.EnableDebug = Tweakables::gVisibilityDebugMode > 0;
+						rasterContext.EnableOcclusionCulling = Tweakables::gOcclusionCulling;
+						rasterContext.WorkGraph = Tweakables::gWorkGraph;
 						m_pMeshletRasterizer->Render(graph, pView, &pView->MainView, rasterContext, rasterResult);
-						if (Tweakables::CullDebugStats)
+						if (Tweakables::gCullDebugStats)
 							m_pMeshletRasterizer->PrintStats(graph, Vector2(20, 20), pView, rasterContext);
 					}
 					else
@@ -571,11 +576,11 @@ void DemoApp::Update()
 								});
 					}
 
-					if (Tweakables::g_RenderTerrain.GetBool())
+					if (Tweakables::gRenderTerrain.GetBool())
 						m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
 				}
 
-				if (Tweakables::g_SDSM)
+				if (Tweakables::gSDSM)
 				{
 					RG_GRAPH_SCOPE("Depth Reduce", graph);
 
@@ -639,7 +644,7 @@ void DemoApp::Update()
 
 				m_pParticles->Simulate(graph, pView, sceneTextures.pDepth);
 
-				if (Tweakables::g_EnableDDGI)
+				if (Tweakables::gEnableDDGI)
 				{
 					m_pDDGI->Execute(graph, pView, pWorldMut);
 				}
@@ -662,7 +667,7 @@ void DemoApp::Update()
 						});
 
 				sceneTextures.pAmbientOcclusion = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::White2D));
-				if (Tweakables::g_RaytracedAO)
+				if (Tweakables::gRaytracedAO)
 					m_pRTAO->Execute(graph, pView, sceneTextures);
 				else
 					sceneTextures.pAmbientOcclusion = m_pSSAO->Execute(graph, pView, sceneTextures);
@@ -671,7 +676,7 @@ void DemoApp::Update()
 				m_pLightCulling->ComputeClusteredLightCulling(graph, pView, lightCull3DData);
 
 				RGTexture* pFog = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
-				if (Tweakables::g_VolumetricFog)
+				if (Tweakables::gVolumetricFog)
 				{
 					pFog = m_pVolumetricFog->RenderFog(graph, pView, lightCull3DData, m_FogData);
 				}
@@ -719,7 +724,7 @@ void DemoApp::Update()
 					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, true);
 				}
 
-				if (Tweakables::g_RenderTerrain.GetBool())
+				if (Tweakables::gRenderTerrain.GetBool())
 					m_pCBTTessellation->Shade(graph, pView, sceneTextures, pFog);
 
 				m_pParticles->Render(graph, pView, sceneTextures);
@@ -738,7 +743,7 @@ void DemoApp::Update()
 							context.Draw(0, 36);
 						});
 
-				if (Tweakables::g_Clouds)
+				if (Tweakables::gClouds)
 				{
 					m_pClouds->Render(graph, sceneTextures, pView);
 				}
@@ -752,12 +757,12 @@ void DemoApp::Update()
 					sceneTextures.pColorTarget = pResolveColor;
 				}
 
-				if (Tweakables::g_RaytracedReflections)
+				if (Tweakables::gRaytracedReflections)
 				{
 					m_pRTReflections->Execute(graph, pView, sceneTextures);
 				}
 
-				if (Tweakables::g_TAA.Get())
+				if (Tweakables::gTAA.Get())
 				{
 					RGTexture* pTaaTarget = graph.Create("TAA Target", sceneTextures.pColorTarget->GetDesc());
 
@@ -794,7 +799,7 @@ void DemoApp::Update()
 				}
 
 				// Probes contain irradiance data, and need to go through tonemapper.
-				if (Tweakables::g_VisualizeDDGI)
+				if (Tweakables::gVisualizeDDGI)
 				{
 					m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures);
 				}
@@ -869,8 +874,8 @@ void DemoApp::Update()
 							} parameters;
 							parameters.Width = pColorSource->GetWidth();
 							parameters.Height = pColorSource->GetHeight();
-							parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
-							parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
+							parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
+							parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get());
 
 							context.BindRootCBV(0, parameters);
 							context.BindResources(2, pHistogram->GetUAV());
@@ -899,10 +904,10 @@ void DemoApp::Update()
 							} parameters;
 
 							parameters.PixelCount = numPixels;
-							parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
-							parameters.LogLuminanceRange = Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get();
+							parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
+							parameters.LogLuminanceRange = Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get();
 							parameters.TimeDelta = Time::DeltaTime();
-							parameters.Tau = Tweakables::g_Tau.Get();
+							parameters.Tau = Tweakables::gTau.Get();
 
 							context.BindRootCBV(0, parameters);
 							context.BindResources(2, pAverageLuminance->Get()->GetUAV());
@@ -911,7 +916,7 @@ void DemoApp::Update()
 							context.Dispatch(1);
 						});
 
-				if (Tweakables::g_DrawHistogram.Get())
+				if (Tweakables::gDrawHistogram.Get())
 				{
 					RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_pDebugHistogramTexture, true);
 					graph.AddPass("Draw Histogram", RGPassFlag::Compute)
@@ -932,8 +937,8 @@ void DemoApp::Update()
 									Vector2 InvTextureDimensions;
 								} parameters;
 
-								parameters.MinLogLuminance = Tweakables::g_MinLogLuminance.Get();
-								parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::g_MaxLogLuminance.Get() - Tweakables::g_MinLogLuminance.Get());
+								parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
+								parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get());
 								parameters.InvTextureDimensions.x = 1.0f / pHistogramDebugTexture->GetDesc().Width;
 								parameters.InvTextureDimensions.y = 1.0f / pHistogramDebugTexture->GetDesc().Height;
 
@@ -951,7 +956,7 @@ void DemoApp::Update()
 
 			RGTexture* pBloomTexture = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
-			if (Tweakables::g_Bloom.Get())
+			if (Tweakables::gBloom.Get())
 			{
 				RG_GRAPH_SCOPE("Bloom", graph);
 
@@ -1017,7 +1022,7 @@ void DemoApp::Update()
 								parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
 								parameters.SourceCurrentMip = i;
 								parameters.SourcePreviousMip = i + 1;
-								parameters.Radius = Tweakables::g_BloomInteralBlendFactor;
+								parameters.Radius = Tweakables::gBloomInteralBlendFactor;
 
 								context.BindRootCBV(0, parameters);
 								context.BindResources(2, pUpscaleTarget->Get()->GetUAV(i));
@@ -1052,10 +1057,10 @@ void DemoApp::Update()
 							float BloomBlendFactor;
 							Vector3 LensDirtTint;
 						} parameters;
-						parameters.WhitePoint = Tweakables::g_WhitePoint.Get();
-						parameters.Tonemapper = Tweakables::g_ToneMapper.Get();
-						parameters.BloomIntensity = Tweakables::g_BloomIntensity.Get();
-						parameters.BloomBlendFactor = Tweakables::g_BloomBlendFactor.Get();
+						parameters.WhitePoint = Tweakables::gWhitePoint.Get();
+						parameters.Tonemapper = Tweakables::gToneMapper.Get();
+						parameters.BloomIntensity = Tweakables::gBloomIntensity.Get();
+						parameters.BloomBlendFactor = Tweakables::gBloomBlendFactor.Get();
 						parameters.LensDirtTint = m_LensDirtTint;
 
 						context.SetPipelineState(m_pToneMapPSO);
@@ -1081,7 +1086,7 @@ void DemoApp::Update()
 
 			if (m_RenderPath != RenderPath::PathTracing)
 			{
-				if (Tweakables::g_VisualizeLightDensity)
+				if (Tweakables::gVisualizeLightDensity)
 				{
 					if (m_RenderPath == RenderPath::Clustered)
 						sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull3DData);
@@ -1089,7 +1094,7 @@ void DemoApp::Update()
 						sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull2DData);
 				}
 
-				if (m_RenderPath == RenderPath::Visibility && Tweakables::g_VisibilityDebugMode > 0)
+				if (m_RenderPath == RenderPath::Visibility && Tweakables::gVisibilityDebugMode > 0)
 				{
 					graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
 						.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, rasterResult.pDebugData })
@@ -1101,7 +1106,7 @@ void DemoApp::Update()
 								context.SetComputeRootSignature(m_pCommonRS);
 								context.SetPipelineState(m_pVisibilityDebugRenderPSO);
 
-								uint32 mode = Tweakables::g_VisibilityDebugMode;
+								uint32 mode = Tweakables::gVisibilityDebugMode;
 								context.BindRootCBV(0, mode);
 								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
 								context.BindResources(2, pColorTarget->GetUAV());
@@ -1128,20 +1133,26 @@ void DemoApp::Update()
 			graph.Export(sceneTextures.pColorTarget, &m_pColorOutput, TextureFlag::ShaderResource);
 		}
 
+		RGGraphOptions graphOptions;
+		graphOptions.Jobify = Tweakables::gRenderGraphJobify;
+		graphOptions.PassCulling = Tweakables::gRenderGraphPassCulling;
+		graphOptions.ResourceAliasing = Tweakables::gRenderGraphResourceAliasing;
+		graphOptions.CommandlistGroupSize = Tweakables::gRenderGraphPassGroupSize;
+
 		// Compile graph
-		graph.Compile(*m_RenderGraphPool);
+		graph.Compile(*m_RenderGraphPool, graphOptions);
 
 		// Debug options
-		graph.DrawResourceTracker(Tweakables::g_EnableRenderGraphResourceTracker);
+		graph.DrawResourceTracker(Tweakables::gEnableRenderGraphResourceTracker);
 
-		if (Tweakables::g_DumpRenderGraph)
+		if (Tweakables::gDumpRenderGraphNextFrame)
 		{
 			graph.DumpDebugGraph(Sprintf("%sRenderGraph_%s", Paths::SavedDir(), Utils::GetTimeString()).c_str());
-			Tweakables::g_DumpRenderGraph = false;
+			Tweakables::gDumpRenderGraphNextFrame = false;
 		}
 
 		// Execute
-		graph.Execute(m_pDevice, Tweakables::RenderGraphJobify);
+		graph.Execute(m_pDevice);
 		
 	}
 
@@ -1333,9 +1344,9 @@ void DemoApp::UpdateImGui()
 			{
 				showConsole = !showConsole;
 			}
-			if (ImGui::MenuItem("Luminance Histogram", 0, &Tweakables::g_DrawHistogram.Get()))
+			if (ImGui::MenuItem("Luminance Histogram", 0, &Tweakables::gDrawHistogram.Get()))
 			{
-				Tweakables::g_DrawHistogram.Set(!Tweakables::g_DrawHistogram.GetBool());
+				Tweakables::gDrawHistogram.Set(!Tweakables::gDrawHistogram.GetBool());
 			}
 
 			ImGui::EndMenu();
@@ -1344,15 +1355,15 @@ void DemoApp::UpdateImGui()
 		{
 			if (ImGui::MenuItem("Dump RenderGraph"))
 			{
-				Tweakables::g_DumpRenderGraph = true;
+				Tweakables::gDumpRenderGraphNextFrame = true;
 			}
 			if (ImGui::MenuItem("RenderGraph Resource Tracker"))
 			{
-				Tweakables::g_EnableRenderGraphResourceTracker = true;
+				Tweakables::gEnableRenderGraphResourceTracker = true;
 			}
 			if (ImGui::MenuItem("Screenshot"))
 			{
-				Tweakables::g_Screenshot = true;
+				Tweakables::gScreenshotNextFrame = true;
 			}
 			if (ImGui::MenuItem("Pix Capture"))
 			{
@@ -1400,23 +1411,23 @@ void DemoApp::UpdateImGui()
 		ImGui::ShowDemoWindow();
 	}
 
-	if (Tweakables::g_DrawHistogram && m_pDebugHistogramTexture)
+	if (Tweakables::gDrawHistogram && m_pDebugHistogramTexture)
 	{
 		ImGui::Begin("Luminance Histogram");
 		ImVec2 cursor = ImGui::GetCursorPos();
 		ImVec2 size = ImGui::GetAutoSize(ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
 		ImGui::Image(m_pDebugHistogramTexture, size);
-		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::g_MinLogLuminance.Get()).c_str());
+		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::gMinLogLuminance.Get()).c_str());
 		ImGui::End();
 	}
 
-	if (Tweakables::g_VisualizeShadowCascades)
+	if (Tweakables::gVisualizeShadowCascades)
 	{
 		float cascadeImageSize = 256.0f;
 		ImVec2 cursor = viewportOrigin + ImVec2(5, viewportExtents.y - cascadeImageSize - 5);
 
 		const Light& sunLight = m_World.Registry.get<Light>(m_World.Sunlight);
-		for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
+		for (int i = 0; i < Tweakables::gShadowCascades; ++i)
 		{
 			if (i < sunLight.ShadowMaps.size())
 			{
@@ -1484,8 +1495,6 @@ void DemoApp::UpdateImGui()
 	{
 		if (ImGui::CollapsingHeader("General"))
 		{
-			ImGui::Checkbox("Jobify RenderGraph", &Tweakables::RenderGraphJobify.Get());
-
 			static constexpr const char* pPathNames[] =
 			{
 				"Tiled",
@@ -1497,7 +1506,7 @@ void DemoApp::UpdateImGui()
 
 			if (m_RenderPath == RenderPath::Visibility)
 			{
-				ImGui::Checkbox("Occlusion Culling", &Tweakables::g_OcclusionCulling.Get());
+				ImGui::Checkbox("Occlusion Culling", &Tweakables::gOcclusionCulling.Get());
 				static constexpr const char* pDebugViewNames[] =
 				{
 					"Off",
@@ -1506,10 +1515,10 @@ void DemoApp::UpdateImGui()
 					"PrimitiveID",
 					"Overdraw",
 				};
-				ImGui::Combo("VisBuffer Debug View", &Tweakables::g_VisibilityDebugMode.Get(), pDebugViewNames, ARRAYSIZE(pDebugViewNames));
+				ImGui::Combo("VisBuffer Debug View", &Tweakables::gVisibilityDebugMode.Get(), pDebugViewNames, ARRAYSIZE(pDebugViewNames));
 
-				ImGui::Checkbox("Cull statistics", &Tweakables::CullDebugStats.Get());
-				ImGui::Checkbox("Work Graph", &Tweakables::g_WorkGraph.Get());
+				ImGui::Checkbox("Cull statistics", &Tweakables::gCullDebugStats.Get());
+				ImGui::Checkbox("Work Graph", &Tweakables::gWorkGraph.Get());
 			}
 
 			if (m_pCamera)
@@ -1531,6 +1540,14 @@ void DemoApp::UpdateImGui()
 			}
 		}
 
+		if (ImGui::CollapsingHeader("Render Graph"))
+		{
+			ImGui::Checkbox("RenderGraph Jobify", &Tweakables::gRenderGraphJobify.Get());
+			ImGui::Checkbox("RenderGraph Aliasing", &Tweakables::gRenderGraphResourceAliasing.Get());
+			ImGui::Checkbox("RenderGraph Pass Culling", &Tweakables::gRenderGraphPassCulling.Get());
+			ImGui::SliderInt("RenderGraph Pass Group Size", &Tweakables::gRenderGraphPassGroupSize.Get(), 5, 50);
+		}
+
 		if (ImGui::CollapsingHeader("Swapchain"))
 		{
 			bool vsync = m_pSwapchain->GetVSync();
@@ -1549,42 +1566,42 @@ void DemoApp::UpdateImGui()
 
 		if (ImGui::CollapsingHeader("Atmosphere"))
 		{
-			ImGui::SliderFloat("Sun Orientation", &Tweakables::g_SunOrientation, -Math::PI, Math::PI);
-			ImGui::SliderFloat("Sun Inclination", &Tweakables::g_SunInclination, 0, 1);
-			ImGui::SliderFloat("Sun Temperature", &Tweakables::g_SunTemperature, 1000, 15000);
-			ImGui::SliderFloat("Sun Intensity", &Tweakables::g_SunIntensity, 0, 30);
-			ImGui::Checkbox("Sky", &Tweakables::g_Sky.Get());
-			ImGui::Checkbox("Volumetric Fog", &Tweakables::g_VolumetricFog.Get());
-			ImGui::Checkbox("Clouds", &Tweakables::g_Clouds.Get());
+			ImGui::SliderFloat("Sun Orientation", &Tweakables::gSunOrientation, -Math::PI, Math::PI);
+			ImGui::SliderFloat("Sun Inclination", &Tweakables::gSunInclination, 0, 1);
+			ImGui::SliderFloat("Sun Temperature", &Tweakables::gSunTemperature, 1000, 15000);
+			ImGui::SliderFloat("Sun Intensity", &Tweakables::gSunIntensity, 0, 30);
+			ImGui::Checkbox("Sky", &Tweakables::gSky.Get());
+			ImGui::Checkbox("Volumetric Fog", &Tweakables::gVolumetricFog.Get());
+			ImGui::Checkbox("Clouds", &Tweakables::gClouds.Get());
 		}
 
 		if (ImGui::CollapsingHeader("Shadows"))
 		{
-			ImGui::SliderInt("Shadow Cascades", &Tweakables::g_ShadowCascades.Get(), 1, 4);
-			ImGui::Checkbox("SDSM", &Tweakables::g_SDSM.Get());
-			ImGui::SliderFloat("PSSM Factor", &Tweakables::g_PSSMFactor.Get(), 0, 1);
-			ImGui::Checkbox("Visualize Cascades", &Tweakables::g_VisualizeShadowCascades.Get());
-			ImGui::Checkbox("GPU Cull", &Tweakables::g_ShadowsGPUCull.Get());
-			if (Tweakables::g_ShadowsGPUCull)
+			ImGui::SliderInt("Shadow Cascades", &Tweakables::gShadowCascades.Get(), 1, 4);
+			ImGui::Checkbox("SDSM", &Tweakables::gSDSM.Get());
+			ImGui::SliderFloat("PSSM Factor", &Tweakables::gPSSMFactor.Get(), 0, 1);
+			ImGui::Checkbox("Visualize Cascades", &Tweakables::gVisualizeShadowCascades.Get());
+			ImGui::Checkbox("GPU Cull", &Tweakables::gShadowsGPUCull.Get());
+			if (Tweakables::gShadowsGPUCull)
 			{
-				ImGui::Checkbox("GPU Occlusion Cull", &Tweakables::g_ShadowsOcclusionCulling.Get());
-				ImGui::SliderInt("GPU Cull Stats", &Tweakables::g_CullShadowsDebugStats.Get(), -1, (int)m_SceneData.ShadowViews.size() - 1);
+				ImGui::Checkbox("GPU Occlusion Cull", &Tweakables::gShadowsOcclusionCulling.Get());
+				ImGui::SliderInt("GPU Cull Stats", &Tweakables::gCullShadowsDebugStats.Get(), -1, (int)m_SceneData.ShadowViews.size() - 1);
 			}
 		}
 		if (ImGui::CollapsingHeader("Bloom"))
 		{
-			ImGui::Checkbox("Enabled", &Tweakables::g_Bloom.Get());
-			ImGui::SliderFloat("Intensity", &Tweakables::g_BloomIntensity.Get(), 0.0f, 4.0f);
-			ImGui::SliderFloat("Blend Factor", &Tweakables::g_BloomBlendFactor.Get(), 0.0f, 1.0f);
-			ImGui::SliderFloat("Internal Blend Factor", &Tweakables::g_BloomInteralBlendFactor.Get(), 0.0f, 1.0f);
+			ImGui::Checkbox("Enabled", &Tweakables::gBloom.Get());
+			ImGui::SliderFloat("Intensity", &Tweakables::gBloomIntensity.Get(), 0.0f, 4.0f);
+			ImGui::SliderFloat("Blend Factor", &Tweakables::gBloomBlendFactor.Get(), 0.0f, 1.0f);
+			ImGui::SliderFloat("Internal Blend Factor", &Tweakables::gBloomInteralBlendFactor.Get(), 0.0f, 1.0f);
 			ImGui::ColorEdit3("Lens Dirt Tint", &m_LensDirtTint.x, ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
 		}
 		if (ImGui::CollapsingHeader("Exposure/Tonemapping"))
 		{
-			ImGui::DragFloatRange2("Log Luminance", &Tweakables::g_MinLogLuminance.Get(), &Tweakables::g_MaxLogLuminance.Get(), 1.0f, -100, 50);
-			ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::g_DrawHistogram.Get());
-			ImGui::SliderFloat("White Point", &Tweakables::g_WhitePoint.Get(), 0, 20);
-			ImGui::SliderFloat("Tau", &Tweakables::g_Tau.Get(), 0, 5);
+			ImGui::DragFloatRange2("Log Luminance", &Tweakables::gMinLogLuminance.Get(), &Tweakables::gMaxLogLuminance.Get(), 1.0f, -100, 50);
+			ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::gDrawHistogram.Get());
+			ImGui::SliderFloat("White Point", &Tweakables::gWhitePoint.Get(), 0, 20);
+			ImGui::SliderFloat("Tau", &Tweakables::gTau.Get(), 0, 5);
 
 			static constexpr const char* pTonemapperNames[] = {
 				"Reinhard",
@@ -1593,33 +1610,33 @@ void DemoApp::UpdateImGui()
 				"Unreal 3",
 				"Uncharted 2",
 			};
-			ImGui::Combo("Tonemapper", (int*)&Tweakables::g_ToneMapper.Get(), pTonemapperNames, ARRAYSIZE(pTonemapperNames));
+			ImGui::Combo("Tonemapper", (int*)&Tweakables::gToneMapper.Get(), pTonemapperNames, ARRAYSIZE(pTonemapperNames));
 		}
 
 		if (ImGui::CollapsingHeader("Misc"))
 		{
-			ImGui::Checkbox("TAA", &Tweakables::g_TAA.Get());
-			ImGui::Checkbox("Debug Render Lights", &Tweakables::g_VisualizeLights.Get());
-			ImGui::Checkbox("Visualize Light Density", &Tweakables::g_VisualizeLightDensity.Get());
-			ImGui::SliderInt("SSR Samples", &Tweakables::g_SsrSamples.Get(), 0, 32);
-			ImGui::Checkbox("Object Bounds", &Tweakables::g_RenderObjectBounds.Get());
-			ImGui::Checkbox("Render Terrain", &Tweakables::g_RenderTerrain.Get());
+			ImGui::Checkbox("TAA", &Tweakables::gTAA.Get());
+			ImGui::Checkbox("Debug Render Lights", &Tweakables::gVisualizeLights.Get());
+			ImGui::Checkbox("Visualize Light Density", &Tweakables::gVisualizeLightDensity.Get());
+			ImGui::SliderInt("SSR Samples", &Tweakables::gSSRSamples.Get(), 0, 32);
+			ImGui::Checkbox("Object Bounds", &Tweakables::gRenderObjectBounds.Get());
+			ImGui::Checkbox("Render Terrain", &Tweakables::gRenderTerrain.Get());
 		}
 
 		if (ImGui::CollapsingHeader("Raytracing"))
 		{
 			if (m_pDevice->GetCapabilities().SupportsRaytracing())
 			{
-				ImGui::Checkbox("Raytraced AO", &Tweakables::g_RaytracedAO.Get());
-				ImGui::Checkbox("Raytraced Reflections", &Tweakables::g_RaytracedReflections.Get());
-				ImGui::Checkbox("DDGI", &Tweakables::g_EnableDDGI.Get());
+				ImGui::Checkbox("Raytraced AO", &Tweakables::gRaytracedAO.Get());
+				ImGui::Checkbox("Raytraced Reflections", &Tweakables::gRaytracedReflections.Get());
+				ImGui::Checkbox("DDGI", &Tweakables::gEnableDDGI.Get());
 				auto ddgi_view = m_World.Registry.view<DDGIVolume>();
 				ddgi_view.each([&](DDGIVolume& volume)
 					{
 						ImGui::SliderInt("DDGI RayCount", &volume.NumRays, 1, volume.MaxNumRays);
 					});
-				ImGui::Checkbox("Visualize DDGI", &Tweakables::g_VisualizeDDGI.Get());
-				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::g_TLASBoundsThreshold.Get(), 0, 40);
+				ImGui::Checkbox("Visualize DDGI", &Tweakables::gVisualizeDDGI.Get());
+				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::gTLASBoundsThreshold.Get(), 0, 40);
 			}
 		}
 	}
@@ -1634,11 +1651,11 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 	float minPoint = 0;
 	float maxPoint = 1;
 
-	const uint32 numCascades = Tweakables::g_ShadowCascades;
-	const float pssmLambda = Tweakables::g_PSSMFactor;
+	const uint32 numCascades = Tweakables::gShadowCascades;
+	const float pssmLambda = Tweakables::gPSSMFactor;
 	view.NumShadowCascades = numCascades;
 
-	if (Tweakables::g_SDSM)
+	if (Tweakables::gSDSM)
 	{
 		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % GraphicsDevice::NUM_BUFFERS];
 		if (pSourceBuffer)
@@ -1716,7 +1733,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 			};
 
 			const Matrix lightView = transform.World.Invert();
-			for (int i = 0; i < Tweakables::g_ShadowCascades; ++i)
+			for (int i = 0; i < Tweakables::gShadowCascades; ++i)
 			{
 				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
 				float currentCascadeSplit = cascadeSplits[i];

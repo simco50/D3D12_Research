@@ -85,14 +85,14 @@ RGGraph::~RGGraph()
 	DestroyData();
 }
 
-void RGGraph::Compile(RGResourcePool& resourcePool)
+void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& options)
 {
-	check(!m_IsCompiled);
-
 	PROFILE_CPU_SCOPE();
-	constexpr bool PassCulling = true;
 
-	if (PassCulling)
+	check(!m_IsCompiled);
+	m_Options = options;
+
+	if (options.PassCulling)
 	{
 		auto WritesTo = [&](RGResource* pResource, RGPass* pPass)
 		{
@@ -105,6 +105,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 		};
 
 		std::vector<RGPass*> cullStack;
+		cullStack.reserve(m_RenderPasses.size());
 		for (RGPass* pPass : m_RenderPasses)
 		{
 			// If the pass should never cull or the pass writes to an imported resource, we add it on the stack
@@ -191,8 +192,6 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 		}
 	}
 
-	static const bool enable_resource_reuse = !CommandLine::GetBool("-render_graph_no_reuse");
-
 	// Go through all resources accesses and allocate on first access and de-allocate on last access
 	// It's important to make the distinction between the Ref allocation and the Raw resource itself.
 	// A de-allocate returns the resource back to the pool by resetting the Ref however the Raw resource keeps a reference to it to use during execution.
@@ -217,7 +216,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 			check(pResource->pPhysicalResource);
 		}
 
-		if (enable_resource_reuse)
+		if (options.ResourceAliasing)
 		{
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
@@ -231,7 +230,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 		}
 	}
 
-	if (!enable_resource_reuse)
+	if (!options.ResourceAliasing)
 	{
 		for (RGResource* pResource : m_Resources)
 		{
@@ -335,18 +334,17 @@ void RGGraph::PopEvent()
 		++m_RenderPasses.back()->NumEventsToEnd;
 }
 
-void RGGraph::Execute(GraphicsDevice* pDevice, bool jobify)
+void RGGraph::Execute(GraphicsDevice* pDevice)
 {
-	check(m_IsCompiled);
-
 	PROFILE_CPU_SCOPE();
 
-	std::vector<CommandContext*> contexts;
+	check(m_IsCompiled);
 
-	if (jobify)
+	std::vector<CommandContext*> contexts;
+	if (m_Options.Jobify)
 	{
 		// Group passes in jobs
-		const uint32 maxPassesPerJob = 10;
+		const uint32 maxPassesPerJob = m_Options.CommandlistGroupSize;
 		std::vector<Span<RGPass*>> passGroups;
 
 		// Duplicate profile events that cross the border of jobs to retain event hierarchy

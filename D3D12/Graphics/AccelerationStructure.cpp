@@ -15,7 +15,7 @@ namespace Tweakables
 	static const uint32 gMaxNumBLASVerticesPerFrame = 100'000;
 	static const uint32 gMaxNumCompactionsPerFrame = 32;
 
-	extern ConsoleVariable<float> g_TLASBoundsThreshold;
+	extern ConsoleVariable<float> gTLASBoundsThreshold;
 }
 
 static GlobalResource<RootSignature> gCommonRS;
@@ -117,7 +117,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 					// Cull object that are small to the viewer - Deligiannis2019
 					Vector3 cameraVec = (batch.Bounds.Center - view.MainView.Position);
 					float angle = tanf(batch.Radius / cameraVec.Length());
-					if (angle < Tweakables::g_TLASBoundsThreshold && cameraVec.Length() > batch.Radius)
+					if (angle < Tweakables::gTLASBoundsThreshold && cameraVec.Length() > batch.Radius)
 					{
 						continue;
 					}

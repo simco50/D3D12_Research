@@ -14,8 +14,8 @@
 
 namespace Tweakables
 {
-	extern ConsoleVariable<int> g_SsrSamples;
-	extern ConsoleVariable<bool> g_EnableDDGI;
+	extern ConsoleVariable<int> gSSRSamples;
+	extern ConsoleVariable<bool> gEnableDDGI;
 }
 
 namespace Renderer
@@ -67,7 +67,7 @@ namespace Renderer
 		}
 		parameters.FrameIndex = pView->FrameIndex;
 		parameters.NumInstances = (uint32)pView->Batches.size();
-		parameters.SsrSamples = Tweakables::g_SsrSamples.Get();
+		parameters.SsrSamples = Tweakables::gSSRSamples.Get();
 		parameters.LightCount = pView->LightBuffer.Count;
 		parameters.CascadeDepths = pView->ShadowCascadeDepths;
 		parameters.NumCascades = pView->NumShadowCascades;
@@ -208,7 +208,7 @@ namespace Renderer
 		}
 
 		// DDGI
-		if (Tweakables::g_EnableDDGI)
+		if (Tweakables::gEnableDDGI)
 		{
 			std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
 			auto ddgi_view = pWorld->Registry.view<Transform, DDGIVolume>();
