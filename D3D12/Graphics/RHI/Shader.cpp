@@ -69,14 +69,14 @@ namespace ShaderCompiler
 
 	static void LoadDXC()
 	{
-		FN_PROC(DxcCreateInstance);
+		using DxcCreateInstanceFn = decltype(&::DxcCreateInstance);
 
 		HMODULE lib = LoadLibraryA(pCompilerPath);
-		DxcCreateInstanceFn.Load(lib);
+		DxcCreateInstanceFn CreateInstance = (DxcCreateInstanceFn)GetProcAddress(lib, "DxcCreateInstance");
 
-		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
-		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
-		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
+		VERIFY_HR(CreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
+		VERIFY_HR(CreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
+		VERIFY_HR(CreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
 		VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
 		E_LOG(Info, "Loaded %s", pCompilerPath);
 	}

@@ -41,31 +41,3 @@ constexpr inline bool EnumHasAnyFlags(Enum Flags, Enum Contains)
 {
 	return (((__underlying_type(Enum))Flags) & (__underlying_type(Enum))Contains) != 0;
 }
-
-template<typename T>
-struct FnProc
-{
-	FnProc(const char* pName)
-		: pName(pName), pFunction(nullptr)
-	{}
-
-	T Load(HMODULE library)
-	{
-		assert(library);
-		pFunction = (T)GetProcAddress(library, pName);
-		assert(pFunction);
-		return pFunction;
-	}
-
-	template<typename... Args>
-	auto operator()(Args&&... args)
-	{
-		assert(pFunction && "Function is not yet loaded");
-		return pFunction(std::forward<Args&&>(args)...);
-	}
-
-	const char* pName;
-	T pFunction;
-};
-
-#define FN_PROC(fnName) static FnProc<decltype(&fnName)> fnName##Fn(#fnName)

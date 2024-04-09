@@ -164,6 +164,7 @@ void DemoApp::SetupScene()
 	{
 		entt::entity entity = m_World.Registry.create();
 		Transform& transform = m_World.Registry.emplace<Transform>(entity);
+		transform.Position = Vector3::Zero;
 
 		Light& sunLight = m_World.Registry.emplace<Light>(entity);
 		sunLight.Intensity = 10;
