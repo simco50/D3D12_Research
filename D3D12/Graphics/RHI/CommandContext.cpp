@@ -133,30 +133,36 @@ bool NeedsTransition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES& after,
 	return true;
 }
 
-void CommandContext::InsertResourceBarrier(DeviceResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
+void CommandContext::InsertResourceBarrier(DeviceResource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, uint32 subResource /*= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES*/)
 {
 	check(!m_InRenderPass);
 	check(pResource && pResource->GetResource());
-	check(D3D::IsTransitionAllowed(m_Type, state), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
 	check(pResource->UseStateTracking());
+	check(D3D::IsTransitionAllowed(m_Type, beforeState), "Before state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
+	check(D3D::IsTransitionAllowed(m_Type, afterState), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(afterState).c_str(), D3D::CommandlistTypeToString(m_Type));
 
-	ResourceState& resourceState = m_ResourceStates[pResource];
-	D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
+	ResourceState& localResourceState = m_ResourceStates[pResource];
+	D3D12_RESOURCE_STATES localBeforeState = localResourceState.Get(subResource);
+	check(beforeState == D3D12_RESOURCE_STATE_UNKNOWN || localBeforeState == D3D12_RESOURCE_STATE_UNKNOWN || localBeforeState == beforeState, "Provided before state %s of resource %s does not match with tracked resource state %s",
+		D3D::ResourceStateToString(beforeState), pResource->GetName(), D3D::ResourceStateToString(localBeforeState));
+
+	// If the given before state is "Unknown", get it from the commandlist
+	if(beforeState == D3D12_RESOURCE_STATE_UNKNOWN)
+		beforeState = localBeforeState;
+
 	if (beforeState == D3D12_RESOURCE_STATE_UNKNOWN)
 	{
-		resourceState.Set(state, subResource);
+		localResourceState.Set(afterState, subResource);
 
 		PendingBarrier& barrier = m_PendingBarriers.emplace_back();
 		barrier.pResource = pResource;
-		barrier.State = resourceState;
+		barrier.State = afterState;
 		barrier.Subresource = subResource;
 	}
 	else
 	{
-		if (NeedsTransition(beforeState, state, true))
+		if (NeedsTransition(beforeState, afterState, true))
 		{
-			check(D3D::IsTransitionAllowed(m_Type, beforeState), "Current resource state (%s) is not valid to transition from in this commandlist type (%s)", D3D::ResourceStateToString(state).c_str(), D3D::CommandlistTypeToString(m_Type));
-			
 			if (m_NumBatchedBarriers > 0)
 			{
 				// If the previous barrier is for the same resource, see if we can combine the barrier.
@@ -164,20 +170,20 @@ void CommandContext::InsertResourceBarrier(DeviceResource* pResource, D3D12_RESO
 				if (last.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
 					&& last.Transition.pResource == pResource->GetResource()
 					&& last.Transition.StateBefore == beforeState
-					&& D3D::CanCombineResourceState(state, last.Transition.StateAfter))
+					&& D3D::CanCombineResourceState(afterState, last.Transition.StateAfter))
 				{
-					last.Transition.StateAfter |= state;
+					last.Transition.StateAfter |= afterState;
 					return;
 				}
 			}
 			AddBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource->GetResource(),
 						beforeState,
-						state,
+						afterState,
 						subResource,
 						D3D12_RESOURCE_BARRIER_FLAG_NONE)
 			);
 
-			resourceState.Set(state, subResource);
+			localResourceState.Set(afterState, subResource);
 		}
 	}
 }
@@ -432,7 +438,7 @@ void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 			pResource->GetName(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
 
 		// Get the after state of the first use in the current cmdlist
-		D3D12_RESOURCE_STATES afterState = pending.State.Get(subResource);
+		D3D12_RESOURCE_STATES afterState = pending.State;
 		if(NeedsTransition(beforeState, afterState, false))
 			resolveContext.AddBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource->GetResource(), beforeState, afterState, subResource));
 
@@ -587,8 +593,8 @@ void CommandContext::EndRenderPass()
 		{
 			if (data.Target->GetDesc().SampleCount > 1)
 			{
-				InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+				InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_RESOLVE_DEST);
 				uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
 				ResolveResource(data.Target, subResource, data.ResolveTarget, 0, data.Target->GetFormat());
 			}

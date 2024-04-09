@@ -235,13 +235,13 @@ namespace ViewportImpl
 			CommandContext* pContext = static_cast<CommandContext*>(pCmd);
 			PROFILE_GPU_SCOPE(pContext->GetCommandList());
 
-			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 			pContext->BeginRenderPass(RenderPassInfo(pBackBuffer, RenderPassColorFlags::Clear, nullptr, RenderPassDepthFlags::None));
 
 			RenderDrawData(pViewport->DrawData, *pContext);
 
 			pContext->EndRenderPass();
-			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_PRESENT);
+			pContext->InsertResourceBarrier(pBackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 			pContext->FlushResourceBarriers();
 		}
 	}
@@ -387,7 +387,7 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 				const ImDrawCmd* pCmd = &pList->CmdBuffer[cmd];
 				Texture* pTexture = (Texture*)pCmd->GetTexID();
 				if (pTexture && pTexture->UseStateTracking())
-					context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+					context.InsertResourceBarrier(pTexture, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 			}
 		}
 	}
@@ -396,7 +396,7 @@ void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)
 		PROFILE_GPU_SCOPE(context.GetCommandList(), "Render");
 		ImDrawData* pDrawData = ImGui::GetDrawData();
 
-		context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		context.InsertResourceBarrier(pRenderTarget, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		context.BeginRenderPass(RenderPassInfo(pRenderTarget, RenderPassColorFlags::Clear, nullptr, RenderPassDepthFlags::None));
 		RenderDrawData(pDrawData, context);
 		context.EndRenderPass();

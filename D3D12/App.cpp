@@ -173,7 +173,7 @@ void App::Update_Internal()
 		PROFILE_CPU_SCOPE("Execute Commandlist");
 		CommandContext* pContext = m_pDevice->AllocateCommandContext();
 		ImGuiRenderer::Render(*pContext, m_pSwapchain->GetBackBuffer());
-		pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_PRESENT);
+		pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
 		pContext->Execute();
 	}
 

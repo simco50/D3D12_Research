@@ -491,7 +491,7 @@ void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
 		check(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
 		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
 		if (pResource->GetPhysical()->UseStateTracking())
-			context.InsertResourceBarrier(pResource->pPhysicalResource, access.Access);
+			context.InsertResourceBarrier(pResource->pPhysicalResource, D3D12_RESOURCE_STATE_UNKNOWN, access.Access);
 	}
 
 	context.FlushResourceBarriers();
@@ -538,7 +538,7 @@ Ref<Texture> RGResourcePool::Allocate(const char* pName, const TextureDesc& desc
 		if (pTexture->GetNumRefs() == 1 && pTexture->GetDesc().IsCompatible(desc))
 		{
 			texture.LastUsedFrame = m_FrameIndex;
-			//pTexture->SetName(pName);
+			pTexture->SetName(pName);
 			return pTexture;
 		}
 	}
@@ -553,7 +553,7 @@ Ref<Buffer> RGResourcePool::Allocate(const char* pName, const BufferDesc& desc)
 		if (pBuffer->GetNumRefs() == 1 && pBuffer->GetDesc().IsCompatible(desc))
 		{
 			buffer.LastUsedFrame = m_FrameIndex;
-			//pBuffer->SetName(pName);
+			pBuffer->SetName(pName);
 			return pBuffer;
 		}
 	}

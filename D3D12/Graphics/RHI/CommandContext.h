@@ -108,7 +108,7 @@ public:
 	void Free(const SyncPoint& syncPoint);
 	void ClearState();
 
-	void InsertResourceBarrier(DeviceResource* pResource, D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+	void InsertResourceBarrier(DeviceResource* pResource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	void InsertAliasingBarrier(const DeviceResource* pResource);
 	void InsertUAVBarrier(const DeviceResource* pResource = nullptr);
 	void FlushResourceBarriers();
@@ -187,7 +187,7 @@ private:
 	struct PendingBarrier
 	{
 		DeviceResource* pResource;
-		ResourceState State;
+		D3D12_RESOURCE_STATES State;
 		uint32 Subresource;
 	};
 

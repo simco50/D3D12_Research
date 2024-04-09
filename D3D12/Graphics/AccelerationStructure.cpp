@@ -172,14 +172,14 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			
 			if (!blasInstances.empty())
 			{
-				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST);
+				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
 
 				ScratchAllocation alloc = context.AllocateScratch(sizeof(BLASInstance) * blasInstances.size());
 				memcpy(alloc.pMappedMemory, blasInstances.data(), sizeof(BLASInstance)* blasInstances.size());
 				context.CopyBuffer(alloc.pBackingResource, m_pBLASInstancesSourceBuffer, alloc.Size, alloc.Offset, 0);
 
-				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-				context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
 				context.SetComputeRootSignature(gCommonRS);
 				context.SetPipelineState(gUpdateTLASPSO);
@@ -204,7 +204,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			asDesc.Inputs.NumDescs = (uint32)blasInstances.size();
 			asDesc.SourceAccelerationStructureData = 0;
 
-			context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 			context.FlushResourceBarriers();
 			pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 			context.InsertUAVBarrier(m_pTLAS);
@@ -274,11 +274,11 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 
 		// UAV barrier to ensure BLAS creation is finished
 		context.InsertUAVBarrier();
-		context.InsertResourceBarrier(m_pPostBuildInfoBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		context.InsertResourceBarrier(m_pPostBuildInfoBuffer, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		context.FlushResourceBarriers();
 		context.GetCommandList()->EmitRaytracingAccelerationStructurePostbuildInfo(&desc, (uint32)blasAddresses.size(), blasAddresses.data());
 
-		context.InsertResourceBarrier(m_pPostBuildInfoBuffer, D3D12_RESOURCE_STATE_COPY_SOURCE);
+		context.InsertResourceBarrier(m_pPostBuildInfoBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
 		context.CopyResource(m_pPostBuildInfoBuffer, m_pPostBuildInfoReadbackBuffer);
 
 		m_PostBuildInfoFence = SyncPoint(context.GetParent()->GetFrameFence(), context.GetParent()->GetFrameFence()->GetCurrentValue());
