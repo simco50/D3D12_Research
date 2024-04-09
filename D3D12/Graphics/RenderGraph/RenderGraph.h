@@ -13,16 +13,10 @@ class RGPass;
 enum class RGPassFlag
 {
 	None =		0,
-	// Raster pass
-	Raster =	1 << 0,
-	// Compute pass
-	Compute =	1 << 1,
-	// Pass that performs a copy resource operation. Does not play well with Raster/Compute passes
-	Copy =		1 << 2,
-	// Makes a pass never be culled when not referenced.
-	NeverCull = 1 << 3,
-	// Automatically begin/end render pass
-	NoRenderPass = 1 << 4,
+	Raster =	1 << 0,		///< Raster pass
+	Compute =	1 << 1,		///< Compute pass
+	Copy =		1 << 2,		///< Pass that performs a copy resource operation. Does not play well with Raster/Compute passes
+	NeverCull = 1 << 3,		///< Makes a pass never be culled when not referenced.
 };
 DECLARE_BITMASK_TYPE(RGPassFlag);
 
@@ -193,8 +187,6 @@ public:
 		static_assert(sizeof(ExecuteFn) < 1024, "The Execute callback exceeds the maximum size");
 		check(!pExecuteCallback, "Pass is already bound! This may be unintentional");
 		pExecuteCallback = Allocator.AllocateObject<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
-		if constexpr (RGPassCallback<ExecuteFn>::HasPassResources)
-			Flags |= RGPassFlag::NoRenderPass;
 		return *this;
 	}
 
@@ -214,9 +206,9 @@ private:
 
 	void AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state);
 
+	const char*			pName;
 	RGGraph&			Graph;
 	RGGraphAllocator&	Allocator;
-	const char*			pName;
 	uint32				ID;
 	RGPassFlag			Flags;
 	std::vector<uint32> EventsToStart;
@@ -273,7 +265,9 @@ public:
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
-	void Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice, bool jobify);
+	void Compile(RGResourcePool& resourcePool);
+
+	void Execute(GraphicsDevice* pDevice, bool jobify);
 
 	template<typename T, typename... Args>
 	NO_DISCARD T* Allocate(Args&&... args)
@@ -352,9 +346,9 @@ public:
 		return nullptr;
 	}
 
-	void EnableResourceTrackerView() { m_EnableResourceTrackerView = true; }
-	void DumpGraph(const char* pPath) { m_pDumpGraphPath = m_Allocator.AllocateString(pPath); }
-
+	void DumpDebugGraph(const char* pFilePath) const;
+	void DrawResourceTracker(bool& enabled) const;
+	
 	void PushEvent(const char* pName, const char* pFilePath = "", uint32 lineNumber = 0);
 	void PopEvent();
 
@@ -367,18 +361,11 @@ private:
 		return (uint32)m_Events.size() - 1;
 	}
 
-	void Compile(RGResourcePool& resourcePool);
-
 	void ExecutePass(RGPass* pPass, CommandContext& context);
 	void PrepareResources(RGPass* pPass, CommandContext& context);
 	void DestroyData();
 
-	void DumpDebugGraph(const char* pFilePath) const;
-	void DrawResourceTracker(bool& enabled) const;
-
-	bool m_EnableResourceTrackerView = false;
-	const char* m_pDumpGraphPath = nullptr;
-
+	bool m_IsCompiled = false;
 	std::vector<uint32> m_PendingEvents;
 	std::vector<RGEvent> m_Events;
 

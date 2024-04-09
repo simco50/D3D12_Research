@@ -717,7 +717,7 @@ void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, cons
 	RGBuffer* pBins0 = rasterContext.pBinnedMeshletOffsetAndCounts[0] ? rasterContext.pBinnedMeshletOffsetAndCounts[0] : pDummy;
 	RGBuffer* pBins1 = rasterContext.pBinnedMeshletOffsetAndCounts[1] ? rasterContext.pBinnedMeshletOffsetAndCounts[1] : pDummy;
 
-	graph.AddPass("Print Stats", RGPassFlag::Compute)
+	graph.AddPass("Print Stats", RGPassFlag::Compute | RGPassFlag::NeverCull)
 		.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshletsCounter, pBins0, pBins1 })
 		.Bind([=](CommandContext& context)
 			{

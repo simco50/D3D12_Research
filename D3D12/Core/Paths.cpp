@@ -103,6 +103,14 @@ namespace Paths
 		return filePath.substr(0, extensionStart + 1) + newExtension;
 	}
 
+	std::string MakeAbsolute(const char* pFilePath)
+	{
+		char fullPath[MAX_PATH];
+		GetFullPathNameA(pFilePath, MAX_PATH, fullPath, nullptr);
+		return fullPath;
+	}
+
+
 	std::string MakeRelativePath(const std::string& basePath, const std::string& filePath)
 	{
 		size_t matchLength = 0;

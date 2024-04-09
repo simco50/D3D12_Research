@@ -66,4 +66,11 @@
 		<DisplayString>{D3D::GetResourceDescription(this)}</DisplayString>
 	</Type>
 
+
+	<Type Name="RGPass">
+		<DisplayString Condition="!IsCulled">{pName,s} - {Flags}</DisplayString>
+		<DisplayString Condition="IsCulled">[CULLED] {pName,s} - {Flags}</DisplayString>
+	</Type>
+
+
 </AutoVisualizer>

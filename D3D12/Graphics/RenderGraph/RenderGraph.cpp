@@ -87,8 +87,10 @@ RGGraph::~RGGraph()
 
 void RGGraph::Compile(RGResourcePool& resourcePool)
 {
+	check(!m_IsCompiled);
+
 	PROFILE_CPU_SCOPE();
-	constexpr bool PassCulling = false;
+	constexpr bool PassCulling = true;
 
 	if (PassCulling)
 	{
@@ -114,7 +116,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 			{
 				for (RGPass::ResourceAccess access : pPass->Accesses)
 				{
-					if (access.pResource->IsImported && D3D::HasWriteResourceState(access.Access))
+					if ((access.pResource->IsExported || access.pResource->IsImported) && D3D::HasWriteResourceState(access.Access))
 					{
 						cullStack.push_back(pPass);
 						break;
@@ -298,6 +300,8 @@ void RGGraph::Compile(RGResourcePool& resourcePool)
 	}
 	pLastActivePass->NumEventsToEnd += eventsToEnd;
 	check(eventsToStart.empty());
+
+	m_IsCompiled = true;
 }
 
 void RGGraph::Export(RGTexture* pTexture, Ref<Texture>* pTarget, TextureFlag additionalFlags)
@@ -331,16 +335,11 @@ void RGGraph::PopEvent()
 		++m_RenderPasses.back()->NumEventsToEnd;
 }
 
-void RGGraph::Execute(RGResourcePool& resourcePool, GraphicsDevice* pDevice, bool jobify)
+void RGGraph::Execute(GraphicsDevice* pDevice, bool jobify)
 {
+	check(m_IsCompiled);
+
 	PROFILE_CPU_SCOPE();
-
-	Compile(resourcePool);
-
-	if (m_EnableResourceTrackerView)
-		DrawResourceTracker(m_EnableResourceTrackerView);
-	if (m_pDumpGraphPath)
-		DumpDebugGraph(m_pDumpGraphPath);
 
 	std::vector<CommandContext*> contexts;
 
@@ -461,8 +460,7 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 		{
 			RGPassResources resources(*pPass);
 
-			bool useRenderPass = EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster) && !EnumHasAllFlags(pPass->Flags, RGPassFlag::NoRenderPass);
-
+			bool useRenderPass = EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster);
 			if (useRenderPass)
 				context.BeginRenderPass(resources.GetRenderPassInfo());
 

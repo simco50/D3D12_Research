@@ -167,7 +167,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 					context.InsertUAVBarrier();
 				});
 
-		graph.AddPass("Emit", RGPassFlag::Compute | RGPassFlag::NeverCull)
+		graph.AddPass("Emit", RGPassFlag::Compute)
 			.Read({ pDepth, pIndirectArgs, pDeadList })
 			.Write({ pParticlesBuffer, pCountersBuffer, pCurrentAliveList })
 			.Bind([=](CommandContext& context)
@@ -200,7 +200,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 					context.InsertUAVBarrier();
 				});
 
-		graph.AddPass("Simulate", RGPassFlag::Compute | RGPassFlag::NeverCull)
+		graph.AddPass("Simulate", RGPassFlag::Compute)
 			.Read({ pDepth, pIndirectArgs, pCurrentAliveList })
 			.Write({ pCountersBuffer, pDeadList, pNewAliveList, pParticlesBuffer })
 			.Bind([=](CommandContext& context)

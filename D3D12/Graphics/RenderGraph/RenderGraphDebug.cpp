@@ -50,7 +50,6 @@ std::string PassFlagToString(RGPassFlag flags)
 			case RGPassFlag::Raster: return "Raster";
 			case RGPassFlag::Copy: return "Copy";
 			case RGPassFlag::NeverCull: return "Never Cull";
-			case RGPassFlag::NoRenderPass: return "No Render Pass";
 			default: return nullptr;
 			}
 		});
@@ -58,6 +57,8 @@ std::string PassFlagToString(RGPassFlag flags)
 
 void RGGraph::DrawResourceTracker(bool& enabled) const
 {
+	check(m_IsCompiled);
+
 	if (!enabled)
 		return;
 
@@ -188,6 +189,8 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 void RGGraph::DumpDebugGraph(const char* pPath) const
 {
+	check(m_IsCompiled);
+
 	struct StringStream
 	{
 		StringStream& operator<<(const char* pText)
@@ -212,9 +215,11 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		std::string String;
 	};
 
-	StringStream stream;
+	// Mermaid
+	{
+		StringStream stream;
 
-	constexpr const char* pMermaidTemplate = R"(
+		constexpr const char* pMermaidTemplate = R"(
 			<!DOCTYPE html>
 				<html lang="en">
 				<head>
@@ -235,138 +240,206 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 			</html>
 		)";
 
-	stream << "graph TD;\n";
+		stream << "graph TD;\n";
 
-	stream << "classDef neverCullPass fill:#ff5e00,stroke:#333,stroke-width:4px;\n";
-	stream << "classDef referencedPass fill:#fa0,stroke:#333,stroke-width:4px;\n";
-	stream << "classDef unreferenced stroke:#fee,stroke-width:1px;\n";
-	stream << "classDef referencedResource fill:#bef,stroke:#333,stroke-width:2px;\n";
-	stream << "classDef importedResource fill:#9bd,stroke:#333,stroke-width:2px;\n";
+		stream << "classDef neverCullPass fill:#ff5e00,stroke:#333,stroke-width:4px;\n";
+		stream << "classDef referencedPass fill:#fa0,stroke:#333,stroke-width:4px;\n";
+		stream << "classDef unreferenced stroke:#fee,stroke-width:1px;\n";
+		stream << "classDef referencedResource fill:#bef,stroke:#333,stroke-width:2px;\n";
+		stream << "classDef importedResource fill:#9bd,stroke:#333,stroke-width:2px;\n";
 
-	const char* writeLinkStyle = "stroke:#f82,stroke-width:2px;";
-	const char* readLinkStyle = "stroke:#9c9,stroke-width:2px;";
-	int linkIndex = 0;
+		const char* writeLinkStyle = "stroke:#f82,stroke-width:2px;";
+		const char* readLinkStyle = "stroke:#9c9,stroke-width:2px;";
+		int linkIndex = 0;
 
-	std::unordered_map<RGResource*, uint32> resourceVersions;
+		std::unordered_map<RGResource*, uint32> resourceVersions;
 
-#define PRINT_RESOURCE_REUSE 0
-#if PRINT_RESOURCE_REUSE
-	std::unordered_map<GraphicsResource*, std::string> resourceMap;
-	for (RGResource* pResource : m_Resources)
-	{
-		std::string& s = resourceMap[pResource->GetPhysical()];
-		s = Sprintf("|%-60s| ", pResource->GetPhysical()->GetName().c_str());
+		//Pass declaration
+		int passIndex = 0;
+		for (RGPass* pPass : m_RenderPasses)
+		{
+			stream << "Pass" << pPass->ID;
+			stream << "[";
+			stream << "\"" << pPass->GetName() << "\"<br/>";
+			stream << "Flags: " << PassFlagToString(pPass->Flags) << "<br/>";
+			stream << "Index: " << passIndex << "<br/>";
+			stream << "Culled: " << (pPass->IsCulled ? "Yes" : "No") << "<br/>";
+			stream << "]:::";
+
+			if (EnumHasAnyFlags(pPass->Flags, RGPassFlag::NeverCull))
+			{
+				stream << "neverCullPass";
+			}
+			else
+			{
+				stream << (pPass->IsCulled ? "unreferenced" : "referencedPass");
+			}
+
+			stream << "\n";
+
+			auto PrintResource = [&](RGResource* pResource, uint32 version) {
+				stream << "Resource" << pResource->ID << "_" << version;
+				stream << (pResource->IsImported ? "[(" : "([");
+				stream << "\"" << pResource->GetName() << "\"<br/>";
+
+				if (pResource->Type == RGResourceType::Texture)
+				{
+					const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
+					stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
+					stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "<br/>";
+					stream << "Mips: " << desc.Mips << "<br/>";
+					stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)) << "</br>";
+				}
+				else if (pResource->Type == RGResourceType::Buffer)
+				{
+					const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
+					stream << "Stride: " << desc.ElementSize << "<br/>";
+					stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "<br/>";
+					stream << "Size: " << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
+					stream << "Elements: " << desc.NumElements() << "<br/>";
+				}
+
+				stream << (pResource->IsImported ? ")]" : "])");
+				if (pResource->IsImported)
+				{
+					stream << ":::importedResource";
+				}
+				else
+				{
+					stream << ":::referencedResource";
+				}
+				stream << "\n";
+				};
+
+			for (RGPass::ResourceAccess& access : pPass->Accesses)
+			{
+				RGResource* pResource = access.pResource;
+				uint32 resourceVersion = 0;
+				auto it = resourceVersions.find(pResource);
+				if (it == resourceVersions.end())
+				{
+					resourceVersions[pResource] = resourceVersion;
+
+					if (pResource->IsImported)
+						PrintResource(pResource, resourceVersion);
+
+				}
+				resourceVersion = resourceVersions[pResource];
+
+				if (resourceVersion > 0 || pResource->IsImported)
+				{
+					stream << "Resource" << pResource->ID << "_" << resourceVersion << " -- " << D3D::ResourceStateToString(access.Access) << " --> Pass" << pPass->ID << "\n";
+					stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
+				}
+
+				if (D3D::HasWriteResourceState(access.Access))
+				{
+					++resourceVersions[pResource];
+					resourceVersion++;
+					PrintResource(pResource, resourceVersion);
+
+					stream << "Pass" << pPass->ID << " -- " << D3D::ResourceStateToString(access.Access) << " --> " << "Resource" << pResource->ID << "_" << resourceVersion;
+					stream << "\nlinkStyle " << linkIndex++ << " " << writeLinkStyle << "\n";
+				}
+			}
+
+			++passIndex;
+		}
+
+		std::string output = Sprintf(pMermaidTemplate, stream.String.c_str());
+
+		std::string fullPath = Paths::MakeAbsolute(Sprintf("%s.html", pPath).c_str());
+		Paths::CreateDirectoryTree(fullPath);
+
+		FileStream file;
+		if (file.Open(pPath, FileMode::Write))
+			file.Write(output.c_str(), (uint32)output.length());
 	}
-	for (auto& resource : resourceMap)
+
+	// GraphViz
 	{
-		GraphicsResource* pResource = resource.first;
-		for (int passIndex = 0; passIndex < (int)m_RenderPasses.size(); ++passIndex)
-		{
-			RGPass* pPass = m_RenderPasses[passIndex];
-			auto access = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource->GetPhysical() == pResource; });
-			resource.second += access != pPass->Accesses.end() ? "#" : " ";
-		}
-	}
-	for (auto& resource : resourceMap)
-		E_LOG(Info, "%s", resource.second.c_str());
-#endif
+		std::unordered_map<RGResource*, uint32> resourceVersions;
 
-	//Pass declaration
-	int passIndex = 0;
-	for (RGPass* pPass : m_RenderPasses)
-	{
-		stream << "Pass" << pPass->ID;
-		stream << "[";
-		stream << "\"" << pPass->GetName() << "\"<br/>";
-		stream << "Flags: " << PassFlagToString(pPass->Flags) << "<br/>";
-		stream << "Index: " << passIndex << "<br/>";
-		stream << "Culled: " << (pPass->IsCulled ? "Yes" : "No") << "<br/>";
-		stream << "]:::";
-
-		if (EnumHasAnyFlags(pPass->Flags, RGPassFlag::NeverCull))
-		{
-			stream << "neverCullPass";
-		}
-		else
-		{
-			stream << (pPass->IsCulled ? "unreferenced" : "referencedPass");
-		}
-
-		stream << "\n";
+		StringStream stream;
 
 		auto PrintResource = [&](RGResource* pResource, uint32 version) {
 			stream << "Resource" << pResource->ID << "_" << version;
-			stream << (pResource->IsImported ? "[(" : "([");
-			stream << "\"" << pResource->GetName() << "\"<br/>";
+			stream << "[ label = \"" << pResource->GetName() << "\\n";
 
 			if (pResource->Type == RGResourceType::Texture)
 			{
 				const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
-				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
-				stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "<br/>";
-				stream << "Mips: " << desc.Mips << "<br/>";
-				stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)) << "</br>";
+				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "\\n";
+				stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "\\n";
+				stream << "Mips: " << desc.Mips << "\\n";
+				stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize));
 			}
 			else if (pResource->Type == RGResourceType::Buffer)
 			{
 				const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
-				stream << "Stride: " << desc.ElementSize << "<br/>";
-				stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "<br/>";
-				stream << "Size: " << Math::PrettyPrintDataSize(desc.Size) << "<br/>";
-				stream << "Elements: " << desc.NumElements() << "<br/>";
+				stream << "Stride: " << desc.ElementSize << "\\n";
+				stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "\\n";
+				stream << "Size: " << Math::PrettyPrintDataSize(desc.Size) << "\\n";
+				stream << "Elements: " << desc.NumElements();
 			}
 
-			stream << (pResource->IsImported ? ")]" : "])");
-			if (pResource->IsImported)
-			{
-				stream << ":::importedResource";
-			}
-			else
-			{
-				stream << ":::referencedResource";
-			}
-			stream << "\n";
-		};
+			stream << "\" ];\n";
+			};
 
-		for (RGPass::ResourceAccess& access : pPass->Accesses)
+		stream << "digraph {\n";
+
+		stream << "splines=ortho;\n";
+
+		int passIndex = 0;
+		for (RGPass* pPass : m_RenderPasses)
 		{
-			RGResource* pResource = access.pResource;
-			uint32 resourceVersion = 0;
-			auto it = resourceVersions.find(pResource);
-			if (it == resourceVersions.end())
-			{
-				resourceVersions[pResource] = resourceVersion;
+			stream << "Pass" << pPass->ID << " ";
+			stream << "[ label = ";
+			stream << "\"" << pPass->GetName() << "\\n";
+			stream << "Flags: " << PassFlagToString(pPass->Flags) << "\\n";
+			stream << "Index: " << passIndex << "\\n";
+			stream << "Culled: " << (pPass->IsCulled ? "Yes" : "No");
+			stream << "\" ];";
 
-				if(pResource->IsImported)
+			stream << "\n";
+
+			for (RGPass::ResourceAccess& access : pPass->Accesses)
+			{
+				RGResource* pResource = access.pResource;
+				uint32 resourceVersion = 0;
+				auto it = resourceVersions.find(pResource);
+				if (it == resourceVersions.end())
+				{
+					resourceVersions[pResource] = resourceVersion;
+				}
+				resourceVersion = resourceVersions[pResource];
+
+				if (resourceVersion > 0 || pResource->IsImported)
+				{
+					stream << "Resource" << pResource->ID << "_" << resourceVersion << " -> " << "Pass" << pPass->ID << "\n";
+				}
+
+				if(D3D::HasWriteResourceState(access.Access))
+				{
+					++resourceVersions[pResource];
+					resourceVersion++;
 					PrintResource(pResource, resourceVersion);
 
-			}
-			resourceVersion = resourceVersions[pResource];
-
-			if (resourceVersion > 0 || pResource->IsImported)
-			{
-				stream << "Resource" << pResource->ID << "_" << resourceVersion << " -- " << D3D::ResourceStateToString(access.Access) << " --> Pass" << pPass->ID << "\n";
-				stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
+					stream << "Pass" << pPass->ID << " -> " << "Resource" << pResource->ID << "_" << resourceVersion << "\n";
+				}
 			}
 
-			if (D3D::HasWriteResourceState(access.Access))
-			{
-				++resourceVersions[pResource];
-				resourceVersion++;
-				PrintResource(pResource, resourceVersion);
-
-				stream << "Pass" << pPass->ID << " -- " << D3D::ResourceStateToString(access.Access) << " --> " << "Resource" << pResource->ID << "_" << resourceVersion;
-				stream << "\nlinkStyle " << linkIndex++ << " " << writeLinkStyle << "\n";
-			}
+			++passIndex;
 		}
 
-		++passIndex;
+		stream << "}\n";
+
+		std::string fullPath = Paths::MakeAbsolute(Sprintf("%s.dot", pPath).c_str());
+		Paths::CreateDirectoryTree(fullPath);
+
+		std::string output = stream.String;
+		FileStream file;
+		if (file.Open(fullPath.c_str(), FileMode::Write))
+			file.Write(output.c_str(), (uint32)output.length());
 	}
-
-	std::string output = Sprintf(pMermaidTemplate, stream.String.c_str());
-	Paths::CreateDirectoryTree(pPath);
-
-	FileStream file;
-	if(file.Open(pPath, FileMode::Write))
-		file.Write(output.c_str(), (uint32)output.length());
 }

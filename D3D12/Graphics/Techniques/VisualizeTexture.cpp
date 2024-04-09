@@ -49,7 +49,7 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 
 	RGBuffer* pPickingBuffer = graph.Create("Picking Buffer", BufferDesc::CreateStructured(1, sizeof(Vector4) + sizeof(Vector4u)));
 
-	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute | RGPassFlag::NeverCull)
+	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute)
 		.Read(pTexture)
 		.Write({ pTarget, pPickingBuffer })
 		.Bind([=](CommandContext& cmdContext)
