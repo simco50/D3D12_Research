@@ -215,6 +215,12 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		std::string String;
 	};
 
+	uint32 neverCullColor			= 0xFF5E00FF;
+	uint32 referencedPassColor		= 0xFFAA00FF;
+	uint32 unreferedPassColor		= 0xFFEEEEFF;
+	uint32 referencedResourceColor	= 0xBBEEFFFF;
+	uint32 importedResourceColor	= 0x99BBDDFF;
+
 	// Mermaid
 	{
 		StringStream stream;
@@ -242,11 +248,11 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 
 		stream << "graph TD;\n";
 
-		stream << "classDef neverCullPass fill:#ff5e00,stroke:#333,stroke-width:4px;\n";
-		stream << "classDef referencedPass fill:#fa0,stroke:#333,stroke-width:4px;\n";
-		stream << "classDef unreferenced stroke:#fee,stroke-width:1px;\n";
-		stream << "classDef referencedResource fill:#bef,stroke:#333,stroke-width:2px;\n";
-		stream << "classDef importedResource fill:#9bd,stroke:#333,stroke-width:2px;\n";
+		stream << Sprintf("classDef neverCullPass fill:#%x,stroke:#333,stroke-width:4px;\n", neverCullColor);
+		stream << Sprintf("classDef referencedPass fill:#%x,stroke:#333,stroke-width:4px;\n", referencedPassColor);
+		stream << Sprintf("classDef unreferenced stroke:#fee,stroke-width:1px;\n");
+		stream << Sprintf("classDef referencedResource fill:#%x,stroke:#333,stroke-width:2px;\n", referencedResourceColor);
+		stream << Sprintf("classDef importedResource fill:#%x,stroke:#333,stroke-width:2px;\n", importedResourceColor);
 
 		const char* writeLinkStyle = "stroke:#f82,stroke-width:2px;";
 		const char* readLinkStyle = "stroke:#9c9,stroke-width:2px;";
@@ -352,12 +358,22 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		Paths::CreateDirectoryTree(fullPath);
 
 		FileStream file;
-		if (file.Open(pPath, FileMode::Write))
+		if (file.Open(fullPath.c_str(), FileMode::Write))
 			file.Write(output.c_str(), (uint32)output.length());
 	}
 
 	// GraphViz
 	{
+		const char* pGraphVizTemplate = R"(<div id="graph"></div>
+			<script src="https://cdn.jsdelivr.net/npm/@viz-js/viz@3.4.0/lib/viz-standalone.js"></script>
+			<script>
+			  Viz.instance().then(function(viz) {
+			    var svg = viz.renderSVGElement(`%s`);
+
+			    document.getElementById("graph").appendChild(svg);
+			  });
+			</script>)";
+
 		std::unordered_map<RGResource*, uint32> resourceVersions;
 
 		StringStream stream;
@@ -383,7 +399,9 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 				stream << "Elements: " << desc.NumElements();
 			}
 
-			stream << "\" ];\n";
+			uint32 color = pResource->IsImported ? importedResourceColor : referencedResourceColor;
+			const char* pShape = pResource->IsImported ? "cylinder" : "oval";
+			stream << Sprintf("\" penwidth=2 shape=%s style=filled fillcolor=\"#%x\" ];\n", pShape, color);
 			};
 
 		stream << "digraph {\n";
@@ -393,13 +411,19 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		int passIndex = 0;
 		for (RGPass* pPass : m_RenderPasses)
 		{
+			uint32 passColor = referencedPassColor;
+			if (EnumHasAnyFlags(pPass->Flags, RGPassFlag::NeverCull))
+				passColor = neverCullColor;
+			else if (pPass->IsCulled)
+				passColor = unreferedPassColor;
+
 			stream << "Pass" << pPass->ID << " ";
 			stream << "[ label = ";
 			stream << "\"" << pPass->GetName() << "\\n";
 			stream << "Flags: " << PassFlagToString(pPass->Flags) << "\\n";
 			stream << "Index: " << passIndex << "\\n";
 			stream << "Culled: " << (pPass->IsCulled ? "Yes" : "No");
-			stream << "\" ];";
+			stream << Sprintf("\" penwidth=4 shape=rectangle style=filled fillcolor=\"#%x\"];", passColor);
 
 			stream << "\n";
 
@@ -411,6 +435,9 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 				if (it == resourceVersions.end())
 				{
 					resourceVersions[pResource] = resourceVersion;
+
+					if (pResource->IsImported)
+						PrintResource(pResource, resourceVersion);
 				}
 				resourceVersion = resourceVersions[pResource];
 
@@ -434,10 +461,10 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 
 		stream << "}\n";
 
-		std::string fullPath = Paths::MakeAbsolute(Sprintf("%s.dot", pPath).c_str());
+		std::string fullPath = Paths::MakeAbsolute(Sprintf("%s_GraphViz.html", pPath).c_str());
 		Paths::CreateDirectoryTree(fullPath);
 
-		std::string output = stream.String;
+		std::string output = Sprintf(pGraphVizTemplate, stream.String);
 		FileStream file;
 		if (file.Open(fullPath.c_str(), FileMode::Write))
 			file.Write(output.c_str(), (uint32)output.length());
