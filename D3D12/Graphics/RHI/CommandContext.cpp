@@ -423,6 +423,9 @@ ScratchAllocation CommandContext::AllocateScratch(uint64 size, uint32 alignment 
 
 void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 {
+	if (m_PendingBarriers.empty())
+		return;
+
 	PROFILE_GPU_SCOPE(resolveContext.GetCommandList());
 	PROFILE_CPU_SCOPE();
 

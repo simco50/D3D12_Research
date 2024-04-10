@@ -4,7 +4,6 @@
 #include "Graphics/RHI/CommandContext.h"
 #include "Core/Profiler.h"
 #include "Core/TaskQueue.h"
-#include "Core/CommandLine.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
@@ -90,19 +89,20 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 	PROFILE_CPU_SCOPE();
 
 	check(!m_IsCompiled);
-	m_Options = options;
 
 	if (options.PassCulling)
 	{
+		PROFILE_CPU_SCOPE("Pass Culling");
+
 		auto WritesTo = [&](RGResource* pResource, RGPass* pPass)
-		{
-			for (RGPass::ResourceAccess& access : pPass->Accesses)
 			{
-				if (access.pResource == pResource && D3D::HasWriteResourceState(access.Access))
-					return true;
-			}
-			return false;
-		};
+				for (RGPass::ResourceAccess& access : pPass->Accesses)
+				{
+					if (access.pResource == pResource && D3D::HasWriteResourceState(access.Access))
+						return true;
+				}
+				return false;
+			};
 
 		std::vector<RGPass*> cullStack;
 		cullStack.reserve(m_RenderPasses.size());
@@ -192,36 +192,78 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		}
 	}
 
-	// Go through all resources accesses and allocate on first access and de-allocate on last access
-	// It's important to make the distinction between the Ref allocation and the Raw resource itself.
-	// A de-allocate returns the resource back to the pool by resetting the Ref however the Raw resource keeps a reference to it to use during execution.
-	// This is how we can "alias" resources (exact match only for now) and allocate our resources during compilation so that execution is thread-safe.
-	for (const RGPass* pPass : m_RenderPasses)
 	{
-		if (pPass->IsCulled)
-			continue;
 
-		for (const RGPass::ResourceAccess& access : pPass->Accesses)
-		{
-			RGResource* pResource = access.pResource;
-			if (!pResource->pPhysicalResource)
-			{
-				if (pResource->Type == RGResourceType::Texture)
-					pResource->SetResource(resourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
-				else if (pResource->Type == RGResourceType::Buffer)
-					pResource->SetResource(resourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
-				else
-					noEntry();
-			}
-			check(pResource->pPhysicalResource);
-		}
+		PROFILE_CPU_SCOPE("Resource Allocation");
 
-		if (options.ResourceAliasing)
+		// Go through all resources accesses and allocate on first access and de-allocate on last access
+		// It's important to make the distinction between the Ref allocation and the Raw resource itself.
+		// A de-allocate returns the resource back to the pool by resetting the Ref however the Raw resource keeps a reference to it to use during execution.
+		// This is how we can "alias" resources (exact match only for now) and allocate our resources during compilation so that execution is thread-safe.
+		for (RGPass* pPass : m_RenderPasses)
 		{
+			if (pPass->IsCulled)
+				continue;
+
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
 				RGResource* pResource = access.pResource;
-				if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
+				if (!pResource->pPhysicalResource)
+				{
+					Ref<DeviceResource> pPhysicalResource;
+					if (pResource->Type == RGResourceType::Texture)
+						pPhysicalResource = resourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc());
+					else if (pResource->Type == RGResourceType::Buffer)
+						pPhysicalResource = resourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc());
+					else
+						noEntry();
+					pResource->SetResource(pPhysicalResource);
+				}
+				check(pResource->pPhysicalResource);
+
+				uint32 subResource = 0xFFFFFFFF;
+
+				if (pResource->pPhysicalResource->UseStateTracking())
+				{
+					// If state tracking, add a transition in this pass and keep track of the resource state
+					if (options.StateTracking)
+					{
+						ResourceState& resourceState = m_ResourceStates[pResource->pPhysicalResource];
+						D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
+						D3D12_RESOURCE_STATES afterState = access.Access;
+						if (beforeState != afterState)
+						{
+							pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = beforeState, .AfterState = afterState, .SubResource = subResource });
+							resourceState.Set(afterState, subResource);
+						}
+					}
+					else
+					{
+						pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = D3D12_RESOURCE_STATE_UNKNOWN, .AfterState = access.Access, .SubResource = subResource });
+					}
+				}
+			}
+
+			if (options.ResourceAliasing)
+			{
+				for (const RGPass::ResourceAccess& access : pPass->Accesses)
+				{
+					RGResource* pResource = access.pResource;
+					if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
+					{
+						check(pResource->pPhysicalResource);
+						pResource->Release();
+					}
+				}
+			}
+		}
+
+		// If not aliasing resources, all resources still have a referece, so release it.
+		if (!options.ResourceAliasing)
+		{
+			for (RGResource* pResource : m_Resources)
+			{
+				if (!pResource->IsImported && !pResource->IsExported && pResource->pPhysicalResource)
 				{
 					check(pResource->pPhysicalResource);
 					pResource->Release();
@@ -230,75 +272,109 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		}
 	}
 
-	if (!options.ResourceAliasing)
-	{
-		for (RGResource* pResource : m_Resources)
-		{
-			if (!pResource->IsImported && !pResource->IsExported && pResource->pPhysicalResource)
-			{
-				check(pResource->pPhysicalResource);
-				pResource->Release();
-			}
-		}
-	}
-
-	// #todo Should exported resources that are not used actually be exported?
-	for (RGResource* pResource : m_Resources)
-	{
-		if (pResource->IsExported && !pResource->pPhysicalResource)
-		{
-			if (pResource->Type == RGResourceType::Texture)
-				pResource->SetResource(resourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc()));
-			else if (pResource->Type == RGResourceType::Buffer)
-				pResource->SetResource(resourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc()));
-			else
-				noEntry();
-		}
-	}
-
 	// Export resources first so they can be available during pass execution.
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
-		check(exportResource.pTexture->pPhysicalResource);
+		check(exportResource.pTexture->pPhysicalResource, "Exported texture doesn't have a physical resource assigned");
 		Ref<Texture> pTexture = exportResource.pTexture->Get();
+		pTexture->SetName(exportResource.pTexture->GetName());
 		*exportResource.pTarget = pTexture;
 	}
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
-		check(exportResource.pBuffer->pPhysicalResource);
+		check(exportResource.pBuffer->pPhysicalResource, "Exported buffer doesn't have a physical resource assigned");
 		Ref<Buffer> pBuffer = exportResource.pBuffer->Get();
+		pBuffer->SetName(exportResource.pBuffer->GetName());
 		*exportResource.pTarget = pBuffer;
 	}
 
-	// Move events from passes that are culled
-	std::vector<uint32> eventsToStart;
-	uint32 eventsToEnd = 0;
-	RGPass* pLastActivePass = nullptr;
-	for (RGPass* pPass : m_RenderPasses)
 	{
-		if (pPass->IsCulled)
+		PROFILE_CPU_SCOPE("Event Resolving");
+
+		// Move events from passes that are culled
+		std::vector<uint32> eventsToStart;
+		uint32 eventsToEnd = 0;
+		RGPass* pLastActivePass = nullptr;
+		for (RGPass* pPass : m_RenderPasses)
 		{
-			while (pPass->NumEventsToEnd > 0 && pPass->EventsToStart.size() > 0)
+			if (pPass->IsCulled)
 			{
-				--pPass->NumEventsToEnd;
-				pPass->EventsToStart.pop_back();
+				while (pPass->NumEventsToEnd > 0 && pPass->EventsToStart.size() > 0)
+				{
+					--pPass->NumEventsToEnd;
+					pPass->EventsToStart.pop_back();
+				}
+				for (uint32 eventIndex : pPass->EventsToStart)
+					eventsToStart.push_back(eventIndex);
+				eventsToEnd += pPass->NumEventsToEnd;
 			}
-			for (uint32 eventIndex : pPass->EventsToStart)
-				eventsToStart.push_back(eventIndex);
-			eventsToEnd += pPass->NumEventsToEnd;
+			else
+			{
+				for (uint32 eventIndex : eventsToStart)
+					pPass->EventsToStart.push_back(eventIndex);
+				pPass->NumEventsToEnd += eventsToEnd;
+				eventsToStart.clear();
+				eventsToEnd = 0;
+				pLastActivePass = pPass;
+			}
+		}
+		pLastActivePass->NumEventsToEnd += eventsToEnd;
+		check(eventsToStart.empty());
+	}
+
+	{
+		PROFILE_CPU_SCOPE("Pass Grouping");
+
+		if (options.Jobify)
+		{
+			// Group passes in jobs
+			const uint32 maxPassesPerJob = options.CommandlistGroupSize;
+
+			// Duplicate profile events that cross the border of jobs to retain event hierarchy
+			uint32 firstPass = 0;
+			uint32 currentGroupSize = 0;
+			std::vector<uint32> activeEvents;
+			RGPass* pLastPass = nullptr;
+
+			for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
+			{
+				RGPass* pPass = m_RenderPasses[passIndex];
+				if (!pPass->IsCulled)
+				{
+					pPass->CPUEventsToStart = pPass->EventsToStart;
+					pPass->NumCPUEventsToEnd = pPass->NumEventsToEnd;
+
+					for (uint32 event : pPass->CPUEventsToStart)
+						activeEvents.push_back(event);
+
+					if (currentGroupSize == 0)
+					{
+						firstPass = pPass->ID;
+						pPass->CPUEventsToStart = activeEvents;
+					}
+
+					for (uint32 i = 0; i < pPass->NumCPUEventsToEnd; ++i)
+						activeEvents.pop_back();
+
+					++currentGroupSize;
+					if (currentGroupSize >= maxPassesPerJob)
+					{
+						pPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
+						m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_RenderPasses[firstPass], passIndex - firstPass + 1));
+						currentGroupSize = 0;
+					}
+					pLastPass = pPass;
+				}
+			}
+			if (currentGroupSize > 0)
+				m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_RenderPasses[firstPass], (uint32)m_RenderPasses.size() - firstPass));
+			pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
 		}
 		else
 		{
-			for (uint32 eventIndex : eventsToStart)
-				pPass->EventsToStart.push_back(eventIndex);
-			pPass->NumEventsToEnd += eventsToEnd;
-			eventsToStart.clear();
-			eventsToEnd = 0;
-			pLastActivePass = pPass;
+			m_PassExecuteGroups.push_back(Span<const RGPass*>(m_RenderPasses.data(), (uint32)m_RenderPasses.size()));
 		}
 	}
-	pLastActivePass->NumEventsToEnd += eventsToEnd;
-	check(eventsToStart.empty());
 
 	m_IsCompiled = true;
 }
@@ -341,62 +417,20 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 	check(m_IsCompiled);
 
 	std::vector<CommandContext*> contexts;
-	if (m_Options.Jobify)
+	contexts.reserve(m_PassExecuteGroups.size());
+
+	if (m_PassExecuteGroups.size() > 1)
 	{
-		// Group passes in jobs
-		const uint32 maxPassesPerJob = m_Options.CommandlistGroupSize;
-		std::vector<Span<RGPass*>> passGroups;
-
-		// Duplicate profile events that cross the border of jobs to retain event hierarchy
-		uint32 firstPass = 0;
-		uint32 currentGroupSize = 0;
-		std::vector<uint32> activeEvents;
-		RGPass* pLastPass = nullptr;
-
-		for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
-		{
-			RGPass* pPass = m_RenderPasses[passIndex];
-			if (!pPass->IsCulled)
-			{
-				pPass->CPUEventsToStart = pPass->EventsToStart;
-				pPass->NumCPUEventsToEnd = pPass->NumEventsToEnd;
-
-				for (uint32 event : pPass->CPUEventsToStart)
-					activeEvents.push_back(event);
-
-				if (currentGroupSize == 0)
-				{
-					firstPass = pPass->ID;
-					pPass->CPUEventsToStart = activeEvents;
-				}
-
-				for (uint32 i = 0; i < pPass->NumCPUEventsToEnd; ++i)
-					activeEvents.pop_back();
-
-				++currentGroupSize;
-				if (currentGroupSize >= maxPassesPerJob)
-				{
-					pPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
-					passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], passIndex - firstPass + 1));
-					currentGroupSize = 0;
-				}
-				pLastPass = pPass;
-			}
-		}
-		if (currentGroupSize > 0)
-			passGroups.push_back(Span<RGPass*>(&m_RenderPasses[firstPass], (uint32)m_RenderPasses.size() - firstPass));
-		pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
-
 		TaskContext context;
 
 		{
 			PROFILE_CPU_SCOPE("Schedule Render Jobs");
-			for (Span<RGPass*> passGroup : passGroups)
+			for (Span<const RGPass*> passGroup : m_PassExecuteGroups)
 			{
 				CommandContext* pContext = pDevice->AllocateCommandContext();
 				TaskQueue::Execute([this, passGroup, pContext](int)
 					{
-						for (RGPass* pPass : passGroup)
+						for (const RGPass* pPass : passGroup)
 						{
 							if (!pPass->IsCulled)
 								ExecutePass(pPass, *pContext);
@@ -416,7 +450,7 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 		PROFILE_CPU_SCOPE("Schedule Render Jobs");
 
 		CommandContext* pContext = pDevice->AllocateCommandContext();
-		for (RGPass* pPass : m_RenderPasses)
+		for (const RGPass* pPass : m_PassExecuteGroups[0])
 		{
 			if (!pPass->IsCulled)
 				ExecutePass(pPass, *pContext);
@@ -435,7 +469,7 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 	DestroyData();
 }
 
-void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
+void RGGraph::ExecutePass(const RGPass* pPass, CommandContext& context) const
 {
 	for (uint32 eventIndex : pPass->EventsToStart)
 	{
@@ -480,16 +514,16 @@ void RGGraph::ExecutePass(RGPass* pPass, CommandContext& context)
 		gCPUProfiler.EndEvent();
 }
 
-void RGGraph::PrepareResources(RGPass* pPass, CommandContext& context)
+void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) const
 {
-	for (const RGPass::ResourceAccess& access : pPass->Accesses)
+	for (const RGPass::ResourceTransition& transition : pPass->Transitions)
 	{
-		RGResource* pResource = access.pResource;
+		RGResource* pResource = transition.pResource;
 
 		check(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
 		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
-		if (pResource->GetPhysical()->UseStateTracking())
-			context.InsertResourceBarrier(pResource->pPhysicalResource, D3D12_RESOURCE_STATE_UNKNOWN, access.Access);
+
+		context.InsertResourceBarrier(pResource->pPhysicalResource, transition.BeforeState, transition.AfterState, transition.SubResource);
 	}
 
 	context.FlushResourceBarriers();

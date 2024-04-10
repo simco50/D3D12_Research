@@ -23,7 +23,7 @@ DECLARE_BITMASK_TYPE(RGPassFlag);
 class RGPassResources
 {
 public:
-	RGPassResources(RGPass& pass)
+	RGPassResources(const RGPass& pass)
 		: m_Pass(pass)
 	{}
 
@@ -33,7 +33,7 @@ public:
 	NO_DISCARD RenderPassInfo GetRenderPassInfo() const;
 
 private:
-	RGPass& m_Pass;
+	const RGPass& m_Pass;
 };
 
 class RGGraphAllocator
@@ -206,6 +206,14 @@ private:
 
 	void AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state);
 
+	struct ResourceTransition
+	{
+		RGResource* pResource;
+		D3D12_RESOURCE_STATES BeforeState;
+		D3D12_RESOURCE_STATES AfterState;
+		uint32 SubResource;
+	};
+
 	const char*			pName;
 	RGGraph&			Graph;
 	RGGraphAllocator&	Allocator;
@@ -217,6 +225,7 @@ private:
 	uint32				NumEventsToEnd		= 0;
 	uint32				NumCPUEventsToEnd	= 0;
 
+	std::vector<ResourceTransition> Transitions;
 	std::vector<ResourceAccess>		Accesses;
 	std::vector<RGPass*>			PassDependencies;
 	std::vector<RenderTargetAccess> RenderTargets;
@@ -261,6 +270,7 @@ struct RGGraphOptions
 	bool ResourceAliasing		= true;
 	bool Jobify					= true;
 	bool PassCulling			= true;
+	bool StateTracking			= true;
 	uint32 CommandlistGroupSize = 10;
 };
 
@@ -369,11 +379,10 @@ private:
 		return (uint32)m_Events.size() - 1;
 	}
 
-	void ExecutePass(RGPass* pPass, CommandContext& context);
-	void PrepareResources(RGPass* pPass, CommandContext& context);
+	void ExecutePass(const RGPass* pPass, CommandContext& context) const;
+	void PrepareResources(const RGPass* pPass, CommandContext& context) const;
 	void DestroyData();
 
-	RGGraphOptions m_Options;
 	bool m_IsCompiled = false;
 	std::vector<uint32> m_PendingEvents;
 	std::vector<RGEvent> m_Events;
@@ -381,8 +390,10 @@ private:
 	RGGraphAllocator m_Allocator;
 	SyncPoint m_LastSyncPoint;
 
+	std::vector<Span<const RGPass*>> m_PassExecuteGroups;
 	std::vector<RGPass*> m_RenderPasses;
 	std::vector<RGResource*> m_Resources;
+	std::unordered_map<DeviceResource*, ResourceState> m_ResourceStates;
 
 	struct ExportedTexture
 	{

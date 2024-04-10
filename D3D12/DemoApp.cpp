@@ -91,6 +91,7 @@ namespace Tweakables
 	ConsoleVariable gRenderGraphJobify("r.RenderGraph.Jobify", true);
 	ConsoleVariable gRenderGraphResourceAliasing("r.RenderGraph.Aliasing", true);
 	ConsoleVariable gRenderGraphPassCulling("r.RenderGraph.PassCulling", true);
+	ConsoleVariable gRenderGraphStateTracking("r.RenderGraph.StateTracking", true);
 	ConsoleVariable gRenderGraphPassGroupSize("r.RenderGraph.PassGroupSize", 10);
 
 	bool gDumpRenderGraphNextFrame = false;
@@ -1137,6 +1138,7 @@ void DemoApp::Update()
 		graphOptions.Jobify = Tweakables::gRenderGraphJobify;
 		graphOptions.PassCulling = Tweakables::gRenderGraphPassCulling;
 		graphOptions.ResourceAliasing = Tweakables::gRenderGraphResourceAliasing;
+		graphOptions.StateTracking = Tweakables::gRenderGraphStateTracking;
 		graphOptions.CommandlistGroupSize = Tweakables::gRenderGraphPassGroupSize;
 
 		// Compile graph
@@ -1545,6 +1547,7 @@ void DemoApp::UpdateImGui()
 			ImGui::Checkbox("RenderGraph Jobify", &Tweakables::gRenderGraphJobify.Get());
 			ImGui::Checkbox("RenderGraph Aliasing", &Tweakables::gRenderGraphResourceAliasing.Get());
 			ImGui::Checkbox("RenderGraph Pass Culling", &Tweakables::gRenderGraphPassCulling.Get());
+			ImGui::Checkbox("RenderGraph State Tracking", &Tweakables::gRenderGraphStateTracking.Get());
 			ImGui::SliderInt("RenderGraph Pass Group Size", &Tweakables::gRenderGraphPassGroupSize.Get(), 5, 50);
 		}
 
