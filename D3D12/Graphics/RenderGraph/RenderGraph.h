@@ -393,7 +393,6 @@ private:
 	std::vector<Span<const RGPass*>> m_PassExecuteGroups;
 	std::vector<RGPass*> m_RenderPasses;
 	std::vector<RGResource*> m_Resources;
-	std::unordered_map<DeviceResource*, ResourceState> m_ResourceStates;
 
 	struct ExportedTexture
 	{

@@ -195,6 +195,31 @@ namespace D3D
 		return true;
 	}
 
+	static bool NeedsTransition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES& after, bool allowCombine)
+	{
+		if (before == after)
+			return false;
+
+		// When resolving pending resource barriers, combining resource states is not working
+		// This is because the last known resource state of the resource is used to update the resource
+		// And so combining after_state during the result will result in the last known resource state not matching up.
+		if (!allowCombine)
+			return true;
+
+		//Can read from 'write' DSV
+		if (before == D3D12_RESOURCE_STATE_DEPTH_WRITE && after == D3D12_RESOURCE_STATE_DEPTH_READ)
+			return false;
+
+		if (after == D3D12_RESOURCE_STATE_COMMON)
+			return before != D3D12_RESOURCE_STATE_COMMON;
+
+		//Combine already transitioned bits
+		if (D3D::CanCombineResourceState(before, after) && !EnumHasAllFlags(before, after))
+			after |= before;
+
+		return true;
+	}
+
 	inline void SetObjectName(ID3D12Object* pObject, const char* pName)
 	{
 		if (pObject)

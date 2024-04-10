@@ -228,13 +228,12 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 					// If state tracking, add a transition in this pass and keep track of the resource state
 					if (options.StateTracking)
 					{
-						ResourceState& resourceState = m_ResourceStates[pResource->pPhysicalResource];
-						D3D12_RESOURCE_STATES beforeState = resourceState.Get(subResource);
+						D3D12_RESOURCE_STATES beforeState = pResource->GetPhysical()->GetResourceState(subResource);
 						D3D12_RESOURCE_STATES afterState = access.Access;
-						if (beforeState != afterState)
+						if (D3D::NeedsTransition(beforeState, afterState, true))
 						{
 							pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = beforeState, .AfterState = afterState, .SubResource = subResource });
-							resourceState.Set(afterState, subResource);
+							pResource->GetPhysical()->SetResourceState(afterState, subResource);
 						}
 					}
 					else
