@@ -976,6 +976,7 @@ void DemoApp::Update()
 				{
 					Vector2u targetDimensions(Math::Max(1u, bloomDimensions.x >> i), Math::Max(1u, bloomDimensions.y >> i));
 					graph.AddPass(Sprintf("Downsample %d [%dx%d > %dx%d]", i, targetDimensions.x << 1, targetDimensions.y << 1, targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
+						.Read(i == 0 ? pSourceTexture : nullptr)
 						.Write(pDownscaleTarget)
 						.Bind([=](CommandContext& context)
 							{
