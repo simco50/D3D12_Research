@@ -145,6 +145,8 @@ void DemoApp::Init()
 
 	InitializePipelines();
 
+	m_SceneData.AccelerationStructure.Init(m_pDevice);
+
 	SetupScene();
 
 	OnResizeViewport(16, 16);
@@ -294,6 +296,7 @@ void DemoApp::Update()
 		m_pCamera->SetJitter(Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing);
 		m_pCamera->Update();
 
+		// Directional light is expected to be at index 0
 		m_World.Registry.sort<Light>([](const Light& a, const Light& b) {
 			return (int)a.Type < (int)b.Type;
 			});
@@ -307,38 +310,7 @@ void DemoApp::Update()
 		if (Tweakables::gScreenshotNextFrame)
 		{
 			Tweakables::gScreenshotNextFrame = false;
-			TaskContext taskContext;
-			TaskQueue::Execute([this](uint32)
-				{
-					CommandContext* pScreenshotContext = m_pDevice->AllocateCommandContext();
-					Ref<Texture> pSource = m_pColorOutput;
-					uint32 width = pSource->GetWidth();
-					uint32 height = pSource->GetHeight();
-
-					D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-					D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
-					m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
-					Ref<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
-					pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_COPY_SOURCE);
-					pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
-
-					SyncPoint fence = pScreenshotContext->Execute();
-					fence.Wait();
-
-					char* pData = (char*)pScreenshotBuffer->GetMappedData();
-					Image img(width, height, 1, ResourceFormat::RGBA8_UNORM, 1);
-					uint32 imageRowPitch = width * 4;
-					uint32 targetOffset = 0;
-					for (uint32 i = 0; i < height; ++i)
-					{
-						img.SetData((uint32*)pData, targetOffset, imageRowPitch);
-						pData += textureFootprint.Footprint.RowPitch;
-						targetOffset += imageRowPitch;
-					}
-
-					Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-					img.Save(Sprintf("%sScreenshot_%s.jpg", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
-				}, taskContext);
+			MakeScreenshot();
 		}
 
 		const SceneView* pView = &m_SceneData;
@@ -463,7 +435,7 @@ void DemoApp::Update()
 					.Bind([=](CommandContext& context)
 						{
 							Texture* pSkyTexture = pSky->Get();
-							context.SetComputeRootSignature(m_pCommonRS);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pRenderSkyPSO);
 
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pSkyTexture));
@@ -479,63 +451,48 @@ void DemoApp::Update()
 			// Export makes sure the target texture is filled in during pass execution.
 			graph.Export(pSky, &pViewMut->pSky, TextureFlag::ShaderResource);
 
-
 			RasterResult rasterResult;
 			if (m_RenderPath != RenderPath::PathTracing)
 			{
+				RG_GRAPH_SCOPE("Shadow Depths", graph);
+				for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 				{
-					RG_GRAPH_SCOPE("Shadow Depths", graph);
-					for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
+					const ShadowView& shadowView = pView->ShadowViews[i];
+					RG_GRAPH_SCOPE(Sprintf("View %d (%s - Cascade %d)", i, gLightTypeStr[(int)shadowView.pLight->Type], shadowView.ViewIndex).c_str(), graph);
+
+					RGTexture* pShadowmap = graph.Import(pView->ShadowViews[i].pDepthTexture);
+					if (Tweakables::gShadowsGPUCull)
 					{
-						const ShadowView& shadowView = pView->ShadowViews[i];
+						RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
+						context.EnableOcclusionCulling = Tweakables::gShadowsOcclusionCulling;
+						RasterResult result;
+						m_pMeshletRasterizer->Render(graph, pView, &shadowView.View, context, result);
+						if(Tweakables::gCullShadowsDebugStats == (int)i)
+							m_pMeshletRasterizer->PrintStats(graph, Vector2(400, 20), pView, context);
+					}
+					else
+					{
+						graph.AddPass("Raster", RGPassFlag::Raster)
+							.DepthStencil(pShadowmap, RenderPassDepthFlags::Clear)
+							.Bind([=](CommandContext& context)
+								{
+									context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-						auto LightTypeToString = [](LightType type) -> const char* {
-							switch (type)
-							{
-							case LightType::Directional:	return "Directional";
-							case LightType::Point:			return "Point";
-							case LightType::Spot:			return "Spot";
-							default:						return "INVALID";
-							}
-						};
-						const std::string passName = Sprintf("View %d (%s - Cascade %d)", i, LightTypeToString(shadowView.pLight->Type), shadowView.ViewIndex);
+									const ShadowView& view = pView->ShadowViews[i];
+									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &view.View, pShadowmap->Get()));
 
-						RGTexture* pShadowmap = graph.Import(pView->ShadowViews[i].pDepthTexture);
-
-						RG_GRAPH_SCOPE(passName.c_str(), graph);
-						if (Tweakables::gShadowsGPUCull)
-						{
-							RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
-							context.EnableOcclusionCulling = Tweakables::gShadowsOcclusionCulling;
-							RasterResult result;
-							m_pMeshletRasterizer->Render(graph, pView, &shadowView.View, context, result);
-							if(Tweakables::gCullShadowsDebugStats == (int)i)
-								m_pMeshletRasterizer->PrintStats(graph, Vector2(400, 20), pView, context);
-						}
-						else
-						{
-							graph.AddPass("Raster", RGPassFlag::Raster)
-								.DepthStencil(pShadowmap, RenderPassDepthFlags::Clear)
-								.Bind([=](CommandContext& context)
 									{
-										context.SetGraphicsRootSignature(m_pCommonRS);
-										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-										const ShadowView& view = pView->ShadowViews[i];
-										context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &view.View, pShadowmap->Get()));
-
-										{
-											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
-											context.SetPipelineState(m_pShadowsOpaquePSO);
-											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::Opaque);
-										}
-										{
-											PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
-											context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
-										}
-									});
-						}
+										PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
+										context.SetPipelineState(m_pShadowsOpaquePSO);
+										Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::Opaque);
+									}
+									{
+										PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
+										context.SetPipelineState(m_pShadowsAlphaMaskPSO);
+										Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
+									}
+								});
 					}
 				}
 
@@ -561,7 +518,7 @@ void DemoApp::Update()
 							.Bind([=](CommandContext& context)
 								{
 									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-									context.SetGraphicsRootSignature(m_pCommonRS);
+									context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pDepth->Get()));
 									{
@@ -598,7 +555,7 @@ void DemoApp::Update()
 								Texture* pSource = sceneTextures.pDepth->Get();
 								Texture* pTarget = pReductionTarget->Get();
 
-								context.SetComputeRootSignature(m_pCommonRS);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(pSource->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
 								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
@@ -619,7 +576,7 @@ void DemoApp::Update()
 							.Bind([=](CommandContext& context)
 								{
 									Texture* pTarget = pReductionTarget->Get();
-									context.SetComputeRootSignature(m_pCommonRS);
+									context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 									context.SetPipelineState(m_pReduceDepthPSO);
 									context.BindResources(2, pTarget->GetUAV());
 									context.BindResources(3, pReductionSource->Get()->GetSRV());
@@ -657,7 +614,7 @@ void DemoApp::Update()
 						{
 							Texture* pVelocity = sceneTextures.pVelocity->Get();
 
-							context.SetComputeRootSignature(m_pCommonRS);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pCameraMotionPSO);
 
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pVelocity));
@@ -704,7 +661,7 @@ void DemoApp::Update()
 							{
 								Texture* pColorTarget = sceneTextures.pColorTarget->Get();
 
-								context.SetGraphicsRootSignature(m_pCommonRS);
+								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pVisibilityShadingGraphicsPSO);
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -737,7 +694,7 @@ void DemoApp::Update()
 					.Bind([=](CommandContext& context)
 						{
 							context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-							context.SetGraphicsRootSignature(m_pCommonRS);
+							context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pSkyboxPSO);
 
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
@@ -773,7 +730,7 @@ void DemoApp::Update()
 						.Bind([=](CommandContext& context)
 							{
 								Texture* pTarget = pTaaTarget->Get();
-								context.SetComputeRootSignature(m_pCommonRS);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pTemporalResolvePSO);
 
 								struct
@@ -798,6 +755,7 @@ void DemoApp::Update()
 
 					sceneTextures.pColorTarget = pTaaTarget;
 				}
+				graph.Export(sceneTextures.pColorTarget, &m_pColorHistory, TextureFlag::ShaderResource);
 
 				// Probes contain irradiance data, and need to go through tonemapper.
 				if (Tweakables::gVisualizeDDGI)
@@ -810,237 +768,15 @@ void DemoApp::Update()
 				m_pPathTracing->Render(graph, pView, sceneTextures.pColorTarget);
 			}
 
-			graph.Export(sceneTextures.pColorTarget, &m_pColorHistory, TextureFlag::ShaderResource);
-
 			/*
 				Post Processing
 			*/
 
-			RGBuffer* pAverageLuminance = RGUtils::CreatePersistent(graph, "Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)), &m_pAverageLuminance, true);
-			{
-				RG_GRAPH_SCOPE("Eye Adaptation", graph);
-
-				TextureDesc sourceDesc = sceneTextures.pColorTarget->GetDesc();
-				sourceDesc.Width = Math::DivideAndRoundUp(sourceDesc.Width, 4);
-				sourceDesc.Height = Math::DivideAndRoundUp(sourceDesc.Height, 4);
-				RGTexture* pDownscaleTarget = graph.Create("Downscaled HDR Target", sourceDesc);
-
-				graph.AddPass("Downsample Color", RGPassFlag::Compute)
-					.Read(sceneTextures.pColorTarget)
-					.Write(pDownscaleTarget)
-					.Bind([=](CommandContext& context)
-						{
-							Texture* pTarget = pDownscaleTarget->Get();
-
-							context.SetComputeRootSignature(m_pCommonRS);
-							context.SetPipelineState(m_pDownsampleColorPSO);
-
-							struct
-							{
-								Vector2i TargetDimensions;
-								Vector2 TargetDimensionsInv;
-							} parameters;
-							parameters.TargetDimensions.x = pTarget->GetWidth();
-							parameters.TargetDimensions.y = pTarget->GetHeight();
-							parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
-
-							context.BindRootCBV(0, parameters);
-							context.BindResources(2, pTarget->GetUAV());
-							context.BindResources(3, sceneTextures.pColorTarget->Get()->GetSRV());
-
-							context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.TargetDimensions.x, 8, parameters.TargetDimensions.y, 8));
-						});
-
-				RGBuffer* pLuminanceHistogram = graph.Create("Luminance Histogram", BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
-				graph.AddPass("Luminance Histogram", RGPassFlag::Compute)
-					.Read(pDownscaleTarget)
-					.Write(pLuminanceHistogram)
-					.Bind([=](CommandContext& context)
-						{
-							Texture* pColorSource = pDownscaleTarget->Get();
-							Buffer* pHistogram = pLuminanceHistogram->Get();
-
-							context.ClearUAVu(pHistogram->GetUAV());
-							context.InsertUAVBarrier(pHistogram);
-
-							context.SetComputeRootSignature(m_pCommonRS);
-							context.SetPipelineState(m_pLuminanceHistogramPSO);
-
-							struct
-							{
-								uint32 Width;
-								uint32 Height;
-								float MinLogLuminance;
-								float OneOverLogLuminanceRange;
-							} parameters;
-							parameters.Width = pColorSource->GetWidth();
-							parameters.Height = pColorSource->GetHeight();
-							parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
-							parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get());
-
-							context.BindRootCBV(0, parameters);
-							context.BindResources(2, pHistogram->GetUAV());
-							context.BindResources(3, pColorSource->GetSRV());
-
-							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorSource->GetWidth(), 16, pColorSource->GetHeight(), 16));
-						});
-
-				uint32 numPixels = sourceDesc.Width * sourceDesc.Height;
-
-				graph.AddPass("Average Luminance", RGPassFlag::Compute)
-					.Read(pLuminanceHistogram)
-					.Write(pAverageLuminance)
-					.Bind([=](CommandContext& context)
-						{
-							context.SetComputeRootSignature(m_pCommonRS);
-							context.SetPipelineState(m_pAverageLuminancePSO);
-
-							struct
-							{
-								int32 PixelCount;
-								float MinLogLuminance;
-								float LogLuminanceRange;
-								float TimeDelta;
-								float Tau;
-							} parameters;
-
-							parameters.PixelCount = numPixels;
-							parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
-							parameters.LogLuminanceRange = Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get();
-							parameters.TimeDelta = Time::DeltaTime();
-							parameters.Tau = Tweakables::gTau.Get();
-
-							context.BindRootCBV(0, parameters);
-							context.BindResources(2, pAverageLuminance->Get()->GetUAV());
-							context.BindResources(3, pLuminanceHistogram->Get()->GetSRV());
-
-							context.Dispatch(1);
-						});
-
-				if (Tweakables::gDrawHistogram.Get())
-				{
-					RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_pDebugHistogramTexture, true);
-					graph.AddPass("Draw Histogram", RGPassFlag::Compute)
-						.Read({ pLuminanceHistogram, pAverageLuminance })
-						.Write(pHistogramDebugTexture)
-						.Bind([=](CommandContext& context)
-							{
-								context.ClearUAVf(pHistogramDebugTexture->Get()->GetUAV());
-								context.InsertUAVBarrier(pHistogramDebugTexture->Get());
-
-								context.SetPipelineState(m_pDrawHistogramPSO);
-								context.SetComputeRootSignature(m_pCommonRS);
-
-								struct
-								{
-									float MinLogLuminance;
-									float InverseLogLuminanceRange;
-									Vector2 InvTextureDimensions;
-								} parameters;
-
-								parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
-								parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get());
-								parameters.InvTextureDimensions.x = 1.0f / pHistogramDebugTexture->GetDesc().Width;
-								parameters.InvTextureDimensions.y = 1.0f / pHistogramDebugTexture->GetDesc().Height;
-
-								context.BindRootCBV(0, parameters);
-								context.BindResources(2, pHistogramDebugTexture->Get()->GetUAV());
-								context.BindResources(3, {
-									pLuminanceHistogram->Get()->GetSRV(),
-									pAverageLuminance->Get()->GetSRV(),
-									});
-
-								context.Dispatch(1, pLuminanceHistogram->Get()->GetNumElements());
-							});
-				}
-			}
+			RGBuffer* pAverageLuminance = ComputeExposure(graph, pView, sceneTextures.pColorTarget);
 
 			RGTexture* pBloomTexture = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
-
 			if (Tweakables::gBloom.Get())
-			{
-				RG_GRAPH_SCOPE("Bloom", graph);
-
-				auto ComputeNumMips = [](uint32 width, uint32 height) -> uint32
-				{
-					return (uint32)Math::Floor(log2f((float)Math::Max(width, height))) + 1u;
-				};
-
-				Vector2u bloomDimensions = Vector2u(viewDimensions.x >> 1, viewDimensions.y >> 1);
-				const uint32 mipBias = 3;
-				uint32 numMips = ComputeNumMips(bloomDimensions.x, bloomDimensions.y) - mipBias;
-				RGTexture* pDownscaleTarget = graph.Create("Downscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, numMips));
-
-				RGTexture* pSourceTexture = sceneTextures.pColorTarget;
-				for (uint32 i = 0; i < numMips; ++i)
-				{
-					Vector2u targetDimensions(Math::Max(1u, bloomDimensions.x >> i), Math::Max(1u, bloomDimensions.y >> i));
-					graph.AddPass(Sprintf("Downsample %d [%dx%d > %dx%d]", i, targetDimensions.x << 1, targetDimensions.y << 1, targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
-						.Read(i == 0 ? pSourceTexture : nullptr)
-						.Write(pDownscaleTarget)
-						.Bind([=](CommandContext& context)
-							{
-								context.SetComputeRootSignature(m_pCommonRS);
-								context.SetPipelineState(i == 0 ? m_pBloomDownsampleKarisAveragePSO : m_pBloomDownsamplePSO);
-								struct
-								{
-									Vector2 TargetDimensionsInv;
-									uint32 SourceMip;
-								} parameters;
-								parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
-								parameters.SourceMip = i == 0 ? 0 : i - 1;
-
-								context.BindRootCBV(0, parameters);
-								context.BindResources(2, pDownscaleTarget->Get()->GetUAV(i));
-								context.BindResources(3, pSourceTexture->Get()->GetSRV());
-								context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
-								context.InsertUAVBarrier();
-							});
-
-					pSourceTexture = pDownscaleTarget;
-				}
-
-				numMips = Math::Max(2u, numMips);
-				RGTexture* pUpscaleTarget = graph.Create("Upscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, numMips - 1));
-				RGTexture* pPreviousSource = pDownscaleTarget;
-
-				for (int32 i = numMips - 2; i >= 0; --i)
-				{
-					Vector2u targetDimensions(Math::Max(1u, bloomDimensions.x >> i), Math::Max(1u, bloomDimensions.y >> i));
-					graph.AddPass(Sprintf("UpsampleCombine %d [%dx%d > %dx%d]", numMips - 2 - i, Math::Max(1u, targetDimensions.x >> 1), Math::Max(1u, targetDimensions.y >> 1), targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
-						.Read(pDownscaleTarget)
-						.Write(pUpscaleTarget)
-						.Bind([=](CommandContext& context)
-							{
-								context.SetComputeRootSignature(m_pCommonRS);
-								context.SetPipelineState(m_pBloomUpsamplePSO);
-								struct
-								{
-									Vector2 TargetDimensionsInv;
-									uint32 SourceCurrentMip;
-									uint32 SourcePreviousMip;
-									float Radius;
-								} parameters;
-								parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
-								parameters.SourceCurrentMip = i;
-								parameters.SourcePreviousMip = i + 1;
-								parameters.Radius = Tweakables::gBloomInteralBlendFactor;
-
-								context.BindRootCBV(0, parameters);
-								context.BindResources(2, pUpscaleTarget->Get()->GetUAV(i));
-								context.BindResources(3, {
-									pDownscaleTarget->Get()->GetSRV(),
-									pPreviousSource->Get()->GetSRV(),
-									});
-								context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
-								context.InsertUAVBarrier();
-							});
-
-					pPreviousSource = pUpscaleTarget;
-				}
-
-				pBloomTexture = pUpscaleTarget;
-			}
+				pBloomTexture = ComputeBloom(graph, pView, sceneTextures.pColorTarget);
 
 			RGTexture* pTonemapTarget = graph.Create("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
 
@@ -1066,7 +802,7 @@ void DemoApp::Update()
 						parameters.LensDirtTint = m_LensDirtTint;
 
 						context.SetPipelineState(m_pToneMapPSO);
-						context.SetComputeRootSignature(m_pCommonRS);
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
 						context.BindRootCBV(0, parameters);
 						context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
@@ -1105,7 +841,7 @@ void DemoApp::Update()
 							{
 								Texture* pColorTarget = sceneTextures.pColorTarget->Get();
 
-								context.SetComputeRootSignature(m_pCommonRS);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pVisibilityDebugRenderPSO);
 
 								uint32 mode = Tweakables::gVisibilityDebugMode;
@@ -1136,11 +872,11 @@ void DemoApp::Update()
 		}
 
 		RGGraphOptions graphOptions;
-		graphOptions.Jobify = Tweakables::gRenderGraphJobify;
-		graphOptions.PassCulling = Tweakables::gRenderGraphPassCulling;
-		graphOptions.ResourceAliasing = Tweakables::gRenderGraphResourceAliasing;
-		graphOptions.StateTracking = Tweakables::gRenderGraphStateTracking;
-		graphOptions.CommandlistGroupSize = Tweakables::gRenderGraphPassGroupSize;
+		graphOptions.Jobify					= Tweakables::gRenderGraphJobify;
+		graphOptions.PassCulling			= Tweakables::gRenderGraphPassCulling;
+		graphOptions.ResourceAliasing		= Tweakables::gRenderGraphResourceAliasing;
+		graphOptions.StateTracking			= Tweakables::gRenderGraphStateTracking;
+		graphOptions.CommandlistGroupSize	= Tweakables::gRenderGraphPassGroupSize;
 
 		// Compile graph
 		graph.Compile(*m_RenderGraphPool, graphOptions);
@@ -1179,14 +915,6 @@ void DemoApp::OnResizeViewport(uint32 width, uint32 height)
 
 void DemoApp::InitializePipelines()
 {
-	// Common Root Signature - Make it 12 DWORDs as is often recommended by IHVs
-	m_pCommonRS = new RootSignature(m_pDevice);
-	m_pCommonRS->AddRootConstants(0, 8);
-	m_pCommonRS->AddRootCBV(100);
-	m_pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	m_pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-	m_pCommonRS->Finalize("Common");
-
 	// Depth-only raster PSOs
 
 	{
@@ -1195,8 +923,7 @@ void DemoApp::InitializePipelines()
 
 		{
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pCommonRS);
-			psoDesc.SetRootSignature(m_pCommonRS);
+			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
 			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
 			psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
@@ -1213,8 +940,7 @@ void DemoApp::InitializePipelines()
 
 		{
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(m_pCommonRS);
-			psoDesc.SetRootSignature(m_pCommonRS);
+			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
 			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
 			psoDesc.SetDepthOnlyTarget(GraphicsCommon::ShadowFormat, 1);
@@ -1233,24 +959,24 @@ void DemoApp::InitializePipelines()
 
 	ShaderDefineHelper tonemapperDefines;
 	tonemapperDefines.Set("NUM_HISTOGRAM_BINS", 256);
-	m_pLuminanceHistogramPSO		= m_pDevice->CreateComputePipeline(m_pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
-	m_pDrawHistogramPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
-	m_pAverageLuminancePSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
-	m_pToneMapPSO					= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
-	m_pDownsampleColorPSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/DownsampleColor.hlsl", "CSMain");
+	m_pLuminanceHistogramPSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
+	m_pDrawHistogramPSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
+	m_pAverageLuminancePSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
+	m_pToneMapPSO					= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
+	m_pDownsampleColorPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/DownsampleColor.hlsl", "CSMain");
 
-	m_pPrepareReduceDepthPSO		= m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
-	m_pPrepareReduceDepthMsaaPSO	= m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
-	m_pReduceDepthPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
+	m_pPrepareReduceDepthPSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
+	m_pPrepareReduceDepthMsaaPSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
+	m_pReduceDepthPSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
 
-	m_pCameraMotionPSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
-	m_pTemporalResolvePSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
+	m_pCameraMotionPSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
+	m_pTemporalResolvePSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
 
 
 	//Sky
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
 		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
 		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, GraphicsCommon::DepthStencilFormat, 1);
@@ -1259,18 +985,18 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
 
-		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "ProceduralSky.hlsl", "ComputeSkyCS");
+		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ProceduralSky.hlsl", "ComputeSkyCS");
 	}
 
 	//Bloom
-	m_pBloomDownsamplePSO				= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
-	m_pBloomDownsampleKarisAveragePSO	= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", {"KARIS_AVERAGE=1"});
-	m_pBloomUpsamplePSO					= m_pDevice->CreateComputePipeline(m_pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
+	m_pBloomDownsamplePSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
+	m_pBloomDownsampleKarisAveragePSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", {"KARIS_AVERAGE=1"});
+	m_pBloomUpsamplePSO					= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
 
 	//Visibility Shading
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
 		psoDesc.SetPixelShader("VisibilityShading.hlsl", "ShadePS");
 		psoDesc.SetRenderTargetFormats(GraphicsCommon::GBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
@@ -1281,7 +1007,7 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Visibility Shading");
 		m_pVisibilityShadingGraphicsPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
-	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(m_pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
+	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
 }
 
 void DemoApp::UpdateImGui()
@@ -1645,6 +1371,268 @@ void DemoApp::UpdateImGui()
 		}
 	}
 	ImGui::End();
+}
+
+RGTexture* DemoApp::ComputeBloom(RGGraph& graph, const SceneView* pView, RGTexture* pColor)
+{
+	RG_GRAPH_SCOPE("Bloom", graph);
+
+	auto ComputeNumMips = [](uint32 width, uint32 height) -> uint32
+		{
+			return (uint32)Math::Floor(log2f((float)Math::Max(width, height))) + 1u;
+		};
+
+	Vector2u bloomDimensions = Vector2u(pColor->GetDesc().Width >> 1, pColor->GetDesc().Height >> 1);
+	const uint32 mipBias = 3;
+	uint32 numMips = ComputeNumMips(bloomDimensions.x, bloomDimensions.y) - mipBias;
+	RGTexture* pDownscaleTarget = graph.Create("Downscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, numMips));
+
+	RGTexture* pSourceTexture = pColor;
+	for (uint32 i = 0; i < numMips; ++i)
+	{
+		Vector2u targetDimensions(Math::Max(1u, bloomDimensions.x >> i), Math::Max(1u, bloomDimensions.y >> i));
+		graph.AddPass(Sprintf("Downsample %d [%dx%d > %dx%d]", i, targetDimensions.x << 1, targetDimensions.y << 1, targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
+			.Read(i == 0 ? pSourceTexture : nullptr)
+			.Write(pDownscaleTarget)
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+					context.SetPipelineState(i == 0 ? m_pBloomDownsampleKarisAveragePSO : m_pBloomDownsamplePSO);
+					struct
+					{
+						Vector2 TargetDimensionsInv;
+						uint32 SourceMip;
+					} parameters;
+					parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
+					parameters.SourceMip = i == 0 ? 0 : i - 1;
+
+					context.BindRootCBV(0, parameters);
+					context.BindResources(2, pDownscaleTarget->Get()->GetUAV(i));
+					context.BindResources(3, pSourceTexture->Get()->GetSRV());
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
+					context.InsertUAVBarrier();
+				});
+
+		pSourceTexture = pDownscaleTarget;
+	}
+
+	numMips = Math::Max(2u, numMips);
+	RGTexture* pUpscaleTarget = graph.Create("Upscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, numMips - 1));
+	RGTexture* pPreviousSource = pDownscaleTarget;
+
+	for (int32 i = numMips - 2; i >= 0; --i)
+	{
+		Vector2u targetDimensions(Math::Max(1u, bloomDimensions.x >> i), Math::Max(1u, bloomDimensions.y >> i));
+		graph.AddPass(Sprintf("UpsampleCombine %d [%dx%d > %dx%d]", numMips - 2 - i, Math::Max(1u, targetDimensions.x >> 1), Math::Max(1u, targetDimensions.y >> 1), targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
+			.Read(pDownscaleTarget)
+			.Write(pUpscaleTarget)
+			.Bind([=](CommandContext& context)
+				{
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+					context.SetPipelineState(m_pBloomUpsamplePSO);
+					struct
+					{
+						Vector2 TargetDimensionsInv;
+						uint32 SourceCurrentMip;
+						uint32 SourcePreviousMip;
+						float Radius;
+					} parameters;
+					parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
+					parameters.SourceCurrentMip = i;
+					parameters.SourcePreviousMip = i + 1;
+					parameters.Radius = Tweakables::gBloomInteralBlendFactor;
+
+					context.BindRootCBV(0, parameters);
+					context.BindResources(2, pUpscaleTarget->Get()->GetUAV(i));
+					context.BindResources(3, {
+						pDownscaleTarget->Get()->GetSRV(),
+						pPreviousSource->Get()->GetSRV(),
+						});
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
+					context.InsertUAVBarrier();
+				});
+
+		pPreviousSource = pUpscaleTarget;
+	}
+
+	return pUpscaleTarget;
+}
+
+RGBuffer* DemoApp::ComputeExposure(RGGraph& graph, const SceneView* pView, RGTexture* pColor)
+{
+	RG_GRAPH_SCOPE("Auto Exposure", graph);
+	RGBuffer* pAverageLuminance = RGUtils::CreatePersistent(graph, "Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)), &m_pAverageLuminance, true);
+
+	TextureDesc sourceDesc = pColor->GetDesc();
+	sourceDesc.Width = Math::DivideAndRoundUp(sourceDesc.Width, 4);
+	sourceDesc.Height = Math::DivideAndRoundUp(sourceDesc.Height, 4);
+	RGTexture* pDownscaleTarget = graph.Create("Downscaled HDR Target", sourceDesc);
+
+	graph.AddPass("Downsample Color", RGPassFlag::Compute)
+		.Read(pColor)
+		.Write(pDownscaleTarget)
+		.Bind([=](CommandContext& context)
+			{
+				Texture* pTarget = pDownscaleTarget->Get();
+
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetPipelineState(m_pDownsampleColorPSO);
+
+				struct
+				{
+					Vector2i TargetDimensions;
+					Vector2 TargetDimensionsInv;
+				} parameters;
+				parameters.TargetDimensions.x = pTarget->GetWidth();
+				parameters.TargetDimensions.y = pTarget->GetHeight();
+				parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
+
+				context.BindRootCBV(0, parameters);
+				context.BindResources(2, pTarget->GetUAV());
+				context.BindResources(3, pColor->Get()->GetSRV());
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.TargetDimensions.x, 8, parameters.TargetDimensions.y, 8));
+			});
+
+	RGBuffer* pLuminanceHistogram = graph.Create("Luminance Histogram", BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
+	graph.AddPass("Luminance Histogram", RGPassFlag::Compute)
+		.Read(pDownscaleTarget)
+		.Write(pLuminanceHistogram)
+		.Bind([=](CommandContext& context)
+			{
+				Texture* pColorSource = pDownscaleTarget->Get();
+				Buffer* pHistogram = pLuminanceHistogram->Get();
+
+				context.ClearUAVu(pHistogram->GetUAV());
+				context.InsertUAVBarrier(pHistogram);
+
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetPipelineState(m_pLuminanceHistogramPSO);
+
+				struct
+				{
+					uint32 Width;
+					uint32 Height;
+					float MinLogLuminance;
+					float OneOverLogLuminanceRange;
+				} parameters;
+				parameters.Width = pColorSource->GetWidth();
+				parameters.Height = pColorSource->GetHeight();
+				parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
+				parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get());
+
+				context.BindRootCBV(0, parameters);
+				context.BindResources(2, pHistogram->GetUAV());
+				context.BindResources(3, pColorSource->GetSRV());
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorSource->GetWidth(), 16, pColorSource->GetHeight(), 16));
+			});
+
+	uint32 numPixels = sourceDesc.Width * sourceDesc.Height;
+
+	graph.AddPass("Average Luminance", RGPassFlag::Compute)
+		.Read(pLuminanceHistogram)
+		.Write(pAverageLuminance)
+		.Bind([=](CommandContext& context)
+			{
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetPipelineState(m_pAverageLuminancePSO);
+
+				struct
+				{
+					int32 PixelCount;
+					float MinLogLuminance;
+					float LogLuminanceRange;
+					float TimeDelta;
+					float Tau;
+				} parameters;
+
+				parameters.PixelCount = numPixels;
+				parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
+				parameters.LogLuminanceRange = Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get();
+				parameters.TimeDelta = Time::DeltaTime();
+				parameters.Tau = Tweakables::gTau.Get();
+
+				context.BindRootCBV(0, parameters);
+				context.BindResources(2, pAverageLuminance->Get()->GetUAV());
+				context.BindResources(3, pLuminanceHistogram->Get()->GetSRV());
+
+				context.Dispatch(1);
+			});
+
+	if (Tweakables::gDrawHistogram.Get())
+	{
+		RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_pDebugHistogramTexture, true);
+		graph.AddPass("Draw Histogram", RGPassFlag::Compute)
+			.Read({ pLuminanceHistogram, pAverageLuminance })
+			.Write(pHistogramDebugTexture)
+			.Bind([=](CommandContext& context)
+				{
+					context.ClearUAVf(pHistogramDebugTexture->Get()->GetUAV());
+					context.InsertUAVBarrier(pHistogramDebugTexture->Get());
+
+					context.SetPipelineState(m_pDrawHistogramPSO);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+
+					struct
+					{
+						float MinLogLuminance;
+						float InverseLogLuminanceRange;
+						Vector2 InvTextureDimensions;
+					} parameters;
+
+					parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
+					parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get());
+					parameters.InvTextureDimensions.x = 1.0f / pHistogramDebugTexture->GetDesc().Width;
+					parameters.InvTextureDimensions.y = 1.0f / pHistogramDebugTexture->GetDesc().Height;
+
+					context.BindRootCBV(0, parameters);
+					context.BindResources(2, pHistogramDebugTexture->Get()->GetUAV());
+					context.BindResources(3, {
+						pLuminanceHistogram->Get()->GetSRV(),
+						pAverageLuminance->Get()->GetSRV(),
+						});
+
+					context.Dispatch(1, pLuminanceHistogram->Get()->GetNumElements());
+				});
+	}
+	return pAverageLuminance;
+}
+
+void DemoApp::MakeScreenshot()
+{
+	TaskContext taskContext;
+	TaskQueue::Execute([this](uint32)
+		{
+			CommandContext* pScreenshotContext = m_pDevice->AllocateCommandContext();
+			Ref<Texture> pSource = m_pColorOutput;
+			uint32 width = pSource->GetWidth();
+			uint32 height = pSource->GetHeight();
+
+			D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
+			D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
+			m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
+			Ref<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
+			pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_COPY_SOURCE);
+			pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
+
+			SyncPoint fence = pScreenshotContext->Execute();
+			fence.Wait();
+
+			char* pData = (char*)pScreenshotBuffer->GetMappedData();
+			Image img(width, height, 1, ResourceFormat::RGBA8_UNORM, 1);
+			uint32 imageRowPitch = width * 4;
+			uint32 targetOffset = 0;
+			for (uint32 i = 0; i < height; ++i)
+			{
+				img.SetData((uint32*)pData, targetOffset, imageRowPitch);
+				pData += textureFootprint.Footprint.RowPitch;
+				targetOffset += imageRowPitch;
+			}
+
+			Paths::CreateDirectoryTree(Paths::ScreenshotDir());
+			img.Save(Sprintf("%sScreenshot_%s.jpg", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
+		}, taskContext);
 }
 
 

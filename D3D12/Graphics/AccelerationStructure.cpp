@@ -18,23 +18,22 @@ namespace Tweakables
 	extern ConsoleVariable<float> gTLASBoundsThreshold;
 }
 
-static GlobalResource<RootSignature> gCommonRS;
-static GlobalResource<PipelineState> gUpdateTLASPSO;
+
+void AccelerationStructure::Init(GraphicsDevice* pDevice)
+{
+	m_pCommonRS = new RootSignature(pDevice);
+	m_pCommonRS->AddRootConstants(0, 1);
+	m_pCommonRS->AddRootCBV(100);
+	m_pCommonRS->AddRootUAV(0);
+	m_pCommonRS->AddRootSRV(0);
+	m_pCommonRS->Finalize("Update TLAS");
+
+	m_pUpdateTLASPSO = pDevice->CreateComputePipeline(m_pCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
+}
 
 void AccelerationStructure::Build(CommandContext& context, const SceneView& view)
 {
 	PROFILE_CPU_SCOPE();
-	if (!gCommonRS)
-	{
-		gCommonRS = new RootSignature(context.GetParent());
-		gCommonRS->AddRootConstants(0, 1);
-		gCommonRS->AddRootCBV(100);
-		gCommonRS->AddRootUAV(0);
-		gCommonRS->AddRootSRV(0);
-		gCommonRS->Finalize("Update TLAS");
-
-		gUpdateTLASPSO = context.GetParent()->CreateComputePipeline(gCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
-	}
 
 	GraphicsDevice* pDevice = context.GetParent();
 	if (pDevice->GetCapabilities().SupportsRaytracing())
@@ -181,8 +180,8 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetComputeRootSignature(gCommonRS);
-				context.SetPipelineState(gUpdateTLASPSO);
+				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetPipelineState(m_pUpdateTLASPSO);
 				context.BindRootCBV(0, (uint32)blasInstances.size());
 				context.BindRootCBV(1, Renderer::GetViewUniforms(&view));
 				context.BindRootUAV(2, m_pBLASInstancesTargetBuffer->GetGpuHandle());

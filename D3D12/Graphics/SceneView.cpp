@@ -295,6 +295,7 @@ namespace GraphicsCommon
 	Ref<CommandSignature> pIndirectDrawSignature;
 	Ref<CommandSignature> pIndirectDispatchSignature;
 	Ref<CommandSignature> pIndirectDispatchMeshSignature;
+	Ref<RootSignature> pCommonRS;
 
 	void Create(GraphicsDevice* pDevice)
 	{
@@ -353,6 +354,14 @@ namespace GraphicsCommon
 			sigDesc.AddDispatchMesh();
 			pIndirectDispatchMeshSignature = pDevice->CreateCommandSignature(sigDesc, "Default Indirect Dispatch Mesh");
 		}
+
+		// Common Root Signature - Make it 12 DWORDs as is often recommended by IHVs
+		pCommonRS = new RootSignature(pDevice);
+		pCommonRS->AddRootConstants(0, 8);
+		pCommonRS->AddRootCBV(100);
+		pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+		pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+		pCommonRS->Finalize("Common");
 	}
 
 	void Destroy()
@@ -365,6 +374,7 @@ namespace GraphicsCommon
 		pIndirectDispatchSignature.Reset();
 		pIndirectDrawSignature.Reset();
 		pIndirectDispatchMeshSignature.Reset();
+		pCommonRS.Reset();
 	}
 
 	Texture* GetDefaultTexture(DefaultTexture type)

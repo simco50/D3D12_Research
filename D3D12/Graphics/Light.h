@@ -9,6 +9,13 @@ enum class LightType
 	MAX
 };
 
+static constexpr const char* gLightTypeStr[] = {
+	"Directional",
+	"Point",
+	"Spot",
+	"Invalid"
+};
+
 struct Light
 {
 	LightType Type = LightType::MAX;

@@ -199,6 +199,7 @@ namespace GraphicsCommon
 	extern Ref<CommandSignature> pIndirectDrawIndexedSignature;
 	extern Ref<CommandSignature> pIndirectDispatchSignature;
 	extern Ref<CommandSignature> pIndirectDispatchMeshSignature;
+	extern Ref<RootSignature> pCommonRS;
 
 	Ref<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName = nullptr);
 	Ref<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName = nullptr);

@@ -262,6 +262,8 @@ void CullMeshletsCS(
 	MeshletCull(candidate, MeshNodes);
 }
 
+#if !OCCLUSION_FIRST_PASS
+
 [Shader("node")]
 [NodeLaunch("broadcasting")]
 [NodeMaxDispatchGrid(128, 1, 1)]
@@ -307,6 +309,10 @@ void KickPhase2NodesCS(
 	}
 }
 
+#endif
+
+#if __SHADER_TARGET_STAGE == __SHADER_STAGE_COMPUTE
+
 [shader("compute")]
 [numthreads(1, 1, 1)]
 void ClearRasterBins()
@@ -319,6 +325,7 @@ void ClearRasterBins()
 	}
 }
 
+#endif
 
 // Obviously this is very stupid, but since there are no mesh nodes yet,
 // do this just to hook it up to the existing mesh shaders as a test

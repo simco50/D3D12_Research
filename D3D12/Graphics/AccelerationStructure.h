@@ -9,11 +9,15 @@ struct SubMesh;
 class AccelerationStructure
 {
 public:
+	void Init(GraphicsDevice* pDevice);
 	void Build(CommandContext& context, const SceneView& view);
 	ShaderResourceView* GetSRV() const;
 
 private:
 	void ProcessCompaction(CommandContext& context);
+
+	Ref<RootSignature> m_pCommonRS;
+	Ref<PipelineState> m_pUpdateTLASPSO;
 
 	Ref<Buffer> m_pTLAS;
 	Ref<Buffer> m_pScratch;

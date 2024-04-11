@@ -57,6 +57,10 @@ private:
 
 	void UpdateImGui();
 
+	RGTexture* ComputeBloom(RGGraph& graph, const SceneView* pView, RGTexture* pColor);
+	RGBuffer* ComputeExposure(RGGraph& graph, const SceneView* pView, RGTexture* pColor);
+	void MakeScreenshot();
+
 	void CreateShadowViews(SceneView& view, World& world);
 	
 	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
@@ -93,8 +97,6 @@ private:
 
 	World m_World;
 	SceneView m_SceneData;
-
-	Ref<RootSignature> m_pCommonRS;
 
 	//Shadow mapping
 	Ref<PipelineState> m_pShadowsOpaquePSO;

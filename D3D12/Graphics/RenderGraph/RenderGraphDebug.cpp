@@ -468,5 +468,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		FileStream file;
 		if (file.Open(fullPath.c_str(), FileMode::Write))
 			file.Write(output.c_str(), (uint32)output.length());
+
+		ShellExecuteA(nullptr, "open", fullPath.c_str(), nullptr, nullptr, SW_SHOW);
 	}
 }

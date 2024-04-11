@@ -13,16 +13,9 @@ DDGI::DDGI(GraphicsDevice* pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		m_pCommonRS = new RootSignature(pDevice);
-		m_pCommonRS->AddRootConstants(0, 8);
-		m_pCommonRS->AddRootCBV(100);
-		m_pCommonRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-		m_pCommonRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-		m_pCommonRS->Finalize("Common");
-
-		m_pDDGIUpdateIrradianceColorPSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateIrradianceCS");
-		m_pDDGIUpdateIrradianceDepthPSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateDepthCS");
-		m_pDDGIUpdateProbeStatesPSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/DDGI.hlsl", "UpdateProbeStatesCS");
+		m_pDDGIUpdateIrradianceColorPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RayTracing/DDGI.hlsl", "UpdateIrradianceCS");
+		m_pDDGIUpdateIrradianceDepthPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RayTracing/DDGI.hlsl", "UpdateDepthCS");
+		m_pDDGIUpdateProbeStatesPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RayTracing/DDGI.hlsl", "UpdateProbeStatesCS");
 
 		StateObjectInitializer soDesc{};
 		soDesc.Name = "DDGI Trace Rays";
@@ -35,11 +28,11 @@ DDGI::DDGI(GraphicsDevice* pDevice)
 		soDesc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
 		soDesc.AddMissShader("MaterialMS");
 		soDesc.AddMissShader("OcclusionMiss");
-		soDesc.pGlobalRootSignature = m_pCommonRS;
+		soDesc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 		m_pDDGITraceRaysSO = pDevice->CreateStateObject(soDesc);
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("RayTracing/DDGI.hlsl", "VisualizeIrradianceVS");
 		psoDesc.SetPixelShader("RayTracing/DDGI.hlsl", "VisualizeIrradiancePS");
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
@@ -114,7 +107,7 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 					.Write(pRayBuffer)
 					.Bind([=](CommandContext& context)
 						{
-							context.SetComputeRootSignature(m_pCommonRS);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGITraceRaysSO);
 
 							context.BindRootCBV(0, parameters);
@@ -136,7 +129,7 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 					.Write(pIrradianceTarget)
 					.Bind([=](CommandContext& context)
 						{
-							context.SetComputeRootSignature(m_pCommonRS);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
 
 							context.BindRootCBV(0, parameters);
@@ -155,7 +148,7 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 					.Write(pDepthTarget)
 					.Bind([=](CommandContext& context)
 						{
-							context.SetComputeRootSignature(m_pCommonRS);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
 
 							context.BindRootCBV(0, parameters);
@@ -176,7 +169,7 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 					.Write({ pProbeOffsets, pProbeStates })
 					.Bind([=](CommandContext& context)
 						{
-							context.SetComputeRootSignature(m_pCommonRS);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
 
 							context.BindRootCBV(0, parameters);
@@ -209,7 +202,7 @@ void DDGI::RenderVisualization(RGGraph& graph, const SceneView* pView, const Wor
 				.RenderTarget(sceneTextures.pColorTarget)
 				.Bind([=](CommandContext& context)
 					{
-						context.SetGraphicsRootSignature(m_pCommonRS);
+						context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 						context.SetPipelineState(m_pDDGIVisualizePSO);
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 

@@ -9,28 +9,21 @@
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Scene/Camera.h"
 
-GlobalResource<PipelineState> CloudShapeNoisePSO;
-GlobalResource<PipelineState> CloudDetailNoisePSO;
-GlobalResource<PipelineState> CloudHeighDensityLUTPSO;
-
-GlobalResource<RootSignature> CloudsRS;
-GlobalResource<PipelineState> CloudsPSO;
 
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
-	CloudsRS = new RootSignature(pDevice);
-	CloudsRS->AddRootCBV(0);
-	CloudsRS->AddRootCBV(100);
-	CloudsRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	CloudsRS->AddDescriptorTable(0, 5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-	CloudsRS->Finalize("Clouds RS");
+	m_pCloudsRS = new RootSignature(pDevice);
+	m_pCloudsRS->AddRootCBV(0);
+	m_pCloudsRS->AddRootCBV(100);
+	m_pCloudsRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+	m_pCloudsRS->AddDescriptorTable(0, 5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+	m_pCloudsRS->Finalize("Clouds RS");
 
 	const char* pCloudShapesShader = "CloudsShapes.hlsl";
-	CloudShapeNoisePSO		= pDevice->CreateComputePipeline(CloudsRS, pCloudShapesShader, "CloudShapeNoiseCS");
-	CloudDetailNoisePSO		= pDevice->CreateComputePipeline(CloudsRS, pCloudShapesShader, "CloudDetailNoiseCS");
-	CloudHeighDensityLUTPSO = pDevice->CreateComputePipeline(CloudsRS, pCloudShapesShader, "CloudHeightDensityCS");
-
-	CloudsPSO = pDevice->CreateComputePipeline(CloudsRS, "Clouds.hlsl", "CSMain");
+	m_pCloudShapeNoisePSO		= pDevice->CreateComputePipeline(m_pCloudsRS, pCloudShapesShader, "CloudShapeNoiseCS");
+	m_pCloudDetailNoisePSO		= pDevice->CreateComputePipeline(m_pCloudsRS, pCloudShapesShader, "CloudDetailNoiseCS");
+	m_pCloudHeighDensityLUTPSO	= pDevice->CreateComputePipeline(m_pCloudsRS, pCloudShapesShader, "CloudHeightDensityCS");
+	m_pCloudsPSO				= pDevice->CreateComputePipeline(m_pCloudsRS, "Clouds.hlsl", "CSMain");
 
 	pDevice->GetShaderManager()->OnShaderEditedEvent().AddLambda([this](Shader*) { m_pShapeNoise = nullptr; });
 }
@@ -123,8 +116,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					{
 						uint32 resolution = pNoiseTexture->GetDesc().Width >> i;
 
-						context.SetComputeRootSignature(CloudsRS);
-						context.SetPipelineState(CloudShapeNoisePSO);
+						context.SetComputeRootSignature(m_pCloudsRS);
+						context.SetPipelineState(m_pCloudShapeNoisePSO);
 
 						NoiseParams constants;
 						constants.Seed = parameters.NoiseSeed;
@@ -146,8 +139,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					{
 						uint32 resolution = pDetailNoiseTexture->GetDesc().Width >> i;
 
-						context.SetComputeRootSignature(CloudsRS);
-						context.SetPipelineState(CloudDetailNoisePSO);
+						context.SetComputeRootSignature(m_pCloudsRS);
+						context.SetPipelineState(m_pCloudDetailNoisePSO);
 
 						NoiseParams constants;
 						constants.Seed = parameters.NoiseSeed;
@@ -168,8 +161,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 				{
 					Texture* pTarget = pCloudTypeLUT->Get();
 
-					context.SetComputeRootSignature(CloudsRS);
-					context.SetPipelineState(CloudHeighDensityLUTPSO);
+					context.SetComputeRootSignature(m_pCloudsRS);
+					context.SetPipelineState(m_pCloudHeighDensityLUTPSO);
 
 					NoiseParams constants;
 					constants.ResolutionInv = 1.0f / pTarget->GetWidth();
@@ -191,8 +184,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 			{
 				Texture* pTarget = pIntermediateColor->Get();
 
-				context.SetComputeRootSignature(CloudsRS);
-				context.SetPipelineState(CloudsPSO);
+				context.SetComputeRootSignature(m_pCloudsRS);
+				context.SetPipelineState(m_pCloudsPSO);
 
 				struct
 				{

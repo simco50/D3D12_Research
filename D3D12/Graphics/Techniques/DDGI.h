@@ -30,7 +30,6 @@ public:
 	void RenderVisualization(RGGraph& graph, const SceneView* pView, const World* pWorld, const SceneTextures& sceneTextures);
 
 private:
-	Ref<RootSignature> m_pCommonRS;
 	Ref<StateObject> m_pDDGITraceRaysSO;
 	Ref<PipelineState> m_pDDGIUpdateIrradianceColorPSO;
 	Ref<PipelineState> m_pDDGIUpdateIrradianceDepthPSO;
