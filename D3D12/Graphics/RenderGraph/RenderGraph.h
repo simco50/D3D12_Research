@@ -298,14 +298,14 @@ public:
 
 	RGPass& AddPass(const char* pName, RGPassFlag flags)
 	{
-		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, m_Allocator.AllocateString(pName), flags, RGPassID((uint16)m_RenderPasses.size()));
+		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, m_Allocator.AllocateString(pName), flags, RGPassID((uint16)m_Passes.size()));
 
 		for (uint32 eventIndex : m_PendingEvents)
 			pPass->EventsToStart.push_back(eventIndex);
 		m_PendingEvents.clear();
 
-		m_RenderPasses.push_back(pPass);
-		return *m_RenderPasses.back();
+		m_Passes.push_back(pPass);
+		return *m_Passes.back();
 	}
 
 	NO_DISCARD RGTexture* Create(const char* pName, const TextureDesc& desc)
@@ -391,10 +391,9 @@ private:
 	std::vector<RGEvent>				m_Events;
 
 	RGGraphAllocator					m_Allocator;
-	SyncPoint							m_LastSyncPoint;
 
 	std::vector<Span<const RGPass*>>	m_PassExecuteGroups;
-	std::vector<RGPass*>				m_RenderPasses;
+	std::vector<RGPass*>				m_Passes;
 	std::vector<RGResource*>			m_Resources;
 
 	struct ExportedTexture

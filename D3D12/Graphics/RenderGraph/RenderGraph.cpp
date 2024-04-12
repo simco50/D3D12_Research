@@ -95,9 +95,9 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		PROFILE_CPU_SCOPE("Pass Culling");
 
 		std::vector<RGPassID> cullStack;
-		cullStack.reserve(m_RenderPasses.size());
+		cullStack.reserve(m_Passes.size());
 
-		for (RGPass* pPass : m_RenderPasses)
+		for (RGPass* pPass : m_Passes)
 		{
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
@@ -129,7 +129,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			RGPassID pass = cullStack.back();
 			cullStack.pop_back();
 
-			RGPass* pPass = m_RenderPasses[pass.GetIndex()];
+			RGPass* pPass = m_Passes[pass.GetIndex()];
 			if (pPass->IsCulled)
 			{
 				cullStack.insert(cullStack.end(), pPass->PassDependencies.begin(), pPass->PassDependencies.end());
@@ -139,12 +139,12 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 	}
 	else
 	{
-		for (RGPass* pPass : m_RenderPasses)
+		for (RGPass* pPass : m_Passes)
 			pPass->IsCulled = false;
 	}
 
 	// Tell the resources when they're first/last accessed and apply usage flags
-	for (const RGPass* pPass : m_RenderPasses)
+	for (const RGPass* pPass : m_Passes)
 	{
 		if (pPass->IsCulled)
 			continue;
@@ -187,7 +187,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		// It's important to make the distinction between the Ref allocation and the Raw resource itself.
 		// A de-allocate returns the resource back to the pool by resetting the Ref however the Raw resource keeps a reference to it to use during execution.
 		// This is how we can "alias" resources (exact match only for now) and allocate our resources during compilation so that execution is thread-safe.
-		for (RGPass* pPass : m_RenderPasses)
+		for (RGPass* pPass : m_Passes)
 		{
 			if (pPass->IsCulled)
 				continue;
@@ -281,7 +281,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		std::vector<uint32> eventsToStart;
 		uint32 eventsToEnd = 0;
 		RGPass* pLastActivePass = nullptr;
-		for (RGPass* pPass : m_RenderPasses)
+		for (RGPass* pPass : m_Passes)
 		{
 			if (pPass->IsCulled)
 			{
@@ -322,9 +322,9 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			std::vector<uint32> activeEvents;
 			RGPass* pLastPass = nullptr;
 
-			for (uint32 passIndex = 0; passIndex < (uint32)m_RenderPasses.size(); ++passIndex)
+			for (uint32 passIndex = 0; passIndex < (uint32)m_Passes.size(); ++passIndex)
 			{
-				RGPass* pPass = m_RenderPasses[passIndex];
+				RGPass* pPass = m_Passes[passIndex];
 				if (!pPass->IsCulled)
 				{
 					pPass->CPUEventsToStart = pPass->EventsToStart;
@@ -346,19 +346,19 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 					if (currentGroupSize >= maxPassesPerJob)
 					{
 						pPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
-						m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_RenderPasses[firstPass.GetIndex()], passIndex - firstPass.GetIndex() + 1));
+						m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_Passes[firstPass.GetIndex()], passIndex - firstPass.GetIndex() + 1));
 						currentGroupSize = 0;
 					}
 					pLastPass = pPass;
 				}
 			}
 			if (currentGroupSize > 0)
-				m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_RenderPasses[firstPass.GetIndex()], (uint32)m_RenderPasses.size() - firstPass.GetIndex()));
+				m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_Passes[firstPass.GetIndex()], (uint32)m_Passes.size() - firstPass.GetIndex()));
 			pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
 		}
 		else
 		{
-			m_PassExecuteGroups.push_back(Span<const RGPass*>(m_RenderPasses.data(), (uint32)m_RenderPasses.size()));
+			m_PassExecuteGroups.push_back(Span<const RGPass*>(m_Passes.data(), (uint32)m_Passes.size()));
 		}
 	}
 
@@ -393,7 +393,7 @@ void RGGraph::PopEvent()
 	if (!m_PendingEvents.empty())
 		m_PendingEvents.pop_back();
 	else
-		++m_RenderPasses.back()->NumEventsToEnd;
+		++m_Passes.back()->NumEventsToEnd;
 }
 
 void RGGraph::Execute(GraphicsDevice* pDevice)
@@ -517,7 +517,7 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 
 void RGGraph::DestroyData()
 {
-	m_RenderPasses.clear();
+	m_Passes.clear();
 	m_Resources.clear();
 	m_ExportTextures.clear();
 	m_ExportBuffers.clear();

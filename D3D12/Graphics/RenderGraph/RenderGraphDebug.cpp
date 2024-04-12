@@ -70,7 +70,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 		float passNameHeight = 300.0f;
 		float resourceNameWidth = 300.0f;
 		ImVec2 boxSize = ImVec2(20.0f, ImGui::GetTextLineHeightWithSpacing());
-		float width = (int)m_RenderPasses.size() * boxSize.x + resourceNameWidth;
+		float width = (int)m_Passes.size() * boxSize.x + resourceNameWidth;
 		float height = 1200;
 
 		ImGui::BeginChild("Table", ImVec2(width, height));
@@ -80,7 +80,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 		ImVec2 passNamePos = cursor + ImVec2(resourceNameWidth, 0);
 
 		const RGPass* pActivePass = nullptr;
-		for (const RGPass* pPass : m_RenderPasses)
+		for (const RGPass* pPass : m_Passes)
 		{
 			ImRect itemRect(passNamePos + ImVec2(passIndex * boxSize.x, 0.0f), passNamePos + ImVec2((passIndex + 1) * boxSize.x, passNameHeight));
 			pCmd->AddLine(itemRect.Max, itemRect.Max + ImVec2(0, height), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
@@ -122,7 +122,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				continue;
 
 			uint32 firstPassOffset = firstPass.GetIndex();
-			uint32 lastPassOffset = pResource->IsExported ? (int)m_RenderPasses.size() - 1 : lastPass.GetIndex();
+			uint32 lastPassOffset = pResource->IsExported ? (int)m_Passes.size() - 1 : lastPass.GetIndex();
 
 			ImRect itemRect(resourceAccessPos + ImVec2(firstPassOffset * boxSize.x + 1, physicalResourceIndex * boxSize.y + 1), resourceAccessPos + ImVec2((lastPassOffset + 1) * boxSize.x - 1, (physicalResourceIndex + 1) * boxSize.y - 1));
 			ImGui::ItemAdd(itemRect, pResource->ID.GetIndex());
@@ -262,7 +262,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 
 		//Pass declaration
 		int passIndex = 0;
-		for (RGPass* pPass : m_RenderPasses)
+		for (RGPass* pPass : m_Passes)
 		{
 			stream << "Pass" << pPass->ID.GetIndex();
 			stream << "[";
@@ -409,7 +409,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		stream << "splines=ortho;\n";
 
 		int passIndex = 0;
-		for (RGPass* pPass : m_RenderPasses)
+		for (RGPass* pPass : m_Passes)
 		{
 			uint32 passColor = referencedPassColor;
 			if (EnumHasAnyFlags(pPass->Flags, RGPassFlag::NeverCull))
