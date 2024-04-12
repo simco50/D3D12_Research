@@ -56,15 +56,18 @@ protected:
 		// pResource keeps a raw reference to use during execution
 	}
 
-	const char* pName;
-	int ID;
-	bool IsImported;
-	bool IsExported = false;
-	RGResourceType Type;
-	Ref<DeviceResource> pResourceReference;
-	DeviceResource* pPhysicalResource = nullptr;
-	const RGPass* pFirstAccess = nullptr;
-	const RGPass* pLastAccess = nullptr;
+	const char*				pName;
+	int						ID;
+	bool					IsImported;
+	bool					IsExported = false;
+	RGResourceType			Type;
+	DeviceResource*			pPhysicalResource = nullptr;
+
+	// Compile-time data
+	Ref<DeviceResource>		pResourceReference;
+	const RGPass*			pFirstAccess = nullptr;		///< First non-culled pass that accesses this resource
+	const RGPass*			pLastAccess = nullptr;		///< Last non-culled pass that accesses this resource
+	RGPass*					pLastWrite = nullptr;		///< Last pass that wrote to this resource. Used for pass culling
 };
 
 template<typename T>

@@ -94,49 +94,31 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 	{
 		PROFILE_CPU_SCOPE("Pass Culling");
 
-		auto WritesTo = [&](RGResource* pResource, RGPass* pPass)
-			{
-				for (RGPass::ResourceAccess& access : pPass->Accesses)
-				{
-					if (access.pResource == pResource && D3D::HasWriteResourceState(access.Access))
-						return true;
-				}
-				return false;
-			};
-
 		std::vector<RGPass*> cullStack;
 		cullStack.reserve(m_RenderPasses.size());
+
 		for (RGPass* pPass : m_RenderPasses)
 		{
-			// If the pass should never cull or the pass writes to an imported resource, we add it on the stack
-			if (EnumHasAllFlags(pPass->Flags, RGPassFlag::NeverCull))
+			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
-				cullStack.push_back(pPass);
-			}
-			else
-			{
-				for (RGPass::ResourceAccess access : pPass->Accesses)
-				{
-					if ((access.pResource->IsExported || access.pResource->IsImported) && D3D::HasWriteResourceState(access.Access))
-					{
-						cullStack.push_back(pPass);
-						break;
-					}
-				}
+				// Add a pass dependency to the last pass that wrote to this resource
+				if (access.pResource->pLastWrite)
+					pPass->PassDependencies.insert(access.pResource->pLastWrite);
+
+				// If the resource is written to in this pass, update the LastWrite pass
+				if (D3D::HasWriteResourceState(access.Access))
+					access.pResource->pLastWrite = pPass;
 			}
 
-			// Collect all passes that write to a resource which this pass accesses
-			for (RGPass::ResourceAccess access : pPass->Accesses)
-			{
-				for (RGPass* pIterPass : m_RenderPasses)
-				{
-					if (pIterPass != pPass && WritesTo(access.pResource, pIterPass))
-					{
-						if (std::find(pPass->PassDependencies.begin(), pPass->PassDependencies.end(), pIterPass) == pPass->PassDependencies.end())
-							pPass->PassDependencies.push_back(pIterPass);
-					}
-				}
-			}
+			// If pass is marked for never cull, immediately add it to the stack
+			if (EnumHasAllFlags(pPass->Flags, RGPassFlag::NeverCull))
+				cullStack.push_back(pPass);
+		}
+
+		for (RGResource* pResource : m_Resources)
+		{
+			if (pResource->pLastWrite && (pResource->IsExported || pResource->IsImported))
+				cullStack.push_back(pResource->pLastWrite);
 		}
 
 		while (!cullStack.empty())

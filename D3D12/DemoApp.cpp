@@ -405,6 +405,7 @@ void DemoApp::Update()
 		RGGraph graph;
 
 		{
+			RG_GRAPH_SCOPE("GPU Frame", graph);
 			PROFILE_CPU_SCOPE("Record RenderGraph");
 
 			graph.AddPass("Build Acceleration Structures", RGPassFlag::Compute | RGPassFlag::NeverCull)
@@ -454,45 +455,47 @@ void DemoApp::Update()
 			RasterResult rasterResult;
 			if (m_RenderPath != RenderPath::PathTracing)
 			{
-				RG_GRAPH_SCOPE("Shadow Depths", graph);
-				for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 				{
-					const ShadowView& shadowView = pView->ShadowViews[i];
-					RG_GRAPH_SCOPE(Sprintf("View %d (%s - Cascade %d)", i, gLightTypeStr[(int)shadowView.pLight->Type], shadowView.ViewIndex).c_str(), graph);
-
-					RGTexture* pShadowmap = graph.Import(pView->ShadowViews[i].pDepthTexture);
-					if (Tweakables::gShadowsGPUCull)
+					RG_GRAPH_SCOPE("Shadow Depths", graph);
+					for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
 					{
-						RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
-						context.EnableOcclusionCulling = Tweakables::gShadowsOcclusionCulling;
-						RasterResult result;
-						m_pMeshletRasterizer->Render(graph, pView, &shadowView.View, context, result);
-						if(Tweakables::gCullShadowsDebugStats == (int)i)
-							m_pMeshletRasterizer->PrintStats(graph, Vector2(400, 20), pView, context);
-					}
-					else
-					{
-						graph.AddPass("Raster", RGPassFlag::Raster)
-							.DepthStencil(pShadowmap, RenderPassDepthFlags::Clear)
-							.Bind([=](CommandContext& context)
-								{
-									context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+						const ShadowView& shadowView = pView->ShadowViews[i];
+						RG_GRAPH_SCOPE(Sprintf("View %d (%s - Cascade %d)", i, gLightTypeStr[(int)shadowView.pLight->Type], shadowView.ViewIndex).c_str(), graph);
 
-									const ShadowView& view = pView->ShadowViews[i];
-									context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &view.View, pShadowmap->Get()));
+						RGTexture* pShadowmap = graph.Import(pView->ShadowViews[i].pDepthTexture);
+						if (Tweakables::gShadowsGPUCull)
+						{
+							RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
+							context.EnableOcclusionCulling = Tweakables::gShadowsOcclusionCulling;
+							RasterResult result;
+							m_pMeshletRasterizer->Render(graph, pView, &shadowView.View, context, result);
+							if (Tweakables::gCullShadowsDebugStats == (int)i)
+								m_pMeshletRasterizer->PrintStats(graph, Vector2(400, 20), pView, context);
+						}
+						else
+						{
+							graph.AddPass("Raster", RGPassFlag::Raster)
+								.DepthStencil(pShadowmap, RenderPassDepthFlags::Clear)
+								.Bind([=](CommandContext& context)
+									{
+										context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-									{
-										PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
-										context.SetPipelineState(m_pShadowsOpaquePSO);
-										Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::Opaque);
-									}
-									{
-										PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
-										context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-										Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
-									}
-								});
+										const ShadowView& view = pView->ShadowViews[i];
+										context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &view.View, pShadowmap->Get()));
+
+										{
+											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
+											context.SetPipelineState(m_pShadowsOpaquePSO);
+											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::Opaque);
+										}
+										{
+											PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
+											context.SetPipelineState(m_pShadowsAlphaMaskPSO);
+											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
+										}
+									});
+						}
 					}
 				}
 

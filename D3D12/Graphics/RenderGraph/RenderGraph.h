@@ -227,7 +227,7 @@ private:
 
 	std::vector<ResourceTransition> Transitions;
 	std::vector<ResourceAccess>		Accesses;
-	std::vector<RGPass*>			PassDependencies;
+	std::unordered_set<RGPass*>		PassDependencies;
 	std::vector<RenderTargetAccess> RenderTargets;
 	DepthStencilAccess				DepthStencilTarget{};
 	IRGPassCallback*				pExecuteCallback = nullptr;
