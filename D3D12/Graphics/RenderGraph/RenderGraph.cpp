@@ -15,7 +15,7 @@ RGPass& RGPass::Read(Span<RGResource*> resources)
 	{
 		if (pResource)
 		{
-			bool isIndirectArgs = pResource->Type == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Flags, BufferFlag::IndirectArguments);
+			bool isIndirectArgs = pResource->GetType() == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Flags, BufferFlag::IndirectArguments);
 			AddAccess(pResource, isIndirectArgs ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : state);
 		}
 	}
@@ -94,7 +94,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 	{
 		PROFILE_CPU_SCOPE("Pass Culling");
 
-		std::vector<RGPass*> cullStack;
+		std::vector<RGPassID> cullStack;
 		cullStack.reserve(m_RenderPasses.size());
 
 		for (RGPass* pPass : m_RenderPasses)
@@ -102,29 +102,34 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
 				// Add a pass dependency to the last pass that wrote to this resource
-				if (access.pResource->pLastWrite)
-					pPass->PassDependencies.insert(access.pResource->pLastWrite);
+				if (access.pResource->LastWrite.IsValid())
+				{
+					if (std::find_if(pPass->PassDependencies.begin(), pPass->PassDependencies.end(), [&](RGPassID id) { return access.pResource->LastWrite == id; }) == pPass->PassDependencies.end())
+						pPass->PassDependencies.push_back(access.pResource->LastWrite);
+				}
 
 				// If the resource is written to in this pass, update the LastWrite pass
 				if (D3D::HasWriteResourceState(access.Access))
-					access.pResource->pLastWrite = pPass;
+					access.pResource->LastWrite = pPass->ID;
 			}
 
 			// If pass is marked for never cull, immediately add it to the stack
 			if (EnumHasAllFlags(pPass->Flags, RGPassFlag::NeverCull))
-				cullStack.push_back(pPass);
+				cullStack.push_back(pPass->ID);
 		}
 
 		for (RGResource* pResource : m_Resources)
 		{
-			if (pResource->pLastWrite && (pResource->IsExported || pResource->IsImported))
-				cullStack.push_back(pResource->pLastWrite);
+			if (pResource->LastWrite.IsValid() && (pResource->IsExported || pResource->IsImported))
+				cullStack.push_back(pResource->LastWrite);
 		}
 
 		while (!cullStack.empty())
 		{
-			RGPass* pPass = cullStack.back();
+			RGPassID pass = cullStack.back();
 			cullStack.pop_back();
+
+			RGPass* pPass = m_RenderPasses[pass.GetIndex()];
 			if (pPass->IsCulled)
 			{
 				cullStack.insert(cullStack.end(), pPass->PassDependencies.begin(), pPass->PassDependencies.end());
@@ -147,11 +152,11 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		for (const RGPass::ResourceAccess& access : pPass->Accesses)
 		{
 			RGResource* pResource = access.pResource;
-			pResource->pFirstAccess = pResource->pFirstAccess ? pResource->pFirstAccess : pPass;
-			pResource->pLastAccess = pPass;
+			pResource->FirstAccess = pResource->FirstAccess.IsValid() ? pResource->FirstAccess : pPass->ID;
+			pResource->LastAccess = pPass->ID;
 
 			D3D12_RESOURCE_STATES state = access.Access;
-			if (pResource->Type == RGResourceType::Buffer)
+			if (pResource->GetType() == RGResourceType::Buffer)
 			{
 				BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
 				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
@@ -159,7 +164,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
 					desc.Flags |= BufferFlag::ShaderResource;
 			}
-			else if (pResource->Type == RGResourceType::Texture)
+			else if (pResource->GetType() == RGResourceType::Texture)
 			{
 				TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
 				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
@@ -193,9 +198,9 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 				if (!pResource->pPhysicalResource)
 				{
 					Ref<DeviceResource> pPhysicalResource;
-					if (pResource->Type == RGResourceType::Texture)
+					if (pResource->GetType() == RGResourceType::Texture)
 						pPhysicalResource = resourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc());
-					else if (pResource->Type == RGResourceType::Buffer)
+					else if (pResource->GetType() == RGResourceType::Buffer)
 						pPhysicalResource = resourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc());
 					else
 						noEntry();
@@ -230,7 +235,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 				for (const RGPass::ResourceAccess& access : pPass->Accesses)
 				{
 					RGResource* pResource = access.pResource;
-					if (!pResource->IsImported && !pResource->IsExported && pResource->pLastAccess == pPass)
+					if (!pResource->IsImported && !pResource->IsExported && pResource->LastAccess == pPass->ID)
 					{
 						check(pResource->pPhysicalResource);
 						pResource->Release();
@@ -312,7 +317,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			const uint32 maxPassesPerJob = options.CommandlistGroupSize;
 
 			// Duplicate profile events that cross the border of jobs to retain event hierarchy
-			uint32 firstPass = 0;
+			RGPassID firstPass;
 			uint32 currentGroupSize = 0;
 			std::vector<uint32> activeEvents;
 			RGPass* pLastPass = nullptr;
@@ -341,14 +346,14 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 					if (currentGroupSize >= maxPassesPerJob)
 					{
 						pPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
-						m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_RenderPasses[firstPass], passIndex - firstPass + 1));
+						m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_RenderPasses[firstPass.GetIndex()], passIndex - firstPass.GetIndex() + 1));
 						currentGroupSize = 0;
 					}
 					pLastPass = pPass;
 				}
 			}
 			if (currentGroupSize > 0)
-				m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_RenderPasses[firstPass], (uint32)m_RenderPasses.size() - firstPass));
+				m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_RenderPasses[firstPass.GetIndex()], (uint32)m_RenderPasses.size() - firstPass.GetIndex()));
 			pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
 		}
 		else

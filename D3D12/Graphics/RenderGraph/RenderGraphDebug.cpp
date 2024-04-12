@@ -116,16 +116,16 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				resourceToIndex[pResource->GetPhysical()] = resourceIndex++;
 			int physicalResourceIndex = resourceToIndex[pResource->GetPhysical()];
 
-			const RGPass* pFirstPass = pResource->pFirstAccess;
-			const RGPass* pLastPass = pResource->pLastAccess;
-			if (pFirstPass == nullptr || pLastPass == nullptr)
+			RGPassID firstPass = pResource->FirstAccess;
+			RGPassID lastPass = pResource->LastAccess;
+			if (!firstPass.IsValid() || !lastPass.IsValid())
 				continue;
 
-			uint32 firstPassOffset = pFirstPass->ID;
-			uint32 lastPassOffset = pResource->IsExported ? (int)m_RenderPasses.size() - 1 : pLastPass->ID;
+			uint32 firstPassOffset = firstPass.GetIndex();
+			uint32 lastPassOffset = pResource->IsExported ? (int)m_RenderPasses.size() - 1 : lastPass.GetIndex();
 
 			ImRect itemRect(resourceAccessPos + ImVec2(firstPassOffset * boxSize.x + 1, physicalResourceIndex * boxSize.y + 1), resourceAccessPos + ImVec2((lastPassOffset + 1) * boxSize.x - 1, (physicalResourceIndex + 1) * boxSize.y - 1));
-			ImGui::ItemAdd(itemRect, pResource->ID);
+			ImGui::ItemAdd(itemRect, pResource->ID.GetIndex());
 			bool isHovered = ImGui::IsItemHovered();
 
 			if (isHovered)
@@ -133,7 +133,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				ImGui::BeginTooltip();
 				ImGui::Text("%s", pResource->GetName());
 
-				if (pResource->Type == RGResourceType::Texture)
+				if (pResource->GetType() == RGResourceType::Texture)
 				{
 					const TextureDesc& desc = static_cast<const RGTexture*>(pResource)->Desc;
 					ImGui::Text("Res: %dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
@@ -141,7 +141,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 					ImGui::Text("Mips: %d", desc.Mips);
 					ImGui::Text("Size: %s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
 				}
-				else if (pResource->Type == RGResourceType::Buffer)
+				else if (pResource->GetType() == RGResourceType::Buffer)
 				{
 					const BufferDesc& desc = static_cast<const RGBuffer*>(pResource)->Desc;
 					ImGui::Text("Size: %s", Math::PrettyPrintDataSize(desc.Size).c_str());
@@ -152,7 +152,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				ImGui::EndTooltip();
 			}
 
-			pCmd->AddRectFilled(itemRect.Min, itemRect.Max, pResource->Type == RGResourceType::Texture ? ImColor(1.0f, 0.7f, 0.9f) : ImColor(0.7f, 0.8f, 1.0f));
+			pCmd->AddRectFilled(itemRect.Min, itemRect.Max, pResource->GetType() == RGResourceType::Texture ? ImColor(1.0f, 0.7f, 0.9f) : ImColor(0.7f, 0.8f, 1.0f));
 
 			ImColor boxColor = ImColor(1.0f, 1.0f, 1.0f, 0.5f);
 
@@ -264,7 +264,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		int passIndex = 0;
 		for (RGPass* pPass : m_RenderPasses)
 		{
-			stream << "Pass" << pPass->ID;
+			stream << "Pass" << pPass->ID.GetIndex();
 			stream << "[";
 			stream << "\"" << pPass->GetName() << "\"<br/>";
 			stream << "Flags: " << PassFlagToString(pPass->Flags) << "<br/>";
@@ -284,11 +284,11 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 			stream << "\n";
 
 			auto PrintResource = [&](RGResource* pResource, uint32 version) {
-				stream << "Resource" << pResource->ID << "_" << version;
+				stream << "Resource" << pResource->ID.GetIndex() << "_" << version;
 				stream << (pResource->IsImported ? "[(" : "([");
 				stream << "\"" << pResource->GetName() << "\"<br/>";
 
-				if (pResource->Type == RGResourceType::Texture)
+				if (pResource->GetType() == RGResourceType::Texture)
 				{
 					const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
 					stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
@@ -296,7 +296,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 					stream << "Mips: " << desc.Mips << "<br/>";
 					stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)) << "</br>";
 				}
-				else if (pResource->Type == RGResourceType::Buffer)
+				else if (pResource->GetType() == RGResourceType::Buffer)
 				{
 					const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
 					stream << "Stride: " << desc.ElementSize << "<br/>";
@@ -334,7 +334,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 
 				if (resourceVersion > 0 || pResource->IsImported)
 				{
-					stream << "Resource" << pResource->ID << "_" << resourceVersion << " -- " << D3D::ResourceStateToString(access.Access) << " --> Pass" << pPass->ID << "\n";
+					stream << "Resource" << pResource->ID.GetIndex() << "_" << resourceVersion << " -- " << D3D::ResourceStateToString(access.Access) << " --> Pass" << pPass->ID.GetIndex() << "\n";
 					stream << "linkStyle " << linkIndex++ << " " << readLinkStyle << "\n";
 				}
 
@@ -344,7 +344,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 					resourceVersion++;
 					PrintResource(pResource, resourceVersion);
 
-					stream << "Pass" << pPass->ID << " -- " << D3D::ResourceStateToString(access.Access) << " --> " << "Resource" << pResource->ID << "_" << resourceVersion;
+					stream << "Pass" << pPass->ID.GetIndex() << " -- " << D3D::ResourceStateToString(access.Access) << " --> " << "Resource" << pResource->ID.GetIndex() << "_" << resourceVersion;
 					stream << "\nlinkStyle " << linkIndex++ << " " << writeLinkStyle << "\n";
 				}
 			}
@@ -379,10 +379,10 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		StringStream stream;
 
 		auto PrintResource = [&](RGResource* pResource, uint32 version) {
-			stream << "Resource" << pResource->ID << "_" << version;
+			stream << "Resource" << pResource->ID.GetIndex() << "_" << version;
 			stream << "[ label = \"" << pResource->GetName() << "\\n";
 
-			if (pResource->Type == RGResourceType::Texture)
+			if (pResource->GetType() == RGResourceType::Texture)
 			{
 				const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
 				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "\\n";
@@ -390,7 +390,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 				stream << "Mips: " << desc.Mips << "\\n";
 				stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize));
 			}
-			else if (pResource->Type == RGResourceType::Buffer)
+			else if (pResource->GetType() == RGResourceType::Buffer)
 			{
 				const BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
 				stream << "Stride: " << desc.ElementSize << "\\n";
@@ -417,7 +417,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 			else if (pPass->IsCulled)
 				passColor = unreferedPassColor;
 
-			stream << "Pass" << pPass->ID << " ";
+			stream << "Pass" << pPass->ID.GetIndex() << " ";
 			stream << "[ label = ";
 			stream << "\"" << pPass->GetName() << "\\n";
 			stream << "Flags: " << PassFlagToString(pPass->Flags) << "\\n";
@@ -443,16 +443,16 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 
 				if (resourceVersion > 0 || pResource->IsImported)
 				{
-					stream << "Resource" << pResource->ID << "_" << resourceVersion << " -> " << "Pass" << pPass->ID << "\n";
+					stream << "Resource" << pResource->ID.GetIndex() << "_" << resourceVersion << " -> " << "Pass" << pPass->ID.GetIndex() << "\n";
 				}
 
-				if(D3D::HasWriteResourceState(access.Access))
+				if (D3D::HasWriteResourceState(access.Access))
 				{
 					++resourceVersions[pResource];
 					resourceVersion++;
 					PrintResource(pResource, resourceVersion);
 
-					stream << "Pass" << pPass->ID << " -> " << "Resource" << pResource->ID << "_" << resourceVersion << "\n";
+					stream << "Pass" << pPass->ID.GetIndex() << " -> " << "Resource" << pResource->ID.GetIndex() << "_" << resourceVersion << "\n";
 				}
 			}
 

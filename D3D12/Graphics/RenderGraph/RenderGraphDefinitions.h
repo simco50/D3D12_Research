@@ -4,6 +4,9 @@
 #include "Graphics/RHI/Buffer.h"
 
 class RGGraph;
+class RGPass;
+class RGGraph;
+class RGResource;
 
 enum class RGResourceType
 {
@@ -26,8 +29,30 @@ struct RGResourceTypeTraits<Buffer>
 	using TDesc = BufferDesc;
 };
 
-class RGPass;
-class RGGraph;
+template<typename ObjectType, typename BackingType>
+class RGHandle
+{
+public:
+	RGHandle() = default;
+
+	explicit RGHandle(BackingType id)
+		: mID(id)
+	{}
+	
+	uint16 GetIndex() const { return mID; }
+	bool IsValid() const { return mID != Invalid; }
+
+	bool operator==(const RGHandle& rhs) const { return mID == rhs.mID; }
+	bool operator!=(const RGHandle& rhs) const { return mID != rhs.mID; }
+
+private:
+	BackingType mID = Invalid;
+
+	static constexpr BackingType Invalid = std::numeric_limits<BackingType>::max();
+};
+
+using RGPassID = RGHandle<RGPass, uint16>;
+using RGResourceID = RGHandle<RGResource, uint16>;
 
 class RGResource
 {
@@ -35,13 +60,14 @@ public:
 	friend class RGGraph;
 	friend class RGPass;
 
-	RGResource(const char* pName, int id, RGResourceType type, DeviceResource* pPhysicalResource = nullptr)
-		: pName(pName), ID(id), IsImported(!!pPhysicalResource), Type(type), pResourceReference(pPhysicalResource), pPhysicalResource(pPhysicalResource)
+	RGResource(const char* pName, RGResourceID id, RGResourceType type, DeviceResource* pPhysicalResource = nullptr)
+		: pName(pName), ID(id), IsImported(!!pPhysicalResource), Type((uint32)type), pResourceReference(pPhysicalResource), pPhysicalResource(pPhysicalResource)
 	{
 	}
 
 	const char* GetName() const { return pName; }
 	DeviceResource* GetPhysical() const { return pPhysicalResource; }
+	RGResourceType GetType() const { return (RGResourceType)Type; }
 
 protected:
 	void SetResource(Ref<DeviceResource> resource)
@@ -57,17 +83,18 @@ protected:
 	}
 
 	const char*				pName;
-	int						ID;
-	bool					IsImported;
-	bool					IsExported = false;
-	RGResourceType			Type;
 	DeviceResource*			pPhysicalResource = nullptr;
+
+	RGResourceID			ID;
+	uint32					IsImported			: 1;
+	uint32					IsExported			: 1;
+	uint32					Type				: 1;
 
 	// Compile-time data
 	Ref<DeviceResource>		pResourceReference;
-	const RGPass*			pFirstAccess = nullptr;		///< First non-culled pass that accesses this resource
-	const RGPass*			pLastAccess = nullptr;		///< Last non-culled pass that accesses this resource
-	RGPass*					pLastWrite = nullptr;		///< Last pass that wrote to this resource. Used for pass culling
+	RGPassID				FirstAccess;			///< First non-culled pass that accesses this resource
+	RGPassID				LastAccess;				///< Last non-culled pass that accesses this resource
+	RGPassID				LastWrite;				///< Last pass that wrote to this resource. Used for pass culling
 };
 
 template<typename T>
@@ -77,7 +104,7 @@ public:
 	friend class RGGraph;
 	using TDesc = typename RGResourceTypeTraits<T>::TDesc;
 
-	RGResourceT(const char* pName, int id, const TDesc& desc, T* pPhysicalResource = nullptr)
+	RGResourceT(const char* pName, RGResourceID id, const TDesc& desc, T* pPhysicalResource = nullptr)
 		: RGResource(pName, id, RGResourceTypeTraits<T>::Type, pPhysicalResource), Desc(desc)
 	{}
 
