@@ -131,7 +131,10 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
 	desc.Init_1_1(m_NumParameters, rootParameters.data(), (uint32)m_StaticSamplers.size(), m_StaticSamplers.data(), flags);
 	Ref<ID3DBlob> pDataBlob, pErrorBlob;
-	D3D12SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf());
+
+	Ref<ID3D12DeviceConfiguration> pDeviceConfig;
+	VERIFY_HR(GetParent()->GetDevice()->QueryInterface(pDeviceConfig.GetAddressOf()));
+	VERIFY_HR(pDeviceConfig->SerializeVersionedRootSignature(&desc, pDataBlob.GetAddressOf(), pErrorBlob.GetAddressOf()));
 	if (pErrorBlob)
 	{
 		const char* pError = (char*)pErrorBlob->GetBufferPointer();

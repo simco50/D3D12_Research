@@ -16,10 +16,6 @@
 #include "dxgidebug.h"
 #include "Core/Commandline.h"
 
-// Setup the Agility D3D12 SDK
-extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
-extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
-
 GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 {
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
@@ -228,6 +224,12 @@ GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
 GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	: DeviceObject(this), m_DeleteQueue(this)
 {
+	Ref<ID3D12SDKConfiguration1> pSDKConfig;
+	VERIFY_HR(D3D12GetInterface(CLSID_D3D12SDKConfiguration, IID_PPV_ARGS(pSDKConfig.GetAddressOf())));
+
+	Ref<ID3D12DeviceFactory> pDeviceFactory;
+	VERIFY_HR(pSDKConfig->CreateDeviceFactory(D3D12_SDK_VERSION, "", IID_PPV_ARGS(pDeviceFactory.GetAddressOf())));
+
 	UINT flags = 0;
 	if (options.UseDebugDevice)
 	{
@@ -239,7 +241,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseDebugDevice)
 	{
 		Ref<ID3D12Debug> pDebugController;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
+		if (SUCCEEDED(pDeviceFactory->GetConfigurationInterface(CLSID_D3D12Debug, IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->EnableDebugLayer();
 			E_LOG(Warning, "D3D12 Debug Layer Enabled");
@@ -249,7 +251,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseDRED)
 	{
 		Ref<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDredSettings.GetAddressOf()))))
+		if (SUCCEEDED(pDeviceFactory->GetConfigurationInterface(CLSID_D3D12DeviceRemovedExtendedData, IID_PPV_ARGS(pDredSettings.GetAddressOf()))))
 		{
 			// Turn on auto-breadcrumbs and page fault reporting.
 			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
@@ -262,7 +264,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseGPUValidation)
 	{
 		Ref<ID3D12Debug1> pDebugController;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
+		if (SUCCEEDED(pDeviceFactory->GetConfigurationInterface(CLSID_D3D12Debug, IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
 			E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
@@ -326,12 +328,12 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 			D3D_FEATURE_LEVEL_11_0
 		};
 
-		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(pDevice.GetAddressOf())));
+		VERIFY_HR(pDeviceFactory->CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(pDevice.GetAddressOf())));
 		D3D12_FEATURE_DATA_FEATURE_LEVELS caps{};
 		caps.pFeatureLevelsRequested = featureLevels;
 		caps.NumFeatureLevels = ARRAYSIZE(featureLevels);
 		VERIFY_HR(pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)));
-		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(pDevice.ReleaseAndGetAddressOf())));
+		VERIFY_HR(pDeviceFactory->CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(pDevice.ReleaseAndGetAddressOf())));
 	}
 
 	if (!pDevice)
@@ -340,7 +342,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(pAdapter.GetAddressOf()));
 	}
 
-	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
+	VERIFY_HR(pDeviceFactory->CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
 
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
@@ -354,51 +356,24 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	Ref<ID3D12InfoQueue> pInfoQueue;
 	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
 	{
-		// Suppress whole categories of messages
-		//D3D12_MESSAGE_CATEGORY Categories[] = {};
-
-		// Suppress messages based on their severity level
-		D3D12_MESSAGE_SEVERITY Severities[] =
-		{
-			D3D12_MESSAGE_SEVERITY_INFO
-		};
-
-		// Suppress individual messages by their ID
-		D3D12_MESSAGE_ID DenyIds[] =
-		{
-			// This occurs when there are uninitialized descriptors in a descriptor table, even when a
-			// shader does not access the missing descriptors.  I find this is common when switching
-			// shader permutations and not wanting to change much code to reorder resources.
-			D3D12_MESSAGE_ID_INVALID_DESCRIPTOR_HANDLE,
-		};
-
-		D3D12_INFO_QUEUE_FILTER NewFilter = {};
-		//NewFilter.DenyList.NumCategories = _countof(Categories);
-		//NewFilter.DenyList.pCategoryList = Categories;
-		NewFilter.DenyList.NumSeverities = _countof(Severities);
-		NewFilter.DenyList.pSeverityList = Severities;
-		NewFilter.DenyList.NumIDs = _countof(DenyIds);
-		NewFilter.DenyList.pIDList = DenyIds;
-
 		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true), GetDevice());
 		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
 		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
 		E_LOG(Warning, "D3D Validation Break on Severity Enabled");
 
-		pInfoQueue->PushStorageFilter(&NewFilter);
-
 		Ref<ID3D12InfoQueue1> pInfoQueue1;
 		if (pInfoQueue.As(&pInfoQueue1))
 		{
 			auto MessageCallback = [](
-				D3D12_MESSAGE_CATEGORY Category,
-				D3D12_MESSAGE_SEVERITY Severity,
-				D3D12_MESSAGE_ID ID,
+				D3D12_MESSAGE_CATEGORY category,
+				D3D12_MESSAGE_SEVERITY severity,
+				D3D12_MESSAGE_ID id,
 				LPCSTR pDescription,
 				void* pContext)
-			{
-				E_LOG(Warning, "D3D12 Validation Layer: %s", pDescription);
-			};
+				{
+					GraphicsDevice* pDevice = static_cast<GraphicsDevice*>(pContext);
+					E_LOG(Warning, "D3D12 Validation Layer: %s", pDescription);
+				};
 
 			DWORD callbackCookie = 0;
 			VERIFY_HR(pInfoQueue1->RegisterMessageCallback(MessageCallback, D3D12_MESSAGE_CALLBACK_FLAG_NONE, this, &callbackCookie));
@@ -407,8 +382,8 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 	if (options.UseStablePowerState)
 	{
-		VERIFY_HR(D3D12EnableExperimentalFeatures(0, nullptr, nullptr, nullptr));
 		VERIFY_HR(m_pDevice->SetStablePowerState(TRUE));
+		E_LOG(Warning, "D3D12 Enabled Stable Power State");
 	}
 
 	m_pFrameFence = new Fence(this, "Frame Fence");
