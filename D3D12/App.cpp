@@ -130,11 +130,11 @@ void App::Init_Internal()
 	Vector2i displayDimensions = Window::GetDisplaySize();
 
 	m_Window.Init((int)(displayDimensions.x * 0.7f), (int)(displayDimensions.y * 0.7f));
-	m_Window.OnKeyInput += [](uint32 character, bool isDown) { Input::Instance().UpdateKey(character, isDown); };
-	m_Window.OnMouseInput += [](uint32 mouse, bool isDown) { Input::Instance().UpdateMouseKey(mouse, isDown); };
-	m_Window.OnMouseMove += [](uint32 x, uint32 y) { Input::Instance().UpdateMousePosition((float)x, (float)y); };
-	m_Window.OnMouseScroll += [](float wheel) { Input::Instance().UpdateMouseWheel(wheel); };
-	m_Window.OnResizeOrMove += [this](uint32 width, uint32 height) { OnWindowResized_Internal(width, height); };
+	m_Window.OnKeyInput			+= [](uint32 character, bool isDown)	{ Input::Instance().UpdateKey(character, isDown); };
+	m_Window.OnMouseInput		+= [](uint32 mouse, bool isDown)		{ Input::Instance().UpdateMouseKey(mouse, isDown); };
+	m_Window.OnMouseMove		+= [](uint32 x, uint32 y)				{ Input::Instance().UpdateMousePosition((float)x, (float)y); };
+	m_Window.OnMouseScroll		+= [](float wheel)						{ Input::Instance().UpdateMouseWheel(wheel); };
+	m_Window.OnResizeOrMove		+= [this](uint32 width, uint32 height)	{ OnWindowResized_Internal(width, height); };
 	m_Window.SetTitle("App");
 
 	Time::Reset();
@@ -142,11 +142,11 @@ void App::Init_Internal()
 	E_LOG(Info, "Graphics::InitD3D()");
 
 	GraphicsDeviceOptions options;
-	options.UseDebugDevice = CommandLine::GetBool("d3ddebug");
-	options.UseDRED = CommandLine::GetBool("dred");
-	options.LoadPIX = CommandLine::GetBool("pix");
-	options.UseGPUValidation = CommandLine::GetBool("gpuvalidation");
-	options.UseWarp = CommandLine::GetBool("warp");
+	options.UseDebugDevice		= CommandLine::GetBool("d3ddebug");
+	options.UseDRED				= CommandLine::GetBool("dred");
+	options.LoadPIX				= CommandLine::GetBool("pix");
+	options.UseGPUValidation	= CommandLine::GetBool("gpuvalidation");
+	options.UseWarp				= CommandLine::GetBool("warp");
 	options.UseStablePowerState = CommandLine::GetBool("stablepowerstate");
 	m_pDevice = new GraphicsDevice(options);
 
