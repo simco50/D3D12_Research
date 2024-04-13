@@ -205,17 +205,18 @@ template<typename T>
 class RefCounted
 {
 public:
-	void AddRef()
+	uint32 AddRef()
 	{
-		m_RefCount.fetch_add(1);
+		return m_RefCount.fetch_add(1);
 	}
 
-	void Release()
+	uint32 Release()
 	{
 		uint32 count_prev = m_RefCount.fetch_sub(1);
 		check(count_prev >= 1);
 		if (count_prev == 1)
 			Destroy();
+		return count_prev;
 	}
 
 	uint32 GetNumRefs() const { return m_RefCount; }

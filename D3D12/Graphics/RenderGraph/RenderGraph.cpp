@@ -195,8 +195,10 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
 				RGResource* pResource = access.pResource;
-				if (!pResource->pPhysicalResource)
+				if (!pResource->GetPhysical())
 				{
+					check(pResource->FirstAccess == pPass->ID);
+
 					Ref<DeviceResource> pPhysicalResource;
 					if (pResource->GetType() == RGResourceType::Texture)
 						pPhysicalResource = resourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc());
@@ -206,12 +208,13 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 						noEntry();
 					pResource->SetResource(pPhysicalResource);
 				}
-				check(pResource->pPhysicalResource);
+				check(pResource->GetPhysical());
 
-				uint32 subResource = 0xFFFFFFFF;
 
-				if (pResource->pPhysicalResource->UseStateTracking())
+				if (pResource->GetPhysical()->UseStateTracking())
 				{
+					uint32 subResource = 0xFFFFFFFF;
+
 					// If state tracking, add a transition in this pass and keep track of the resource state
 					if (options.StateTracking)
 					{
@@ -237,7 +240,6 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 					RGResource* pResource = access.pResource;
 					if (!pResource->IsImported && !pResource->IsExported && pResource->LastAccess == pPass->ID)
 					{
-						check(pResource->pPhysicalResource);
 						pResource->Release();
 					}
 				}
@@ -249,9 +251,8 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		{
 			for (RGResource* pResource : m_Resources)
 			{
-				if (!pResource->IsImported && !pResource->IsExported && pResource->pPhysicalResource)
+				if (!pResource->IsImported && !pResource->IsExported && pResource->IsAllocated())
 				{
-					check(pResource->pPhysicalResource);
 					pResource->Release();
 				}
 			}
@@ -261,14 +262,14 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 	// Export resources first so they can be available during pass execution.
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
-		check(exportResource.pTexture->pPhysicalResource, "Exported texture doesn't have a physical resource assigned");
+		check(exportResource.pTexture->GetPhysical(), "Exported texture doesn't have a physical resource assigned");
 		Ref<Texture> pTexture = exportResource.pTexture->Get();
 		pTexture->SetName(exportResource.pTexture->GetName());
 		*exportResource.pTarget = pTexture;
 	}
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
-		check(exportResource.pBuffer->pPhysicalResource, "Exported buffer doesn't have a physical resource assigned");
+		check(exportResource.pBuffer->GetPhysical(), "Exported buffer doesn't have a physical resource assigned");
 		Ref<Buffer> pBuffer = exportResource.pBuffer->Get();
 		pBuffer->SetName(exportResource.pBuffer->GetName());
 		*exportResource.pTarget = pBuffer;
@@ -448,9 +449,9 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 
 	// Update exported resource names
 	for (ExportedTexture& exportResource : m_ExportTextures)
-		exportResource.pTexture->pPhysicalResource->SetName(exportResource.pTexture->GetName());
+		exportResource.pTexture->GetPhysical()->SetName(exportResource.pTexture->GetName());
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
-		exportResource.pBuffer->pPhysicalResource->SetName(exportResource.pBuffer->GetName());
+		exportResource.pBuffer->GetPhysical()->SetName(exportResource.pBuffer->GetName());
 
 	DestroyData();
 }
@@ -506,10 +507,10 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 	{
 		RGResource* pResource = transition.pResource;
 
-		check(pResource->pPhysicalResource, "Resource was not allocated during the graph compile phase");
-		check(pResource->IsImported || pResource->IsExported || !pResource->pResourceReference, "If resource is not external, it's reference should be released during the graph compile phase");
+		check(pResource->GetPhysical(), "Resource was not allocated during the graph compile phase");
+		check(pResource->IsImported || pResource->IsExported || !pResource->IsAllocated(), "If resource is not external, it's reference should be released during the graph compile phase");
 
-		context.InsertResourceBarrier(pResource->pPhysicalResource, transition.BeforeState, transition.AfterState, transition.SubResource);
+		context.InsertResourceBarrier(pResource->GetPhysical(), transition.BeforeState, transition.AfterState, transition.SubResource);
 	}
 
 	context.FlushResourceBarriers();

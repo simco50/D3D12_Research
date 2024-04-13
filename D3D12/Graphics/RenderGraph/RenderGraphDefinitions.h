@@ -51,6 +51,7 @@ private:
 	static constexpr BackingType Invalid = std::numeric_limits<BackingType>::max();
 };
 
+
 using RGPassID = RGHandle<RGPass, uint16>;
 using RGResourceID = RGHandle<RGResource, uint16>;
 
@@ -61,37 +62,51 @@ public:
 	friend class RGPass;
 
 	RGResource(const char* pName, RGResourceID id, RGResourceType type, DeviceResource* pPhysicalResource = nullptr)
-		: pName(pName), ID(id), IsImported(!!pPhysicalResource), Type((uint32)type), pResourceReference(pPhysicalResource), pPhysicalResource(pPhysicalResource)
+		: pName(pName), ID(id), Allocated(false), IsImported(!!pPhysicalResource), Type((uint32)type), pPhysicalResource(nullptr)
 	{
+		if (pPhysicalResource)
+			SetResource(pPhysicalResource);
 	}
 
-	const char* GetName() const { return pName; }
-	DeviceResource* GetPhysical() const { return pPhysicalResource; }
-	RGResourceType GetType() const { return (RGResourceType)Type; }
+	~RGResource()
+	{
+		if (Allocated)
+			pPhysicalResource->Release();
+	}
+
+	const char*			GetName() const			{ return pName; }
+	DeviceResource*		GetPhysical() const		{ return pPhysicalResource; }
+	RGResourceType		GetType() const			{ return (RGResourceType)Type; }
+	bool				IsAllocated() const		{ return Allocated; }
 
 protected:
-	void SetResource(Ref<DeviceResource> resource)
+	void SetResource(DeviceResource* resource)
 	{
-		pResourceReference = resource;
+		check(!pPhysicalResource);
 		pPhysicalResource = resource;
+		pPhysicalResource->AddRef();
+		Allocated = true;
 	}
 
 	void Release()
 	{
-		pResourceReference = nullptr;
-		// pResource keeps a raw reference to use during execution
+		check(pPhysicalResource);
+		check(Allocated);
+		uint32 prev = pPhysicalResource->Release();
+		check(prev > 1); // This reference should never be the last one
+		Allocated = false;
 	}
 
 	const char*				pName;
 	DeviceResource*			pPhysicalResource = nullptr;
 
 	RGResourceID			ID;
+	uint32					Allocated			: 1;
 	uint32					IsImported			: 1;
 	uint32					IsExported			: 1;
 	uint32					Type				: 1;
 
 	// Compile-time data
-	Ref<DeviceResource>		pResourceReference;
 	RGPassID				FirstAccess;			///< First non-culled pass that accesses this resource
 	RGPassID				LastAccess;				///< Last non-culled pass that accesses this resource
 	RGPassID				LastWrite;				///< Last pass that wrote to this resource. Used for pass culling
@@ -110,8 +125,8 @@ public:
 
 	T* Get() const
 	{
-		check(pPhysicalResource);
-		return static_cast<T*>(pPhysicalResource);
+		check(GetPhysical());
+		return static_cast<T*>(GetPhysical());
 	}
 
 	const TDesc& GetDesc() const { return Desc; }
