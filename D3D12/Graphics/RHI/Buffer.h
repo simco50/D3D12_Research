@@ -2,7 +2,7 @@
 #include "GraphicsResource.h"
 #include "D3D.h"
 
-enum class BufferFlag
+enum class BufferFlag : uint8
 {
 	None = 0,
 	UnorderedAccess =		1 << 0,
@@ -18,6 +18,11 @@ DECLARE_BITMASK_TYPE(BufferFlag)
 
 struct BufferDesc
 {
+	uint64			Size			= 0;
+	uint32			ElementSize		= 1;
+	BufferFlag		Flags			= BufferFlag::None;
+	ResourceFormat	Format			= ResourceFormat::Unknown;
+
 	static BufferDesc CreateIndexBuffer(uint32 elements, ResourceFormat format, BufferFlag flags = BufferFlag::None)
 	{
 		check(format == ResourceFormat::R32_UINT || format == ResourceFormat::R16_UINT);
@@ -89,11 +94,6 @@ struct BufferDesc
 			Format == rhs.Format &&
 			EnumHasAllFlags(Flags, rhs.Flags);
 	}
-
-	uint64 Size = 0;
-	uint32 ElementSize = 1;
-	BufferFlag Flags = BufferFlag::None;
-	ResourceFormat Format = ResourceFormat::Unknown;
 };
 
 class Buffer : public DeviceResource

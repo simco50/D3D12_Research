@@ -1,7 +1,7 @@
 #pragma once
 #include "GraphicsResource.h"
 
-enum class TextureFlag
+enum class TextureFlag : uint8
 {
 	None = 0,
 	UnorderedAccess = 1 << 0,
@@ -12,7 +12,7 @@ enum class TextureFlag
 };
 DECLARE_BITMASK_TYPE(TextureFlag)
 
-enum class TextureType
+enum class TextureType : uint8
 {
 	Texture1D,
 	Texture1DArray,
@@ -80,15 +80,15 @@ struct ClearBinding
 
 struct TextureDesc
 {
-	uint32 Width						= 1;
-	uint32 Height						= 1;
-	uint32 DepthOrArraySize				= 1;
-	uint32 Mips							= 1;
-	TextureType Type					= TextureType::Texture2D;
-	uint32 SampleCount					= 1;
-	ResourceFormat Format				= ResourceFormat::Unknown;
-	TextureFlag Flags					= TextureFlag::None;
-	ClearBinding ClearBindingValue		= ClearBinding(Colors::Black);
+	uint32				Width				: 14	= 1;
+	uint32				Height				: 14	= 1;
+	uint32				DepthOrArraySize	: 10	= 1;
+	uint32				Mips				: 5		= 1;
+	uint32				SampleCount			: 3		= 1;
+	TextureType			Type						= TextureType::Texture2D;
+	ResourceFormat		Format						= ResourceFormat::Unknown;
+	TextureFlag			Flags						= TextureFlag::None;
+	ClearBinding		ClearBindingValue			= ClearBinding(Colors::Black);
 
 	Vector3u Size() const { return Vector3u(Width, Height, DepthOrArraySize); }
 	Vector2u Size2D() const { return Vector2u(Width, Height); }
@@ -157,6 +157,11 @@ struct TextureDesc
 			&& Type == other.Type;
 	}
 
+	bool operator!=(const TextureDesc& other) const
+	{
+		return !operator==(other);
+	}
+
 	bool IsCompatible(const TextureDesc& other) const
 	{
 		return Width == other.Width
@@ -168,11 +173,6 @@ struct TextureDesc
 			&& ClearBindingValue == other.ClearBindingValue
 			&& Type == other.Type
 			&& EnumHasAllFlags(Flags, other.Flags);
-	}
-
-	bool operator!=(const TextureDesc& other) const
-	{
-		return !operator==(other);
 	}
 };
 

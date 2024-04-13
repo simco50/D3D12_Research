@@ -18,7 +18,7 @@ class UnorderedAccessView;
 class PipelineStateInitializer;
 class StateObjectInitializer;
 
-enum class ResourceFormat
+enum class ResourceFormat : uint8
 {
 	Unknown,
 
@@ -87,7 +87,7 @@ enum class ResourceFormat
 	Num,
 };
 
-enum class FormatType
+enum class FormatType : uint8
 {
 	Integer,
 	Normalized,
@@ -97,16 +97,16 @@ enum class FormatType
 
 struct FormatInfo
 {
-	ResourceFormat Format;
-	const char* pName;
-	uint8 BytesPerBlock;
-	uint8 BlockSize;
-	FormatType Type;
-	uint32 NumComponents;
-	bool IsDepth : 1;
-	bool IsStencil : 1;
-	bool IsSigned : 1;
-	bool IsBC : 1;
+	const char*		pName;
+	ResourceFormat	Format;
+	FormatType		Type;
+	uint8			BytesPerBlock	: 8;
+	uint8			BlockSize		: 4;
+	uint8			NumComponents	: 3;
+	uint8			IsDepth			: 1;
+	uint8			IsStencil		: 1;
+	uint8			IsSigned		: 1;
+	uint8			IsBC			: 1;
 };
 
 namespace RHI

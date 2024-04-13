@@ -371,7 +371,6 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 				LPCSTR pDescription,
 				void* pContext)
 				{
-					GraphicsDevice* pDevice = static_cast<GraphicsDevice*>(pContext);
 					E_LOG(Warning, "D3D12 Validation Layer: %s", pDescription);
 				};
 
@@ -673,14 +672,15 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 Ref<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index)
 {
 	D3D12_RESOURCE_DESC resourceDesc = pSwapchainResource->GetDesc();
-	TextureDesc desc;
-	desc.Width = (uint32)resourceDesc.Width;
-	desc.Height = (uint32)resourceDesc.Height;
-	desc.Format = ResourceFormat::Unknown;
-	desc.ClearBindingValue = ClearBinding(Colors::Black);
-	desc.Mips = resourceDesc.MipLevels;
-	desc.SampleCount = resourceDesc.SampleDesc.Count;
-	desc.Flags = TextureFlag::RenderTarget;
+	TextureDesc desc{
+		.Width = (uint32)resourceDesc.Width,
+		.Height = (uint32)resourceDesc.Height,
+		.Mips = resourceDesc.MipLevels,
+		.SampleCount = resourceDesc.SampleDesc.Count,
+		.Format = ResourceFormat::Unknown,
+		.Flags = TextureFlag::RenderTarget,
+		.ClearBindingValue = ClearBinding(Colors::Black),
+	};
 
 	Texture* pTexture = new Texture(this, desc, pSwapchainResource);
 	pTexture->SetImmediateDelete(true);

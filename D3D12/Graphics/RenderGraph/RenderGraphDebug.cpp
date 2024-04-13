@@ -77,7 +77,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			physicalResourceMap[pResource->GetPhysical()].push_back(pResource);
 		}
 
-		if (ImGui::BeginTable("Resource Tracker", m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImGui::GetContentRegionAvail()))
+		if (ImGui::BeginTable("Resource Tracker", (int)m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImGui::GetContentRegionAvail()))
 		{
 			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 300);
 			for (const RGPass* pPass : m_Passes)
@@ -104,7 +104,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 					uint32 firstPassOffset = pResource->IsImported ? 0 : firstPass.GetIndex();
 					uint32 lastPassOffset = pResource->IsExported ? (int)m_Passes.size() - 1 : lastPass.GetIndex();
 
-					for (int i = firstPassOffset; i <= lastPassOffset; ++i)
+					for (uint32 i = firstPassOffset; i <= lastPassOffset; ++i)
 					{
 						const RGPass* pPass = m_Passes[i];
 						auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
