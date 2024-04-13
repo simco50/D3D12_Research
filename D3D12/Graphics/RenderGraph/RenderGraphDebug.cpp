@@ -62,127 +62,100 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 	if (!enabled)
 		return;
 
-	if(ImGui::Begin("Resource usage", &enabled, ImGuiWindowFlags_HorizontalScrollbar))
+	if(ImGui::Begin("Resource usage", &enabled))
 	{
-		int32 passIndex = 0;
-		int32 resourceIndex = 0;
-
-		float passNameHeight = 300.0f;
-		float resourceNameWidth = 300.0f;
-		ImVec2 boxSize = ImVec2(20.0f, ImGui::GetTextLineHeightWithSpacing());
-		float width = (int)m_Passes.size() * boxSize.x + resourceNameWidth;
-		float height = 1200;
-
-		ImGui::BeginChild("Table", ImVec2(width, height));
-		ImDrawList* pCmd = ImGui::GetWindowDrawList();
-
-		ImVec2 cursor = ImGui::GetCursorScreenPos();
-		ImVec2 passNamePos = cursor + ImVec2(resourceNameWidth, 0);
-
-		const RGPass* pActivePass = nullptr;
-		for (const RGPass* pPass : m_Passes)
-		{
-			ImRect itemRect(passNamePos + ImVec2(passIndex * boxSize.x, 0.0f), passNamePos + ImVec2((passIndex + 1) * boxSize.x, passNameHeight));
-			pCmd->AddLine(itemRect.Max, itemRect.Max + ImVec2(0, height), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
-			ImGui::AddText(pCmd, pPass->GetName(), itemRect.Max - ImVec2(0.0f, 12.0f), ImColor(1.0f, 1.0f, 1.0f), -Math::PI_DIV_4);
-
-			ImGui::ItemAdd(itemRect, passIndex);
-			bool passActive = ImGui::IsItemHovered();
-			if (passActive)
-			{
-				ImGui::BeginTooltip();
-				ImGui::Text("%s", pPass->GetName());
-				ImGui::Text("Flags: %s", PassFlagToString(pPass->Flags).c_str());
-				ImGui::Text("Index: %d", passIndex);
-				ImGui::EndTooltip();
-
-				pActivePass = pPass;
-			}
-			++passIndex;
-		}
-
-		cursor += ImVec2(0.0f, passNameHeight);
-		ImVec2 resourceAccessPos = cursor + ImVec2(resourceNameWidth, 0.0f);
-
-		std::unordered_map<DeviceResource*, int> resourceToIndex;
+		std::vector<const DeviceResource*> physicalResources;
+		std::unordered_map<const DeviceResource*, std::vector<const RGResource*>> physicalResourceMap;
 		for (const RGResource* pResource : m_Resources)
 		{
-			if (pResource->GetPhysical() == nullptr)
-				continue;
-			if (pResource->IsImported)
+			if (pResource->GetPhysical() == nullptr || pResource->IsImported)
 				continue;
 
-			if (resourceToIndex.find(pResource->GetPhysical()) == resourceToIndex.end())
-				resourceToIndex[pResource->GetPhysical()] = resourceIndex++;
-			int physicalResourceIndex = resourceToIndex[pResource->GetPhysical()];
+			if (std::find(physicalResources.begin(), physicalResources.end(), pResource->GetPhysical()) == physicalResources.end())
+				physicalResources.push_back(pResource->GetPhysical());
 
-			RGPassID firstPass = pResource->FirstAccess;
-			RGPassID lastPass = pResource->LastAccess;
-			if (!firstPass.IsValid() || !lastPass.IsValid())
-				continue;
-
-			uint32 firstPassOffset = firstPass.GetIndex();
-			uint32 lastPassOffset = pResource->IsExported ? (int)m_Passes.size() - 1 : lastPass.GetIndex();
-
-			ImRect itemRect(resourceAccessPos + ImVec2(firstPassOffset * boxSize.x + 1, physicalResourceIndex * boxSize.y + 1), resourceAccessPos + ImVec2((lastPassOffset + 1) * boxSize.x - 1, (physicalResourceIndex + 1) * boxSize.y - 1));
-			ImGui::ItemAdd(itemRect, pResource->ID.GetIndex());
-			bool isHovered = ImGui::IsItemHovered();
-
-			if (isHovered)
-			{
-				ImGui::BeginTooltip();
-				ImGui::Text("%s", pResource->GetName());
-
-				if (pResource->GetType() == RGResourceType::Texture)
-				{
-					const TextureDesc& desc = static_cast<const RGTexture*>(pResource)->Desc;
-					ImGui::Text("Res: %dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
-					ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
-					ImGui::Text("Mips: %d", desc.Mips);
-					ImGui::Text("Size: %s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
-				}
-				else if (pResource->GetType() == RGResourceType::Buffer)
-				{
-					const BufferDesc& desc = static_cast<const RGBuffer*>(pResource)->Desc;
-					ImGui::Text("Size: %s", Math::PrettyPrintDataSize(desc.Size).c_str());
-					ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
-					ImGui::Text("Stride: %d", desc.ElementSize);
-					ImGui::Text("Elements: %d", desc.NumElements());
-				}
-				ImGui::EndTooltip();
-			}
-
-			pCmd->AddRectFilled(itemRect.Min, itemRect.Max, pResource->GetType() == RGResourceType::Texture ? ImColor(1.0f, 0.7f, 0.9f) : ImColor(0.7f, 0.8f, 1.0f));
-
-			ImColor boxColor = ImColor(1.0f, 1.0f, 1.0f, 0.5f);
-
-			bool isActivePass = false;
-			if (pActivePass)
-			{
-				auto it = std::find_if(pActivePass->Accesses.begin(), pActivePass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access)
-					{
-						return access.pResource == pResource;
-					});
-
-				if (it != pActivePass->Accesses.end())
-				{
-					isActivePass = true;
-					const RGPass::ResourceAccess& access = *it;
-					if (D3D::HasWriteResourceState(access.Access))
-						boxColor = ImColor(1.0f, 0.5f, 0.1f, 0.8f);
-					else
-						boxColor = ImColor(0.0f, 0.9f, 0.3f, 0.8f);
-				}
-			}
-
-			if(isActivePass || isHovered)
-				pCmd->AddRectFilled(itemRect.Min, itemRect.Max, boxColor);
+			physicalResourceMap[pResource->GetPhysical()].push_back(pResource);
 		}
 
-		for (auto& resource : resourceToIndex)
-			pCmd->AddText(ImVec2(cursor.x, cursor.y + resource.second * boxSize.y), ImColor(1.0f, 1.0f, 1.0f), resource.first->GetName());
+		if (ImGui::BeginTable("Resource Tracker", m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImGui::GetContentRegionAvail()))
+		{
+			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 300);
+			for (const RGPass* pPass : m_Passes)
+			{
+				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed, 20.0f);
+			}
+			ImGui::TableAngledHeadersRowEx(25.0f * Math::DegreesToRadians);
+			ImGui::TableHeadersRow();
 
-		ImGui::EndChild();
+			for (const DeviceResource* pPhysical : physicalResources)
+			{
+				ImGui::TableNextRow();
+				ImGui::TableSetColumnIndex(0);
+				ImGui::Text(pPhysical->GetName());
+
+				const std::vector<const RGResource*>& resources = physicalResourceMap[pPhysical];
+				for (const RGResource* pResource : resources)
+				{
+					RGPassID firstPass = pResource->FirstAccess;
+					RGPassID lastPass = pResource->LastAccess;
+					if (!firstPass.IsValid() || !lastPass.IsValid())
+						continue;
+
+					uint32 firstPassOffset = pResource->IsImported ? 0 : firstPass.GetIndex();
+					uint32 lastPassOffset = pResource->IsExported ? (int)m_Passes.size() - 1 : lastPass.GetIndex();
+
+					for (int i = firstPassOffset; i <= lastPassOffset; ++i)
+					{
+						const RGPass* pPass = m_Passes[i];
+						auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
+
+						ImGui::TableSetColumnIndex(i + 1);
+
+						ImVec4 buttonColor = ImVec4(0.3f, 0.3f, 0.3f, 0.8f);
+
+						if (it != pPass->Accesses.end())
+						{
+							if (D3D::HasWriteResourceState(it->Access))
+								buttonColor = ImVec4(1.0f, 0.5f, 0.1f, 0.8f);
+							else
+								buttonColor = ImVec4(0.0f, 0.9f, 0.3f, 0.8f);
+						}
+
+						ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
+						ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonColor);
+						ImGui::PushStyleColor(ImGuiCol_ButtonHovered, buttonColor);
+						ImGui::Button("##button", ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
+						ImGui::PopStyleColor(3);
+
+						if (ImGui::IsItemHovered())
+						{
+							ImGui::BeginTooltip();
+							ImGui::Text("%s", pResource->GetName());
+
+							if (pResource->GetType() == RGResourceType::Texture)
+							{
+								const TextureDesc& desc = static_cast<const RGTexture*>(pResource)->Desc;
+								ImGui::Text("Res: %dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
+								ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
+								ImGui::Text("Mips: %d", desc.Mips);
+								ImGui::Text("Size: %s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
+							}
+							else if (pResource->GetType() == RGResourceType::Buffer)
+							{
+								const BufferDesc& desc = static_cast<const RGBuffer*>(pResource)->Desc;
+								ImGui::Text("Size: %s", Math::PrettyPrintDataSize(desc.Size).c_str());
+								ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
+								ImGui::Text("Stride: %d", desc.ElementSize);
+								ImGui::Text("Elements: %d", desc.NumElements());
+							}
+							ImGui::EndTooltip();
+						}
+					}
+				}
+			}
+
+			ImGui::EndTable();
+		}
 	}
 	ImGui::End();
 }

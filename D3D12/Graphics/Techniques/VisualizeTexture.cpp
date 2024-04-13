@@ -187,11 +187,11 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				ImGui::Text("Mip");
 				ImGui::SameLine();
 				ImGui::SetNextItemWidth(170);
-				ImGui::Combo("##Mip", &MipLevel, [](void* pData, int idx, const char** pOutText)
+
+				ImGui::Combo("##Mip", &MipLevel, [](void* pData, int idx)
 					{
 						std::string* pStrings = (std::string*)pData;
-						*pOutText = pStrings[idx].c_str();
-						return true;
+						return pStrings[idx].c_str();
 					}, mipTexts.data(), (int)mipTexts.size());
 				ImGui::EndDisabled();
 			}
