@@ -278,7 +278,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		PROFILE_CPU_SCOPE("Event Resolving");
 
 		// Move events from passes that are culled
-		std::vector<uint32> eventsToStart;
+		std::vector<RGEventID> eventsToStart;
 		uint32 eventsToEnd = 0;
 		RGPass* pLastActivePass = nullptr;
 		for (RGPass* pPass : m_Passes)
@@ -290,13 +290,13 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 					--pPass->NumEventsToEnd;
 					pPass->EventsToStart.pop_back();
 				}
-				for (uint32 eventIndex : pPass->EventsToStart)
+				for (RGEventID eventIndex : pPass->EventsToStart)
 					eventsToStart.push_back(eventIndex);
 				eventsToEnd += pPass->NumEventsToEnd;
 			}
 			else
 			{
-				for (uint32 eventIndex : eventsToStart)
+				for (RGEventID eventIndex : eventsToStart)
 					pPass->EventsToStart.push_back(eventIndex);
 				pPass->NumEventsToEnd += eventsToEnd;
 				eventsToStart.clear();
@@ -319,7 +319,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			// Duplicate profile events that cross the border of jobs to retain event hierarchy
 			RGPassID firstPass;
 			uint32 currentGroupSize = 0;
-			std::vector<uint32> activeEvents;
+			std::vector<RGEventID> activeEvents;
 			RGPass* pLastPass = nullptr;
 
 			for (uint32 passIndex = 0; passIndex < (uint32)m_Passes.size(); ++passIndex)
@@ -330,7 +330,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 					pPass->CPUEventsToStart = pPass->EventsToStart;
 					pPass->NumCPUEventsToEnd = pPass->NumEventsToEnd;
 
-					for (uint32 event : pPass->CPUEventsToStart)
+					for (RGEventID event : pPass->CPUEventsToStart)
 						activeEvents.push_back(event);
 
 					if (currentGroupSize == 0)
@@ -457,14 +457,14 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 
 void RGGraph::ExecutePass(const RGPass* pPass, CommandContext& context) const
 {
-	for (uint32 eventIndex : pPass->EventsToStart)
+	for (RGEventID eventIndex : pPass->EventsToStart)
 	{
-		const RGEvent& event = m_Events[eventIndex];
+		const RGEvent& event = m_Events[eventIndex.GetIndex()];
 		gGPUProfiler.BeginEvent(context.GetCommandList(), event.pName, event.pFilePath, event.LineNumber);
 	}
-	for (uint32 eventIndex : pPass->CPUEventsToStart)
+	for (RGEventID eventIndex : pPass->CPUEventsToStart)
 	{
-		const RGEvent& event = m_Events[eventIndex];
+		const RGEvent& event = m_Events[eventIndex.GetIndex()];
 		gCPUProfiler.BeginEvent(event.pName, event.pFilePath, event.LineNumber);
 	}
 

@@ -10,7 +10,7 @@ class RGGraph;
 class RGPass;
 
 // Flags assigned to a pass that can determine various things
-enum class RGPassFlag
+enum class RGPassFlag : uint8
 {
 	None =		0,
 	Raster =	1 << 0,		///< Raster pass
@@ -122,6 +122,14 @@ private:
 	char* m_pCurrentOffset;
 };
 
+struct RGEvent
+{
+	const char*		pName		= "";
+	const char*		pFilePath	= nullptr;
+	uint32			LineNumber	= 0;
+};
+using RGEventID = RGHandle<RGEvent, uint16>;
+
 class RGPass
 {
 private:
@@ -143,13 +151,9 @@ private:
 		virtual void Execute(CommandContext& context, const RGPassResources& resources)
 		{
 			if constexpr (HasPassResources)
-			{
 				(Lambda)(context, resources);
-			}
 			else
-			{
 				(Lambda)(context);
-			}
 		}
 
 		TLambda Lambda;
@@ -161,16 +165,16 @@ public:
 
 	struct RenderTargetAccess
 	{
-		RGTexture* pResource = nullptr;
-		RenderPassColorFlags Flags = RenderPassColorFlags::None;
-		RGTexture* pResolveTarget = nullptr;
+		RGTexture*				pResource		= nullptr;
+		RenderPassColorFlags	Flags			= RenderPassColorFlags::None;
+		RGTexture*				pResolveTarget	= nullptr;
 	};
 
 	struct DepthStencilAccess
 	{
-		RGTexture* pResource = nullptr;
-		RenderPassDepthFlags Flags = RenderPassDepthFlags::None;
-		bool Write;
+		RGTexture*				pResource		= nullptr;
+		RenderPassDepthFlags	Flags			= RenderPassDepthFlags::None;
+		bool					Write;
 	};
 
 	RGPass(RGGraph& graph, RGGraphAllocator& allocator, const char* pName, RGPassFlag flags, RGPassID id)
@@ -208,10 +212,10 @@ private:
 
 	struct ResourceTransition
 	{
-		RGResource* pResource;
-		D3D12_RESOURCE_STATES BeforeState;
-		D3D12_RESOURCE_STATES AfterState;
-		uint32 SubResource;
+		RGResource*				pResource;
+		D3D12_RESOURCE_STATES	BeforeState;
+		D3D12_RESOURCE_STATES	AfterState;
+		uint32					SubResource;
 	};
 
 	const char*						pName;
@@ -222,8 +226,8 @@ private:
 	bool							IsCulled			= true;
 
 	// Profiling
-	std::vector<uint32>				EventsToStart;
-	std::vector<uint32>				CPUEventsToStart;
+	std::vector<RGEventID>			EventsToStart;
+	std::vector<RGEventID>			CPUEventsToStart;
 	uint32							NumEventsToEnd		= 0;
 	uint32							NumCPUEventsToEnd	= 0;
 
@@ -261,13 +265,6 @@ private:
 	uint32 m_FrameIndex = 0;
 };
 
-struct RGEvent
-{
-	const char* pName = "";
-	const char* pFilePath = nullptr;
-	uint32 LineNumber = 0;
-};
-
 struct RGGraphOptions
 {
 	bool ResourceAliasing		= true;
@@ -300,7 +297,7 @@ public:
 	{
 		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, m_Allocator.AllocateString(pName), flags, RGPassID((uint16)m_Passes.size()));
 
-		for (uint32 eventIndex : m_PendingEvents)
+		for (RGEventID eventIndex : m_PendingEvents)
 			pPass->EventsToStart.push_back(eventIndex);
 		m_PendingEvents.clear();
 
@@ -376,10 +373,10 @@ public:
 	RGBlackboard Blackboard;
 
 private:
-	uint32 AddEvent(const char* pName, const char* pFilePath, uint32 lineNumber)
+	RGEventID AddEvent(const char* pName, const char* pFilePath, uint32 lineNumber)
 	{
 		m_Events.push_back(RGEvent{ m_Allocator.AllocateString(pName), pFilePath, lineNumber });
-		return (uint32)m_Events.size() - 1;
+		return RGEventID((uint16)(m_Events.size() - 1));
 	}
 
 	void ExecutePass(const RGPass* pPass, CommandContext& context) const;
@@ -387,7 +384,7 @@ private:
 	void DestroyData();
 
 	bool								m_IsCompiled		= false;
-	std::vector<uint32>					m_PendingEvents;
+	std::vector<RGEventID>				m_PendingEvents;
 	std::vector<RGEvent>				m_Events;
 
 	RGGraphAllocator					m_Allocator;
@@ -429,8 +426,8 @@ private:
 
 namespace RGUtils
 {
-	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
-	RGPass& AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
-	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool doExport);
-	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool doExport);
+	RGPass&		AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
+	RGPass&		AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
+	RGBuffer*	CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool doExport);
+	RGTexture*	CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool doExport);
 }

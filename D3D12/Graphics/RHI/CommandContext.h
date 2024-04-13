@@ -7,14 +7,14 @@
 struct VertexBufferView;
 struct IndexBufferView;
 
-enum class CommandListContext
+enum class CommandListContext : uint8
 {
 	Graphics,
 	Compute,
 	Invalid,
 };
 
-enum class RenderPassColorFlags
+enum class RenderPassColorFlags : uint8
 {
 	None,
 	Clear = 1 << 0,
@@ -22,7 +22,7 @@ enum class RenderPassColorFlags
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderPassColorFlags)
 
-enum class RenderPassDepthFlags
+enum class RenderPassDepthFlags : uint8
 {
 	None,
 	ClearDepth = 1 << 0,
