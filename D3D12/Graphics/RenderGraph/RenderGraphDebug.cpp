@@ -77,8 +77,10 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			physicalResourceMap[pResource->GetPhysical()].push_back(pResource);
 		}
 
+		static char filter[128];
+
 		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(1, 1));
-		if (ImGui::BeginTable("Resource Tracker", (int)m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImGui::GetContentRegionAvail()))
+		if (ImGui::BeginTable("Resource Tracker", (int)m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg, ImGui::GetContentRegionAvail()))
 		{
 			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 300);
 			for (const RGPass* pPass : m_Passes)
@@ -103,7 +105,17 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				// In your own code you may omit the PushID/PopID all-together, provided you know they won't collide.
 				const char* name = (ImGui::TableGetColumnFlags(column_n) & ImGuiTableColumnFlags_NoHeaderLabel) ? "" : ImGui::TableGetColumnName(column_n);
 				ImGui::PushID(column_n);
-				ImGui::TableHeader(name);
+
+				if (column_n == 0)
+				{
+					ImGui::TableHeader("##name");
+					ImGui::SameLine();
+					ImGui::InputTextWithHint("##search", "Filter", filter, ARRAYSIZE(filter));
+				}
+				else
+				{
+					ImGui::TableHeader(name);
+				}
 
 				if (column_n > 0 && ImGui::IsItemHovered())
 				{
@@ -123,11 +135,24 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 			for (const DeviceResource* pPhysical : physicalResources)
 			{
+				bool filterMatch = false;
+				const std::vector<const RGResource*>& resources = physicalResourceMap[pPhysical];
+				for (const RGResource* pResource : resources)
+				{
+					if (strstr(pResource->GetName(), filter))
+					{
+						filterMatch = true;
+						break;
+					}
+				}
+
+				if (!filterMatch)
+					continue;
+				
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
 				ImGui::Text(pPhysical->GetName());
 
-				const std::vector<const RGResource*>& resources = physicalResourceMap[pPhysical];
 				for (const RGResource* pResource : resources)
 				{
 					RGPassID firstPass = pResource->FirstAccess;
@@ -153,11 +178,9 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 									buttonColor = ImVec4(1.0f, 0.5f, 0.1f, 0.6f);
 								else
 									buttonColor = ImVec4(0.0f, 0.9f, 0.3f, 0.6f);
-							}
 
-							if (pPass == pActivePass)
-							{
-								buttonColor.w += 0.2f;
+								if (pPass == pActivePass)
+									buttonColor.w = 1.0f;
 							}
 
 							ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
@@ -188,6 +211,9 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 									ImGui::Text("Stride: %d", desc.ElementSize);
 									ImGui::Text("Elements: %d", desc.NumElements());
 								}
+
+								ImGui::Text("Export: %s - Import: %s", pResource->IsExported ? "Y" : "N", pResource->IsImported ? "Y" : "N");
+
 								ImGui::EndTooltip();
 							}
 						}
