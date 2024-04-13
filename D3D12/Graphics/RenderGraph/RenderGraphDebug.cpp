@@ -77,15 +77,49 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			physicalResourceMap[pResource->GetPhysical()].push_back(pResource);
 		}
 
+		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(1, 1));
 		if (ImGui::BeginTable("Resource Tracker", (int)m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImGui::GetContentRegionAvail()))
 		{
 			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 300);
 			for (const RGPass* pPass : m_Passes)
 			{
-				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed, 20.0f);
+				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed, 17.0f);
 			}
 			ImGui::TableAngledHeadersRowEx(25.0f * Math::DegreesToRadians);
-			ImGui::TableHeadersRow();
+
+			const RGPass* pActivePass = nullptr;
+
+			// Open row
+			const float row_height = ImGui::TableGetHeaderRowHeight();
+			ImGui::TableNextRow(ImGuiTableRowFlags_Headers, row_height);
+
+			const int columns_count = ImGui::TableGetColumnCount();
+			for (int column_n = 0; column_n < columns_count; column_n++)
+			{
+				if (!ImGui::TableSetColumnIndex(column_n))
+					continue;
+
+				// Push an id to allow unnamed labels (generally accidental, but let's behave nicely with them)
+				// In your own code you may omit the PushID/PopID all-together, provided you know they won't collide.
+				const char* name = (ImGui::TableGetColumnFlags(column_n) & ImGuiTableColumnFlags_NoHeaderLabel) ? "" : ImGui::TableGetColumnName(column_n);
+				ImGui::PushID(column_n);
+				ImGui::TableHeader(name);
+
+				if (column_n > 0 && ImGui::IsItemHovered())
+				{
+					const RGPass* pPass = m_Passes[column_n];
+					ImGui::BeginTooltip();
+					ImGui::Text("%s", pPass->GetName());
+					ImGui::Text("Flags: %s", PassFlagToString(pPass->Flags).c_str());
+					ImGui::Text("Index: %d", pPass->ID.GetIndex());
+					ImGui::EndTooltip();
+
+					pActivePass = pPass;
+				}
+
+				ImGui::PopID();
+			}
+
 
 			for (const DeviceResource* pPhysical : physicalResources)
 			{
@@ -106,55 +140,62 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 					for (uint32 i = firstPassOffset; i <= lastPassOffset; ++i)
 					{
-						const RGPass* pPass = m_Passes[i];
-						auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
-
-						ImGui::TableSetColumnIndex(i + 1);
-
-						ImVec4 buttonColor = ImVec4(0.3f, 0.3f, 0.3f, 0.8f);
-
-						if (it != pPass->Accesses.end())
+						if (ImGui::TableSetColumnIndex(i + 1))
 						{
-							if (D3D::HasWriteResourceState(it->Access))
-								buttonColor = ImVec4(1.0f, 0.5f, 0.1f, 0.8f);
-							else
-								buttonColor = ImVec4(0.0f, 0.9f, 0.3f, 0.8f);
-						}
+							const RGPass* pPass = m_Passes[i];
+							auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
 
-						ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
-						ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonColor);
-						ImGui::PushStyleColor(ImGuiCol_ButtonHovered, buttonColor);
-						ImGui::Button("##button", ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
-						ImGui::PopStyleColor(3);
+							ImVec4 buttonColor = ImVec4(0.3f, 0.3f, 0.3f, 0.6f);
 
-						if (ImGui::IsItemHovered())
-						{
-							ImGui::BeginTooltip();
-							ImGui::Text("%s", pResource->GetName());
-
-							if (pResource->GetType() == RGResourceType::Texture)
+							if (it != pPass->Accesses.end())
 							{
-								const TextureDesc& desc = static_cast<const RGTexture*>(pResource)->Desc;
-								ImGui::Text("Res: %dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
-								ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
-								ImGui::Text("Mips: %d", desc.Mips);
-								ImGui::Text("Size: %s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
+								if (D3D::HasWriteResourceState(it->Access))
+									buttonColor = ImVec4(1.0f, 0.5f, 0.1f, 0.6f);
+								else
+									buttonColor = ImVec4(0.0f, 0.9f, 0.3f, 0.6f);
 							}
-							else if (pResource->GetType() == RGResourceType::Buffer)
+
+							if (pPass == pActivePass)
 							{
-								const BufferDesc& desc = static_cast<const RGBuffer*>(pResource)->Desc;
-								ImGui::Text("Size: %s", Math::PrettyPrintDataSize(desc.Size).c_str());
-								ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
-								ImGui::Text("Stride: %d", desc.ElementSize);
-								ImGui::Text("Elements: %d", desc.NumElements());
+								buttonColor.w += 0.2f;
 							}
-							ImGui::EndTooltip();
+
+							ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
+							ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonColor);
+							buttonColor.w = 1.0f;
+							ImGui::PushStyleColor(ImGuiCol_ButtonHovered, buttonColor);
+							ImGui::Button("##button", ImVec2(ImGui::TableGetHeaderRowHeight(), ImGui::TableGetHeaderRowHeight()));
+							ImGui::PopStyleColor(3);
+
+							if (ImGui::IsItemHovered())
+							{
+								ImGui::BeginTooltip();
+								ImGui::Text("%s", pResource->GetName());
+
+								if (pResource->GetType() == RGResourceType::Texture)
+								{
+									const TextureDesc& desc = static_cast<const RGTexture*>(pResource)->Desc;
+									ImGui::Text("Res: %dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
+									ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
+									ImGui::Text("Mips: %d", desc.Mips);
+									ImGui::Text("Size: %s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
+								}
+								else if (pResource->GetType() == RGResourceType::Buffer)
+								{
+									const BufferDesc& desc = static_cast<const RGBuffer*>(pResource)->Desc;
+									ImGui::Text("Size: %s", Math::PrettyPrintDataSize(desc.Size).c_str());
+									ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
+									ImGui::Text("Stride: %d", desc.ElementSize);
+									ImGui::Text("Elements: %d", desc.NumElements());
+								}
+								ImGui::EndTooltip();
+							}
 						}
 					}
 				}
 			}
-
 			ImGui::EndTable();
+			ImGui::PopStyleVar();
 		}
 	}
 	ImGui::End();
