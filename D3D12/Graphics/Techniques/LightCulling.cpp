@@ -49,7 +49,7 @@ LightCulling::~LightCulling()
 
 void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView* pView, LightCull3DData& cullData)
 {
-	RG_GRAPH_SCOPE("Light Culling", graph);
+	RG_GRAPH_SCOPE("Clustered Light Culling", graph);
 
 	cullData.ClusterCount.x = Math::DivideAndRoundUp(pView->GetDimensions().x, gLightClusterTexelSize);
 	cullData.ClusterCount.y = Math::DivideAndRoundUp(pView->GetDimensions().y, gLightClusterTexelSize);
@@ -147,7 +147,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 
 void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& resources)
 {
-	RG_GRAPH_SCOPE("Light Culling", graph);
+	RG_GRAPH_SCOPE("Tiled Light Culling", graph);
 
 	uint32 tilesX = Math::DivideAndRoundUp((uint32)pView->MainView.Viewport.GetWidth(), gTiledLightingTileSize);
 	uint32 tilesY = Math::DivideAndRoundUp((uint32)pView->MainView.Viewport.GetHeight(), gTiledLightingTileSize);

@@ -93,9 +93,10 @@ namespace Tweakables
 	ConsoleVariable gRenderGraphPassCulling("r.RenderGraph.PassCulling", true);
 	ConsoleVariable gRenderGraphStateTracking("r.RenderGraph.StateTracking", true);
 	ConsoleVariable gRenderGraphPassGroupSize("r.RenderGraph.PassGroupSize", 10);
+	ConsoleVariable gRenderGraphResourceTracker("r.RenderGraph.ResourceTracker", false);
+	ConsoleVariable gRenderGraphPassView("r.RenderGraph.PassView", false);
 
 	bool gDumpRenderGraphNextFrame = false;
-	bool gEnableRenderGraphResourceTracker = false;
 	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { gDumpRenderGraphNextFrame = true; });
 	bool gScreenshotNextFrame = false;
 	ConsoleCommand<> gScreenshot("Screenshot", []() { gScreenshotNextFrame = true; });
@@ -885,7 +886,8 @@ void DemoApp::Update()
 		graph.Compile(*m_RenderGraphPool, graphOptions);
 
 		// Debug options
-		graph.DrawResourceTracker(Tweakables::gEnableRenderGraphResourceTracker);
+		graph.DrawResourceTracker(Tweakables::gRenderGraphResourceTracker.Get());
+		graph.DrawPassView(Tweakables::gRenderGraphPassView.Get());
 
 		if (Tweakables::gDumpRenderGraphNextFrame)
 		{
@@ -1071,6 +1073,14 @@ void DemoApp::UpdateImGui()
 			{
 				showProfiler = !showProfiler;
 			}
+			if (ImGui::MenuItem("RenderGraph Resource Tracker", "Ctrl + R"))
+			{
+				Tweakables::gRenderGraphResourceTracker = true;
+			}
+			if (ImGui::MenuItem("RenderGraph Pass View", "Ctrl + T"))
+			{
+				Tweakables::gRenderGraphPassView = true;
+			}
 			bool& showConsole = console.IsVisible();
 			if (ImGui::MenuItem("Output Log", "~", showConsole))
 			{
@@ -1088,10 +1098,6 @@ void DemoApp::UpdateImGui()
 			if (ImGui::MenuItem("Dump RenderGraph"))
 			{
 				Tweakables::gDumpRenderGraphNextFrame = true;
-			}
-			if (ImGui::MenuItem("RenderGraph Resource Tracker"))
-			{
-				Tweakables::gEnableRenderGraphResourceTracker = true;
 			}
 			if (ImGui::MenuItem("Screenshot"))
 			{
@@ -1207,6 +1213,11 @@ void DemoApp::UpdateImGui()
 
 	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_P))
 		showProfiler = !showProfiler;
+	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_R))
+		Tweakables::gRenderGraphResourceTracker = !Tweakables::gRenderGraphResourceTracker;
+	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_T))
+		Tweakables::gRenderGraphPassView = !Tweakables::gRenderGraphPassView;
+
 
 	if (showProfiler)
 	{

@@ -4,6 +4,7 @@
 #include "Graphics/ImGuiRenderer.h"
 
 #include <External/Imgui/imgui_internal.h>
+#include <External/FontAwesome/IconsFontAwesome4.h>
 
 template<typename T>
 std::string BitmaskToString(T mask, const char* (*pValueToString)(T))
@@ -77,17 +78,19 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			physicalResourceMap[pResource->GetPhysical()].push_back(pResource);
 		}
 
-		static char filter[128];
+		static char resourceFilter[128] = "";
 
 		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(1, 1));
 		if (ImGui::BeginTable("Resource Tracker", (int)m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg, ImGui::GetContentRegionAvail()))
 		{
-			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 300);
+			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 250.0f);
 			for (const RGPass* pPass : m_Passes)
 			{
 				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed, 17.0f);
 			}
-			ImGui::TableAngledHeadersRowEx(25.0f * Math::DegreesToRadians);
+			ImGui::TableSetupScrollFreeze(1, 2);
+
+			ImGui::TableAngledHeadersRowEx(25.0f * Math::DegreesToRadians, 220);
 
 			const RGPass* pActivePass = nullptr;
 
@@ -110,7 +113,8 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				{
 					ImGui::TableHeader("##name");
 					ImGui::SameLine();
-					ImGui::InputTextWithHint("##search", "Filter", filter, ARRAYSIZE(filter));
+					ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+					ImGui::InputTextWithHint("##search", "Filter...", resourceFilter, ARRAYSIZE(resourceFilter));
 				}
 				else
 				{
@@ -139,7 +143,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				const std::vector<const RGResource*>& resources = physicalResourceMap[pPhysical];
 				for (const RGResource* pResource : resources)
 				{
-					if (strstr(pResource->GetName(), filter))
+					if (strstr(pResource->GetName(), resourceFilter))
 					{
 						filterMatch = true;
 						break;
@@ -187,7 +191,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 							ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonColor);
 							buttonColor.w = 1.0f;
 							ImGui::PushStyleColor(ImGuiCol_ButtonHovered, buttonColor);
-							ImGui::Button("##button", ImVec2(ImGui::TableGetHeaderRowHeight(), ImGui::TableGetHeaderRowHeight()));
+							ImGui::Button("##button", ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
 							ImGui::PopStyleColor(3);
 
 							if (ImGui::IsItemHovered())
@@ -207,12 +211,14 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 								{
 									const BufferDesc& desc = static_cast<const RGBuffer*>(pResource)->Desc;
 									ImGui::Text("Size: %s", Math::PrettyPrintDataSize(desc.Size).c_str());
-									ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
-									ImGui::Text("Stride: %d", desc.ElementSize);
+									if (desc.Format != ResourceFormat::Unknown)
+										ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
+									else
+										ImGui::Text("Stride: %d", desc.ElementSize);
 									ImGui::Text("Elements: %d", desc.NumElements());
 								}
 
-								ImGui::Text("Export: %s - Import: %s", pResource->IsExported ? "Y" : "N", pResource->IsImported ? "Y" : "N");
+								ImGui::Text("Export: %s - Import: %s", pResource->IsExported ? "Yes" : "No", pResource->IsImported ? "Yes" : "No");
 
 								ImGui::EndTooltip();
 							}
@@ -226,6 +232,125 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 	}
 	ImGui::End();
 }
+
+
+void RGGraph::DrawPassView(bool& enabled) const
+{
+	if (!enabled)
+		return;
+
+	struct TreeNode
+	{
+		const char*			pName;
+		RGPassID			Pass;
+		std::vector<int>	Children;
+
+		void DrawNode(Span<const TreeNode> nodes, const RGGraph& graph, int depth = 0) const
+		{
+			ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns;
+
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+
+			if (Pass.IsValid())
+			{
+				ImGui::PushID(Pass.GetIndex());
+				const RGPass* pPass = graph.m_Passes[Pass.GetIndex()];
+				bool open = ImGui::TreeNodeEx(pPass->GetName(), flags);
+
+				ImGui::TableNextColumn();
+				ImGui::TextDisabled(PassFlagToString(pPass->Flags).c_str());
+				ImGui::TableNextColumn();
+
+				if (open)
+				{
+					for (const RGPass::ResourceAccess& access : pPass->Accesses)
+					{
+						ImGui::TableNextRow();
+						ImGui::TableNextColumn();
+
+						ImGui::TreeNodeEx(access.pResource->GetName(), flags | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen);
+						ImGui::TableNextColumn();
+						ImGui::Text(D3D::ResourceStateToString(access.Access).c_str());
+					}
+					ImGui::TreePop();
+				}
+				ImGui::PopID();
+			}
+			else
+			{
+				if (depth == 0)
+					flags |= ImGuiTreeNodeFlags_DefaultOpen;
+
+				bool open = ImGui::TreeNodeEx(pName, flags, ICON_FA_FOLDER " %s", pName);
+				ImGui::TableNextColumn();
+				ImGui::TextDisabled("--");
+				ImGui::TableNextColumn();
+
+				if(open)
+				{
+					for (int i : Children)
+					{
+						nodes[i].DrawNode(nodes, graph, depth + 1);
+					}
+					ImGui::TreePop();
+				}
+			}
+		}
+	};
+
+	std::vector<TreeNode> nodes(1);
+	std::vector<int> nodeStack;
+	nodeStack.push_back(0);
+
+	for (RGPass* pPass : m_Passes)
+	{
+		if (pPass->IsCulled)
+			continue;
+
+		for (RGEventID eventID : pPass->EventsToStart)
+		{
+			uint32 newIndex = (uint32)nodes.size();
+			nodes[nodeStack.back()].Children.push_back(newIndex);
+			TreeNode& newNode = nodes.emplace_back();
+			newNode.pName = m_Events[eventID.GetIndex()].pName;
+			nodeStack.push_back(newIndex);
+		}
+
+		uint32 newIndex = (uint32)nodes.size();
+		TreeNode& newNode = nodes.emplace_back();
+		nodes[nodeStack.back()].Children.push_back(newIndex);
+		newNode.Pass = pPass->ID;
+
+		for (uint32 i = 0; i < pPass->NumEventsToEnd; ++i)
+		{
+			nodeStack.pop_back();
+		}
+	}
+
+	check(nodeStack.size() == 1);
+
+	Span<int> rootNodes = nodes[0].Children;
+
+	if (ImGui::Begin("Passes", &enabled))
+	{
+		if (ImGui::BeginTable("Passes", 2, ImGuiTableFlags_Resizable))
+		{
+			ImGui::TableSetupColumn("Name");
+			ImGui::TableSetupColumn("Resources");
+			ImGui::TableHeadersRow();
+
+			for (int node : rootNodes)
+			{
+				nodes[node].DrawNode(nodes, *this);
+			}
+
+			ImGui::EndTable();
+		}
+	}
+	ImGui::End();
+}
+
 
 void RGGraph::DumpDebugGraph(const char* pPath) const
 {

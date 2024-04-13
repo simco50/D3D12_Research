@@ -366,6 +366,7 @@ public:
 
 	void DumpDebugGraph(const char* pFilePath) const;
 	void DrawResourceTracker(bool& enabled) const;
+	void DrawPassView(bool& enabled) const;
 	
 	void PushEvent(const char* pName, const char* pFilePath = "", uint32 lineNumber = 0);
 	void PopEvent();
