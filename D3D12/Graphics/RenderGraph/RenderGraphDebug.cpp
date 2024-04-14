@@ -2,6 +2,7 @@
 #include "RenderGraph.h"
 #include "Core/Stream.h"
 #include "Graphics/ImGuiRenderer.h"
+#include "Core/Profiler.h"
 
 #include <External/Imgui/imgui_internal.h>
 #include <External/FontAwesome/IconsFontAwesome4.h>
@@ -56,12 +57,53 @@ std::string PassFlagToString(RGPassFlag flags)
 		});
 }
 
+
+// 32-bit FNV hash
+static uint32 HashString(const char* pStr)
+{
+	uint32 result = 0x811c9dc5;
+	while (*pStr)
+	{
+		result ^= *pStr++;
+		result *= 0x1000193;
+	}
+	return result;
+}
+
+// From https://github.com/stolk/hsvbench
+static ImVec4 HSVtoRGB(float h, float s, float v)
+{
+	const float h6 = 6.0f * h;
+	const float r = fabsf(h6 - 3.0f) - 1.0f;
+	const float g = 2.0f - fabsf(h6 - 2.0f);
+	const float b = 2.0f - fabsf(h6 - 4.0f);
+
+	const float is = 1.0f - s;
+	ImVec4 rgba;
+	rgba.x = v * (s * ImClamp(r, 0.0f, 1.0f) + is);
+	rgba.y = v * (s * ImClamp(g, 0.0f, 1.0f) + is);
+	rgba.z = v * (s * ImClamp(b, 0.0f, 1.0f) + is);
+	rgba.w = 1.0f;
+	return rgba;
+}
+
+// Generate a color from a string. Used to color bars
+static ImColor ColorFromString(const char* pName)
+{
+	uint32 hash = HashString(pName);
+	float hashF = (float)hash / UINT32_MAX;
+	return ImColor(HSVtoRGB(hashF, 0.5f, 0.6f));
+}
+
+
 void RGGraph::DrawResourceTracker(bool& enabled) const
 {
 	check(m_IsCompiled);
 
 	if (!enabled)
 		return;
+
+	PROFILE_CPU_SCOPE();
 
 	if(ImGui::Begin("Resource usage", &enabled))
 	{
@@ -83,25 +125,97 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			physicalResourceMap[pResource->GetPhysical()].push_back(pResource);
 		}
 
+		struct Event
+		{
+			RGEventID ID;
+			RGPassID Begin;
+			RGPassID End;
+			uint16 Depth;
+		};
+		std::vector<Event> events;
+		std::vector<uint16> eventStack;
+		int eventDepth = 0;
+
+		for (RGPass* pPass : m_Passes)
+		{
+			if (pPass->IsCulled)
+				continue;
+
+			for (RGEventID eventID : pPass->EventsToStart)
+			{
+				events.push_back(Event{
+						.ID = eventID,
+						.Begin = pPass->ID,
+						.Depth = (uint16)eventStack.size(),
+					});
+				eventStack.push_back((uint16)(events.size() - 1));
+				eventDepth = ImMax(eventDepth, (int)eventStack.size());
+			}
+
+			for (uint32 i = 0; i < pPass->NumEventsToEnd; ++i)
+			{
+				events[eventStack.back()].End = pPass->ID;
+				eventStack.pop_back();
+			}
+		}
+
 		static char resourceFilter[128] = "";
 
 		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(1, 1));
+
 		if (ImGui::BeginTable("Resource Tracker", (int)m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImGui::GetContentRegionAvail()))
 		{
-			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 300.0f);
+			float column_width = 20.0f;
+			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 250.0f);
 			for (const RGPass* pPass : m_Passes)
 			{
-				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed, 17.0f);
+				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed, column_width);
 			}
-			ImGui::TableSetupScrollFreeze(1, 2);
+			ImGui::TableSetupScrollFreeze(1, 3);
 
-			ImGui::TableAngledHeadersRowEx(25.0f * Math::DegreesToRadians, 220);
+			ImGui::TableAngledHeadersRowEx(40.0f * Math::DegreesToRadians, 180);
 
+			// Event bars
+			const float row_height = ImGui::GetTextLineHeight();
+			ImGui::TableNextRow(ImGuiTableRowFlags_Headers, row_height * eventDepth);
+			float clipRectX = ImGui::GetCursorScreenPos().x + ImGui::GetColumnWidth(0);
+			ImGui::TableSetColumnIndex(1);
+
+			// Find actual column width
+			ImVec2 c = ImGui::GetCursorScreenPos();
+			ImGui::TableSetColumnIndex(2);
+			float colWidth = ImGui::GetCursorScreenPos().x - c.x;
+
+			ImDrawList* pDrawList = ImGui::GetWindowDrawList();
+			ImGui::PushClipRect(ImVec2(clipRectX, GImGui->CurrentTable->BgClipRect.Min.y), GImGui->CurrentTable->BgClipRect.Max, false); // Span all columns
+
+			for (const Event& e : events)
+			{
+				RGEvent ev = m_Events[e.ID.GetIndex()];
+				ImRect rect(e.Begin.GetIndex() * colWidth, e.Depth * row_height, (e.End.GetIndex() + 1) * colWidth, (e.Depth + 1)* row_height);
+				rect.Expand(-1.0f);
+				rect.Translate(c);
+				if (ImGui::ItemAdd(rect, ImGui::GetID(&ev)))
+				{
+					pDrawList->AddRectFilled(rect.Min, rect.Max, ColorFromString(ev.pName));
+					ImGui::RenderTextEllipsis(pDrawList, rect.Min, rect.Max, rect.Max.x, rect.Max.x, ev.pName, nullptr, nullptr);
+				}
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::BeginTooltip();
+					ImGui::Text("%s", ev.pName);
+					ImGui::Text("FilePath: %s", Paths::GetFileName(ev.pFilePath).c_str());
+					ImGui::Text("Line: %d", ev.LineNumber);
+					ImGui::EndTooltip();
+				}
+			}
+			ImGui::PopClipRect();
+
+			// Passes row
 			const RGPass* pActivePass = nullptr;
 
 			// Open row
-			const float row_height = ImGui::TableGetHeaderRowHeight();
-			ImGui::TableNextRow(ImGuiTableRowFlags_Headers, row_height);
+			ImGui::TableNextRow(ImGuiTableRowFlags_Headers, ImGui::TableGetHeaderRowHeight());
 
 			const int columns_count = ImGui::TableGetColumnCount();
 			for (int column_n = 0; column_n < columns_count; column_n++)
@@ -109,9 +223,6 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				if (!ImGui::TableSetColumnIndex(column_n))
 					continue;
 
-				// Push an id to allow unnamed labels (generally accidental, but let's behave nicely with them)
-				// In your own code you may omit the PushID/PopID all-together, provided you know they won't collide.
-				const char* name = (ImGui::TableGetColumnFlags(column_n) & ImGuiTableColumnFlags_NoHeaderLabel) ? "" : ImGui::TableGetColumnName(column_n);
 				ImGui::PushID(column_n);
 
 				if (column_n == 0)
@@ -123,19 +234,25 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				}
 				else
 				{
-					ImGui::TableHeader(name);
-				}
-
-				if (column_n > 0 && ImGui::IsItemHovered())
-				{
 					const RGPass* pPass = m_Passes[column_n - 1];
-					ImGui::BeginTooltip();
-					ImGui::Text("%s", pPass->GetName());
-					ImGui::Text("Flags: %s", PassFlagToString(pPass->Flags).c_str());
-					ImGui::Text("Index: %d", pPass->ID.GetIndex());
-					ImGui::EndTooltip();
+					ImVec4 clr = pPass->IsCulled ? ImVec4(1.0f, 1.0f, 1.0f, 0.4f) : ImVec4(1.0f, 1.0f, 1.0f, 0.8f);
+					ImGui::PushStyleColor(ImGuiCol_Button, clr);
+					ImGui::PushStyleColor(ImGuiCol_ButtonActive, clr);
+					clr.w = 1.0f;
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, clr);
+					ImGui::Button("##button", ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
+					ImGui::PopStyleColor(3);
 
-					pActivePass = pPass;
+					if (ImGui::IsItemHovered())
+					{
+						ImGui::BeginTooltip();
+						ImGui::Text("%s", pPass->GetName());
+						ImGui::Text("Flags: %s", PassFlagToString(pPass->Flags).c_str());
+						ImGui::Text("Index: %d", pPass->ID.GetIndex());
+						ImGui::EndTooltip();
+
+						pActivePass = pPass;
+					}
 				}
 
 				ImGui::PopID();
@@ -236,38 +353,39 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 						}
 					};
 
-				if (!isOpen)
+				for (const RGResource* pResource : resources)
 				{
-					for (const RGResource* pResource : resources)
-					{
-						RGPassID firstPass = pResource->FirstAccess;
-						RGPassID lastPass = pResource->LastAccess;
-						if (!firstPass.IsValid() || !lastPass.IsValid())
-							continue;
+					RGPassID firstPass = pResource->FirstAccess;
+					RGPassID lastPass = pResource->LastAccess;
+					if (!firstPass.IsValid() || !lastPass.IsValid())
+						continue;
 
-						DrawResourceRow(pResource, false);
-					}
+					DrawResourceRow(pResource, false);
 				}
-				else
+
+				if (isOpen)
 				{
 
 					for (const RGResource* pResource : resources)
 					{
 						ImGui::TableNextRow();
 						ImGui::TableNextColumn();
-						ImGui::Text(pResource->GetName());
+
+						ImGui::TreeNodeEx(pResource->GetName(), ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen);
 
 						if (ImGui::IsItemHovered())
 							DrawResourceTooltip(pResource);
+
 						DrawResourceRow(pResource, true);
 						ImGui::TableNextColumn();
 					}
 					ImGui::TreePop();
 				}
 			}
-			ImGui::EndTable();
-			ImGui::PopStyleVar();
 		}
+
+		ImGui::EndTable();
+		ImGui::PopStyleVar();
 	}
 	ImGui::End();
 }
