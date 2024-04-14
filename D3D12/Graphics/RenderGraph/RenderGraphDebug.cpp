@@ -65,9 +65,14 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 	if(ImGui::Begin("Resource usage", &enabled))
 	{
+		std::vector<RGResource*> sortedResources = m_Resources;
+		std::sort(sortedResources.begin(), sortedResources.end(), [](const RGResource* pA, const RGResource* pB) {
+			return pA->FirstAccess.GetIndex() < pB->FirstAccess.GetIndex();
+			});
+
 		std::vector<const DeviceResource*> physicalResources;
 		std::unordered_map<const DeviceResource*, std::vector<const RGResource*>> physicalResourceMap;
-		for (const RGResource* pResource : m_Resources)
+		for (const RGResource* pResource : sortedResources)
 		{
 			if (pResource->GetPhysical() == nullptr || pResource->IsImported)
 				continue;
@@ -81,9 +86,9 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 		static char resourceFilter[128] = "";
 
 		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(1, 1));
-		if (ImGui::BeginTable("Resource Tracker", (int)m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg, ImGui::GetContentRegionAvail()))
+		if (ImGui::BeginTable("Resource Tracker", (int)m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImGui::GetContentRegionAvail()))
 		{
-			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 250.0f);
+			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 300.0f);
 			for (const RGPass* pPass : m_Passes)
 			{
 				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed, 17.0f);
@@ -123,7 +128,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 				if (column_n > 0 && ImGui::IsItemHovered())
 				{
-					const RGPass* pPass = m_Passes[column_n];
+					const RGPass* pPass = m_Passes[column_n - 1];
 					ImGui::BeginTooltip();
 					ImGui::Text("%s", pPass->GetName());
 					ImGui::Text("Flags: %s", PassFlagToString(pPass->Flags).c_str());
@@ -136,7 +141,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				ImGui::PopID();
 			}
 
-
+			int rowIndex = 0;
 			for (const DeviceResource* pPhysical : physicalResources)
 			{
 				bool filterMatch = false;
@@ -152,78 +157,112 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 				if (!filterMatch)
 					continue;
-				
+
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
-				ImGui::Text(pPhysical->GetName());
 
-				for (const RGResource* pResource : resources)
-				{
-					RGPassID firstPass = pResource->FirstAccess;
-					RGPassID lastPass = pResource->LastAccess;
-					if (!firstPass.IsValid() || !lastPass.IsValid())
-						continue;
+				bool isOpen = ImGui::TreeNodeEx(Sprintf("%d", rowIndex).c_str(), ImGuiTreeNodeFlags_SpanAvailWidth, pPhysical->GetName());
+				rowIndex++;
 
-					uint32 firstPassOffset = pResource->IsImported ? 0 : firstPass.GetIndex();
-					uint32 lastPassOffset = pResource->IsExported ? (int)m_Passes.size() - 1 : lastPass.GetIndex();
-
-					for (uint32 i = firstPassOffset; i <= lastPassOffset; ++i)
+				auto DrawResourceTooltip = [&](const RGResource* pResource)
 					{
-						if (ImGui::TableSetColumnIndex(i + 1))
+						ImGui::BeginTooltip();
+						ImGui::Text("%s", pResource->GetName());
+
+						if (pResource->GetType() == RGResourceType::Texture)
 						{
-							const RGPass* pPass = m_Passes[i];
-							auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
+							const TextureDesc& desc = static_cast<const RGTexture*>(pResource)->Desc;
+							ImGui::Text("Res: %dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
+							ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
+							ImGui::Text("Mips: %d", desc.Mips);
+							ImGui::Text("Size: %s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
+						}
+						else if (pResource->GetType() == RGResourceType::Buffer)
+						{
+							const BufferDesc& desc = static_cast<const RGBuffer*>(pResource)->Desc;
+							ImGui::Text("Size: %s", Math::PrettyPrintDataSize(desc.Size).c_str());
+							if (desc.Format != ResourceFormat::Unknown)
+								ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
+							else
+								ImGui::Text("Stride: %d", desc.ElementSize);
+							ImGui::Text("Elements: %d", desc.NumElements());
+						}
 
-							ImVec4 buttonColor = ImVec4(0.3f, 0.3f, 0.3f, 0.6f);
+						ImGui::Text("Export: %s - Import: %s", pResource->IsExported ? "Yes" : "No", pResource->IsImported ? "Yes" : "No");
 
-							if (it != pPass->Accesses.end())
+						ImGui::EndTooltip();
+					};
+
+				auto DrawResourceRow = [&](const RGResource* pResource, bool isInner)
+					{
+						RGPassID firstPass = pResource->FirstAccess;
+						RGPassID lastPass = pResource->LastAccess;
+						uint32 firstPassOffset = pResource->IsImported ? 0 : firstPass.GetIndex();
+						uint32 lastPassOffset = pResource->IsExported ? (int)m_Passes.size() - 1 : lastPass.GetIndex();
+
+						for (uint32 i = firstPassOffset; i <= lastPassOffset; ++i)
+						{
+							if (ImGui::TableSetColumnIndex(i + 1))
 							{
-								if (D3D::HasWriteResourceState(it->Access))
-									buttonColor = ImVec4(1.0f, 0.5f, 0.1f, 0.6f);
-								else
-									buttonColor = ImVec4(0.0f, 0.9f, 0.3f, 0.6f);
+								const RGPass* pPass = m_Passes[i];
+								auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
 
-								if (pPass == pActivePass)
-									buttonColor.w = 1.0f;
-							}
-
-							ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
-							ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonColor);
-							buttonColor.w = 1.0f;
-							ImGui::PushStyleColor(ImGuiCol_ButtonHovered, buttonColor);
-							ImGui::Button("##button", ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
-							ImGui::PopStyleColor(3);
-
-							if (ImGui::IsItemHovered())
-							{
-								ImGui::BeginTooltip();
-								ImGui::Text("%s", pResource->GetName());
-
-								if (pResource->GetType() == RGResourceType::Texture)
+								ImVec4 buttonColor = ImVec4(0.7f, 0.7f, 0.7f, 0.3f);
+								if (it != pPass->Accesses.end())
 								{
-									const TextureDesc& desc = static_cast<const RGTexture*>(pResource)->Desc;
-									ImGui::Text("Res: %dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
-									ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
-									ImGui::Text("Mips: %d", desc.Mips);
-									ImGui::Text("Size: %s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
-								}
-								else if (pResource->GetType() == RGResourceType::Buffer)
-								{
-									const BufferDesc& desc = static_cast<const RGBuffer*>(pResource)->Desc;
-									ImGui::Text("Size: %s", Math::PrettyPrintDataSize(desc.Size).c_str());
-									if (desc.Format != ResourceFormat::Unknown)
-										ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
+									if (D3D::HasWriteResourceState(it->Access))
+										buttonColor = ImVec4(1.0f, 0.5f, 0.1f, 0.6f);
 									else
-										ImGui::Text("Stride: %d", desc.ElementSize);
-									ImGui::Text("Elements: %d", desc.NumElements());
+										buttonColor = ImVec4(0.0f, 0.9f, 0.3f, 0.6f);
+									if (pPass == pActivePass)
+										buttonColor.w = 1.0f;
 								}
+								if (isInner)
+									buttonColor.w += 0.3f;
+								buttonColor.w = ImMin(1.0f, buttonColor.w);
 
-								ImGui::Text("Export: %s - Import: %s", pResource->IsExported ? "Yes" : "No", pResource->IsImported ? "Yes" : "No");
+								ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
+								ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonColor);
+								buttonColor.w = 1.0f;
+								ImGui::PushStyleColor(ImGuiCol_ButtonHovered, buttonColor);
+								ImGui::Button("##button", ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
+								ImGui::PopStyleColor(3);
 
-								ImGui::EndTooltip();
+								if (ImGui::IsItemHovered())
+								{
+									DrawResourceTooltip(pResource);
+								}
 							}
 						}
+					};
+
+				if (!isOpen)
+				{
+					for (const RGResource* pResource : resources)
+					{
+						RGPassID firstPass = pResource->FirstAccess;
+						RGPassID lastPass = pResource->LastAccess;
+						if (!firstPass.IsValid() || !lastPass.IsValid())
+							continue;
+
+						DrawResourceRow(pResource, false);
 					}
+				}
+				else
+				{
+
+					for (const RGResource* pResource : resources)
+					{
+						ImGui::TableNextRow();
+						ImGui::TableNextColumn();
+						ImGui::Text(pResource->GetName());
+
+						if (ImGui::IsItemHovered())
+							DrawResourceTooltip(pResource);
+						DrawResourceRow(pResource, true);
+						ImGui::TableNextColumn();
+					}
+					ImGui::TreePop();
 				}
 			}
 			ImGui::EndTable();
