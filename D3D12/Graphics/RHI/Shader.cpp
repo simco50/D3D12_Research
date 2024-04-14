@@ -377,10 +377,6 @@ namespace ShaderCompiler
 		for (const std::string& includeDir : compileJob.IncludeDirs)
 			arguments.AddArgument("-I", includeDir.c_str());
 
-		arguments.AddDefine(Sprintf("_SM_MAJ=%d", compileJob.MajVersion).c_str());
-		arguments.AddDefine(Sprintf("_SM_MIN=%d", compileJob.MinVersion).c_str());
-		arguments.AddDefine("_DXC");
-
 		for (const ShaderDefine& define : compileJob.Defines)
 			arguments.AddDefine(define.Value.c_str());
 

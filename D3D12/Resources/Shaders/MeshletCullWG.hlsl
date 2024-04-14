@@ -311,7 +311,7 @@ void KickPhase2NodesCS(
 
 #endif
 
-#if __SHADER_TARGET_STAGE == __SHADER_STAGE_COMPUTE
+#ifdef SHADER_COMPUTE
 
 [shader("compute")]
 [numthreads(1, 1, 1)]
