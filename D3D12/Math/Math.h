@@ -289,6 +289,23 @@ namespace Math
 
 	Color MakeFromColorTemperature(float Temp);
 
+	// From https://github.com/stolk/hsvbench
+	inline Color HSVtoRGB(float h, float s, float v)
+	{
+		const float h6 = 6.0f * h;
+		const float r = fabsf(h6 - 3.0f) - 1.0f;
+		const float g = 2.0f - fabsf(h6 - 2.0f);
+		const float b = 2.0f - fabsf(h6 - 4.0f);
+
+		const float is = 1.0f - s;
+		Color rgba;
+		rgba.x = v * (s * Clamp(r, 0.0f, 1.0f) + is);
+		rgba.y = v * (s * Clamp(g, 0.0f, 1.0f) + is);
+		rgba.z = v * (s * Clamp(b, 0.0f, 1.0f) + is);
+		rgba.w = 1.0f;
+		return rgba;
+	}
+
 	struct Halton
 	{
 		static constexpr int FloorConstExpr(const float val)

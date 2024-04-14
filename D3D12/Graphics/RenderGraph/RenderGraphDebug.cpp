@@ -57,42 +57,12 @@ std::string PassFlagToString(RGPassFlag flags)
 		});
 }
 
-
-// 32-bit FNV hash
-static uint32 HashString(const char* pStr)
-{
-	uint32 result = 0x811c9dc5;
-	while (*pStr)
-	{
-		result ^= *pStr++;
-		result *= 0x1000193;
-	}
-	return result;
-}
-
-// From https://github.com/stolk/hsvbench
-static ImVec4 HSVtoRGB(float h, float s, float v)
-{
-	const float h6 = 6.0f * h;
-	const float r = fabsf(h6 - 3.0f) - 1.0f;
-	const float g = 2.0f - fabsf(h6 - 2.0f);
-	const float b = 2.0f - fabsf(h6 - 4.0f);
-
-	const float is = 1.0f - s;
-	ImVec4 rgba;
-	rgba.x = v * (s * ImClamp(r, 0.0f, 1.0f) + is);
-	rgba.y = v * (s * ImClamp(g, 0.0f, 1.0f) + is);
-	rgba.z = v * (s * ImClamp(b, 0.0f, 1.0f) + is);
-	rgba.w = 1.0f;
-	return rgba;
-}
-
 // Generate a color from a string. Used to color bars
-static ImColor ColorFromString(const char* pName)
+static ImU32 ColorFromString(const char* pName)
 {
-	uint32 hash = HashString(pName);
+	uint32 hash = StringHash(pName);
 	float hashF = (float)hash / UINT32_MAX;
-	return ImColor(HSVtoRGB(hashF, 0.5f, 0.6f));
+	return Math::Pack_RGBA8_UNORM(Math::HSVtoRGB(hashF, 0.5f, 0.6f));
 }
 
 
