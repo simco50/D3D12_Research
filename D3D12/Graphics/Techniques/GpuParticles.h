@@ -20,8 +20,6 @@ private:
 	Ref<Buffer> m_pParticleBuffer;
 	Ref<Buffer> m_pCountersBuffer;
 
-	Ref<RootSignature> m_pCommonRS;
-
 	Ref<PipelineState> m_pInitializeBuffersPSO;
 	Ref<PipelineState> m_pPrepareArgumentsPS;
 	Ref<PipelineState> m_pEmitPS;

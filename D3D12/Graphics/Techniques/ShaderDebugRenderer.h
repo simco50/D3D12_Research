@@ -44,8 +44,6 @@ private:
 
 	void BuildFontAtlas(GraphicsDevice* pDevice);
 
-	Ref<RootSignature> m_pCommonRS;
-
 	Ref<PipelineState> m_pBuildIndirectDrawArgsPSO;
 	Ref<PipelineState> m_pRenderTextPSO;
 	Ref<PipelineState> m_pRenderLinesPSO;

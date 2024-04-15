@@ -17,13 +17,6 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 		return;
 	}
 
-	m_pRS = new RootSignature(pDevice);
-	m_pRS->AddRootCBV(0);
-	m_pRS->AddRootCBV(100);
-	m_pRS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	m_pRS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-	m_pRS->Finalize("Global");
-
 	StateObjectInitializer desc{};
 	desc.Name = "Path Tracing";
 	desc.MaxRecursion = 1;
@@ -35,10 +28,10 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
 	desc.AddMissShader("MaterialMS");
 	desc.AddMissShader("OcclusionMiss");
-	desc.pGlobalRootSignature = m_pRS;
+	desc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 	m_pSO = pDevice->CreateStateObject(desc);
 
-	m_pBlitPSO = pDevice->CreateComputePipeline(m_pRS, "RayTracing/PathTracing.hlsl", "BlitAccumulationCS", { "BLIT_SHADER"});
+	m_pBlitPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RayTracing/PathTracing.hlsl", "BlitAccumulationCS", { "BLIT_SHADER"});
 
 	m_OnShaderCompiledHandle = pDevice->GetShaderManager()->OnShaderEditedEvent().AddLambda([this](Shader*) { Reset(); });
 }
@@ -92,7 +85,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 			.Write(pTarget)
 			.Bind([=](CommandContext& context)
 				{
-					context.SetComputeRootSignature(m_pRS);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pBlitPSO);
 
 					struct
@@ -121,7 +114,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 				{
 					Texture* pRTTarget = pTarget->Get();
 
-					context.SetComputeRootSignature(m_pRS);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pSO);
 
 					struct

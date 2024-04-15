@@ -10,15 +10,8 @@
 ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 	: m_FontSize(24)
 {
-	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddRootConstants(0, 8);
-	m_pCommonRS->AddRootCBV(100);
-	m_pCommonRS->AddDescriptorTable(0, 4, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	m_pCommonRS->AddDescriptorTable(0, 4, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-	m_pCommonRS->Finalize("Common");
-
 	const char* pDebugRenderPath = "ShaderDebugRender.hlsl";
-	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, pDebugRenderPath, "BuildIndirectDrawArgsCS");
+	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, pDebugRenderPath, "BuildIndirectDrawArgsCS");
 
 	{
 		PipelineStateInitializer psoDesc;
@@ -27,7 +20,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
-		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetName("Render Glyphs");
 		m_pRenderTextPSO = pDevice->CreatePipeline(psoDesc);
 	}
@@ -40,7 +33,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
-		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetName("Render Lines");
 		m_pRenderLinesPSO = pDevice->CreatePipeline(psoDesc);
 	}
@@ -92,7 +85,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 			{
 				context.InsertUAVBarrier();
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBuildIndirectDrawArgsPSO);
 
 				context.BindResources(2, {
@@ -108,7 +101,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 		.DepthStencil(pDepth, RenderPassDepthFlags::ReadOnly)
 		.Bind([=](CommandContext& context)
 			{
-				context.SetGraphicsRootSignature(m_pCommonRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRenderLinesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
@@ -127,7 +120,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 		.RenderTarget(pTarget)
 		.Bind([=](CommandContext& context)
 			{
-				context.SetGraphicsRootSignature(m_pCommonRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRenderTextPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 

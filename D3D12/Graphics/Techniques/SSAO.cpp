@@ -10,15 +10,8 @@
 
 SSAO::SSAO(GraphicsDevice* pDevice)
 {
-	m_pSSAORS = new RootSignature(pDevice);
-	m_pSSAORS->AddRootConstants(0, 4);
-	m_pSSAORS->AddRootCBV(100);
-	m_pSSAORS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	m_pSSAORS->AddDescriptorTable(0, 2, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-	m_pSSAORS->Finalize("SSAO");
-
-	m_pSSAOPSO = pDevice->CreateComputePipeline(m_pSSAORS, "PostProcessing/SSAO.hlsl", "CSMain");
-	m_pSSAOBlurPSO = pDevice->CreateComputePipeline(m_pSSAORS, "PostProcessing/SSAOBlur.hlsl", "CSMain");
+	m_pSSAOPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/SSAO.hlsl", "CSMain");
+	m_pSSAOBlurPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/SSAOBlur.hlsl", "CSMain");
 }
 
 RGTexture* SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
@@ -52,7 +45,7 @@ RGTexture* SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 			{
 				Texture* pTarget = pRawAmbientOcclusion->Get();
 
-				context.SetComputeRootSignature(m_pSSAORS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSSAOPSO);
 
 				struct
@@ -86,7 +79,7 @@ RGTexture* SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				Texture* pAO = pRawAmbientOcclusion->Get();
 				Texture* pTarget = pBlurTarget->Get();
 
-				context.SetComputeRootSignature(m_pSSAORS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSSAOBlurPSO);
 
 				struct
@@ -118,7 +111,7 @@ RGTexture* SSAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				Texture* pTarget = pAmbientOcclusion->Get();
 				Texture* pBlurSource = pBlurTarget->Get();
 
-				context.SetComputeRootSignature(m_pSSAORS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSSAOBlurPSO);
 
 				struct

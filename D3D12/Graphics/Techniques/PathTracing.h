@@ -13,7 +13,6 @@ public:
 	bool IsSupported();
 
 private:
-	Ref<RootSignature> m_pRS;
 	Ref<StateObject> m_pSO;
 	Ref<PipelineState> m_pBlitPSO;
 

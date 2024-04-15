@@ -67,7 +67,6 @@ private:
 	void CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
 
 	GraphicsDevice* m_pDevice;
-	Ref<RootSignature> m_pCommonRS;
 	
 	Ref<PipelineState> m_pCullInstancesPSO[2];
 	Ref<PipelineState> m_pCullInstancesNoOcclusionPSO;

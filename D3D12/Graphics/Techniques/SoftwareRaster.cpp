@@ -12,16 +12,9 @@
 
 SoftwareRaster::SoftwareRaster(GraphicsDevice* pDevice)
 {
-	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddRootConstants(0, 8);
-	m_pCommonRS->AddRootCBV(100);
-	m_pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	m_pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-	m_pCommonRS->Finalize("Common");
-
-	m_pRasterPSO = pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "RasterizeCS");
-	m_pRasterVisualizePSO = pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "ResolveVisBufferCS");
-	m_pBuildRasterArgsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "RasterCompute.hlsl", "BuildRasterArgsCS");
+	m_pRasterPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RasterCompute.hlsl", "RasterizeCS");
+	m_pRasterVisualizePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RasterCompute.hlsl", "ResolveVisBufferCS");
+	m_pBuildRasterArgsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RasterCompute.hlsl", "BuildRasterArgsCS");
 }
 
 void SoftwareRaster::Render(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext)
@@ -34,7 +27,7 @@ void SoftwareRaster::Render(RGGraph& graph, const SceneView* pView, const Raster
 		.Write({ pRasterArgs })
 		.Bind([=](CommandContext& context)
 			{
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBuildRasterArgsPSO);
 
 				context.BindResources(2, pRasterArgs->Get()->GetUAV());
@@ -51,7 +44,7 @@ void SoftwareRaster::Render(RGGraph& graph, const SceneView* pView, const Raster
 				context.ClearUAVu(pRasterOutput->Get()->GetUAV());
 				context.InsertUAVBarrier();
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterPSO);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pRasterOutput->Get()));
@@ -70,7 +63,7 @@ void SoftwareRaster::Render(RGGraph& graph, const SceneView* pView, const Raster
 		.Write(pDebug)
 		.Bind([=](CommandContext& context)
 			{
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterVisualizePSO);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pDebug->Get()));

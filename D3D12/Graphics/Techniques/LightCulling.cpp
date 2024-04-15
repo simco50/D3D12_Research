@@ -27,20 +27,13 @@ static_assert(gMaxLightsPerTile % 32 == 0);
 LightCulling::LightCulling(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddRootConstants(0, 8);
-	m_pCommonRS->AddRootCBV(100);
-	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-	m_pCommonRS->Finalize("Light Density Visualization");
-
 	// Clustered
-	m_pClusteredCullPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ClusteredLightCulling.hlsl", "LightCulling");
-	m_pClusteredVisualizeLightsPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
+	m_pClusteredCullPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ClusteredLightCulling.hlsl", "LightCulling");
+	m_pClusteredVisualizeLightsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
 
 	// Tiled
-	m_pTiledCullPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "LightCulling.hlsl", "CSMain");
-	m_pTiledVisualizeLightsPSO = m_pDevice->CreateComputePipeline(m_pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
+	m_pTiledCullPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LightCulling.hlsl", "CSMain");
+	m_pTiledVisualizeLightsPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
 }
 
 LightCulling::~LightCulling()
@@ -110,7 +103,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pClusteredCullPSO);
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
 				// Clear the light grid because we're accumulating the light count in the shader
 				Buffer* pLightGrid = cullData.pLightGrid->Get();
@@ -204,7 +197,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 			{
 				Texture* pDepth = sceneTextures.pDepth->Get();
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledCullPSO);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pDepth));
@@ -236,7 +229,7 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* 
 			{
 				Texture* pTarget = pVisualizationTarget->Get();
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledVisualizeLightsPSO);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
@@ -280,7 +273,7 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* 
 				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
 				constantBuffer.LightGridParams = lightGridParams;
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pClusteredVisualizeLightsPSO);
 
 				context.BindRootCBV(0, constantBuffer);

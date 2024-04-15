@@ -14,13 +14,6 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		m_pGlobalRS = new RootSignature(pDevice);
-		m_pGlobalRS->AddRootConstants(0, 1);
-		m_pGlobalRS->AddRootCBV(100);
-		m_pGlobalRS->AddDescriptorTable(0, 4, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-		m_pGlobalRS->AddDescriptorTable(0, 4, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-		m_pGlobalRS->Finalize("Global");
-
 		StateObjectInitializer stateDesc;
 		stateDesc.Name = "RT Reflections";
 		stateDesc.RayGenShader = "RayGen";
@@ -32,7 +25,7 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 		stateDesc.MaxPayloadSize = 6 * sizeof(float);
 		stateDesc.MaxAttributeSize = 2 * sizeof(float);
 		stateDesc.MaxRecursion = 2;
-		stateDesc.pGlobalRootSignature = m_pGlobalRS;
+		stateDesc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 		m_pRtSO = pDevice->CreateStateObject(stateDesc);
 	}
 }
@@ -48,7 +41,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView* pView, SceneTexture
 			{
 				Texture* pTarget = pReflectionsTarget->Get();
 
-				context.SetComputeRootSignature(m_pGlobalRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRtSO);
 
 				struct

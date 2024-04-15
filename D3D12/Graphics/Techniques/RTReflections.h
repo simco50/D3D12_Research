@@ -14,6 +14,5 @@ public:
 
 private:
 	Ref<StateObject> m_pRtSO;
-	Ref<RootSignature> m_pGlobalRS;
 };
 

@@ -37,25 +37,17 @@ RG_BLACKBOARD_DATA(ParticleBlackboardData);
 GpuParticles::GpuParticles(GraphicsDevice* pDevice)
 {
 	{
-		m_pCommonRS = new RootSignature(pDevice);
-		m_pCommonRS->AddRootConstants(0, 4);
-		m_pCommonRS->AddRootCBV(100);
-		m_pCommonRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-		m_pCommonRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
-		m_pCommonRS->Finalize("Particles");
-	}
-	{
-		m_pPrepareArgumentsPS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "UpdateSimulationParameters");
-		m_pEmitPS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "Emit");
-		m_pSimulatePS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "Simulate");
-		m_pSimulateEndPS = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "SimulateEnd");
-		m_pInitializeBuffersPSO = pDevice->CreateComputePipeline(m_pCommonRS, "ParticleSimulation.hlsl", "InitializeDataCS");
+		m_pPrepareArgumentsPS = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ParticleSimulation.hlsl", "UpdateSimulationParameters");
+		m_pEmitPS = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ParticleSimulation.hlsl", "Emit");
+		m_pSimulatePS = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ParticleSimulation.hlsl", "Simulate");
+		m_pSimulateEndPS = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ParticleSimulation.hlsl", "SimulateEnd");
+		m_pInitializeBuffersPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ParticleSimulation.hlsl", "InitializeDataCS");
 	}
 	{
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetVertexShader("ParticleRendering.hlsl", "VSMain");
 		psoDesc.SetPixelShader("ParticleRendering.hlsl", "PSMain");
-		psoDesc.SetRootSignature(m_pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthWrite(true);
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
@@ -115,7 +107,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 			.Write({ pDeadList, pCountersBuffer })
 			.Bind([=](CommandContext& context)
 				{
-					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pInitializeBuffersPSO);
 
 					struct
@@ -144,7 +136,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 				{
 					m_ParticlesToSpawn += (float)g_EmitCount * Time::DeltaTime();
 
-					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pPrepareArgumentsPS);
 					struct
 					{
@@ -172,7 +164,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 			.Write({ pParticlesBuffer, pCountersBuffer, pCurrentAliveList })
 			.Bind([=](CommandContext& context)
 				{
-					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pEmitPS);
 
 					struct
@@ -205,7 +197,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 			.Write({ pCountersBuffer, pDeadList, pNewAliveList, pParticlesBuffer })
 			.Bind([=](CommandContext& context)
 				{
-					context.SetComputeRootSignature(m_pCommonRS);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pSimulatePS);
 
 					struct
@@ -241,7 +233,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 		.Write({ pIndirectArgs })
 		.Bind([=](CommandContext& context)
 			{
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSimulateEndPS);
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
@@ -278,7 +270,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 		.Bind([=](CommandContext& context)
 			{
 				context.SetPipelineState(m_pRenderParticlesPS);
-				context.SetGraphicsRootSignature(m_pCommonRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));

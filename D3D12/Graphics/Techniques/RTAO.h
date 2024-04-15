@@ -17,7 +17,6 @@ private:
 	Ref<Texture> m_pHistory;
 
 	Ref<StateObject> m_pTraceRaysSO;
-	Ref<RootSignature> m_pCommonRS;
 	Ref<PipelineState> m_pDenoisePSO;
 	Ref<PipelineState> m_pBilateralBlurPSO;
 };

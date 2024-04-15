@@ -17,7 +17,6 @@ public:
 	static void RasterizeTest();
 
 private:
-	Ref<RootSignature> m_pCommonRS;
 	Ref<PipelineState> m_pBuildRasterArgsPSO;
 	Ref<PipelineState> m_pRasterPSO;
 	Ref<PipelineState> m_pRasterVisualizePSO;
