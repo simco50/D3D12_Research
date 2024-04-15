@@ -1022,6 +1022,7 @@ void DemoApp::UpdateImGui()
 	static ImGuiConsole console;
 	static bool showProfiler = false;
 	static bool showImguiDemo = false;
+	static bool showToolMetrics = false;
 
 	ImGuiViewport* pViewport = ImGui::GetMainViewport();
 	ImGuiID dockspace = ImGui::DockSpaceOverViewport(pViewport);
@@ -1081,6 +1082,10 @@ void DemoApp::UpdateImGui()
 			{
 				Tweakables::gRenderGraphPassView = true;
 			}
+			if (ImGui::MenuItem("ImGui Metrics"))
+			{
+				showToolMetrics = !showToolMetrics;
+			}
 			bool& showConsole = console.IsVisible();
 			if (ImGui::MenuItem("Output Log", "~", showConsole))
 			{
@@ -1120,6 +1125,8 @@ void DemoApp::UpdateImGui()
 		ImGui::EndMainMenuBar();
 	}
 
+	if(showToolMetrics)
+		ImGui::ShowMetricsWindow(&showToolMetrics);
 
 	ImGui::Begin(ICON_FA_DESKTOP " Viewport", 0, ImGuiWindowFlags_NoScrollbar);
 	ImDrawList* pDraw = ImGui::GetWindowDrawList();
