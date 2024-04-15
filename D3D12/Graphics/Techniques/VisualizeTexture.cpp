@@ -64,7 +64,7 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 					Vector2 ValueRange;
 					uint32 TextureSource;
 					uint32 TextureTarget;
-					TextureType TextureType;
+					uint32 TextureType;
 					uint32 ChannelMask;
 					uint32 MipLevel;
 					uint32 Slice;
@@ -78,7 +78,7 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 				constants.TextureSource = pTexture->Get()->GetSRV()->GetHeapIndex();
 				constants.TextureTarget = pTarget->Get()->GetUAV()->GetHeapIndex();
 				constants.Dimensions = mipSize;
-				constants.TextureType = pTexture->GetDesc().Type;
+				constants.TextureType = (uint32)pTexture->GetDesc().Type;
 				constants.ValueRange = Vector2(RangeMin, RangeMax);
 				constants.ChannelMask =
 					(VisibleChannels[0] ? 1 : 0) << 0 |
@@ -372,24 +372,23 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 
 				ImVec2 UV;
 
+				ImVec2 imageSize = ImVec2((float)mipSize.x, (float)mipSize.y) * Scale;
+				ImVec2 checkersSize = ImMax(ImGui::GetContentRegionAvail(), imageSize);
+				ImVec2 c = ImGui::GetCursorScreenPos();
+				ImGui::GetWindowDrawList()->AddImage(GraphicsCommon::GetDefaultTexture(DefaultTexture::CheckerPattern), c, c + ImGui::GetContentRegionAvail(), ImVec2(0.0f, 0.0f), checkersSize / 50.0f, ImColor(0.1f, 0.1f, 0.1f, 1.0f));
+
 				static bool held = false;
 				if (XRay)
 				{
 					ImVec2 maxSize = ImGui::GetContentRegionAvail() - ImVec2(0, ImGui::GetTextLineHeight());
-					ImGui::SetCursorScreenPos(ImMax(viewportOrigin, ImGui::GetCursorScreenPos()));
-					ImVec2 size = ImClamp(maxSize, ImVec2(0, 0), viewportOrigin + viewportSize - ImGui::GetCursorScreenPos());
-					ImVec2 uv0 = (ImGui::GetCursorScreenPos() - viewportOrigin) / viewportSize;
-					ImVec2 uv1 = uv0 + size / viewportSize;
-					ImGui::Image(pVisualizeTexture, size, uv0, uv1);
+					ImGui::GetWindowDrawList()->AddImage(pVisualizeTexture, viewportOrigin, viewportOrigin + viewportSize);
+					ImGui::ItemSize(viewportSize);
 					held = false;
 					UV = (ImGui::GetMousePos() - viewportOrigin) / viewportSize;
 				}
 				else
 				{
-					ImVec2 imageSize = ImVec2((float)mipSize.x, (float)mipSize.y) * Scale;
-					ImVec2 checkersSize = ImMax(ImGui::GetContentRegionAvail(), imageSize);
-					ImGui::Image(GraphicsCommon::GetDefaultTexture(DefaultTexture::CheckerPattern), checkersSize, ImVec2(0, 0), checkersSize / 50.0f, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
-					ImGui::SetCursorPos(ImVec2(0, 0));
+					
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
 					ImGui::ImageButton("##ImageView", pVisualizeTexture, imageSize);
 					UV = (ImGui::GetMousePos() - ImGui::GetItemRectMin()) / ImGui::GetItemRectSize();

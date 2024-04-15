@@ -254,7 +254,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				auto DrawResourceTooltip = [&](const RGResource* pResource)
 					{
 						ImGui::BeginTooltip();
-						ImGui::Text("%s", pResource->GetName());
+						ImGui::TextColored(ImVec4(0.922f, 0.71f, 0.082f, 1.0f), "%s", pResource->GetName());
 
 						if (pResource->GetType() == RGResourceType::Texture)
 						{
