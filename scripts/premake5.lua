@@ -5,8 +5,8 @@ ROOT = "../"
 SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
 WIN_SDK = "latest"
 
-function runtimeDependency(source)
-	postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries/" .. source .. "\" \"$(OutDir)/\"") }
+function runtimeDependency(source, destination)
+	postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries/" .. source .. "\" \"$(OutDir)" .. destination .. "/\"") }
 end
 
 workspace (ENGINE_NAME)
@@ -89,21 +89,21 @@ workspace (ENGINE_NAME)
 
 		-- D3D12
 		includedirs "$(SolutionDir)Libraries/D3D12/include"
-		runtimeDependency("D3D12/bin/D3D12Core.dll")
-		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll")
+		runtimeDependency("D3D12/bin/D3D12Core.dll", "D3D12")
+		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll", "D3D12")
 		runtimeDependency("D3D12/bin/d3d10warp.dll", "")
 		links {	"d3d12.lib", "dxgi", "dxguid" }
 
 		-- Pix
 		includedirs "$(SolutionDir)Libraries/Pix/include"
 		libdirs "$(SolutionDir)Libraries/Pix/lib"
-		runtimeDependency("Pix/bin/WinPixEventRuntime.dll")
+		runtimeDependency("Pix/bin/WinPixEventRuntime.dll", "")
 		links { "WinPixEventRuntime" }
 
 		-- DXC
 		includedirs "$(SolutionDir)Libraries/Dxc/include"
-		runtimeDependency ("Dxc/bin/dxcompiler.dll")
-		runtimeDependency ("Dxc/bin/dxil.dll")
+		runtimeDependency ("Dxc/bin/dxcompiler.dll", "")
+		runtimeDependency ("Dxc/bin/dxil.dll", "")
 
 		-- DirectXMath
 		includedirs "$(SolutionDir)Libraries/DirectXMath/include"

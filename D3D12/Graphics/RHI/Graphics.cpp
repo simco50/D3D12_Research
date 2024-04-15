@@ -16,6 +16,10 @@
 #include "dxgidebug.h"
 #include "Core/Commandline.h"
 
+// Setup the Agility D3D12 SDK
+extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
+extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
+
 GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 {
 	auto OnDeviceRemovedCallback = [](void* pContext, BOOLEAN) {
@@ -224,12 +228,6 @@ GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
 GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	: DeviceObject(this), m_DeleteQueue(this)
 {
-	Ref<ID3D12SDKConfiguration1> pSDKConfig;
-	VERIFY_HR(D3D12GetInterface(CLSID_D3D12SDKConfiguration, IID_PPV_ARGS(pSDKConfig.GetAddressOf())));
-
-	Ref<ID3D12DeviceFactory> pDeviceFactory;
-	VERIFY_HR(pSDKConfig->CreateDeviceFactory(D3D12_SDK_VERSION, "", IID_PPV_ARGS(pDeviceFactory.GetAddressOf())));
-
 	UINT flags = 0;
 	if (options.UseDebugDevice)
 	{
@@ -241,7 +239,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseDebugDevice)
 	{
 		Ref<ID3D12Debug> pDebugController;
-		if (SUCCEEDED(pDeviceFactory->GetConfigurationInterface(CLSID_D3D12Debug, IID_PPV_ARGS(pDebugController.GetAddressOf()))))
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->EnableDebugLayer();
 			E_LOG(Warning, "D3D12 Debug Layer Enabled");
@@ -251,7 +249,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseDRED)
 	{
 		Ref<ID3D12DeviceRemovedExtendedDataSettings1> pDredSettings;
-		if (SUCCEEDED(pDeviceFactory->GetConfigurationInterface(CLSID_D3D12DeviceRemovedExtendedData, IID_PPV_ARGS(pDredSettings.GetAddressOf()))))
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDredSettings.GetAddressOf()))))
 		{
 			// Turn on auto-breadcrumbs and page fault reporting.
 			pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
@@ -264,7 +262,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseGPUValidation)
 	{
 		Ref<ID3D12Debug1> pDebugController;
-		if (SUCCEEDED(pDeviceFactory->GetConfigurationInterface(CLSID_D3D12Debug, IID_PPV_ARGS(pDebugController.GetAddressOf()))))
+		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
 			E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
@@ -328,12 +326,12 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 			D3D_FEATURE_LEVEL_11_0
 		};
 
-		VERIFY_HR(pDeviceFactory->CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(pDevice.GetAddressOf())));
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(pDevice.GetAddressOf())));
 		D3D12_FEATURE_DATA_FEATURE_LEVELS caps{};
 		caps.pFeatureLevelsRequested = featureLevels;
 		caps.NumFeatureLevels = ARRAYSIZE(featureLevels);
 		VERIFY_HR(pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)));
-		VERIFY_HR(pDeviceFactory->CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(pDevice.ReleaseAndGetAddressOf())));
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(pDevice.ReleaseAndGetAddressOf())));
 	}
 
 	if (!pDevice)
@@ -342,7 +340,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(pAdapter.GetAddressOf()));
 	}
 
-	VERIFY_HR(pDeviceFactory->CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
+	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
 
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 
