@@ -40,17 +40,17 @@ std::string BitmaskToString(T mask, const char* (*pValueToString)(T))
 	return outString;
 }
 
-std::string PassFlagToString(RGPassFlag flags)
+static std::string PassFlagToString(RGPassFlag flags)
 {
 	return BitmaskToString<RGPassFlag>(flags,
 		[](RGPassFlag flag) -> const char*
 		{
 			switch (flag)
 			{
-			case RGPassFlag::None: return "None";
-			case RGPassFlag::Compute: return "Compute";
-			case RGPassFlag::Raster: return "Raster";
-			case RGPassFlag::Copy: return "Copy";
+			case RGPassFlag::None:		return "None";
+			case RGPassFlag::Compute:	return "Compute";
+			case RGPassFlag::Raster:	return "Raster";
+			case RGPassFlag::Copy:		return "Copy";
 			case RGPassFlag::NeverCull: return "Never Cull";
 			default: return nullptr;
 			}
@@ -139,7 +139,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 250.0f);
 			for (const RGPass* pPass : m_Passes)
 			{
-				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed, column_width);
+				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoClip, column_width);
 			}
 			ImGui::TableSetupScrollFreeze(1, 3);
 
@@ -205,13 +205,17 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				else
 				{
 					const RGPass* pPass = m_Passes[column_n - 1];
-					ImVec4 clr = pPass->IsCulled ? ImVec4(1.0f, 1.0f, 1.0f, 0.4f) : ImVec4(1.0f, 1.0f, 1.0f, 0.8f);
-					ImGui::PushStyleColor(ImGuiCol_Button, clr);
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive, clr);
-					clr.w = 1.0f;
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, clr);
-					ImGui::Button("##button", ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
-					ImGui::PopStyleColor(3);
+					ImColor clr = pPass->IsCulled ? ImColor(1.0f, 1.0f, 1.0f, 0.4f) : ImColor(1.0f, 1.0f, 1.0f, 0.8f);
+					c = ImGui::GetCursorScreenPos();
+					ImRect rect(0, 0, colWidth, row_height);
+					float dilation = 2;
+					rect.Expand(dilation);
+					rect.Translate(c);
+					if(ImGui::ItemAdd(rect, ImGui::GetID("##pass")))
+					{
+						rect.Expand(-dilation - 1);
+						pDrawList->AddRectFilled(rect.Min, rect.Max, clr);
+					}
 
 					if (ImGui::IsItemHovered())
 					{
@@ -251,31 +255,55 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				bool isOpen = ImGui::TreeNodeEx(Sprintf("%d", rowIndex).c_str(), ImGuiTreeNodeFlags_SpanAvailWidth, pPhysical->GetName());
 				rowIndex++;
 
-				auto DrawResourceTooltip = [&](const RGResource* pResource)
+				auto DrawResourceTooltip = [&](const RGResource* pResource, const RGPass::ResourceAccess* pAccess)
 					{
 						ImGui::BeginTooltip();
 						ImGui::TextColored(ImVec4(0.922f, 0.71f, 0.082f, 1.0f), "%s", pResource->GetName());
+						ImGui::Separator();
+
+						if (pAccess)
+						{
+							ImColor rectColor = D3D::HasWriteResourceState(pAccess->Access) ? ImColor(1.0f, 0.5f, 0.1f, 1.0f) : ImColor(0.0f, 0.9f, 0.3f, 1.0f);
+							ImGui::TextColored(rectColor, "%s", D3D::ResourceStateToString(pAccess->Access).c_str());
+						}
+
+						float width = 90;
+						auto AddRow = [width](const char* pCol1, const char* pCol2, ...)
+							{
+								ImGui::Text(pCol1);
+								ImGui::SameLine(width);
+								va_list args;
+								va_start(args, pCol2);
+								ImGui::TextV(pCol2, args);
+								va_end(args);
+							};
 
 						if (pResource->GetType() == RGResourceType::Texture)
 						{
 							const TextureDesc& desc = static_cast<const RGTexture*>(pResource)->Desc;
-							ImGui::Text("Res: %dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
-							ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
-							ImGui::Text("Mips: %d", desc.Mips);
-							ImGui::Text("Size: %s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
+							AddRow("Resolution:", "%dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
+							AddRow("Format:", "%s", RHI::GetFormatInfo(desc.Format).pName);
+							AddRow("Mips:", "%d", desc.Mips);
+							AddRow("Size:", "%s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
 						}
 						else if (pResource->GetType() == RGResourceType::Buffer)
 						{
 							const BufferDesc& desc = static_cast<const RGBuffer*>(pResource)->Desc;
-							ImGui::Text("Size: %s", Math::PrettyPrintDataSize(desc.Size).c_str());
+							AddRow("Size:", "%s", Math::PrettyPrintDataSize(desc.Size).c_str());
 							if (desc.Format != ResourceFormat::Unknown)
-								ImGui::Text("Fmt: %s", RHI::GetFormatInfo(desc.Format).pName);
+								AddRow("Format:", "%s", RHI::GetFormatInfo(desc.Format).pName);
 							else
-								ImGui::Text("Stride: %d", desc.ElementSize);
-							ImGui::Text("Elements: %d", desc.NumElements());
+								AddRow("Stride:", "%d", desc.ElementSize);
+							AddRow("Elements:", "%s", Utils::AddThousandsSeperator(desc.NumElements()).c_str());
 						}
 
-						ImGui::Text("Export: %s - Import: %s", pResource->IsExported ? "Yes" : "No", pResource->IsImported ? "Yes" : "No");
+						ImGui::Text("Export:");
+						ImGui::SameLine();
+						ImGui::TextColored(pResource->IsExported ? ImColor(0.0f, 1.0f, 0.0f, 1.0f) : ImColor(1.0f, 0.0f, 0.0f, 1.0f), pResource->IsExported ? ICON_FA_CHECK : ICON_FA_TIMES);
+						ImGui::SameLine();
+						ImGui::Text("Import:");
+						ImGui::SameLine();
+						ImGui::TextColored(pResource->IsImported ? ImColor(0.0f, 1.0f, 0.0f, 1.0f) : ImColor(1.0f, 0.0f, 0.0f, 1.0f), pResource->IsImported? ICON_FA_CHECK : ICON_FA_TIMES);
 
 						ImGui::EndTooltip();
 					};
@@ -287,40 +315,52 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 						uint32 firstPassOffset = pResource->IsImported ? 0 : firstPass.GetIndex();
 						uint32 lastPassOffset = pResource->IsExported ? (int)m_Passes.size() - 1 : lastPass.GetIndex();
 
+						ImDrawList* pDraw = ImGui::GetWindowDrawList();
+						ImGui::TableSetColumnIndex(1);
+						ImGui::PushClipRect(ImVec2(clipRectX, GImGui->CurrentTable->BgClipRect.Min.y), GImGui->CurrentTable->BgClipRect.Max, false); // Span all columns
+						c = ImGui::GetCursorScreenPos();
+						ImRect itemRect(firstPassOffset * colWidth, 0, (lastPassOffset + 1) * colWidth, row_height);
+						itemRect.Expand(-1);
+						itemRect.Translate(c);
+						if(ImGui::ItemAdd(itemRect, ImGui::GetID(pResource)))
+							pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(0.3f, 0.3f, 0.3f, 1.0f));
+
+						bool mainBarHovered = ImGui::IsItemHovered();
+
+						// If there is a hovered pass, limit the highlighed read/writes to the current pass
+						if(pActivePass)
+						{
+							firstPassOffset = pActivePass->ID.GetIndex();
+							lastPassOffset = pActivePass->ID.GetIndex();
+						}
+
+						const RGPass::ResourceAccess* pResourceAccess = nullptr;
 						for (uint32 i = firstPassOffset; i <= lastPassOffset; ++i)
 						{
-							if (ImGui::TableSetColumnIndex(i + 1))
+							const RGPass* pPass = m_Passes[i];
+							auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
+							if (it != pPass->Accesses.end())
 							{
-								const RGPass* pPass = m_Passes[i];
-								auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
+								ImColor rectColor = D3D::HasWriteResourceState(it->Access) ? ImColor(1.0f, 0.5f, 0.1f, 0.6f) : ImColor(0.0f, 0.9f, 0.3f, 0.6f);
+								ImRect squareRect(i * colWidth, 0, (i + 1) * colWidth, row_height);
+								squareRect.Expand(-1);
+								squareRect.Translate(c);
+								if(ImGui::ItemAdd(squareRect, ImGui::GetID(&*it)))
+									pDraw->AddRectFilled(squareRect.Min, squareRect.Max, rectColor);
 
-								ImVec4 buttonColor = ImVec4(0.7f, 0.7f, 0.7f, 0.3f);
-								if (it != pPass->Accesses.end())
-								{
-									if (D3D::HasWriteResourceState(it->Access))
-										buttonColor = ImVec4(1.0f, 0.5f, 0.1f, 0.6f);
-									else
-										buttonColor = ImVec4(0.0f, 0.9f, 0.3f, 0.6f);
-									if (pPass == pActivePass)
-										buttonColor.w = 1.0f;
-								}
-								if (isInner)
-									buttonColor.w += 0.3f;
-								buttonColor.w = ImMin(1.0f, buttonColor.w);
-
-								ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
-								ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonColor);
-								buttonColor.w = 1.0f;
-								ImGui::PushStyleColor(ImGuiCol_ButtonHovered, buttonColor);
-								ImGui::Button("##button", ImVec2(ImGui::GetTextLineHeight(), ImGui::GetTextLineHeight()));
-								ImGui::PopStyleColor(3);
-
-								if (ImGui::IsItemHovered())
-								{
-									DrawResourceTooltip(pResource);
-								}
+								if(ImGui::IsItemHovered())
+									pResourceAccess = &*it;
 							}
 						}
+
+						if(mainBarHovered)
+						{
+							pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+							DrawResourceTooltip(pResource, pResourceAccess);
+						}
+
+
+						ImGui::PopClipRect();
 					};
 
 				for (const RGResource* pResource : resources)
@@ -335,7 +375,6 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 				if (isOpen)
 				{
-
 					for (const RGResource* pResource : resources)
 					{
 						ImGui::TableNextRow();
@@ -344,7 +383,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 						ImGui::TreeNodeEx(pResource->GetName(), ImGuiTreeNodeFlags_Bullet | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen);
 
 						if (ImGui::IsItemHovered())
-							DrawResourceTooltip(pResource);
+							DrawResourceTooltip(pResource, nullptr);
 
 						DrawResourceRow(pResource, true);
 						ImGui::TableNextColumn();

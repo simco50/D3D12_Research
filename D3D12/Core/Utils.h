@@ -16,6 +16,20 @@ namespace Utils
 			time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
 	}
 
+	inline std::string AddThousandsSeperator(int value)
+	{
+		std::string output;
+		int absV = value > 0 ? value : -value;
+		while (absV > 0)
+		{
+			output = Sprintf(absV > 1000 ? "%03d%s%s" : "%d%s%s", absV % 1000, output.empty() ? "" : ",", output);
+			absV /= 1000;
+		}
+		if (value < 0)
+			output = "-" + output;
+		return output;
+	}
+
 	class TimeScope
 	{
 	public:
