@@ -18,44 +18,38 @@ struct PickingData
 	Vector4u DataUInt;
 };
 
-VisualizeTexture::VisualizeTexture(GraphicsDevice* pDevice)
+CaptureTextureSystem::CaptureTextureSystem(GraphicsDevice* pDevice)
 {
 	m_pVisualizeRS = new RootSignature(pDevice);
 	m_pVisualizeRS->AddRootCBV(0);
 	m_pVisualizeRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
 	m_pVisualizeRS->Finalize("Common");
 	m_pVisualizePSO = pDevice->CreateComputePipeline(m_pVisualizeRS, "ImageVisualize.hlsl", "CSMain");
-
-	m_pReadbackBuffer = pDevice->CreateBuffer(BufferDesc::CreateReadback(sizeof(PickingData) * 3), "Picking Data");
 }
 
-void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
+
+void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captureContext, RGTexture* pSource)
 {
-	if (!pTexture)
-	{
-		pVisualizeTexture = nullptr;
+	if (!pSource)
 		return;
-	}
-	if (SourceName != pTexture->GetName())
-	{
-		Scale = 1.0f;
-	}
 
-	const TextureDesc& desc = pTexture->GetDesc();
-	Vector2u mipSize(desc.Width >> MipLevel, desc.Height >> MipLevel);
-	RGTexture* pTarget = graph.Create("Visualize Target", TextureDesc::Create2D(mipSize.x, mipSize.y, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource));
-	SourceName = pTexture->GetName();
-	SourceDesc = pTexture->GetDesc();
+	captureContext.SourceName = pSource->GetName();
+	captureContext.SourceDesc = pSource->GetDesc();
 
-	RGBuffer* pPickingBuffer = graph.Create("Picking Buffer", BufferDesc::CreateStructured(1, sizeof(Vector4) + sizeof(Vector4u)));
+	RGBuffer* pReadbackTarget = RGUtils::CreatePersistent(graph, "TextureCapture.ReadbackTarget", BufferDesc::CreateReadback(sizeof(CaptureTextureContext::PickData) * 3), &captureContext.pReadbackBuffer, true);
 
-	graph.AddPass("Process Image Visualizer", RGPassFlag::Compute)
-		.Read(pTexture)
+	const TextureDesc& desc = pSource->GetDesc();
+	Vector2u mipSize(desc.Width >> captureContext.MipLevel, desc.Height >> captureContext.MipLevel);
+	RGTexture* pTarget = RGUtils::CreatePersistent(graph, "TextureCapture.Target", TextureDesc::Create2D(mipSize.x, mipSize.y, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &captureContext.pTextureTarget, true);
+	RGBuffer* pPickingBuffer = graph.Create("TextureCapture.Picking", BufferDesc::CreateStructured(1, sizeof(CaptureTextureContext::PickData)));
+
+	graph.AddPass("CaptureTexture.Process", RGPassFlag::Compute)
+		.Read({ pSource })
 		.Write({ pTarget, pPickingBuffer })
-		.Bind([=](CommandContext& cmdContext)
+		.Bind([=](CommandContext& context)
 			{
-				cmdContext.SetComputeRootSignature(m_pVisualizeRS);
-				cmdContext.SetPipelineState(m_pVisualizePSO);
+				context.SetComputeRootSignature(m_pVisualizeRS);
+				context.SetPipelineState(m_pVisualizePSO);
 
 				struct ConstantsData
 				{
@@ -71,46 +65,46 @@ void VisualizeTexture::Capture(RGGraph& graph, RGTexture* pTexture)
 					uint32 IsIntegerFormat;
 				} constants;
 
-				const TextureDesc& desc = pTexture->GetDesc();
 				const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
 
-				constants.HoveredPixel = HoveredPixel;
-				constants.TextureSource = pTexture->Get()->GetSRV()->GetHeapIndex();
+				constants.HoveredPixel = captureContext.HoveredPixel;
+				constants.TextureSource = pSource->Get()->GetSRV()->GetHeapIndex();
 				constants.TextureTarget = pTarget->Get()->GetUAV()->GetHeapIndex();
 				constants.Dimensions = mipSize;
-				constants.TextureType = (uint32)pTexture->GetDesc().Type;
-				constants.ValueRange = Vector2(RangeMin, RangeMax);
+				constants.TextureType = (uint32)pSource->GetDesc().Type;
+				constants.ValueRange = Vector2(captureContext.RangeMin, captureContext.RangeMax);
 				constants.ChannelMask =
-					(VisibleChannels[0] ? 1 : 0) << 0 |
-					(VisibleChannels[1] ? 1 : 0) << 1 |
-					(VisibleChannels[2] ? 1 : 0) << 2 |
-					(VisibleChannels[3] ? 1 : 0) << 3;
+					(captureContext.VisibleChannels[0] ? 1 : 0) << 0 |
+					(captureContext.VisibleChannels[1] ? 1 : 0) << 1 |
+					(captureContext.VisibleChannels[2] ? 1 : 0) << 2 |
+					(captureContext.VisibleChannels[3] ? 1 : 0) << 3;
 				constants.ChannelMask &= ((1u << formatInfo.NumComponents) - 1u);
-				constants.MipLevel = (uint32)MipLevel;
-				constants.Slice = (uint32)Slice;
+				constants.MipLevel = (uint32)captureContext.MipLevel;
+				constants.Slice = (uint32)captureContext.Slice;
 				constants.IsIntegerFormat = formatInfo.Type == FormatType::Integer;
 
-				cmdContext.BindRootCBV(0, constants);
-				cmdContext.BindResources(1, pPickingBuffer->Get()->GetUAV());
-				cmdContext.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 8, desc.Height, 8));
+				context.BindRootCBV(0, constants);
+				context.BindResources(1, pPickingBuffer->Get()->GetUAV());
+
+				context.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 8, desc.Height, 8));
 			});
 
-	graph.AddPass("Copy Picking Data", RGPassFlag::Copy)
+	graph.AddPass("CaptureTexture.CopyPickData", RGPassFlag::Copy)
 		.Read(pPickingBuffer)
-		.Write(graph.Import(m_pReadbackBuffer))
+		.Write(pReadbackTarget)
 		.Bind([=](CommandContext& context)
 			{
-				context.CopyBuffer(pPickingBuffer->Get(), m_pReadbackBuffer, sizeof(PickingData), 0, sizeof(PickingData) * m_ReadbackIndex);
+				context.CopyBuffer(pPickingBuffer->Get(), pReadbackTarget->Get(), sizeof(CaptureTextureContext::PickData), 0, sizeof(CaptureTextureContext::PickData) * captureContext.ReadbackIndex);
 			});
 
-	m_ReadbackIndex = (m_ReadbackIndex + 1) % 3;
-
-	graph.Export(pTarget, &pVisualizeTexture);
+	if(captureContext.pReadbackBuffer)
+		captureContext.Pick = static_cast<CaptureTextureContext::PickData*>(captureContext.pReadbackBuffer->GetMappedData())[captureContext.ReadbackIndex];
+	captureContext.ReadbackIndex = (captureContext.ReadbackIndex + 1) % 3;
 }
 
-void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& viewportSize)
+void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const ImVec2& viewportOrigin, const ImVec2& viewportSize)
 {
-	if (pVisualizeTexture)
+	if (captureContext.pTextureTarget)
 	{
 		struct Group
 		{
@@ -135,9 +129,9 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 		if (ImGui::Begin("Visualize Texture", 0, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 		{
 			ImGui::PushID("VisualizeTexture");
-			TextureDesc& desc = SourceDesc;
+			TextureDesc& desc = captureContext.SourceDesc;
 			const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
-			Vector2u mipSize(desc.Width >> MipLevel, desc.Height >> MipLevel);
+			Vector2u mipSize(desc.Width >> captureContext.MipLevel, desc.Height >> captureContext.MipLevel);
 
 			{
 				Group group;
@@ -153,13 +147,13 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 
 					ImVec2 buttonSize = ImVec2(ImGui::GetTextLineHeightWithSpacing(), ImGui::GetTextLineHeightWithSpacing());
 
-					ChannelButton("R", &VisibleChannels[0], formatInfo.NumComponents >= 1, buttonSize);
+					ChannelButton("R", &captureContext.VisibleChannels[0], formatInfo.NumComponents >= 1, buttonSize);
 					ImGui::SameLine();
-					ChannelButton("G", &VisibleChannels[1], formatInfo.NumComponents >= 2, buttonSize);
+					ChannelButton("G", &captureContext.VisibleChannels[1], formatInfo.NumComponents >= 2, buttonSize);
 					ImGui::SameLine();
-					ChannelButton("B", &VisibleChannels[2], formatInfo.NumComponents >= 3, buttonSize);
+					ChannelButton("B", &captureContext.VisibleChannels[2], formatInfo.NumComponents >= 3, buttonSize);
 					ImGui::SameLine();
-					ChannelButton("A", &VisibleChannels[3], formatInfo.NumComponents >= 4, buttonSize);
+					ChannelButton("A", &captureContext.VisibleChannels[3], formatInfo.NumComponents >= 4, buttonSize);
 				}
 
 				ImGui::SameLine();
@@ -167,7 +161,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				// X-Ray mode
 				{
 					ImVec2 buttonSize = ImVec2(ImGui::GetTextLineHeightWithSpacing(), ImGui::GetTextLineHeightWithSpacing());
-					ImGui::ToggleButton(ICON_FA_SEARCH_PLUS, &XRay, buttonSize);
+					ImGui::ToggleButton(ICON_FA_SEARCH_PLUS, &captureContext.XRay, buttonSize);
 				}
 			}
 
@@ -188,7 +182,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				ImGui::SameLine();
 				ImGui::SetNextItemWidth(170);
 
-				ImGui::Combo("##Mip", &MipLevel, [](void* pData, int idx)
+				ImGui::Combo("##Mip", &captureContext.MipLevel, [](void* pData, int idx)
 					{
 						std::string* pStrings = (std::string*)pData;
 						return pStrings[idx].c_str();
@@ -205,13 +199,10 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				ImGui::BeginDisabled(desc.Type != TextureType::Texture3D);
 				ImGui::SameLine();
 				ImGui::AlignTextToFramePadding();
-				if (desc.Type == TextureType::Texture3D)
-				{
-					ImGui::Text("Slice");
-					ImGui::SameLine();
-					ImGui::SetNextItemWidth(100);
-					ImGui::SliderFloat("##SliceNr", &Slice, 0, (float)desc.DepthOrArraySize - 1, "%.2f");
-				}
+				ImGui::Text("Slice");
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(100);
+				ImGui::SliderFloat("##SliceNr", &captureContext.Slice, 0, (float)desc.DepthOrArraySize - 1, "%.2f");
 				ImGui::EndDisabled();
 			}
 
@@ -223,20 +214,20 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				ImGui::SameLine();
 				if (ImGui::Button("1:1"))
 				{
-					Scale = 1.0f;
+					captureContext.Scale = 1.0f;
 				}
 				ImGui::SameLine();
 				if (ImGui::Button(ICON_FA_ARROWS_ALT " Fit"))
 				{
 					ImVec2 ratio = ImGui::GetWindowSize() / ImVec2((float)mipSize.x, (float)mipSize.y);
-					Scale = ImMin(ratio.x, ratio.y);
+					captureContext.Scale = ImMin(ratio.x, ratio.y);
 				}
 				ImGui::SameLine();
 				ImGui::SetNextItemWidth(60);
-				float scalePercent = Scale * 100.0f;
+				float scalePercent = captureContext.Scale * 100.0f;
 				if (ImGui::DragFloat("##Scale", &scalePercent, 4.0f, 1.0f, 50000.0f, "%.0f%%", ImGuiSliderFlags_Logarithmic))
 				{
-					Scale = scalePercent / 100.0f;
+					captureContext.Scale = scalePercent / 100.0f;
 				}
 			}
 
@@ -249,8 +240,8 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				float minValue = 0.0f;
 				float maxValue = 1.0f;
 				float stepSize = 0.01f;
-				float* pMinRange = &RangeMin;
-				float* pMaxRange = &RangeMax;
+				float* pMinRange = &captureContext.RangeMin;
+				float* pMaxRange = &captureContext.RangeMax;
 
 				constexpr float triangleSize = 5;
 
@@ -261,8 +252,8 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				ImGui::AlignTextToFramePadding();
 				ImGui::Text("Range");
 				ImGui::SameLine();
-				ImGui::SetNextItemWidth(80);
-				ImGui::DragFloat("##RangeMin", pMinRange, stepSize, minValue, *pMaxRange);
+				ImGui::SetNextItemWidth(60);
+				ImGui::DragFloat("##RangeMin", pMinRange, stepSize, minValue, *pMaxRange, "%.2f");
 				ImGui::SameLine();
 
 				ImGui::SetNextItemWidth(200);
@@ -349,15 +340,22 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				pDrawList->AddTriangle(whiteTri[0], whiteTri[1], whiteTri[2], ImColor(0.0f, 0.0f, 0.0f, 1.0f));
 
 				ImGui::SameLine();
-				ImGui::SetNextItemWidth(80);
-				ImGui::DragFloat("##RangeMax", pMaxRange, stepSize, *pMinRange, maxValue);
+				ImGui::SetNextItemWidth(60);
+				ImGui::DragFloat("##RangeMax", pMaxRange, stepSize, *pMinRange, maxValue, "%.2f");
+
+				ImGui::SameLine();
+				if (ImGui::Button(ICON_FA_RECYCLE "##ResetRange"))
+				{
+					captureContext.RangeMax = 1.0f;
+					captureContext.RangeMin = 0.0f;
+				}
 			}
 
 
 			// Image
 			{
 				ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoScrollWithMouse;
-				if (XRay)
+				if (captureContext.XRay)
 				{
 					windowFlags |= ImGuiWindowFlags_NoScrollbar;
 				}
@@ -372,25 +370,25 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 
 				ImVec2 UV;
 
-				ImVec2 imageSize = ImVec2((float)mipSize.x, (float)mipSize.y) * Scale;
+				ImVec2 imageSize = ImVec2((float)mipSize.x, (float)mipSize.y) * captureContext.Scale;
 				ImVec2 checkersSize = ImMax(ImGui::GetContentRegionAvail(), imageSize);
 				ImVec2 c = ImGui::GetCursorScreenPos();
 				ImGui::GetWindowDrawList()->AddImage(GraphicsCommon::GetDefaultTexture(DefaultTexture::CheckerPattern), c, c + ImGui::GetContentRegionAvail(), ImVec2(0.0f, 0.0f), checkersSize / 50.0f, ImColor(0.1f, 0.1f, 0.1f, 1.0f));
 
 				static bool held = false;
-				if (XRay)
+				if (captureContext.XRay)
 				{
 					ImVec2 maxSize = ImGui::GetContentRegionAvail() - ImVec2(0, ImGui::GetTextLineHeight());
-					ImGui::GetWindowDrawList()->AddImage(pVisualizeTexture, viewportOrigin, viewportOrigin + viewportSize);
+					ImGui::GetWindowDrawList()->AddImage(captureContext.pTextureTarget, viewportOrigin, viewportOrigin + viewportSize);
 					ImGui::ItemSize(viewportSize);
 					held = false;
 					UV = (ImGui::GetMousePos() - viewportOrigin) / viewportSize;
 				}
 				else
 				{
-					
+
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-					ImGui::ImageButton("##ImageView", pVisualizeTexture, imageSize);
+					ImGui::ImageButton("##ImageView", captureContext.pTextureTarget, imageSize);
 					UV = (ImGui::GetMousePos() - ImGui::GetItemRectMin()) / ImGui::GetItemRectSize();
 					ImGui::PopStyleVar();
 					if (ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
@@ -399,7 +397,7 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 					}
 				}
 
-				HoveredPixel = Vector2u((uint32)Math::Floor(UV.x * mipSize.x), (uint32)Math::Floor(UV.y * mipSize.y));
+				captureContext.HoveredPixel = Vector2u((uint32)Math::Floor(UV.x * mipSize.x), (uint32)Math::Floor(UV.y * mipSize.y));
 
 				if (held)
 				{
@@ -426,9 +424,9 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 					float wheel = ImGui::GetIO().MouseWheel;
 					if (wheel != 0)
 					{
-						float logScale = logf(Scale);
+						float logScale = logf(captureContext.Scale);
 						logScale += wheel / 5.0f;
-						Scale = Math::Clamp(expf(logScale), 0.0f, 1000.0f);
+						captureContext.Scale = Math::Clamp(expf(logScale), 0.0f, 1000.0f);
 					}
 				}
 
@@ -436,9 +434,9 @@ void VisualizeTexture::RenderUI(const ImVec2& viewportOrigin, const ImVec2& view
 				{
 					UV = ImClamp(UV, ImVec2(0, 0), ImVec2(1, 1));
 					Vector2u texel((uint32)Math::Floor(UV.x * mipSize.x), (uint32)Math::Floor(UV.y * mipSize.y));
-					ImGui::Text("%s - %dx%d %d mips - %s - %8d, %8d (%.4f, %.4f)", SourceName.c_str(), desc.Width, desc.Height, desc.Mips, formatInfo.pName, texel.x, texel.y, UV.x, 1.0f - UV.y);
+					ImGui::Text("%s - %dx%d %d mips - %s - %8d, %8d (%.4f, %.4f)", captureContext.SourceName.c_str(), desc.Width, desc.Height, desc.Mips, formatInfo.pName, texel.x, texel.y, UV.x, 1.0f - UV.y);
 
-					PickingData pickData = static_cast<PickingData*>(m_pReadbackBuffer->GetMappedData())[m_ReadbackIndex];
+					CaptureTextureContext::PickData pickData = captureContext.Pick;
 
 					const char* componentNames[] = { "R", "G", "B", "A" };
 

@@ -5,6 +5,7 @@
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
 #include "Graphics/Techniques/VolumetricFog.h"
+#include "Graphics/Techniques/VisualizeTexture.h"
 #include "App.h"
 
 class Camera;
@@ -23,7 +24,6 @@ class PipelineState;
 class ShaderDebugRenderer;
 class MeshletRasterizer;
 class DDGI;
-class VisualizeTexture;
 class VolumetricFog;
 class ForwardRenderer;
 class LightCulling;
@@ -86,7 +86,8 @@ private:
 	std::unique_ptr<ShaderDebugRenderer> m_pShaderDebugRenderer;
 	std::unique_ptr<MeshletRasterizer> m_pMeshletRasterizer;
 	std::unique_ptr<DDGI> m_pDDGI;
-	std::unique_ptr<VisualizeTexture> m_pVisualizeTexture;
+	std::unique_ptr<CaptureTextureSystem> m_pCaptureTextureSystem;
+	CaptureTextureContext m_CaptureTextureContext;
 
 	VolumetricFogData m_FogData;
 

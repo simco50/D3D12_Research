@@ -142,7 +142,7 @@ void DemoApp::Init()
 	m_pParticles			= std::make_unique<GpuParticles>(m_pDevice);
 	m_pPathTracing			= std::make_unique<PathTracing>(m_pDevice);
 	m_pCBTTessellation		= std::make_unique<CBTTessellation>(m_pDevice);
-	m_pVisualizeTexture		= std::make_unique<VisualizeTexture>(m_pDevice);
+	m_pCaptureTextureSystem	= std::make_unique<CaptureTextureSystem>(m_pDevice);
 
 	InitializePipelines();
 
@@ -869,7 +869,7 @@ void DemoApp::Update()
 			if (!Tweakables::VisualizeTextureName.empty())
 			{
 				RGTexture* pVisualizeTexture = graph.FindTexture(Tweakables::VisualizeTextureName.c_str());
-				m_pVisualizeTexture->Capture(graph, pVisualizeTexture);
+				m_pCaptureTextureSystem->Capture(graph, m_CaptureTextureContext, pVisualizeTexture);
 			}
 
 			graph.Export(sceneTextures.pColorTarget, &m_pColorOutput, TextureFlag::ShaderResource);
@@ -1146,8 +1146,8 @@ void DemoApp::UpdateImGui()
 
 	ImGui::End();
 
-	if(m_pVisualizeTexture)
-		m_pVisualizeTexture->RenderUI(viewportOrigin, viewportExtents);
+	if(m_pCaptureTextureSystem)
+		m_pCaptureTextureSystem->RenderUI(m_CaptureTextureContext, viewportOrigin, viewportExtents);
 
 	console.Update();
 
