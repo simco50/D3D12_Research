@@ -49,13 +49,13 @@ struct VertexAttribute
 
 VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertexId)
 {
+	Vertex vertex = LoadVertex(mesh, vertexId);
+
 	VertexAttribute result = (VertexAttribute)0;
-	float3 position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
-	float3 positionWS = mul(float4(position, 1.0f), world).xyz;
+	float3 positionWS = mul(float4(vertex.Position, 1.0f), world).xyz;
 	result.Position = mul(float4(positionWS, 1.0f), cView.ViewProjection);
 #if ALPHA_MASK
-	if(mesh.UVsOffset != 0xFFFFFFFF)
-		result.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+	result.UV = vertex.UV;
 #endif
 	return result;
 }

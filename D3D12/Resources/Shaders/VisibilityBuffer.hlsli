@@ -98,26 +98,19 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 		BufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
 	);
 
-	VisBufferVertexAttribute vertices[3];
-	float3 positions[3];
+	Vertex vertices[3];
+	float3 worldPos[3];
+	[unroll]
 	for(uint i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-		float3 position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
-		positions[i] = mul(float4(position, 1), instance.LocalToWorld).xyz;
-        vertices[i].UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
-        uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-        vertices[i].Normal = Unpack_RGB10A2_SNORM(normalData.x).xyz;
-        vertices[i].Tangent = Unpack_RGB10A2_SNORM(normalData.y);
-		if(mesh.ColorsOffset != ~0u)
-			vertices[i].Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
-		else
-			vertices[i].Color = 0xFFFFFFFF;
+		vertices[i] = LoadVertex(mesh, vertexId);
+		worldPos[i] = mul(float4(vertices[i].Position, 1), instance.LocalToWorld).xyz;
 	}
 
-	float4 clipPos0 = mul(float4(positions[0], 1), cView.ViewProjection);
-	float4 clipPos1 = mul(float4(positions[1], 1), cView.ViewProjection);
-	float4 clipPos2 = mul(float4(positions[2], 1), cView.ViewProjection);
+	float4 clipPos0 = mul(float4(worldPos[0], 1), cView.ViewProjection);
+	float4 clipPos1 = mul(float4(worldPos[1], 1), cView.ViewProjection);
+	float4 clipPos2 = mul(float4(worldPos[2], 1), cView.ViewProjection);
 	float2 pixelClip = screenUV * 2 - 1;
 	pixelClip.y *= -1;
 	BaryDerivs bary = ComputeBarycentrics(pixelClip, clipPos0, clipPos1, clipPos2);
@@ -128,7 +121,7 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 	float4 tangent = BaryInterpolate(vertices[0].Tangent, vertices[1].Tangent, vertices[2].Tangent, bary.Barycentrics);
     outVertex.Tangent = float4(normalize(mul(tangent.xyz, (float3x3)instance.LocalToWorld)), tangent.w);
 	outVertex.Color = vertices[0].Color;
-    outVertex.Position = BaryInterpolate(positions[0], positions[1], positions[2], bary.Barycentrics);
+    outVertex.Position = BaryInterpolate(worldPos[0], worldPos[1], worldPos[2], bary.Barycentrics);
 	outVertex.DX = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.DDX_Barycentrics);
 	outVertex.DY = BaryInterpolate(vertices[0].UV, vertices[1].UV, vertices[2].UV, bary.DDY_Barycentrics);
 	outVertex.LinearDepth = BaryInterpolate(clipPos0.w, clipPos1.w, clipPos2.w, bary.Barycentrics);

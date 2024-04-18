@@ -2,6 +2,7 @@
 
 #include "Constants.hlsli"
 #include "Interop/InteropMain.h"
+#include "Packing.hlsli"
 
 //CBVs
 ConstantBuffer<ViewUniforms> cView : 						register(b100);
@@ -96,4 +97,29 @@ uint3 GetPrimitive(MeshData mesh, uint primitiveIndex)
 		}
 	}
 	return indices;
+}
+
+struct Vertex
+{
+	float3 Position;
+	float2 UV;
+	float3 Normal;
+	float4 Tangent;
+	uint Color;
+};
+
+Vertex LoadVertex(MeshData mesh, uint vertexId)
+{
+	Vertex vertex;
+	vertex.Position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
+	vertex.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+
+	uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+	vertex.Normal = Unpack_RGB10A2_SNORM(normalData.x).xyz;
+	vertex.Tangent = Unpack_RGB10A2_SNORM(normalData.y);
+
+	vertex.Color = 0xFFFFFFFF;
+	if(mesh.ColorsOffset != ~0u)
+		vertex.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+	return vertex;
 }

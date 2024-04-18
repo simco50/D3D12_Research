@@ -138,9 +138,9 @@ void RasterizeCS(uint groupThreadID : SV_GroupIndex, uint groupID : SV_GroupID)
 			BufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
 		);
 
-		float3 p0 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[0], mesh.PositionsOffset)).xyz;
-		float3 p1 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[1], mesh.PositionsOffset)).xyz;
-		float3 p2 = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, indices[2], mesh.PositionsOffset)).xyz;
+		float3 p0 = LoadVertex(mesh, indices[0]).Position;
+		float3 p1 = LoadVertex(mesh, indices[1]).Position;
+		float3 p2 = LoadVertex(mesh, indices[2]).Position;
 
 		p0 = mul(float4(p0, 1), instance.LocalToWorld).xyz;
 		p1 = mul(float4(p1, 1), instance.LocalToWorld).xyz;

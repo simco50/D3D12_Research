@@ -110,24 +110,19 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 
 #endif
 
+
 InterpolantsVSToPS LoadVertex(MeshData mesh, float4x4 world, uint vertexId)
 {
+	Vertex vertex = LoadVertex(mesh, vertexId);
 	InterpolantsVSToPS result;
-	float3 position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
-	float3 worldPos = mul(float4(position, 1.0f), world).xyz;
+	float3 worldPos = mul(float4(vertex.Position, 1.0f), world).xyz;
 	result.Position = mul(float4(worldPos, 1.0f), cView.ViewProjection);
-	result.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
-
+	result.UV = vertex.UV;
 #ifndef DEPTH_ONLY
 	result.PositionWS = worldPos;
-	uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-	result.Normal = normalize(mul(Unpack_RGB10A2_SNORM(normalData.x).xyz, (float3x3)world));
-	float4 tangent = Unpack_RGB10A2_SNORM(normalData.y);
-	result.Tangent = float4(normalize(mul(tangent.xyz, (float3x3)world)), tangent.w);
-
-	result.Color = 0xFFFFFFFF;
-	if(mesh.ColorsOffset != ~0u)
-		result.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+	result.Normal = normalize(mul(vertex.Normal, (float3x3)world));
+	result.Tangent = float4(normalize(mul(vertex.Tangent.xyz, (float3x3)world)), vertex.Tangent.w);
+	result.Color = vertex.Color;
 #endif
 
 	return result;

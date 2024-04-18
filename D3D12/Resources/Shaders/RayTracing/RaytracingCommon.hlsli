@@ -28,15 +28,12 @@ VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycent
 	for(int i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-		positions[i] = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
-		outData.UV += Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset)) * barycentrics[i];
-		uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-		outData.Normal += Unpack_RGB10A2_SNORM(normalData.x).xyz * barycentrics[i];
-		outData.Tangent += Unpack_RGB10A2_SNORM(normalData.y) * barycentrics[i];
-		if(mesh.ColorsOffset != ~0u)
-			outData.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
-		else
-			outData.Color = 0xFFFFFFFF;
+		Vertex vertex = LoadVertex(mesh, vertexId);
+		positions[i] = vertex.Position;
+		outData.UV += vertex.UV * barycentrics[i];
+		outData.Normal += vertex.Normal.xyz * barycentrics[i];
+		outData.Tangent += vertex.Tangent * barycentrics[i];
+		outData.Color = vertex.Color;
 	}
 	outData.Normal = normalize(mul(outData.Normal, (float3x3)instance.LocalToWorld));
 	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)instance.LocalToWorld));
