@@ -228,11 +228,17 @@ GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
 GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	: DeviceObject(this), m_DeleteQueue(this)
 {
+	if (options.LoadPIX)
+	{
+		if (PIXLoadLatestWinPixGpuCapturerLibrary())
+		{
+			E_LOG(Warning, "Dynamically loaded PIX");
+		}
+	}
+
 	UINT flags = 0;
 	if (options.UseDebugDevice)
-	{
 		flags |= DXGI_CREATE_FACTORY_DEBUG;
-	}
 
 	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(m_pFactory.GetAddressOf())));
 
@@ -266,14 +272,6 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		{
 			pDebugController->SetEnableGPUBasedValidation(true);
 			E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
-		}
-	}
-
-	if (options.LoadPIX)
-	{
-		if (PIXLoadLatestWinPixGpuCapturerLibrary())
-		{
-			E_LOG(Warning, "Dynamically loaded PIX");
 		}
 	}
 

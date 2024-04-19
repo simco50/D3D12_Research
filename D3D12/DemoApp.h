@@ -53,7 +53,7 @@ private:
 	void OnResizeViewport(uint32 width, uint32 height);
 
 	void InitializePipelines();
-	void SetupScene();
+	void SetupScene(const char* pPath);
 
 	void UpdateImGui();
 

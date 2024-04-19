@@ -81,7 +81,7 @@ namespace Tweakables
 	ConsoleVariable gSSRSamples("r.SSRSamples", 8);
 	ConsoleVariable gRenderTerrain("r.Terrain", true);
 	ConsoleVariable gOcclusionCulling("r.OcclusionCulling", true);
-	ConsoleVariable gWorkGraph("r.WorkGraph", true);
+	ConsoleVariable gWorkGraph("r.WorkGraph", false);
 
 	// Misc
 	ConsoleVariable gVisibilityDebugMode("r.Raster.VisibilityDebug", 0);
@@ -148,9 +148,7 @@ void DemoApp::Init()
 
 	m_SceneData.AccelerationStructure.Init(m_pDevice);
 
-	SetupScene();
-
-	OnResizeViewport(16, 16);
+	SetupScene("Resources/Scenes/Sponza/Sponza.gltf");
 }
 
 void DemoApp::Shutdown()
@@ -158,15 +156,18 @@ void DemoApp::Shutdown()
 	DebugRenderer::Get()->Shutdown();
 }
 
-void DemoApp::SetupScene()
+void DemoApp::SetupScene(const char* pPath)
 {
+	m_World = {};
+
 	m_pCamera = std::make_unique<FreeCamera>();
 	m_pCamera->SetNearPlane(80.0f);
 	m_pCamera->SetFarPlane(0.1f);
 	m_pCamera->SetPosition(Vector3(-1.3f, 12.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
+	OnResizeViewport(16, 16);
 
-	SceneLoader::Load("Resources/Scenes/Sponza/Sponza.gltf", m_pDevice, m_World, 1.0f);
+	SceneLoader::Load(pPath, m_pDevice, m_World, 1.0f);
 
 
 	{
@@ -330,8 +331,7 @@ void DemoApp::Update()
 
 		{
 			PROFILE_CPU_SCOPE("Flush GPU uploads");
-			SyncPoint sync = m_pDevice->GetRingBuffer()->Flush();
-			m_pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->InsertWait(sync);
+			m_pDevice->GetRingBuffer()->Sync();
 		}
 		{
 			CommandContext* pContext = m_pDevice->AllocateCommandContext();
@@ -340,20 +340,23 @@ void DemoApp::Update()
 		}
 
 		{
-			PROFILE_CPU_SCOPE("Frustum Culling");
-
-			// Sort
-			auto CompareSort = [this](const Batch& a, const Batch& b)
-			{
-				float aDist = Vector3::DistanceSquared(a.Bounds.Center, m_SceneData.MainView.Position);
-				float bDist = Vector3::DistanceSquared(b.Bounds.Center, m_SceneData.MainView.Position);
-				if (a.BlendMode != b.BlendMode)
-					return (int)a.BlendMode < (int)b.BlendMode;
-				return EnumHasAnyFlags(a.BlendMode, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
-			};
-			std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), CompareSort);
-
 			TaskContext taskContext;
+
+			{
+				PROFILE_CPU_SCOPE("Distance Sort");
+
+				// Sort
+				auto CompareSort = [this](const Batch& a, const Batch& b)
+					{
+						float aDist = Vector3::DistanceSquared(a.Bounds.Center, m_SceneData.MainView.Position);
+						float bDist = Vector3::DistanceSquared(b.Bounds.Center, m_SceneData.MainView.Position);
+						if (a.BlendMode != b.BlendMode)
+							return (int)a.BlendMode < (int)b.BlendMode;
+						return EnumHasAnyFlags(a.BlendMode, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
+					};
+				std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), CompareSort);
+			}
+
 			// In Visibility Buffer mode, culling is done on the GPU.
 			if (m_RenderPath != RenderPath::Visibility)
 			{
@@ -1063,7 +1066,7 @@ void DemoApp::UpdateImGui()
 
 				if (GetOpenFileNameA(&ofn) == TRUE)
 				{
-					SceneLoader::Load(ofn.lpstrFile, m_pDevice, m_World, 1.0f);
+					SetupScene(ofn.lpstrFile);
 				}
 			}
 			ImGui::EndMenu();

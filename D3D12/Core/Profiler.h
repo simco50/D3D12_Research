@@ -211,7 +211,7 @@ public:
 	{
 	public:
 		EventData()
-			: Allocator(1 << 14)
+			: Allocator(1 << 16)
 		{}
 
 		struct Event
@@ -513,7 +513,7 @@ public:
 	class EventData
 	{
 	public:
-		static constexpr uint32 ALLOCATOR_SIZE = 1 << 14;
+		static constexpr uint32 ALLOCATOR_SIZE = 1 << 16;
 
 		EventData()
 			: Allocator(ALLOCATOR_SIZE)

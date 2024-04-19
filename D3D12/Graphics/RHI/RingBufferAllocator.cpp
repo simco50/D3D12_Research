@@ -12,12 +12,7 @@ RingBufferAllocator::RingBufferAllocator(GraphicsDevice* pDevice, uint32 size)
 
 RingBufferAllocator::~RingBufferAllocator()
 {
-	while (!m_RetiredAllocations.empty())
-	{
-		const RetiredAllocation& retired = m_RetiredAllocations.front();
-		m_pQueue->GetFence()->CpuWait(retired.FenceValue);
-		m_RetiredAllocations.pop();
-	}
+	Sync();
 	m_ConsumeOffset = 0;
 	m_ProduceOffset = 0;
 }
@@ -29,7 +24,7 @@ bool RingBufferAllocator::Allocate(uint32 size, RingBufferAllocation& allocation
 	while (!m_RetiredAllocations.empty())
 	{
 		const RetiredAllocation& retired = m_RetiredAllocations.front();
-		if (!m_pQueue->GetFence()->IsComplete(retired.FenceValue))
+		if (!retired.Sync.IsComplete())
 			break;
 		m_ConsumeOffset = retired.Offset + retired.Size;
 		m_RetiredAllocations.pop();
@@ -63,10 +58,7 @@ bool RingBufferAllocator::Allocate(uint32 size, RingBufferAllocation& allocation
 	if (offset == InvalidOffset)
 		return false;
 
-	if (!m_pContext)
-		m_pContext = GetParent()->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
-
-	allocation.pContext = m_pContext;
+	allocation.pContext = GetParent()->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 	allocation.Offset = offset;
 	allocation.Size = size;
 	allocation.GpuHandle = m_pBuffer->GetGpuHandle() + offset;
@@ -82,21 +74,18 @@ void RingBufferAllocator::Free(RingBufferAllocation& allocation)
 	RetiredAllocation retired;
 	retired.Offset = allocation.Offset;
 	retired.Size = allocation.Size;
-	retired.FenceValue = m_LastSync.GetFenceValue();
+	retired.Sync = allocation.pContext->Execute();
 	m_RetiredAllocations.push(retired);
 
 	allocation.pBackingResource = nullptr;
 	allocation.pContext = nullptr;
 	allocation.pMappedMemory = nullptr;
+
+	m_LastSync = retired.Sync;
 }
 
-SyncPoint RingBufferAllocator::Flush()
+void RingBufferAllocator::Sync()
 {
-	if (m_pContext)
-	{
-		CommandContext* pContext = m_pContext;
-		m_pContext = nullptr;
-		return pContext->Execute();
-	}
-	return SyncPoint();
+	if(m_LastSync.IsValid())
+		m_LastSync.Wait();
 }

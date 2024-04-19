@@ -40,7 +40,7 @@ struct MeshData
 };
 
 
-static Mesh& CreateMesh(GraphicsDevice* pDevice, World& world, MeshData& meshData)
+static void BuildMeshData(MeshData& meshData)
 {
 	for (const Vector3& position : meshData.PositionsStream)
 	{
@@ -128,6 +128,12 @@ static Mesh& CreateMesh(GraphicsDevice* pDevice, World& world, MeshData& meshDat
 		triangleOffset += meshlet.triangle_count;
 	}
 	meshData.MeshletTriangles.resize(triangleOffset);
+}
+
+
+static Mesh CreateMesh(GraphicsDevice* pDevice, MeshData& meshData)
+{
+	BuildMeshData(meshData);
 
 	constexpr uint64 bufferAlignment = 16;
 	uint64 bufferSize = 0;
@@ -165,7 +171,7 @@ static Mesh& CreateMesh(GraphicsDevice* pDevice, World& world, MeshData& meshDat
 	BoundingBox bounds;
 	bounds.CreateFromPoints(bounds, meshData.PositionsStream.size(), (DirectX::XMFLOAT3*)meshData.PositionsStream.data(), sizeof(Vector3));
 
-	Mesh& subMesh = world.Meshes.emplace_back();
+	Mesh subMesh;
 	subMesh.ScaleFactor = meshData.ScaleFactor;
 	subMesh.Bounds = bounds;
 	subMesh.MaterialId = meshData.MaterialIndex;
@@ -244,12 +250,11 @@ static Mesh& CreateMesh(GraphicsDevice* pDevice, World& world, MeshData& meshDat
 	subMesh.NumMeshlets = (uint32)meshData.Meshlets.size();
 
 	subMesh.pBuffer = pGeometryData;
-	world.GeometryData.push_back(pGeometryData);
 
 	allocation.pContext->CopyBuffer(allocation.pBackingResource, pGeometryData, bufferSize, allocation.Offset, 0);
 	pDevice->GetRingBuffer()->Free(allocation);
 
-	return world.Meshes.back();
+	return subMesh;
 }
 
 
@@ -374,7 +379,7 @@ static bool LoadLdr(const char* pFilePath, GraphicsDevice* pDevice, World& world
 			map.push_back(combination);
 			meshIndex = combination.Index;
 
-			CreateMesh(pDevice, world, mesh);
+			world.Meshes.push_back(CreateMesh(pDevice, mesh));
 			world.Materials.push_back(material);
 		}
 
@@ -570,7 +575,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 				ReadAttributeData("COLOR_0", meshData.ColorsStream, 4);
 			}
 
-			CreateMesh(pDevice, world, meshData);
+			world.Meshes.push_back(CreateMesh(pDevice, meshData));
 		}
 		meshToPrimitives[&mesh] = primitives;
 	}

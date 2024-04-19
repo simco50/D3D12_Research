@@ -38,7 +38,6 @@ struct Transform
 
 struct World
 {
-	std::vector<Ref<Buffer>> GeometryData;
 	std::vector<Ref<Texture>> Textures;
 	std::vector<Mesh> Meshes;
 	std::vector<Material> Materials;

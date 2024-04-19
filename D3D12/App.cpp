@@ -71,8 +71,8 @@ int App::Run()
 static void InitializeProfiler(GraphicsDevice* pDevice)
 {
 	const uint32 frameHistory = 8;
-	const uint32 maxEvents = 1024;
-	const uint32 maxCopyEvents = 128;
+	const uint32 maxEvents = 2048;
+	const uint32 maxCopyEvents = 2048;
 	const uint32 maxActiveCmdLists = 64;
 	
 	gCPUProfiler.Initialize(frameHistory, maxEvents);

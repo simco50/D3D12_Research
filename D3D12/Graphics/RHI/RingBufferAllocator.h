@@ -23,18 +23,17 @@ public:
 
 	bool Allocate(uint32 size, RingBufferAllocation& allocation);
 	void Free(RingBufferAllocation& allocation);
-	SyncPoint Flush();
+	void Sync();
 
 private:
 	struct RetiredAllocation
 	{
-		uint64 FenceValue;
+		SyncPoint Sync;
 		uint32 Offset;
 		uint32 Size;
 	};
 	std::queue<RetiredAllocation> m_RetiredAllocations;
 
-	CommandContext* m_pContext = nullptr;
 	CommandQueue* m_pQueue;
 	std::mutex m_Lock;
 	uint32 m_Size;

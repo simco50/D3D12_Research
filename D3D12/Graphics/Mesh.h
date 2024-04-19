@@ -45,7 +45,7 @@ struct Mesh
 
 	BoundingBox Bounds;
 
-	Buffer* pBuffer = nullptr;
+	Ref<Buffer> pBuffer;
 	Ref<Buffer> pBLAS;
 	float ScaleFactor = 1.0f;
 };
