@@ -72,8 +72,12 @@ GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 			"DispatchMesh",
 			"EncodeFrame",
 			"ResolveEncoderOutputMetadata",
+			"Barrier",
+			"BeginCommandList",
+			"DispatchGraph",
+			"SetProgram",
 		};
-		static_assert(ARRAYSIZE(OpNames) == D3D12_AUTO_BREADCRUMB_OP_RESOLVEENCODEROUTPUTMETADATA + 1, "OpNames array length mismatch");
+		static_assert(ARRAYSIZE(OpNames) == D3D12_AUTO_BREADCRUMB_OP_SETPROGRAM + 1, "OpNames array length mismatch");
 
 		//D3D12_DRED_ALLOCATION_TYPE
 		constexpr const char* AllocTypesNames[] =
