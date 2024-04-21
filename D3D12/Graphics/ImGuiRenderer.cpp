@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "ImGuiRenderer.h"
 #include "RHI/CommandContext.h"
-#include "RHI/Graphics.h"
+#include "RHI/Device.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Texture.h"

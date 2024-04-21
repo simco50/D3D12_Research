@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "DDGI.h"
 
-#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Device.h"
 #include "Graphics/RHI/StateObject.h"
 #include "Graphics/RHI/RootSignature.h"
 #include "Graphics/RHI/PipelineState.h"

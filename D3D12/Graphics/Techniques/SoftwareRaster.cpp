@@ -5,7 +5,7 @@
 #include "Graphics/RHI/Buffer.h"
 #include "Graphics/RHI/ResourceViews.h"
 #include "Graphics/RHI/PipelineState.h"
-#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Device.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/SceneView.h"
 #include "Content/Image.h"

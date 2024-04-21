@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "Texture.h"
-#include "Graphics.h"
+#include "Device.h"
 
 Texture::Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12Resource* pResource)
 	: DeviceResource(pParent, pResource), m_Desc(desc)

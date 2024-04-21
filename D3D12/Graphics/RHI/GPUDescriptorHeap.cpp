@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "GPUDescriptorHeap.h"
-#include "Graphics.h"
+#include "Device.h"
 #include "RootSignature.h"
 #include "CommandContext.h"
 #include "CommandQueue.h"

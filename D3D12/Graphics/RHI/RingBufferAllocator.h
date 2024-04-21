@@ -1,5 +1,5 @@
 #pragma once
-#include "GraphicsResource.h"
+#include "DeviceResource.h"
 #include "CommandQueue.h"
 
 class SyncPoint;

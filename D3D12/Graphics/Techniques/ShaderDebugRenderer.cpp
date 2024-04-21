@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "ShaderDebugRenderer.h"
 #include "Graphics/RHI/CommandContext.h"
-#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Device.h"
 #include "Graphics/RHI/PipelineState.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Content/Image.h"

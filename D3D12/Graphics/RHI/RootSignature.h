@@ -1,5 +1,5 @@
 #pragma once
-#include "GraphicsResource.h"
+#include "DeviceResource.h"
 
 /*
 	The RootSignature describes how the GPU resources map to the shader.

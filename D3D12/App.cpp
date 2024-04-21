@@ -7,7 +7,7 @@
 #include "Core/ConsoleVariables.h"
 #include "Core/Window.h"
 #include "Core/Profiler.h"
-#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Device.h"
 #include "Graphics/RHI/CommandQueue.h"
 #include "Graphics/RHI/CommandContext.h"
 #include "Graphics/SceneView.h"

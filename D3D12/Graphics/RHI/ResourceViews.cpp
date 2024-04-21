@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "ResourceViews.h"
-#include "Graphics.h"
+#include "Device.h"
 #include "Buffer.h"
 #include "Texture.h"
 #include "CPUDescriptorHeap.h"

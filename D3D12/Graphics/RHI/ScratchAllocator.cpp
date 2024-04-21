@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "ScratchAllocator.h"
-#include "Graphics.h"
+#include "Device.h"
 #include "Buffer.h"
 #include "CommandContext.h"
 

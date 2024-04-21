@@ -2,7 +2,7 @@
 #include "Fence.h"
 #include "CommandQueue.h"
 #include "D3D.h"
-#include "Graphics.h"
+#include "Device.h"
 
 Fence::Fence(GraphicsDevice* pParent, const char* pName, uint64 fenceValue)
 	: DeviceObject(pParent), m_CurrentValue(fenceValue + 1), m_LastSignaled(0), m_LastCompleted(fenceValue)

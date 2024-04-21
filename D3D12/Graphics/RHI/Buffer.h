@@ -1,5 +1,5 @@
 #pragma once
-#include "GraphicsResource.h"
+#include "DeviceResource.h"
 #include "D3D.h"
 
 enum class BufferFlag : uint8

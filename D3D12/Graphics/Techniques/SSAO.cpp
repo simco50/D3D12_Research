@@ -2,7 +2,7 @@
 #include "SSAO.h"
 #include "Graphics/RHI/PipelineState.h"
 #include "Graphics/RHI/RootSignature.h"
-#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Device.h"
 #include "Graphics/RHI/CommandContext.h"
 #include "Graphics/RHI/Texture.h"
 #include "Graphics/RenderGraph/RenderGraph.h"

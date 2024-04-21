@@ -4,7 +4,7 @@
 #include "Content/Image.h"
 #include "Graphics/DebugRenderer.h"
 #include "Graphics/Mesh.h"
-#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Device.h"
 #include "Graphics/RHI/Texture.h"
 #include "Graphics/RHI/CommandContext.h"
 #include "Graphics/RHI/Shader.h"

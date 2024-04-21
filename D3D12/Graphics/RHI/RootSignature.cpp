@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "RootSignature.h"
 #include "Shader.h"
-#include "Graphics.h"
+#include "Device.h"
 
 static D3D12_DESCRIPTOR_RANGE_FLAGS sDefaultTableRangeFlags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE | D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
 static D3D12_ROOT_DESCRIPTOR_FLAGS sDefaultRootDescriptorFlags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;

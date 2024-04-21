@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "PathTracing.h"
-#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Device.h"
 #include "Graphics/RHI/Texture.h"
 #include "Graphics/RHI/StateObject.h"
 #include "Graphics/RHI/PipelineState.h"

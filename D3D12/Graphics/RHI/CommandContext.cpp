@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "CommandContext.h"
-#include "Graphics.h"
+#include "Device.h"
 #include "CommandQueue.h"
 #include "GPUDescriptorHeap.h"
 #include "PipelineState.h"

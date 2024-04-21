@@ -1,6 +1,6 @@
 #pragma once
 #include "DescriptorHandle.h"
-#include "GraphicsResource.h"
+#include "DeviceResource.h"
 #include "Core/BitField.h"
 #include "RootSignature.h"
 #include "CommandQueue.h"

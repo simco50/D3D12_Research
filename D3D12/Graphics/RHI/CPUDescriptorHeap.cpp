@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "CPUDescriptorHeap.h"
-#include "Graphics.h"
+#include "Device.h"
 
 CPUDescriptorHeap::CPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors)
 	: DeviceObject(pParent), m_FreeList(numDescriptors), m_NumDescriptors(numDescriptors), m_Type(type)

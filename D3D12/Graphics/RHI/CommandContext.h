@@ -1,6 +1,6 @@
 #pragma once
 #include "RHI.h"
-#include "GraphicsResource.h"
+#include "DeviceResource.h"
 #include "GPUDescriptorHeap.h"
 #include "ScratchAllocator.h"
 

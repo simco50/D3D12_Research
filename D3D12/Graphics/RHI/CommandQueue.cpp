@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "CommandQueue.h"
-#include "Graphics.h"
+#include "Device.h"
 #include "CommandContext.h"
 #include "D3D.h"
 #include "Core/Profiler.h"

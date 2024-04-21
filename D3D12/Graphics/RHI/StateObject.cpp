@@ -2,7 +2,7 @@
 #include "StateObject.h"
 #include "Shader.h"
 #include "RootSignature.h"
-#include "Graphics.h"
+#include "Device.h"
 
 class StateObjectStream
 {

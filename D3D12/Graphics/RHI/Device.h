@@ -2,7 +2,7 @@
 #include "RHI.h"
 #include "Shader.h"
 #include "DescriptorHandle.h"
-#include "GraphicsResource.h"
+#include "DeviceResource.h"
 #include "ResourceViews.h"
 #include "D3D.h"
 #include "Fence.h"

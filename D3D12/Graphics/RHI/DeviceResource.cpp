@@ -1,7 +1,7 @@
 #include "stdafx.h"
-#include "GraphicsResource.h"
+#include "DeviceResource.h"
 #include "ResourceViews.h"
-#include "Graphics.h"
+#include "Device.h"
 
 DeviceResource::DeviceResource(GraphicsDevice* pParent, ID3D12Resource* pResource)
 	: DeviceObject(pParent), m_pResource(pResource)

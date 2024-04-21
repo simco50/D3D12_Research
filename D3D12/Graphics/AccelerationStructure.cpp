@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "AccelerationStructure.h"
-#include "RHI/Graphics.h"
+#include "RHI/Device.h"
 #include "RHI/CommandContext.h"
 #include "RHI/Buffer.h"
 #include "SceneView.h"

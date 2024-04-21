@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "CBTTessellation.h"
 #include "Graphics/RHI/RootSignature.h"
-#include "Graphics/RHI/Graphics.h"
+#include "Graphics/RHI/Device.h"
 #include "Graphics/RHI/PipelineState.h"
 #include "Graphics/RHI/Buffer.h"
 #include "Graphics/RHI/CommandContext.h"

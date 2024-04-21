@@ -4,7 +4,7 @@
 #include "RHI/Buffer.h"
 #include "RHI/PipelineState.h"
 #include "RHI/Texture.h"
-#include "RHI/Graphics.h"
+#include "RHI/Device.h"
 #include "RHI/CommandContext.h"
 #include "Mesh.h"
 #include "Light.h"

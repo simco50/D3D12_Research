@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "PipelineState.h"
 #include "Shader.h"
-#include "Graphics.h"
+#include "Device.h"
 #include "RootSignature.h"
 
 PipelineStateInitializer::PipelineStateInitializer()

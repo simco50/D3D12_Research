@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "DebugRenderer.h"
-#include "RHI/Graphics.h"
+#include "RHI/Device.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/CommandContext.h"

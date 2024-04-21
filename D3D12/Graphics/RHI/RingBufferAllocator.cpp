@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "RingBufferAllocator.h"
-#include "Graphics.h"
+#include "Device.h"
 #include "Buffer.h"
 #include "CommandContext.h"
 
