@@ -3,9 +3,10 @@
 #include "Graphics.h"
 #include "CommandContext.h"
 #include "D3D.h"
+#include "Core/Profiler.h"
 
 CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type)
-	: GraphicsObject(pParent),
+	: DeviceObject(pParent),
 	m_Type(type)
 {
 	D3D12_COMMAND_QUEUE_DESC desc = {};
@@ -22,8 +23,9 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 	VERIFY_HR(m_pCommandQueue->GetTimestampFrequency(&m_TimestampFrequency));
 }
 
-SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& contexts, bool wait)
+SyncPoint CommandQueue::ExecuteCommandLists(Span<CommandContext* const> contexts)
 {
+	PROFILE_CPU_SCOPE();
 	check(contexts.GetSize());
 
 	// Commandlists can be recorded in parallel.
@@ -39,6 +41,10 @@ SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& c
 	CommandContext* pBarrierCommandlist = GetParent()->AllocateCommandContext(m_Type);
 	CommandContext* pCurrentContext = pBarrierCommandlist;
 
+	// Executing a commandlist will update the last sync point and resource state tracking.
+	// Can't have multiple threads do this at the same time.
+	std::lock_guard lock(m_ExecuteLock);
+
 	for(CommandContext* pNextContext : contexts)
 	{
 		check(pNextContext);
@@ -53,52 +59,47 @@ SyncPoint CommandQueue::ExecuteCommandLists(const Span<CommandContext* const>& c
 	VERIFY_HR_EX(pCurrentContext->GetCommandList()->Close(), GetParent()->GetDevice());
 	commandLists.push_back(pCurrentContext->GetCommandList());
 
-	m_pCommandQueue->ExecuteCommandLists((uint32)commandLists.size(), commandLists.data());
+	{
+		PROFILE_CPU_SCOPE("ExecuteCommandLists");
+		PROFILE_EXECUTE_COMMANDLISTS(m_pCommandQueue, commandLists);
+		m_pCommandQueue->ExecuteCommandLists((uint32)commandLists.size(), commandLists.data());
+	}
 
 	uint64 fenceValue = m_pFence->Signal(this);
 	m_SyncPoint = SyncPoint(m_pFence, fenceValue);
 
 	pBarrierCommandlist->Free(m_SyncPoint);
 
-	if (wait)
-	{
-		m_SyncPoint.Wait();
-	}
-
 	return m_SyncPoint;
 }
 
-RefCountPtr<ID3D12CommandAllocator> CommandQueue::RequestAllocator()
+Ref<ID3D12CommandAllocator> CommandQueue::RequestAllocator()
 {
 	auto CreateAllocator = [this]() {
-		RefCountPtr<ID3D12CommandAllocator> pAllocator;
+		Ref<ID3D12CommandAllocator> pAllocator;
 		GetParent()->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
 		D3D::SetObjectName(pAllocator.Get(), Sprintf("Pooled Allocator %d - %s", (int)m_AllocatorPool.GetSize(), D3D::CommandlistTypeToString(m_Type)).c_str());
 		return pAllocator;
 	};
-	RefCountPtr<ID3D12CommandAllocator> pAllocator = m_AllocatorPool.Allocate(CreateAllocator);
+	Ref<ID3D12CommandAllocator> pAllocator = m_AllocatorPool.Allocate(CreateAllocator);
 	pAllocator->Reset();
 	return pAllocator;
 }
 
-void CommandQueue::FreeAllocator(const SyncPoint& syncPoint, RefCountPtr<ID3D12CommandAllocator>& pAllocator)
+void CommandQueue::FreeAllocator(const SyncPoint& syncPoint, Ref<ID3D12CommandAllocator>& pAllocator)
 {
 	m_AllocatorPool.Free(std::move(pAllocator), syncPoint);
 }
 
 void CommandQueue::InsertWait(const SyncPoint& syncPoint)
 {
-	m_pCommandQueue->Wait(syncPoint.GetFence()->GetFence(), syncPoint.GetFenceValue());
+	if(syncPoint.IsValid())
+		m_pCommandQueue->Wait(syncPoint.GetFence()->GetFence(), syncPoint.GetFenceValue());
 }
 
 void CommandQueue::InsertWait(CommandQueue* pQueue)
 {
 	InsertWait(pQueue->m_SyncPoint);
-}
-
-void CommandQueue::WaitForFence(uint64 fenceValue)
-{
-	m_pFence->CpuWait(fenceValue);
 }
 
 void CommandQueue::WaitForIdle()

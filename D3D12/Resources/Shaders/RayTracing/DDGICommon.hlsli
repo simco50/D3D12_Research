@@ -32,7 +32,7 @@ DDGIVolume GetDDGIVolume(uint index)
 bool DDGIIsProbeActive(DDGIVolume volume, uint3 index3D)
 {
 #if DDGI_USE_PROBE_STATES
-	uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions);
+	uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions.xy);
 	Buffer<uint> stateBuffer = ResourceDescriptorHeap[volume.ProbeStatesIndex];
 	return stateBuffer[index1D] == 0;
 #else
@@ -51,7 +51,7 @@ float3 DDGIGetRayDirection(uint rayIndex, uint numRays, float3x3 randomRotation 
 
 float3 GetDDGIProbeIndex3D(DDGIVolume volume, uint index)
 {
-	return UnFlatten3D(index, volume.ProbeVolumeDimensions);
+	return UnFlatten3D(index, volume.ProbeVolumeDimensions.xy);
 }
 
 float3 GetDDGIProbePosition(DDGIVolume volume, uint3 index3D)
@@ -61,7 +61,7 @@ float3 GetDDGIProbePosition(DDGIVolume volume, uint3 index3D)
 	if(volume.ProbeOffsetIndex != INVALID_HANDLE)
 	{
 		Buffer<float4> offsetBuffer = ResourceDescriptorHeap[volume.ProbeOffsetIndex];
-		uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions);
+		uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions.xy);
 		position += offsetBuffer[index1D].xyz;
 	}
 #endif
@@ -91,7 +91,7 @@ float3 DDGIComputeBias(DDGIVolume volume, float3 normal, float3 viewDirection, f
 	const float viewBiasMultiplier = 0.8f;
 	const float axialDistanceMultiplier = 0.75f;
 	return (normal * normalBiasMultiplier + viewDirection * viewBiasMultiplier) *
-		axialDistanceMultiplier * Min3(volume.ProbeSize) * b;
+		axialDistanceMultiplier * MinComponent(volume.ProbeSize) * b;
 }
 
 float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction, float3 cameraDirection)
@@ -167,21 +167,22 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 			float mD = moments.x - probeDistance;
 			chebyshev = variance / (variance + Square(mD));
 			// Sharpen the factor
-			chebyshev = max(pow(chebyshev, 3), 0.0);
+			chebyshev = max(chebyshev * chebyshev * chebyshev, 0.0);
 		}
 		weight *= max(chebyshev, 0.05f);
-
 		weight = max(0.000001f, weight);
-
-		float2 uv = GetDDGIProbeUV(volume, probeCoordinates, direction, DDGI_PROBE_IRRADIANCE_TEXELS);
-		// Remove tone curve and blend in sRGB
-		float3 irradiance = pow(irradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb, DDGI_PROBE_GAMMA * 0.5f);
 
 		const float crushThreshold = 0.2f;
 		if (weight < crushThreshold)
+		{
 			weight *= weight * weight * (1.0f / Square(crushThreshold));
-
+		}
 		weight *= trilinearWeight;
+
+		float2 uv = GetDDGIProbeUV(volume, probeCoordinates, direction, DDGI_PROBE_IRRADIANCE_TEXELS);
+		// Remove tone curve and blend in sRGB
+		float3 irradiance = irradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb;
+		irradiance = pow(irradiance, DDGI_PROBE_GAMMA * 0.5f);
 
 		sumIrradiance += irradiance * weight;
 		sumWeight += weight;

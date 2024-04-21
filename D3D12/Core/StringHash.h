@@ -9,6 +9,8 @@ private:
 
 	static inline constexpr uint32 Hash_Internal(const char* const str, const uint32 value) noexcept
 	{
+		if (!str)
+			return 0;
 		if constexpr (CaseSensitive)
 		{
 			return (str[0] == '\0') ? value : Hash_Internal(&str[1], (value ^ uint64(str[0])) * prime_const);

@@ -1,4 +1,6 @@
 #pragma once
+
+#include "Graphics/RHI/RHI.h"
 #include "Core/BitField.h"
 #include "ShaderInterop.h"
 #include "AccelerationStructure.h"
@@ -6,22 +8,42 @@
 #include "Techniques/ShaderDebugRenderer.h"
 #include "Techniques/DDGI.h"
 
-class Texture;
-class Buffer;
-class Mesh;
-class CommandContext;
-class ShaderResourceView;
-class CommandSignature;
-class GraphicsDevice;
+#include "External/EnTT/entt.hpp"
+
+class LoadedScene;
+struct Mesh;
 class Image;
-struct SubMesh;
+struct Material;
 struct Light;
+
+enum class StencilBit : uint8
+{
+	None				= 0,
+
+	VisibilityBuffer	= 1 << 0,
+	Terrain				= 1 << 1,
+
+	SurfaceTypeMask		= VisibilityBuffer | Terrain,
+};
+DECLARE_BITMASK_TYPE(StencilBit);
+
+struct Transform
+{
+	Vector3 Position	= Vector3::Zero;
+	Quaternion Rotation = Quaternion::Identity;
+	Vector3 Scale		= Vector3::One;
+
+	Matrix World		= Matrix::Identity;
+};
 
 struct World
 {
-	std::vector<Light> Lights;
-	std::vector<std::unique_ptr<Mesh>> Meshes;
-	std::vector<DDGIVolume> DDGIVolumes;
+	std::vector<Ref<Texture>> Textures;
+	std::vector<Mesh> Meshes;
+	std::vector<Material> Materials;
+
+	entt::registry Registry;
+	entt::entity Sunlight;
 };
 
 struct ViewTransform
@@ -30,10 +52,9 @@ struct ViewTransform
 	Matrix View;
 	Matrix ViewProjection;
 	Matrix ViewProjectionPrev;
-	Matrix ViewProjectionFrozen;
 	Matrix ViewInverse;
 	Matrix ProjectionInverse;
-	bool Perspective = true;
+	Matrix UnjtteredViewProjection;
 	Vector3 Position;
 	Vector3 PositionPrev;
 
@@ -41,12 +62,18 @@ struct ViewTransform
 	float FoV = 60.0f * Math::PI / 180;
 	float NearPlane = 1.0f;
 	float FarPlane = 500.0f;
-	float OrthographicSize = 1;
 	int JitterIndex = 0;
-	float JitterWeight = 0.5f;
 	Vector2 Jitter;
-	Vector2 PreviousJitter;
-	BoundingFrustum Frustum;
+	Vector2 JitterPrev;
+
+	bool IsPerspective = true;
+	BoundingFrustum PerspectiveFrustum;
+	OrientedBoundingBox OrthographicFrustum;
+
+	bool IsInFrustum(const BoundingBox& bb) const
+	{
+		return IsPerspective ? PerspectiveFrustum.Contains(bb) : OrthographicFrustum.Contains(bb);
+	}
 };
 
 struct Batch
@@ -59,7 +86,7 @@ struct Batch
 	};
 	uint32 InstanceID;
 	Blending BlendMode = Blending::Opaque;
-	SubMesh* pMesh;
+	const Mesh* pMesh;
 	Matrix WorldMatrix;
 	BoundingBox Bounds;
 	float Radius;
@@ -70,58 +97,70 @@ using VisibilityMask = BitField<8192>;
 
 struct ShadowView
 {
-	Matrix ViewProjection;
-	bool IsPerspective;
-	Texture* pDepthTexture = nullptr;
-	OrientedBoundingBox OrtographicFrustum;
-	BoundingFrustum PerspectiveFrustum;
+	const Light* pLight = nullptr;
+	uint32 ViewIndex = 0;
+	ViewTransform View;
 	VisibilityMask Visibility;
+	Texture* pDepthTexture = nullptr;
 };
 
 struct SceneView
 {
+	const World* pWorld = nullptr;
 	std::vector<Batch> Batches;
-	RefCountPtr<Buffer> pLightBuffer;
-	RefCountPtr<Buffer> pMaterialBuffer;
-	RefCountPtr<Buffer> pMeshBuffer;
-	RefCountPtr<Buffer> pInstanceBuffer;
-	RefCountPtr<Buffer> pDDGIVolumesBuffer;
-	uint32 NumDDGIVolumes = 0;
-	RefCountPtr<Texture> pSky;
-	int FrameIndex = 0;
-	Vector2i HZBDimensions;
-	VisibilityMask VisibilityMask;
-	ViewTransform View;
-	BoundingBox SceneAABB;
+
+	struct SceneBuffer
+	{
+		uint32 Count;
+		Ref<Buffer> pBuffer;
+	};
+
+	SceneBuffer LightBuffer;
+	SceneBuffer MaterialBuffer;
+	SceneBuffer MeshBuffer;
+	SceneBuffer InstanceBuffer;
+	SceneBuffer DDGIVolumesBuffer;
+	SceneBuffer LightMatricesBuffer;
+	Ref<Texture> pSky;
 	AccelerationStructure AccelerationStructure;
 	GPUDebugRenderData DebugRenderData;
+	Vector2u HZBDimensions;
+
+	VisibilityMask VisibilityMask;
+	ViewTransform MainView;
+	BoundingBox SceneAABB;
 
 	std::vector<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
-	uint32 NumLights;
 
-	Vector2i GetDimensions() const;
+	int FrameIndex = 0;
+	bool CameraCut = false;
+
+	Vector2u GetDimensions() const
+	{
+		return Vector2u((uint32)MainView.Viewport.GetWidth(), (uint32)MainView.Viewport.GetHeight());
+	}
 };
 
 struct SceneTextures
 {
-	RGTexture* pPreviousColor = nullptr;
-	RGTexture* pRoughness = nullptr;
-	RGTexture* pColorTarget = nullptr;
-	RGTexture* pDepth = nullptr;
-	RGTexture* pResolvedDepth = nullptr;
-	RGTexture* pNormals = nullptr;
-	RGTexture* pVelocity = nullptr;
-	RGTexture* pAmbientOcclusion = nullptr;
+	RGTexture* pPreviousColor		= nullptr;
+	RGTexture* pRoughness			= nullptr;
+	RGTexture* pColorTarget			= nullptr;
+	RGTexture* pDepth				= nullptr;
+	RGTexture* pNormals				= nullptr;
+	RGTexture* pVelocity			= nullptr;
+	RGTexture* pAmbientOcclusion	= nullptr;
 };
 
 namespace Renderer
 {
-	void DrawScene(CommandContext& context, const SceneView* pView, const VisibilityMask& visibility, Batch::Blending blendModes);
+	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes);
 	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes);
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform, Texture* pTarget = nullptr);
 	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget = nullptr);
-	void UploadSceneData(CommandContext& context, SceneView* pView, World* pWorld);
+	void UploadSceneData(CommandContext& context, SceneView* pView, const World* pWorld);
 }
 
 enum class DefaultTexture
@@ -136,6 +175,7 @@ enum class DefaultTexture
 	Black3D,
 	ColorNoise256,
 	BlueNoise512,
+	CheckerPattern,
 	MAX,
 };
 
@@ -146,11 +186,20 @@ namespace GraphicsCommon
 
 	Texture* GetDefaultTexture(DefaultTexture type);
 
-	extern RefCountPtr<CommandSignature> pIndirectDrawSignature;
-	extern RefCountPtr<CommandSignature> pIndirectDrawIndexedSignature;
-	extern RefCountPtr<CommandSignature> pIndirectDispatchSignature;
-	extern RefCountPtr<CommandSignature> pIndirectDispatchMeshSignature;
+	constexpr static ResourceFormat ShadowFormat = ResourceFormat::D16_UNORM;
+	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D24S8;
+	constexpr static ResourceFormat GBufferFormat[] = {
+		ResourceFormat::RGBA16_FLOAT,
+		ResourceFormat::RG16_SNORM,
+		ResourceFormat::R8_UNORM
+	};
 
-	RefCountPtr<Texture> CreateTextureFromImage(CommandContext& context, Image& image, bool sRGB, const char* pName = nullptr);
-	RefCountPtr<Texture> CreateTextureFromFile(CommandContext& context, const char* pFilePath, bool sRGB, const char* pName = nullptr);
+	extern Ref<CommandSignature> pIndirectDrawSignature;
+	extern Ref<CommandSignature> pIndirectDrawIndexedSignature;
+	extern Ref<CommandSignature> pIndirectDispatchSignature;
+	extern Ref<CommandSignature> pIndirectDispatchMeshSignature;
+	extern Ref<RootSignature> pCommonRS;
+
+	Ref<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName = nullptr);
+	Ref<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName = nullptr);
 }

@@ -1,7 +1,8 @@
 #include "Common.hlsli"
 #include "Random.hlsli"
+#include "Lighting.hlsli"
 #include "Volumetrics.hlsli"
-#include "SkyCommon.hlsli"
+#include "Noise.hlsli"
 
 RWTexture2D<float4> uOutput : register(u0);
 Texture2D tSceneTexture : register(t0);
@@ -30,6 +31,22 @@ struct PassParameters
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
+
+bool RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCenter, float sphereRadius, out float2 intersection)
+{
+    float3 oc = rayOrigin - sphereCenter;
+    float b = dot(oc, rayDirection);
+    float c = dot(oc, oc) - sphereRadius * sphereRadius;
+    float h = b * b - c;
+    if(h < 0.0)
+	{
+		intersection = -1.0f;
+		return false;
+	}
+    h = sqrt(h);
+    intersection = float2(-b - h, -b + h);
+	return true;
+}
 
 float SampleDensity(float3 position, uint mipLevel)
 {
@@ -185,25 +202,24 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	}
 #endif
 
-	float2 texCoord = threadId.xy * cView.TargetDimensionsInv;
+	float2 texCoord = (threadId.xy + 0.5f) * cView.TargetDimensionsInv;
 	float4 color = tSceneTexture.SampleLevel(sPointClamp, texCoord, 0);
 	float sceneDepth = tDepthTexture.SampleLevel(sPointClamp, texCoord, 0).r;
-	float3 viewRay = normalize(ViewFromDepth(texCoord, sceneDepth, cView.ProjectionInverse));
+	float3 viewRay = normalize(ViewPositionFromDepth(texCoord, sceneDepth, cView.ProjectionInverse));
 	float linearDepth = sceneDepth == 0 ? 10000000 : length(viewRay);
 	float3 rayOrigin = cView.ViewLocation;
 	float3 rayDirection = mul(viewRay, (float3x3)cView.ViewInverse);
 
-	// Physically based pitch black earth :-)
 	float2 planetHit;
 	if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit))
 	{
 		float hit = all(planetHit > 0) ? planetHit.x : planetHit.y;
 		if(hit > 0 && hit < linearDepth)
 		{
-			color = 0;
-			linearDepth = hit;
+			linearDepth = 0;
 		}
 	}
+
 
 	float4 scatteringTransmittance = RenderClouds(threadId.xy, rayOrigin, rayDirection, linearDepth);
 	float3 col = color.xyz * scatteringTransmittance.w + scatteringTransmittance.xyz;

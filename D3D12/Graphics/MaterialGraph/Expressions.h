@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MaterialGraph.h"
-#include "imnodes.h"
+#include "External/imnodes/imnodes.h"
 
 namespace ShaderGraph
 {
@@ -12,7 +12,7 @@ namespace ShaderGraph
 		CreateFn Callback;
 		const char* pName;
 	};
-	extern std::map<const char*, ExpressionFactory> gFactories;
+	extern std::unordered_map<const char*, ExpressionFactory> gFactories;
 
 	template<typename T>
 	void RegisterExpression(const char* pName)
@@ -240,11 +240,10 @@ namespace ShaderGraph
 			{
 				int* index = &VertexAttributeIndices[i];
 				ImGui::PushID(ID + (int)i);
-				ImGui::Combo("", index, [](void* pData, int index, const char** pOut)
+				ImGui::Combo("", index, [](void* pData, int index)
 					{
 						Uniform* pAttr = (Uniform*)pData;
-						*pOut = pAttr[index].pName;
-						return true;
+						return pAttr[index].pName;
 					}, (void*)VertexAttributes, ARRAYSIZE(VertexAttributes));
 				Outputs[i].Name = VertexAttributes[*index].pName;
 				ImGui::PopID();
@@ -322,11 +321,10 @@ namespace ShaderGraph
 
 		virtual void RenderBody() override
 		{
-			ImGui::Combo("", &m_Index, [](void* pData, int index, const char** pOut)
+			ImGui::Combo("", &m_Index, [](void* pData, int index)
 				{
 					SystemValueData* pSystemValue = (SystemValueData*)pData;
-					*pOut = pSystemValue[index].pSymbolName;
-					return true;
+					return pSystemValue[index].pSymbolName;
 				}, (void*)SystemValues, ARRAYSIZE(SystemValues));
 		}
 
@@ -362,7 +360,7 @@ namespace ShaderGraph
 			int ID = 0;
 			std::vector<std::unique_ptr<Node>> Nodes;
 			Node* pMasterNode;
-			std::map<int, Node*> NodeMap;
+			std::unordered_map<int, Node*> NodeMap;
 
 			struct LinkData
 			{

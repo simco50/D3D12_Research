@@ -29,7 +29,7 @@ uint SeedThread(uint seed)
 
 uint SeedThread(uint2 pixel, uint2 resolution, uint frameIndex)
 {
-	uint rngState = Flatten2D(pixel, resolution) ^ SeedThread(frameIndex);
+	uint rngState = Flatten2D(pixel, resolution.x) ^ SeedThread(frameIndex);
 	return SeedThread(rngState);
 }
 

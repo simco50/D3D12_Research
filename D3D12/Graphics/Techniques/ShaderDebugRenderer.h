@@ -1,42 +1,25 @@
 #pragma once
 
+#include "Graphics/RHI/RHI.h"
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
-class GraphicsDevice;
-class Texture;
-class Buffer;
-class PipelineState;
-class RootSignature;
 struct SceneView;
-
-struct FontCreateSettings
-{
-	const char* pName = "";
-	bool Bold = false;
-	bool Italic = false;
-	bool StrikeThrough = false;
-	bool Underline = false;
-	uint32 BezierRefinement = 5;
-	uint32 Height = 100;
-
-	void* (*pAllocateFn)(size_t size) = [](size_t size) -> void* { return new char[size]; };
-	void (*pFreeFn)(void* pMemory) = [](void* pMemory) -> void { delete[] pMemory; };
-};
 
 struct GPUDebugRenderData
 {
 	uint32 RenderDataUAV;
 	uint32 FontDataSRV;
+	uint32 FontSize;
 };
 
 class ShaderDebugRenderer
 {
 public:
-	ShaderDebugRenderer(GraphicsDevice* pDevice, const FontCreateSettings& fontSettings);
+	ShaderDebugRenderer(GraphicsDevice* pDevice);
 
 	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth);
 
-	void GetGlobalIndices(GPUDebugRenderData* pData) const;
+	void GetGPUData(GPUDebugRenderData* pData) const;
 
 private:
 	struct Line
@@ -44,7 +27,7 @@ private:
 		Vector2 A, B;
 	};
 
-	struct FontGlyph
+	struct Glyph
 	{
 		uint32 Letter;
 		std::vector<Line> Lines;
@@ -59,29 +42,15 @@ private:
 		Vector2i Inc;
 	};
 
-	struct Font
-	{
-		const char* pName;
-		std::vector<FontGlyph> Glyphs;
-		uint32 Ascent;
-		uint32 Descent;
-		uint32 Height;
-	};
+	void BuildFontAtlas(GraphicsDevice* pDevice);
 
-	bool ProcessFont(Font& outFont, const FontCreateSettings& config);
-	void BuildFontAtlas(CommandContext& context, const Vector2i& resolution);
+	Ref<PipelineState> m_pBuildIndirectDrawArgsPSO;
+	Ref<PipelineState> m_pRenderTextPSO;
+	Ref<PipelineState> m_pRenderLinesPSO;
 
-	Font m_Font;
+	Ref<Buffer> m_pRenderDataBuffer;
 
-	RefCountPtr<RootSignature> m_pCommonRS;
-
-	RefCountPtr<PipelineState> m_pRasterizeGlyphPSO;
-	RefCountPtr<PipelineState> m_pBuildIndirectDrawArgsPSO;
-	RefCountPtr<PipelineState> m_pRenderTextPSO;
-	RefCountPtr<PipelineState> m_pRenderLinesPSO;
-
-	RefCountPtr<Buffer> m_pRenderDataBuffer;
-
-	RefCountPtr<Texture> m_pFontAtlas;
-	RefCountPtr<Buffer> m_pGlyphData;
+	uint32 m_FontSize;
+	Ref<Texture> m_pFontAtlas;
+	Ref<Buffer> m_pGlyphData;
 };

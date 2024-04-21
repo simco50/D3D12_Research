@@ -40,9 +40,9 @@ namespace Win32Console
 
 static HANDLE sConsoleHandle = nullptr;
 static std::mutex sLogMutex;
-static std::queue<Console::LogEntry> sMessageQueue;
 static LogType sVerbosity;
 static std::deque<Console::LogEntry> sHistory;
+std::array<char, 8192> Console::sConvertBuffer;
 
 void Console::Initialize()
 {
@@ -61,9 +61,9 @@ void Console::Shutdown()
 void Console::Log(const char* message, LogType type)
 {
 	if ((int)type < (int)sVerbosity)
-	{
 		return;
-	}
+
+	std::scoped_lock lock(sLogMutex);
 
 	const char* pVerbosityMessage = "";
 	switch (type)
@@ -93,69 +93,15 @@ void Console::Log(const char* message, LogType type)
 	printf("%s %s\n", pVerbosityMessage, message);
 	OutputDebugStringA(messageBuffer);
 
+	sHistory.push_back({ message, type });
+	while (sHistory.size() > 50)
+		sHistory.pop_front();
+
 	if (sConsoleHandle)
-	{
 		SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
-	}
 
-	if (Thread::IsMainThread())
-	{
-		{
-			std::scoped_lock<std::mutex> lock(sLogMutex);
-			while (!sMessageQueue.empty())
-			{
-				const LogEntry& e = sMessageQueue.front();
-				sHistory.push_back(e);
-				sMessageQueue.pop();
-			}
-		}
-
-		sHistory.push_back(LogEntry(message, type));
-		while (sHistory.size() > 50)
-		{
-			sHistory.pop_front();
-		}
-	}
-	else
-	{
-		std::scoped_lock<std::mutex> lock(sLogMutex);
-		sMessageQueue.push(LogEntry(message, type));
-	}
-
-	if (type == LogType::Error)
-	{
-			if (IsDebuggerPresent())
-			{
-				LPCSTR msg = &message[0];
-				int res = MessageBoxA(NULL, msg, "Assert failed", MB_YESNOCANCEL | MB_ICONERROR);
-				if (res == IDYES)
-				{
-#if _MSC_VER >= 1400
-					__debugbreak();
-#else
-					_asm int 0x03;
-#endif
-				}
-				else if (res == IDCANCEL)
-				{
-					abort();
-				}
-			}
-	}
-	else if (type == LogType::FatalError)
-	{
+	if (type == LogType::FatalError)
 		abort();
-	}
-}
-
-void Console::LogFormat(LogType type, const char* format, ...)
-{
-	static char sConvertBuffer[8196];
-	va_list ap;
-	va_start(ap, format);
-	FormatStringVars(sConvertBuffer, ARRAYSIZE(sConvertBuffer), format, ap);
-	va_end(ap);
-	Log(sConvertBuffer, type);
 }
 
 void Console::SetVerbosity(LogType type)
@@ -166,4 +112,46 @@ void Console::SetVerbosity(LogType type)
 const std::deque<Console::LogEntry>& Console::GetHistory()
 {
 	return sHistory;
+}
+
+void Console::FlushLog(const LogEntry& log)
+{
+	const char* pVerbosityMessage = "";
+	switch (log.Type)
+	{
+	case LogType::Info:
+		if (sConsoleHandle)
+			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+		pVerbosityMessage = "[INFO]";
+		break;
+	case LogType::Warning:
+		if (sConsoleHandle)
+			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY);
+		pVerbosityMessage = "[WARNING]";
+		break;
+	case LogType::Error:
+	case LogType::FatalError:
+		if (sConsoleHandle)
+			SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_INTENSITY);
+		pVerbosityMessage = "[ERROR]";
+		break;
+	default:
+		break;
+	}
+
+	char messageBuffer[4096];
+	FormatString(messageBuffer, ARRAYSIZE(messageBuffer), "%s %s\n", pVerbosityMessage, log.Message.c_str());
+	printf("%s %s\n", pVerbosityMessage, log.Message.c_str());
+	OutputDebugStringA(messageBuffer);
+
+	sHistory.push_back(log);
+	while (sHistory.size() > 50)
+	{
+		sHistory.pop_front();
+	}
+
+	if (sConsoleHandle)
+	{
+		SetConsoleTextAttribute(sConsoleHandle, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+	}
 }

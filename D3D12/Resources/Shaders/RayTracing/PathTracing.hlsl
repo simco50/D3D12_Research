@@ -3,7 +3,6 @@
 #include "Lighting.hlsli"
 #include "RaytracingCommon.hlsli"
 #include "Random.hlsli"
-#include "TonemappingCommon.hlsli"
 
 #define MIN_BOUNCES 3
 #define RIS_CANDIDATES_LIGHTS 8
@@ -22,6 +21,8 @@ RWTexture2D<float4> uOutput : register(u0);
 RWTexture2D<float4> uAccumulation : register(u1);
 ConstantBuffer<PassParameters> cPass : register(b0);
 
+Texture2D<float4> tAccumulation : register(t0);
+
 LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, BrdfData brdfData)
 {
 	LightResult result = (LightResult)0;
@@ -33,6 +34,8 @@ LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, floa
 	RayDesc rayDesc = CreateLightOcclusionRay(light, worldPos);
 	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
 	attenuation *= TraceOcclusionRay(rayDesc, tlas);
+	if(attenuation <= 0)
+		return result;
 
 	result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
 	result.Diffuse *= light.GetColor() * light.Intensity;
@@ -51,6 +54,32 @@ float BRDFProbability(BrdfData brdfData, float3 N, float3 V)
 	float diffuse = diffuseReflectance * (1.0f - fresnel);
 	float p = (specular / max(0.0001f, (specular + diffuse)));
 	return clamp(p, 0.1f, 0.9f);
+}
+
+// Calculates rotation quaternion from input vector to the vector (0, 0, 1)
+// Input vector must be normalized!
+float4 GetRotationToZAxis(float3 input)
+{
+	// Handle special case when input is exact or near opposite of (0, 0, 1)
+	if (input.z < -0.99999f)
+	{
+		return float4(1.0f, 0.0f, 0.0f, 0.0f);
+	}
+	return normalize(float4(input.y, -input.x, 0.0f, 1.0f + input.z));
+}
+
+// Returns the quaternion with inverted rotation
+float4 InvertRotation(float4 q)
+{
+	return float4(-q.x, -q.y, -q.z, q.w);
+}
+
+// Optimized point rotation using quaternion
+// Source: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
+float3 RotatePoint(float4 q, float3 v)
+{
+	float3 qAxis = float3(q.x, q.y, q.z);
+	return 2.0f * dot(qAxis, v) * qAxis + (q.w * q.w - dot(qAxis, qAxis)) * v + 2.0f * q.w * cross(qAxis, v);
 }
 
 // Indirect light BRDF evaluation
@@ -178,7 +207,11 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	// Weight the selected light based on the total weight and light count
 
 	if(cView.LightCount <= 0)
+	{
+		lightIndex = 0;
+		sampleWeight = 0.0f;
 		return false;
+	}
 
 	Reservoir reservoir;
 	reservoir.TotalWeight = 0.0f;
@@ -204,7 +237,11 @@ bool SampleLightRIS(inout uint seed, float3 position, float3 N, out int lightInd
 	}
 
 	if(reservoir.TotalWeight == 0.0f)
+	{
+		lightIndex = 0;
+		sampleWeight = 0.0f;
 		return false;
+	}
 
 	lightIndex = reservoir.LightSample;
 	sampleWeight = (reservoir.TotalWeight / reservoir.M) / reservoir.SampleTargetPdf;
@@ -332,3 +369,13 @@ void RayGen()
 	uAccumulation[DispatchRaysIndex().xy] = float4(radiance, 1);
 	uOutput[DispatchRaysIndex().xy] = float4(radiance, 1.0f) / cPass.AccumulatedFrames;
 }
+
+#ifdef BLIT_SHADER
+
+[numthreads(8, 8, 1)]
+void BlitAccumulationCS(uint3 threadId : SV_DispatchThreadID)
+{
+	uOutput[threadId.xy] = tAccumulation[threadId.xy] / cPass.AccumulatedFrames;
+}
+
+#endif

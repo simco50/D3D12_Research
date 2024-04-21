@@ -39,8 +39,12 @@
           "Command": "-pix"
         },
         {
-          "Id": "aa39a7c9-9379-4120-9d1b-58c62157b82d",
-          "Command": "-shadersymbols"
+          "Id": "fbcec7df-5d3f-4382-a66a-34bcdbe45a10",
+          "Command": "-immediate_pso"
+        },
+        {
+          "Id": "7576e3a6-e829-451c-8062-75e4ba00a0ef",
+          "Command": "-render_graph_no_reuse"
         }
       ]
     },

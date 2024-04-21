@@ -1,12 +1,7 @@
 #pragma once
-#include "../RHI/StateObject.h"
-#include "../RenderGraph/RenderGraphDefinitions.h"
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
-class RootSignature;
-class StateObject;
-class Texture;
-class GraphicsDevice;
-class RGGraph;
 struct SceneView;
 
 class PathTracing
@@ -18,10 +13,11 @@ public:
 	bool IsSupported();
 
 private:
-	RefCountPtr<RootSignature> m_pRS;
-	RefCountPtr<StateObject> m_pSO;
+	Ref<StateObject> m_pSO;
+	Ref<PipelineState> m_pBlitPSO;
 
-	RefCountPtr<Texture> m_pAccumulationTexture;
+	Ref<Texture> m_pAccumulationTexture;
 	DelegateHandle m_OnShaderCompiledHandle;
 	int m_NumAccumulatedFrames = 1;
+	Matrix m_LastViewProjection;
 };

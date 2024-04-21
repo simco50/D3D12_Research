@@ -14,13 +14,6 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		m_pGlobalRS = new RootSignature(pDevice);
-		m_pGlobalRS->AddRootConstants(0, 1);
-		m_pGlobalRS->AddConstantBufferView(100);
-		m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4);
-		m_pGlobalRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
-		m_pGlobalRS->Finalize("Global");
-
 		StateObjectInitializer stateDesc;
 		stateDesc.Name = "RT Reflections";
 		stateDesc.RayGenShader = "RayGen";
@@ -32,7 +25,7 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 		stateDesc.MaxPayloadSize = 6 * sizeof(float);
 		stateDesc.MaxAttributeSize = 2 * sizeof(float);
 		stateDesc.MaxRecursion = 2;
-		stateDesc.pGlobalRootSignature = m_pGlobalRS;
+		stateDesc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 		m_pRtSO = pDevice->CreateStateObject(stateDesc);
 	}
 }
@@ -48,7 +41,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView* pView, SceneTexture
 			{
 				Texture* pTarget = pReflectionsTarget->Get();
 
-				context.SetComputeRootSignature(m_pGlobalRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRtSO);
 
 				struct
@@ -56,7 +49,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView* pView, SceneTexture
 					float ViewPixelSpreadAngle;
 				} parameters;
 
-				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(pView->View.FoV / 2) / (float)pTarget->GetHeight());
+				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(pView->MainView.FoV / 2) / (float)pTarget->GetHeight());
 
 				ShaderBindingTable bindingTable(m_pRtSO);
 				bindingTable.BindRayGenShader("RayGen");
@@ -64,8 +57,8 @@ void RTReflections::Execute(RGGraph& graph, const SceneView* pView, SceneTexture
 				bindingTable.BindMissShader("OcclusionMS", 1);
 				bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
-				context.SetRootConstants(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, parameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),

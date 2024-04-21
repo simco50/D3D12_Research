@@ -21,6 +21,7 @@ namespace Paths
 
 	std::string ChangeExtension(const std::string& filePath, const std::string& newExtension);
 
+	std::string MakeAbsolute(const char* pFilePath);
 	std::string MakeRelativePath(const std::string& basePath, const std::string& filePath);
 
 	void CombineInner(const char** pElements, uint32 numElements, std::string& output);
@@ -54,6 +55,8 @@ namespace Paths
 	std::string EngineIniFile();
 
 	std::string WorkingDirectory();
+
+	void GetFileTime(const char* pFilePath, uint64& creationTime, uint64& lastAccessTime, uint64& modificationTime);
 
 	bool CreateDirectoryTree(const std::string& path);
 };

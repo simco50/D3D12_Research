@@ -1,5 +1,5 @@
 #pragma once
-#include "stb_sprintf.h"
+#include <External/Stb/stb_sprintf.h>
 
 template<typename CharSource, typename CharDest>
 inline size_t StringConvert(const CharSource* pSource, CharDest* pDestination, int destinationSize);
@@ -41,7 +41,6 @@ using MultibyteToUnicode = StringConverter<char, wchar_t>;
 #define UNICODE_TO_MULTIBYTE(input) UnicodeToMultibyte(input).Get()
 #define MULTIBYTE_TO_UNICODE(input) MultibyteToUnicode(input).Get()
 
-
 inline int FormatString(char* pBuffer, int bufferSize, const char* pFormat, ...)
 {
 	va_list args;
@@ -56,29 +55,37 @@ inline int FormatString(char* pBuffer, int bufferSize, const char* pFormat, ...)
 	return w;
 }
 
-inline int FormatStringVars(char* pBuffer, size_t bufferSize, const char* pFormat, va_list args)
+template <class T>
+decltype(auto) GetFormatArgument(const T& arg)
 {
-	int w = stbsp_vsnprintf(pBuffer, (int)bufferSize, pFormat, args);
-	if (pBuffer == NULL)
-		return w;
-	if (w == -1 || w >= (int)bufferSize)
-		w = (int)bufferSize - 1;
-	pBuffer[w] = 0;
-	return w;
+	return arg;
+}
+
+inline const char* GetFormatArgument(const std::string& arg)
+{
+	return arg.c_str();
 }
 
 template<typename... Args>
 std::string Sprintf(const char* pFormat, Args&&... args)
 {
-	int length = FormatString(nullptr, 0, pFormat, std::forward<Args&&>(args)...);
+	int length = FormatString(nullptr, 0, pFormat, GetFormatArgument(std::forward<Args&&>(args))...);
 	std::string str;
 	str.resize(length);
-	FormatString(str.data(), length + 1, pFormat, std::forward<Args&&>(args)...);
+	FormatString(str.data(), length + 1, pFormat, GetFormatArgument(std::forward<Args&&>(args))...);
 	return str;
 }
 
 namespace CString
 {
+	constexpr inline uint32 StrLen(const char* pStr)
+	{
+		uint32 len = 0;
+		while (*pStr++)
+			++len;
+		return len;
+	}
+
 	void TrimSpaces(char* pStr);
 
 	bool StrCmp(const char* pStrA, const char* pStrB, bool caseSensitive);
@@ -183,6 +190,7 @@ namespace CString
 
 	inline void ToString(char val, std::string* pOut) { *pOut = Sprintf("%c", val); }
 	inline void ToString(int val, std::string* pOut) { *pOut = Sprintf("%d", val); }
+	inline void ToString(uint32 val, std::string* pOut) { *pOut = Sprintf("%u", val); }
 	inline void ToString(float val, std::string* pOut) { *pOut = Sprintf("%.3f", val); }
 	inline void ToString(double val, std::string* pOut) { *pOut = Sprintf("%.3f", val); }
 	inline void ToString(const char* val, std::string* pOut) { *pOut = val; }

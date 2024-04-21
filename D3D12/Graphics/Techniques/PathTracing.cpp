@@ -3,6 +3,7 @@
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/RHI/Texture.h"
 #include "Graphics/RHI/StateObject.h"
+#include "Graphics/RHI/PipelineState.h"
 #include "Graphics/RHI/RootSignature.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/RHI/CommandContext.h"
@@ -16,12 +17,6 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 		return;
 	}
 
-	m_pRS = new RootSignature(pDevice);
-	m_pRS->AddConstantBufferView(0);
-	m_pRS->AddConstantBufferView(100);
-	m_pRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2);
-	m_pRS->Finalize("Global");
-
 	StateObjectInitializer desc{};
 	desc.Name = "Path Tracing";
 	desc.MaxRecursion = 1;
@@ -33,13 +28,12 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
 	desc.AddMissShader("MaterialMS");
 	desc.AddMissShader("OcclusionMiss");
-	desc.pGlobalRootSignature = m_pRS;
+	desc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 	m_pSO = pDevice->CreateStateObject(desc);
 
-	m_OnShaderCompiledHandle = pDevice->GetShaderManager()->OnLibraryRecompiledEvent().AddLambda([this](ShaderLibrary*, ShaderLibrary*)
-		{
-			Reset();
-		});
+	m_pBlitPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RayTracing/PathTracing.hlsl", "BlitAccumulationCS", { "BLIT_SHADER"});
+
+	m_OnShaderCompiledHandle = pDevice->GetShaderManager()->OnShaderEditedEvent().AddLambda([this](Shader*) { Reset(); });
 }
 
 void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget)
@@ -49,66 +43,105 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 		return;
 	}
 
-	RGTexture* pAccumulationTexture = RGUtils::CreatePersistent(graph, "Accumulation Target", pTarget->GetDesc(), &m_pAccumulationTexture, true);
+	TextureDesc desc = pTarget->GetDesc();
+	desc.Flags |= TextureFlag::ShaderResource;
+	RGTexture* pAccumulationTexture = RGUtils::CreatePersistent(graph, "Accumulation Target", desc, &m_pAccumulationTexture, true);
 
 	static int32 numBounces = 3;
+	static int32 numSamples = 200;
 
+	bool doReset = false;
 	if (ImGui::Begin("Parameters"))
 	{
 		if (ImGui::CollapsingHeader("Path Tracing"))
 		{
 			if (ImGui::SliderInt("Bounces", &numBounces, 1, 15))
 			{
-				Reset();
+				doReset = true;
+			}
+			if (ImGui::SliderInt("Samples", &numSamples, 1, 1500, "%d", ImGuiSliderFlags_Logarithmic))
+			{
+				if (numSamples < m_NumAccumulatedFrames)
+					doReset = true;
 			}
 			if (ImGui::Button("Reset"))
 			{
-				Reset();
+				doReset = true;
 			}
 		}
 	}
 	ImGui::End();
 
-	if (pView->View.ViewProjectionPrev != pView->View.ViewProjection)
-	{
+	if (pView->MainView.UnjtteredViewProjection != m_LastViewProjection)
+		doReset = true;
+
+	if (doReset)
 		Reset();
-	}
 
-	m_NumAccumulatedFrames++;
-
-	graph.AddPass("Path Tracing", RGPassFlag::Compute)
-		.Write({ pTarget, pAccumulationTexture })
-		.Bind([=](CommandContext& context)
-			{
-				Texture* pRTTarget = pTarget->Get();
-
-				context.SetComputeRootSignature(m_pRS);
-				context.SetPipelineState(m_pSO);
-
-				struct
+	if (m_NumAccumulatedFrames >= numSamples)
+	{
+		graph.AddPass("Blit", RGPassFlag::Compute)
+			.Read(pAccumulationTexture)
+			.Write(pTarget)
+			.Bind([=](CommandContext& context)
 				{
-					uint32 NumBounces;
-					uint32 AccumulatedFrames;
-				} parameters;
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+					context.SetPipelineState(m_pBlitPSO);
 
-				parameters.NumBounces = numBounces;
-				parameters.AccumulatedFrames = m_NumAccumulatedFrames;
+					struct
+					{
+						uint32 NumBounces;
+						uint32 AccumulatedFrames;
+					} parameters;
 
-				ShaderBindingTable bindingTable(m_pSO);
-				bindingTable.BindRayGenShader("RayGen");
-				bindingTable.BindMissShader("MaterialMS", 0);
-				bindingTable.BindMissShader("OcclusionMS", 1);
-				bindingTable.BindHitGroup("MaterialHG", 0);
+					parameters.NumBounces = numBounces;
+					parameters.AccumulatedFrames = m_NumAccumulatedFrames;
 
-				context.SetRootCBV(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pRTTarget));
-				context.BindResources(2, {
-					pRTTarget->GetUAV(),
-					pAccumulationTexture->Get()->GetUAV(),
-					});
+					context.BindRootCBV(0, parameters);
+					context.BindResources(2, pTarget->Get()->GetUAV());
+					context.BindResources(3, pAccumulationTexture->Get()->GetSRV());
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetDesc().Width, 8, pTarget->GetDesc().Height, 8));
+				});
+	}
+	else
+	{
+		m_LastViewProjection = pView->MainView.UnjtteredViewProjection;
+		m_NumAccumulatedFrames++;
 
-				context.DispatchRays(bindingTable, pRTTarget->GetWidth(), pRTTarget->GetHeight());
-			});
+		graph.AddPass("Path Tracing", RGPassFlag::Compute)
+			.Write({ pTarget, pAccumulationTexture })
+			.Bind([=](CommandContext& context)
+				{
+					Texture* pRTTarget = pTarget->Get();
+
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+					context.SetPipelineState(m_pSO);
+
+					struct
+					{
+						uint32 NumBounces;
+						uint32 AccumulatedFrames;
+					} parameters;
+
+					parameters.NumBounces = numBounces;
+					parameters.AccumulatedFrames = m_NumAccumulatedFrames;
+
+					ShaderBindingTable bindingTable(m_pSO);
+					bindingTable.BindRayGenShader("RayGen");
+					bindingTable.BindMissShader("MaterialMS", 0);
+					bindingTable.BindMissShader("OcclusionMS", 1);
+					bindingTable.BindHitGroup("MaterialHG", 0);
+
+					context.BindRootCBV(0, parameters);
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pRTTarget));
+					context.BindResources(2, {
+						pRTTarget->GetUAV(),
+						pAccumulationTexture->Get()->GetUAV(),
+						});
+
+					context.DispatchRays(bindingTable, pRTTarget->GetWidth(), pRTTarget->GetHeight());
+				});
+	}
 }
 
 void PathTracing::Reset()

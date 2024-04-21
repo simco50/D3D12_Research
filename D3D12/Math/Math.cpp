@@ -16,23 +16,29 @@ namespace Math
 		return min + rand() % (max - min + 1);
 	}
 
-	float Lerp(float a, float b, float t)
+	float Lerp(float t, float a, float b)
 	{
 		return a + t * (b - a);
 	}
 
-	float InverseLerp(float a, float b, float value)
+	float InverseLerp(float value, float rangeMin, float rangeMax)
 	{
-		return (value - a) / (b - a);
+		return (value - rangeMin) / (rangeMax - rangeMin);
+	}
+
+	float RemapRange(float value, float sourceRangeMin, float sourceRangeMax, float targetRangeMin, float targetRangeMax)
+	{
+		value = Clamp(value, sourceRangeMin, sourceRangeMax);
+		float t = InverseLerp(value, sourceRangeMin, sourceRangeMax);
+		return Lerp(t, targetRangeMin, targetRangeMax);
 	}
 
 	// Create left-handed DX style perspective matrix
 	// FoV is vertical FoV in radians
 	Matrix CreatePerspectiveMatrix(float FoV, float aspectRatio, float nearZ, float farZ)
 	{
-		Matrix m;
-		float sinFov, cosFov;
-		DirectX::XMScalarSinCos(&sinFov, &cosFov, FoV * 0.5f);
+		float sinFov = sinf(FoV * 0.5f);
+		float cosFov = cosf(FoV * 0.5f);
 
 		float B = cosFov / sinFov;
 		float A = B / aspectRatio;
@@ -40,12 +46,12 @@ namespace Math
 		float D = 1.0f; // Needs to be -1 for right handed
 		float E = -nearZ * C; // Positive in right handed
 
-		m.m[0][0] = A;		m.m[0][1] = 0.0f;	m.m[0][2] = 0.0f;	m.m[0][3] = 0.0f;
-		m.m[1][0] = 0.0f;	m.m[1][1] = B;		m.m[1][2] = 0.0f;	m.m[1][3] = 0.0f;
-		m.m[2][0] = 0.0f;	m.m[2][1] = 0;		m.m[2][2] = C;		m.m[2][3] = D;
-		m.m[3][0] = 0.0f;	m.m[3][1] = 0;		m.m[3][2] = E;		m.m[3][3] = 0.0f;
-
-		return m;
+		return Matrix(
+			A, 0, 0, 0,
+			0, B, 0, 0,
+			0, 0, C, D,
+			0, 0, E, 0
+		);
 	}
 
 	// Create left-handed DX style perspective off center matrix
@@ -66,39 +72,61 @@ namespace Math
 		float F = -(left + right) * oneOverWidth; // Positive in right handed
 		float G = -(top + bottom) * oneOverHeight; // Positive in right handed
 
-		m.m[0][0] = A;		m.m[0][1] = 0.0f;	m.m[0][2] = 0.0f;	m.m[0][3] = 0.0f;
-		m.m[1][0] = 0.0f;	m.m[1][1] = B;		m.m[1][2] = 0.0f;	m.m[1][3] = 0.0f;
-		m.m[2][0] = F;		m.m[2][1] = G;		m.m[2][2] = C;		m.m[2][3] = D;
-		m.m[3][0] = 0.0f;	m.m[3][1] = 0;		m.m[3][2] = E;		m.m[3][3] = 0.0f;
-
-		return m;
+		return Matrix(
+			A,	0,	0,	0,
+			0,	B,	0,	0,
+			F,	G,	C,	D,
+			0,	0,	E,	0
+		);
 	}
 
 	Matrix CreateOrthographicMatrix(float width, float height, float nearZ, float farZ)
 	{
-#ifdef WORLD_RIGHT_HANDED
-		return DirectX::XMMatrixOrthographicRH(width, height, nearZ, farZ);
-#else
-		return DirectX::XMMatrixOrthographicLH(width, height, nearZ, farZ);
-#endif
+		return Matrix(
+			2.0f / width,	0,				0,							0,
+			0,				2.0f / height,	0,							0,
+			0,				0,				1.0f / (farZ - nearZ),		0,
+			0,				0,				-nearZ / (farZ - nearZ),	1
+		);
 	}
 
 	Matrix CreateOrthographicOffCenterMatrix(float left, float right, float bottom, float top, float nearZ, float farZ)
 	{
-#ifdef WORLD_RIGHT_HANDED
-		return DirectX::XMMatrixOrthographicOffCenterRH(left, right, bottom, top, nearZ, farZ);
-#else
-		return DirectX::XMMatrixOrthographicOffCenterLH(left, right, bottom, top, nearZ, farZ);
-#endif
+		float rcpWidth = 1.0f / (right - left);
+		float rcpHeight = 1.0f / (top - bottom);
+		float rcpZRange = 1.0f / (farZ - nearZ);
+
+		float A = -(left + right) * rcpWidth;
+		float B = -(top + bottom) * rcpHeight;
+
+		return Matrix(
+			2.0f * rcpWidth,	0,					0,						0,
+			0,					2.0f * rcpHeight,	0,						0,
+			0,					0,					rcpZRange,				0,
+			A,					B,					-nearZ * rcpZRange,		1
+		);
 	}
 
 	Matrix CreateLookToMatrix(const Vector3& position, const Vector3& direction, const Vector3& up)
 	{
-#ifdef WORLD_RIGHT_HANDED
-		return DirectX::XMMatrixLookToRH(position, direction, up);
-#else
-		return DirectX::XMMatrixLookToLH(position, direction, up);
-#endif
+		Vector3 z;
+		direction.Normalize(z);
+		Vector3 x = up.Cross(z);
+		x.Normalize();
+		Vector3 y = z.Cross(x);
+		
+		Vector3 p(
+			x.Dot(-position),
+			y.Dot(-position),
+			z.Dot(-position)
+		);
+
+		return Matrix(
+			x.x, y.x, z.x, 0,
+			x.y, y.y, z.y, 0,
+			x.z, y.z, z.z, 0,
+			p.x, p.y, p.z, 1
+		);
 	}
 
 	BoundingFrustum CreateBoundingFrustum(const Matrix& projection, const Matrix& view)
@@ -126,7 +154,7 @@ namespace Math
 		projection._43 = -projection._33 * n;
 	}
 
-	DirectX::SimpleMath::Vector3 ScaleFromMatrix(const Matrix& m)
+	Vector3 ScaleFromMatrix(const Matrix& m)
 	{
 		return Vector3(
 			sqrtf(m._11 * m._11 + m._21 * m._21 + m._31 * m._31),
@@ -134,7 +162,7 @@ namespace Math
 			sqrtf(m._13 * m._13 + m._23 * m._23 + m._33 * m._33));
 	}
 
-	DirectX::SimpleMath::Quaternion LookRotation(const Vector3& direction, const Vector3& up)
+	Quaternion LookRotation(const Vector3& direction, const Vector3& up)
 	{
 		Matrix m = CreateLookToMatrix(Vector3::Zero, direction, up);
 		return Quaternion::CreateFromRotationMatrix(m);
@@ -188,13 +216,13 @@ namespace Math
 		return out;
 	}
 
-	DirectX::SimpleMath::Vector3 RandVector()
+	Vector3 RandVector()
 	{
 		Matrix randomMatrix = DirectX::XMMatrixRotationRollPitchYaw(Math::RandomRange(-PI, PI), Math::RandomRange(-PI, PI), Math::RandomRange(-PI, PI));
 		return Vector3::Transform(Vector3(1, 0, 0), randomMatrix);
 	}
 
-	DirectX::SimpleMath::Vector3 RandCircleVector()
+	Vector3 RandCircleVector()
 	{
 		Vector3 output;
 		output.z = 0;

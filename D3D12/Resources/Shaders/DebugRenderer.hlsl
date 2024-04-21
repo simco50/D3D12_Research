@@ -1,28 +1,27 @@
 #include "Common.hlsli"
 
-struct VertexInput
+struct Vertex
 {
-	float3 Position : POSITION;
-	uint Color : COLOR;
+	float3 Position;
+	uint Color;
 };
 
-struct InterpolantsVSToPS
+StructuredBuffer<Vertex> tVertices : register(t0);
+
+void VSMain(
+	uint vertexID : SV_VertexID,
+	out float4 outPosition : SV_Position,
+	out float4 outColor : COLOR)
 {
-	float4 Position : SV_Position;
-	float4 Color : COLOR;
-};
-
-InterpolantsVSToPS VSMain(VertexInput input)
-{
-	InterpolantsVSToPS output = (InterpolantsVSToPS)0;
-
-	output.Position = mul(float4(input.Position, 1.0f), cView.ViewProjection);
-	output.Color = UIntToColor(input.Color);
-
-	return output;
+	Vertex v = tVertices[vertexID];
+	outPosition = mul(float4(v.Position, 1.0f), cView.ViewProjection);
+	outColor = Unpack_RGBA8_UNORM(v.Color);
 }
 
-float4 PSMain(InterpolantsVSToPS input) : SV_Target
+void PSMain(
+	float4 position : SV_Position, 
+	float4 color : COLOR,
+	out float4 outColor : SV_Target)
 {
-	return input.Color;
+	outColor = color;
 }

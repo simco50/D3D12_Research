@@ -1,24 +1,25 @@
 #pragma once
 
 #include "Constants.hlsli"
-#include "ShaderInterop.h"
+#include "Interop/InteropMain.h"
+#include "Packing.hlsli"
 
 //CBVs
 ConstantBuffer<ViewUniforms> cView : 						register(b100);
 
 //Static samplers
-SamplerState sLinearWrap :								  	register(s10);
-SamplerState sLinearClamp :								 	register(s11);
-SamplerState sLinearBorder :								register(s12);
-SamplerState sPointWrap :								   	register(s13);
-SamplerState sPointClamp :								  	register(s14);
-SamplerState sPointBorder :								 	register(s15);
-SamplerState sAnisoWrap :								   	register(s16);
-SamplerState sAnisoClamp :								  	register(s17);
-SamplerState sAnisoBorder :									register(s18);
-SamplerState sMaterialSampler :							 	register(s19);
-SamplerComparisonState sLinearClampComparisonGreater :		register(s20);
-SamplerComparisonState sLinearWrapComparisonGreater :		register(s21);
+SamplerState sLinearWrap :								  	register(s0,  space1);
+SamplerState sLinearClamp :								 	register(s1,  space1);
+SamplerState sLinearBorder :								register(s2,  space1);
+SamplerState sPointWrap :								   	register(s3,  space1);
+SamplerState sPointClamp :								  	register(s4,  space1);
+SamplerState sPointBorder :								 	register(s5,  space1);
+SamplerState sAnisoWrap :								   	register(s6,  space1);
+SamplerState sAnisoClamp :								  	register(s7,  space1);
+SamplerState sAnisoBorder :									register(s8,  space1);
+SamplerState sMaterialSampler :							 	register(s9,  space1);
+SamplerComparisonState sLinearClampComparisonGreater :		register(s10, space1);
+SamplerComparisonState sLinearWrapComparisonGreater :		register(s11, space1);
 
 template<typename T>
 T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
@@ -96,4 +97,29 @@ uint3 GetPrimitive(MeshData mesh, uint primitiveIndex)
 		}
 	}
 	return indices;
+}
+
+struct Vertex
+{
+	float3 Position;
+	float2 UV;
+	float3 Normal;
+	float4 Tangent;
+	uint Color;
+};
+
+Vertex LoadVertex(MeshData mesh, uint vertexId)
+{
+	Vertex vertex;
+	vertex.Position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
+	vertex.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+
+	uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+	vertex.Normal = Unpack_RGB10A2_SNORM(normalData.x).xyz;
+	vertex.Tangent = Unpack_RGB10A2_SNORM(normalData.y);
+
+	vertex.Color = 0xFFFFFFFF;
+	if(mesh.ColorsOffset != ~0u)
+		vertex.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+	return vertex;
 }

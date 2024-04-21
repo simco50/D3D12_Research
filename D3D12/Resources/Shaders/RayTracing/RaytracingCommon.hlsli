@@ -28,15 +28,12 @@ VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycent
 	for(int i = 0; i < 3; ++i)
 	{
 		uint vertexId = indices[i];
-		positions[i] = BufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
-		outData.UV += Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset)) * barycentrics[i];
-		NormalData normalData = BufferLoad<NormalData>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-		outData.Normal += normalData.Normal * barycentrics[i];
-		outData.Tangent += normalData.Tangent * barycentrics[i];
-		if(mesh.ColorsOffset != ~0u)
-			outData.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
-		else
-			outData.Color = 0xFFFFFFFF;
+		Vertex vertex = LoadVertex(mesh, vertexId);
+		positions[i] = vertex.Position;
+		outData.UV += vertex.UV * barycentrics[i];
+		outData.Normal += vertex.Normal.xyz * barycentrics[i];
+		outData.Tangent += vertex.Tangent * barycentrics[i];
+		outData.Color = vertex.Color;
 	}
 	outData.Normal = normalize(mul(outData.Normal, (float3x3)instance.LocalToWorld));
 	outData.Tangent.xyz = normalize(mul(outData.Tangent.xyz, (float3x3)instance.LocalToWorld));
@@ -53,10 +50,10 @@ VertexAttribute GetVertexAttributes(InstanceData instance, float2 attribBarycent
 MaterialProperties EvaluateMaterial(MaterialData material, VertexAttribute attributes, int mipLevel)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor * UIntToColor(attributes.Color);
+	float4 baseColor = material.BaseColorFactor * Unpack_RGBA8_UNORM(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
-		baseColor *= SampleLevel2D(material.Diffuse, sMaterialSampler, attributes.UV, mipLevel);
+		baseColor *= SampleLevel2D(NonUniformResourceIndex(material.Diffuse), sMaterialSampler, attributes.UV, mipLevel);
 	}
 	properties.BaseColor = baseColor.rgb;
 	properties.Opacity = baseColor.a;
@@ -65,21 +62,21 @@ MaterialProperties EvaluateMaterial(MaterialData material, VertexAttribute attri
 	properties.Roughness = material.RoughnessFactor;
 	if(material.RoughnessMetalness != INVALID_HANDLE)
 	{
-		float4 roughnessMetalnessSample = SampleLevel2D(material.RoughnessMetalness, sMaterialSampler, attributes.UV, mipLevel);
+		float4 roughnessMetalnessSample = SampleLevel2D(NonUniformResourceIndex(material.RoughnessMetalness), sMaterialSampler, attributes.UV, mipLevel);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
 	if(material.Emissive != INVALID_HANDLE)
 	{
-		properties.Emissive *= SampleLevel2D(material.Emissive, sMaterialSampler, attributes.UV, mipLevel).rgb;
+		properties.Emissive *= SampleLevel2D(NonUniformResourceIndex(material.Emissive), sMaterialSampler, attributes.UV, mipLevel).rgb;
 	}
 	properties.Specular = 0.5f;
 
 	properties.Normal = attributes.Normal;
 	if(material.Normal != INVALID_HANDLE)
 	{
-		float3 normalTS = SampleLevel2D(material.Normal, sMaterialSampler, attributes.UV, mipLevel).rgb;
+		float3 normalTS = SampleLevel2D(NonUniformResourceIndex(material.Normal), sMaterialSampler, attributes.UV, mipLevel).rgb;
 		float3x3 TBN = CreateTangentToWorld(properties.Normal, float4(normalize(attributes.Tangent.xyz), attributes.Tangent.w));
 		properties.Normal = TangentSpaceNormalMapping(normalTS, TBN);
 	}
@@ -185,9 +182,9 @@ RayDesc CreateLightOcclusionRay(Light light, float3 worldPosition)
 	return rayDesc;
 }
 
-struct RAYPAYLOAD OcclusionPayload
+struct [raypayload] OcclusionPayload
 {
-	float HitT RAYQUALIFIER(read(caller) : write(caller, miss));
+	float HitT 	: read(caller) : write(caller, miss);
 
 	bool IsHit() { return HitT >= 0; }
 	void SetMiss() { HitT = -1.0f; }
@@ -246,17 +243,17 @@ float TraceOcclusionRay(
 		ray, 							//Ray
 		payload 						//Payload
 	);
-	return !payload.IsMiss();
+	return payload.IsHit();
 #endif
 }
 
-struct RAYPAYLOAD MaterialRayPayload
+struct [raypayload] MaterialRayPayload
 {
-	float HitT;
-	uint PrimitiveID;
-	uint InstanceID;
-	float2 Barycentrics;
-	uint FrontFace;
+	float HitT				: read(caller) : write(caller, closesthit);
+	uint PrimitiveID		: read(caller) : write(closesthit);
+	uint InstanceID			: read(caller) : write(closesthit);
+	float2 Barycentrics		: read(caller) : write(closesthit);
+	uint FrontFace			: read(caller) : write(closesthit);
 
 	bool IsHit() { return HitT >= 0; }
 	bool IsFrontFace() { return FrontFace > 0; }

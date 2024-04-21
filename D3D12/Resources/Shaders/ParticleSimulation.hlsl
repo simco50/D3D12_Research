@@ -1,5 +1,8 @@
 #include "Random.hlsli"
 #include "Common.hlsli"
+#include "Primitives.hlsli"
+#include "Raytracing/RaytracingCommon.hlsli"
+#include "ShaderDebugRender.hlsli"
 
 struct ParticleData
 {
@@ -13,6 +16,11 @@ struct ParticleData
 #define ALIVE_LIST_1_COUNTER 4
 #define ALIVE_LIST_2_COUNTER 8
 #define EMIT_COUNT 12
+
+struct InitializeParameters
+{
+	uint MaxNumParticles;
+};
 
 struct IndirectArgsParameters
 {
@@ -38,6 +46,7 @@ enum IndirectArgOffsets
 	SizeArgs = DrawArgs + 4 * sizeof(uint),
 };
 
+ConstantBuffer<InitializeParameters> cInitializeParams : register(b0);
 ConstantBuffer<IndirectArgsParameters> cIndirectArgsParams : register(b0);
 ConstantBuffer<EmitParameters> cEmitParams : register(b0);
 ConstantBuffer<SimulateParameters> cSimulateParams : register(b0);
@@ -50,7 +59,21 @@ RWStructuredBuffer<ParticleData> uParticleData : register(u4);
 RWByteAddressBuffer uIndirectArguments : register(u5);
 
 ByteAddressBuffer tCounters : register(t0);
-Texture2D tSceneDepth : register(t1);
+StructuredBuffer<uint> tDeadList : register(t1);
+StructuredBuffer<uint> tAliveList1 : register(t2);
+
+Texture2D<float> tSceneDepth : register(t3);
+
+[numthreads(32, 1, 1)]
+void InitializeDataCS(uint threadID : SV_DispatchThreadID)
+{
+	uint numParticles = cInitializeParams.MaxNumParticles;
+	if(threadID >= numParticles)
+		return;
+	if(threadID == 0)
+		uCounters.Store(0, numParticles);
+	uDeadList[threadID] = threadID;
+}
 
 [numthreads(1, 1, 1)]
 void UpdateSimulationParameters()
@@ -87,7 +110,7 @@ void Emit(uint threadID : SV_DispatchThreadID)
 	{
 		uint deadSlot;
 		uCounters.InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
-		uint particleIndex = uDeadList[deadSlot - 1];
+		uint particleIndex = tDeadList[deadSlot - 1];
 
 		uint seed = SeedThread(deadSlot * particleIndex);
 
@@ -110,23 +133,51 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 	uint aliveCount = uCounters.Load(ALIVE_LIST_1_COUNTER);
 	if(threadID < aliveCount)
 	{
-		uint particleIndex = uAliveList1[threadID];
+		uint particleIndex = tAliveList1[threadID];
 		ParticleData p = uParticleData[particleIndex];
 
 		if(p.LifeTime < cSimulateParams.ParticleLifeTime)
 		{
+			uint seed = SeedThread(particleIndex * 3 + cView.FrameIndex * 5);
+
+			p.Velocity += float3(0, -9.81f * cSimulateParams.DeltaTime, 0);
+
+#define RAYTRACE_COLLISION 0
+#if RAYTRACE_COLLISION
+			float3 direction = p.Velocity * cSimulateParams.DeltaTime;
+			float len = length(direction);
+
+			RayDesc ray;
+			ray.Origin = p.Position + normalize(direction) * p.Size;
+			ray.Direction = normalize(direction);
+			ray.TMin = 0;
+			ray.TMax = max(1.0f, len * 2.0f);
+
+			DrawLine(ray.Origin, ray.Origin + ray.Direction * ray.TMax);
+
+			RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
+			MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
+			float3 hitPos = ray.Origin + payload.HitT * ray.Direction;
+			if(payload.IsHit() && distance(hitPos, ray.Origin) < 0.1f)
+			{
+				InstanceData instance = GetInstance(payload.InstanceID);
+				VertexAttribute vertex = GetVertexAttributes(instance, payload.Barycentrics, payload.PrimitiveID);
+				p.Velocity = reflect(p.Velocity, vertex.Normal) * lerp(0.5f, 0.8f, Random01(seed));
+			}
+#else
 			float4 screenPos = mul(float4(p.Position, 1), cView.ViewProjection);
 			screenPos.xyz /= screenPos.w;
 			if(screenPos.x > -1 && screenPos.y < 1 && screenPos.y > -1 && screenPos.y < 1)
 			{
 				float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
-				float depth = tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r;
+				float depth = tSceneDepth.SampleLevel(sPointClamp, uv, 0);
 				float linearDepth = LinearizeDepth(depth);
 				const float thickness = 1;
 
 				if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
 				{
-					float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, cView.ViewportDimensionsInv, cView.ViewProjectionInverse);
+					float3 viewNormal = ViewNormalFromDepth(uv, tSceneDepth);
+					float3 normal = mul(viewNormal, (float3x3)cView.ViewInverse);
 					if(dot(normal, p.Velocity) < 0)
 					{
 						uint seed = SeedThread(particleIndex);
@@ -134,8 +185,8 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 					}
 				}
 			}
+#endif
 
-			p.Velocity += float3(0, -9.81f * cSimulateParams.DeltaTime, 0);
 			p.Position += p.Velocity * cSimulateParams.DeltaTime;
 			p.LifeTime += cSimulateParams.DeltaTime;
 
@@ -158,5 +209,5 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 void SimulateEnd()
 {
 	uint particleCount = tCounters.Load(ALIVE_LIST_2_COUNTER);
-	uIndirectArguments.Store4(IndirectArgOffsets::DrawArgs, uint4(6 * particleCount, 1, 0, 0));
+	uIndirectArguments.Store4(IndirectArgOffsets::DrawArgs, uint4(ArraySize(SPHERE), particleCount, 0, 0));
 }

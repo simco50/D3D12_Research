@@ -96,10 +96,13 @@ void TaskQueue::AddWorkItem(const AsyncTaskDelegate& action, TaskContext& contex
 
 void TaskQueue::Join(TaskContext& context)
 {
-	m_WakeUpCondition.notify_all();
-	while (context.load() > 0)
+	if (context > 0)
 	{
-		DoWork(0);
+		m_WakeUpCondition.notify_all();
+		while (context.load() > 0)
+		{
+			DoWork(0);
+		}
 	}
 }
 

@@ -1,13 +1,13 @@
 #pragma once
+#include "Graphics/RHI/RHI.h"
 #include "Graphics/RHI/Graphics.h"
 #include "Graphics/Light.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/RHI/CommandQueue.h"
-#include "Graphics/Profiler.h"
-#include "Graphics/Techniques/ClusteredForward.h"
-#include "Graphics/Techniques/TiledForward.h"
+#include "Graphics/Techniques/VolumetricFog.h"
+#include "Graphics/Techniques/VisualizeTexture.h"
+#include "App.h"
 
-class Mesh;
 class Camera;
 class RTAO;
 class RTReflections;
@@ -22,9 +22,11 @@ class RGResourcePool;
 class Clouds;
 class PipelineState;
 class ShaderDebugRenderer;
-class GPUDrivenRenderer;
+class MeshletRasterizer;
 class DDGI;
-struct SubMesh;
+class VolumetricFog;
+class ForwardRenderer;
+class LightCulling;
 struct Material;
 
 enum class RenderPath
@@ -36,42 +38,44 @@ enum class RenderPath
 	MAX
 };
 
-class DemoApp
+class DemoApp : public App
 {
 public:
-	DemoApp(WindowHandle window, const Vector2i& windowRect);
+	DemoApp();
 	~DemoApp();
 
-	void Update();
-	void OnResizeOrMove(int width, int height);
+	virtual void Init() override;
+	virtual void Update() override;
+	virtual void Shutdown() override;
+	virtual void OnWindowResized(uint32 width, uint32 height);
 
 private:
-	void OnResizeViewport(int width, int height);
-
-	void VisualizeTexture(RGGraph& graph, RGTexture* pTexture);
+	void OnResizeViewport(uint32 width, uint32 height);
 
 	void InitializePipelines();
-	void SetupScene(CommandContext& context);
+	void SetupScene(const char* pPath);
 
 	void UpdateImGui();
 
-	void LoadMesh(const std::string& filePath, CommandContext& context, World& world);
+	RGTexture* ComputeBloom(RGGraph& graph, const SceneView* pView, RGTexture* pColor);
+	RGBuffer* ComputeExposure(RGGraph& graph, const SceneView* pView, RGTexture* pColor);
+	void MakeScreenshot();
+
 	void CreateShadowViews(SceneView& view, World& world);
 	
-	RefCountPtr<GraphicsDevice> m_pDevice;
-	RefCountPtr<SwapChain> m_pSwapchain;
 	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
 
 	uint32 m_Frame = 0;
-	TimeHistory<float, 180> m_FrameHistory;
 
-	RefCountPtr<Texture> m_pColorHistory;
-	RefCountPtr<Texture> m_pHZB;
-	RefCountPtr<Texture> m_ColorOutput;
-	std::vector<RefCountPtr<Texture>> m_ShadowMaps;
+	Ref<Texture> m_pColorHistory;
+	Ref<Texture> m_pHZB;
+	Ref<Texture> m_pColorOutput;
+	std::vector<Ref<Texture>> m_ShadowMaps;
+	std::vector<Ref<Texture>> m_ShadowHZBs;
 
-	std::unique_ptr<ClusteredForward> m_pClusteredForward;
-	std::unique_ptr<TiledForward> m_pTiledForward;
+	std::unique_ptr<VolumetricFog> m_pVolumetricFog;
+	std::unique_ptr<ForwardRenderer> m_pForwardRenderer;
+	std::unique_ptr<LightCulling> m_pLightCulling;
 	std::unique_ptr<RTAO> m_pRTAO;
 	std::unique_ptr<RTReflections> m_pRTReflections;
 	std::unique_ptr<SSAO> m_pSSAO;
@@ -80,93 +84,63 @@ private:
 	std::unique_ptr<GpuParticles> m_pParticles;
 	std::unique_ptr<Clouds> m_pClouds;
 	std::unique_ptr<ShaderDebugRenderer> m_pShaderDebugRenderer;
-	std::unique_ptr<GPUDrivenRenderer> m_pGPUDrivenRenderer;
+	std::unique_ptr<MeshletRasterizer> m_pMeshletRasterizer;
 	std::unique_ptr<DDGI> m_pDDGI;
+	std::unique_ptr<CaptureTextureSystem> m_pCaptureTextureSystem;
+	CaptureTextureContext m_CaptureTextureContext;
 
-	LightCull2DData m_LightCull2DData;
-	LightCull3DData m_LightCull3DData;
 	VolumetricFogData m_FogData;
 
 	WindowHandle m_Window = nullptr;
 	std::unique_ptr<Camera> m_pCamera;
 
-	struct ScreenshotRequest
-	{
-		SyncPoint SyncPoint;
-		uint32 Width;
-		uint32 Height;
-		uint32 RowPitch;
-		RefCountPtr<Buffer> pBuffer;
-	};
-	std::queue<ScreenshotRequest> m_ScreenshotBuffers;
 	RenderPath m_RenderPath = RenderPath::Visibility;
 
 	World m_World;
 	SceneView m_SceneData;
 
-	RefCountPtr<RootSignature> m_pCommonRS;
-
 	//Shadow mapping
-	RefCountPtr<PipelineState> m_pShadowsOpaquePSO;
-	RefCountPtr<PipelineState> m_pShadowsAlphaMaskPSO;
+	Ref<PipelineState> m_pShadowsOpaquePSO;
+	Ref<PipelineState> m_pShadowsAlphaMaskPSO;
 
 	//Depth Prepass
-	RefCountPtr<PipelineState> m_pDepthPrepassOpaquePSO;
-	RefCountPtr<PipelineState> m_pDepthPrepassAlphaMaskPSO;
-
-	//MSAA Depth resolve
-	RefCountPtr<PipelineState> m_pResolveDepthPSO;
+	Ref<PipelineState> m_pDepthPrepassOpaquePSO;
+	Ref<PipelineState> m_pDepthPrepassAlphaMaskPSO;
 
 	//Tonemapping
-	RefCountPtr<PipelineState> m_pToneMapPSO;
+	Ref<PipelineState> m_pToneMapPSO;
+	Ref<Texture> m_pLensDirtTexture;
+	Vector3 m_LensDirtTint = Vector3::One;
 
 	// Eye adaptation
-	RefCountPtr<Buffer> m_pAverageLuminance;
-	RefCountPtr<Texture> m_pDebugHistogramTexture;
-	RefCountPtr<PipelineState> m_pLuminanceHistogramPSO;
-	RefCountPtr<PipelineState> m_pAverageLuminancePSO;
-	RefCountPtr<PipelineState> m_pDrawHistogramPSO;
-
-	//Mip generation
-	RefCountPtr<PipelineState> m_pGenerateMipsPSO;
+	Ref<Buffer> m_pAverageLuminance;
+	Ref<Texture> m_pDebugHistogramTexture;
+	Ref<PipelineState> m_pDownsampleColorPSO;
+	Ref<PipelineState> m_pLuminanceHistogramPSO;
+	Ref<PipelineState> m_pAverageLuminancePSO;
+	Ref<PipelineState> m_pDrawHistogramPSO;
 
 	//Depth Reduction
-	RefCountPtr<PipelineState> m_pPrepareReduceDepthPSO;
-	RefCountPtr<PipelineState> m_pPrepareReduceDepthMsaaPSO;
-	RefCountPtr<PipelineState> m_pReduceDepthPSO;
-	std::array<RefCountPtr<Buffer>, SwapChain::NUM_FRAMES> m_ReductionReadbackTargets;
+	Ref<PipelineState> m_pPrepareReduceDepthPSO;
+	Ref<PipelineState> m_pPrepareReduceDepthMsaaPSO;
+	Ref<PipelineState> m_pReduceDepthPSO;
+	std::array<Ref<Buffer>, GraphicsDevice::NUM_BUFFERS> m_ReductionReadbackTargets;
 
 	//Camera motion
-	RefCountPtr<PipelineState> m_pCameraMotionPSO;
+	Ref<PipelineState> m_pCameraMotionPSO;
 
-	RefCountPtr<PipelineState> m_pTemporalResolvePSO;
+	Ref<PipelineState> m_pTemporalResolvePSO;
 
 	//Sky
-	RefCountPtr<PipelineState> m_pSkyboxPSO;
-	RefCountPtr<PipelineState> m_pRenderSkyPSO;
+	Ref<PipelineState> m_pSkyboxPSO;
+	Ref<PipelineState> m_pRenderSkyPSO;
 
 	//Bloom
-	RefCountPtr<PipelineState> m_pBloomSeparatePSO;
-	RefCountPtr<PipelineState> m_pBloomMipChainPSO;
+	Ref<PipelineState> m_pBloomDownsamplePSO;
+	Ref<PipelineState> m_pBloomDownsampleKarisAveragePSO;
+	Ref<PipelineState> m_pBloomUpsamplePSO;
 
 	// Visibility buffer
-	RefCountPtr<PipelineState> m_pVisibilityShadingPSO;
-	RefCountPtr<PipelineState> m_pVisibilityDebugRenderPSO;
-	uint32 m_VisibilityDebugRenderMode = 0;
-
-	// Debug Visualize
-	RefCountPtr<PipelineState> m_pVisualizeTexturePSO;
-	struct TextureVisualizeData
-	{
-		bool Enabled = false;
-		std::string SourceName;
-		TextureDesc SourceDesc;
-		RefCountPtr<Texture> pVisualizeTexture;
-		int CubeFaceIndex = 0;
-		float RangeMin = 0.0f;
-		float RangeMax = 1.0f;
-		bool VisibleChannels[4] = { true, true, true, true };
-		float MipLevel = 0.0f;
-		float Slice = 0.0f;
-	} m_VisualizeTextureData;
+	Ref<PipelineState> m_pVisibilityShadingGraphicsPSO;
+	Ref<PipelineState> m_pVisibilityDebugRenderPSO;
 };

@@ -1,22 +1,18 @@
 #pragma once
-#include "CBT.h"
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
-class RootSignature;
-class Buffer;
-class PipelineState;
-class Texture;
-class GraphicsDevice;
-class RGGraph;
 struct SceneView;
 struct SceneTextures;
 
 struct CBTData
 {
 	uint32 SplitMode = 0;
-	RefCountPtr<Texture> pHeightmap;
-	RefCountPtr<Buffer> pCBTBuffer;
-	RefCountPtr<Buffer> pCBTIndirectArgs;
-	RefCountPtr<Texture> pDebugVisualizeTexture;
+	RGBuffer* pCBT = nullptr;
+
+	Ref<Buffer> pCBTBuffer;
+	Ref<Buffer> pCBTIndirectArgs;
+	Ref<Texture> pDebugVisualizeTexture;
 };
 
 class CBTTessellation
@@ -24,28 +20,23 @@ class CBTTessellation
 public:
 	CBTTessellation(GraphicsDevice* pDevice);
 
-	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
-	{
-		Execute(graph, m_CBTData, pView, sceneTextures);
-	}
-
-	void Execute(RGGraph& graph, CBTData& data, const SceneView* pView, SceneTextures& sceneTextures);
+	void RasterMain(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures);
+	void Shade(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures, RGTexture* pFog);
 	static void CBTDemo();
 
 private:
 	void SetupPipelines(GraphicsDevice* pDevice);
-	void CreateResources(GraphicsDevice* pDevice);
 
 	GraphicsDevice* m_pDevice;
 	CBTData m_CBTData;
 
-	RefCountPtr<RootSignature> m_pCBTRS;
-	RefCountPtr<PipelineState> m_pCBTIndirectArgsPSO;
-	RefCountPtr<PipelineState> m_pCBTCacheBitfieldPSO;
-	RefCountPtr<PipelineState> m_pCBTSumReductionPSO;
-	RefCountPtr<PipelineState> m_pCBTSumReductionFirstPassPSO;
-	RefCountPtr<PipelineState> m_pCBTUpdatePSO;
-	RefCountPtr<PipelineState> m_pCBTDebugVisualizePSO;
-	RefCountPtr<PipelineState> m_pCBTRenderPSO;
-	RefCountPtr<PipelineState> m_pCBTRenderMeshShaderPSO;
+	Ref<RootSignature> m_pCBTRS;
+	Ref<PipelineState> m_pCBTIndirectArgsPSO;
+	Ref<PipelineState> m_pCBTCacheBitfieldPSO;
+	Ref<PipelineState> m_pCBTSumReductionPSO;
+	Ref<PipelineState> m_pCBTUpdatePSO;
+	Ref<PipelineState> m_pCBTDebugVisualizePSO;
+	Ref<PipelineState> m_pCBTRenderPSO;
+	Ref<PipelineState> m_pCBTShadePSO;
+	Ref<PipelineState> m_pCBTRenderMeshShaderPSO;
 };

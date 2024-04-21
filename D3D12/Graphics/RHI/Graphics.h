@@ -1,5 +1,5 @@
 #pragma once
-
+#include "RHI.h"
 #include "Shader.h"
 #include "DescriptorHandle.h"
 #include "GraphicsResource.h"
@@ -7,28 +7,13 @@
 #include "D3D.h"
 #include "Fence.h"
 
-class CommandQueue;
-class CommandContext;
-class DynamicAllocationManager;
-class GraphicsResource;
-class RootSignature;
-class Texture;
-class PipelineState;
-class Buffer;
+class ScratchAllocationManager;
 class ShaderManager;
-class PipelineStateInitializer;
-class StateObject;
-class StateObjectInitializer;
 class GPUDescriptorHeap;
 class CPUDescriptorHeap;
-class ResourceView;
 class SwapChain;
-class Fence;
-class GraphicsDevice;
-class CommandSignature;
 class CommandSignatureInitializer;
-struct TextureDesc;
-struct BufferDesc;
+class RingBufferAllocator;
 
 using WindowHandle = HWND;
 
@@ -36,9 +21,9 @@ template<typename T>
 class GlobalResource
 {
 public:
-	GlobalResource& operator=(RefCountPtr<T>&& pResource)
+	GlobalResource& operator=(Ref<T>&& pResource)
 	{
-		static_assert(std::is_base_of_v<GraphicsObject, T>);
+		static_assert(std::is_base_of_v<DeviceObject, T>);
 		check(pResource);
 		check(m_pResource == nullptr);
 		m_pResource = pResource.Get();
@@ -63,15 +48,20 @@ enum class DisplayMode
 	HDR_scRGB,
 };
 
-class SwapChain : public GraphicsObject
+class SwapChain : public DeviceObject
 {
 public:
-	static constexpr uint32 NUM_FRAMES = 3;
-
-	SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, WindowHandle pNativeWindow);
+	SwapChain(GraphicsDevice* pDevice, DisplayMode displayMode, uint32 numFrames, WindowHandle pNativeWindow);
 	~SwapChain();
 	void OnResizeOrMove(uint32 width, uint32 height);
 	void Present();
+
+	void SetNumFrames(uint32 numFrames);
+	uint32 GetNumFrames() const { return m_NumFrames; }
+	void SetMaxFrameLatency(uint32 maxFrameLatency);
+	uint32 GetMaxFrameLatency() const { return m_MaxFrameLatency; }
+	void SetUseWaitableSwapChain(bool enabled);
+	bool GetUseWaitableSwapChain() { return m_UseWaitableObject; }
 
 	void SetDisplayMode(DisplayMode displayMode) { m_DesiredDisplayMode = displayMode; }
 	void SetVSync(bool enabled) { m_Vsync = enabled; }
@@ -86,16 +76,21 @@ public:
 	bool GetVSync() const { return m_Vsync; }
 
 private:
+	void RecreateSwapChain();
+
 	WindowHandle m_Window;
 	DisplayMode m_DesiredDisplayMode;
-	std::array<SyncPoint, NUM_FRAMES> m_PresentSyncPoints;
-	RefCountPtr<Fence> m_pPresentFence;
-	std::array<RefCountPtr<Texture>, NUM_FRAMES> m_Backbuffers;
-	RefCountPtr<IDXGISwapChain4> m_pSwapchain;
+	Ref<Fence> m_pPresentFence;
+	std::vector<Ref<Texture>> m_Backbuffers;
+	Ref<IDXGISwapChain4> m_pSwapchain;
 	ResourceFormat m_Format;
 	uint32 m_CurrentImage;
 	uint32 m_Width = 0;
 	uint32 m_Height = 0;
+	uint32 m_NumFrames;
+	uint32 m_MaxFrameLatency = 2;
+	HANDLE m_WaitableObject = nullptr;
+	bool m_UseWaitableObject = true;
 	bool m_Vsync = true;
 	bool m_AllowTearing = false;
 };
@@ -107,6 +102,7 @@ struct GraphicsDeviceOptions
 	bool UseGPUValidation = false;
 	bool LoadPIX = false;
 	bool UseWarp = false;
+	bool UseStablePowerState = false;
 };
 
 class GraphicsCapabilities
@@ -118,6 +114,7 @@ public:
 	bool SupportsMeshShading() const { return MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
 	bool SupportsVRS() const { return VRSTier != D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED; }
 	bool SupportsSamplerFeedback() const { return SamplerFeedbackSupport != D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED; }
+	bool SupportsWorkGraphs() const { return m_FeatureSupport.WorkGraphsTier() != D3D12_WORK_GRAPHS_TIER_NOT_SUPPORTED; }
 	void GetShaderModel(uint8& maj, uint8& min) const { maj = (uint8)(ShaderModel >> 0x4); min = (uint8)(ShaderModel & 0xF); }
 	bool CheckUAVSupport(DXGI_FORMAT format) const;
 
@@ -134,9 +131,11 @@ private:
 	CD3DX12FeatureSupport m_FeatureSupport;
 };
 
-class GraphicsDevice : public GraphicsObject
+class GraphicsDevice : public DeviceObject
 {
 public:
+	static const uint32 NUM_BUFFERS = 2;
+
 	GraphicsDevice(GraphicsDeviceOptions options);
 	~GraphicsDevice();
 
@@ -147,37 +146,39 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type);
-	void FreeCPUDescriptor(D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
+	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCPUDescriptor();
+	void FreeCPUDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
 	DescriptorHandle RegisterGlobalResourceView(D3D12_CPU_DESCRIPTOR_HANDLE view);
-	void UnregisterGlobalResourceView(DescriptorHandle& heapIndex);
+	void UnregisterGlobalResourceView(DescriptorHandle& handle);
 
-	RefCountPtr<Texture> CreateTexture(const TextureDesc& desc, const char* pName);
-	RefCountPtr<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource);
-	RefCountPtr<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName);
+	Ref<Texture> CreateTexture(const TextureDesc& desc, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
+	Ref<Texture> CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
+	Ref<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index);
+	Ref<Buffer> CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData = nullptr);
+	Ref<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
 	void DeferReleaseObject(ID3D12Object* pObject);
 
-	RefCountPtr<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
-	RefCountPtr<PipelineState> CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	RefCountPtr<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
-	RefCountPtr<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
-	RefCountPtr<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
-	RefCountPtr<ShaderResourceView> CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
-	RefCountPtr<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
-	RefCountPtr<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
+	Ref<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
+	Ref<PipelineState> CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	Ref<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
+	Ref<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
+	Ref<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
+	Ref<ShaderResourceView> CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
+	Ref<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
+	Ref<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
 
-	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", const Span<ShaderDefine>& defines = {});
-	ShaderLibrary* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {});
+	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	ShaderResult GetLibrary(const char* pShaderPath, Span<ShaderDefine> defines = {});
 
-	void RegisterGlobalResource(RefCountPtr<GraphicsObject>&& pResource)
+	void RegisterGlobalResource(Ref<DeviceObject>&& pResource)
 	{
 		m_GlobalResources.push_back(std::move(pResource));
 	}
 
+	RingBufferAllocator* GetRingBuffer() const { return m_pRingBufferAllocator; }
 	GPUDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
 	GPUDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
-	ID3D12Device* GetDevice() const { return m_pDevice.Get(); }
-	ID3D12Device5* GetRaytracingDevice() const { return m_pRaytracingDevice.Get(); }
+	ID3D12Device5* GetDevice() const { return m_pDevice.Get(); }
 	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
 	const GraphicsCapabilities& GetCapabilities() const { return m_Capabilities; }
 	Fence* GetFrameFence() const { return m_pFrameFence; }
@@ -191,10 +192,8 @@ private:
 
 	GraphicsCapabilities m_Capabilities;
 
-	RefCountPtr<IDXGIFactory6> m_pFactory;
-	RefCountPtr<ID3D12Device> m_pDevice;
-	RefCountPtr<ID3D12Device4> m_pDevice4;
-	RefCountPtr<ID3D12Device5> m_pRaytracingDevice;
+	Ref<IDXGIFactory6> m_pFactory;
+	Ref<ID3D12Device5> m_pDevice;
 
 	class DRED
 	{
@@ -202,21 +201,23 @@ private:
 		DRED(GraphicsDevice* pDevice);
 		~DRED();
 
-		RefCountPtr<Fence> m_pFence;
+		Ref<Fence> m_pFence;
 		HANDLE m_WaitHandle;
 	};
 	std::unique_ptr<DRED> m_pDRED;
 
-	RefCountPtr<Fence> m_pFrameFence;
+	Ref<Fence> m_pFrameFence;
+	std::array<uint64, NUM_BUFFERS> m_FrameFenceValues{};
+	uint32 m_FrameIndex = 0;
 
-	RefCountPtr<GPUDescriptorHeap> m_pGlobalViewHeap;
-	RefCountPtr<GPUDescriptorHeap> m_pGlobalSamplerHeap;
+	Ref<GPUDescriptorHeap> m_pGlobalViewHeap;
+	Ref<GPUDescriptorHeap> m_pGlobalSamplerHeap;
 
-	std::array<RefCountPtr<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	std::array<std::vector<RefCountPtr<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
+	std::array<Ref<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	std::array<std::vector<Ref<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 
-	class DeferredDeleteQueue : public GraphicsObject
+	class DeferredDeleteQueue : public DeviceObject
 	{
 	private:
 		struct FencedObject
@@ -241,10 +242,11 @@ private:
 	DeferredDeleteQueue m_DeleteQueue;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
-	std::array<RefCountPtr<CPUDescriptorHeap>, D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES> m_DescriptorHeaps;
-	RefCountPtr<DynamicAllocationManager> m_pDynamicAllocationManager;
+	Ref<CPUDescriptorHeap> m_pCPUResourceViewHeap;
+	Ref<ScratchAllocationManager> m_pScratchAllocationManager;
+	Ref<RingBufferAllocator> m_pRingBufferAllocator;
 
-	std::vector<RefCountPtr<GraphicsObject>> m_GlobalResources;
+	std::vector<Ref<DeviceObject>> m_GlobalResources;
 
 	std::mutex m_ContextAllocationMutex;
 };

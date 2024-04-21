@@ -1,44 +1,9 @@
 #pragma once
+
+#include "Graphics/RHI/RHI.h"
 #include "RHI/Buffer.h"
 
-class Buffer;
-class CommandContext;
-class Texture;
-class CommandContext;
-class ShaderResourceView;
-class Mesh;
 struct World;
-
-struct SubMesh
-{
-	void Destroy();
-
-	int PositionsStride = 0;
-	int MaterialId = 0;
-
-	ResourceFormat PositionsFormat = ResourceFormat::RGB32_FLOAT;
-	VertexBufferView PositionStreamLocation;
-	VertexBufferView UVStreamLocation;
-	VertexBufferView NormalStreamLocation;
-	VertexBufferView ColorsStreamLocation;
-	IndexBufferView IndicesLocation;
-	uint32 MeshletsLocation;
-	uint32 MeshletVerticesLocation;
-	uint32 MeshletTrianglesLocation;
-	uint32 MeshletBoundsLocation;
-	uint32 NumMeshlets;
-
-	BoundingBox Bounds;
-	Mesh* pParent = nullptr;
-
-	RefCountPtr<Buffer> pBLAS;
-};
-
-struct SubMeshInstance
-{
-	int MeshIndex;
-	Matrix Transform;
-};
 
 enum class MaterialAlphaMode
 {
@@ -62,23 +27,36 @@ struct Material
 	MaterialAlphaMode AlphaMode;
 };
 
-class Mesh
+struct Mesh
+{
+	uint32 MaterialId;
+
+	ResourceFormat PositionsFormat = ResourceFormat::RGB32_FLOAT;
+	VertexBufferView PositionStreamLocation;
+	VertexBufferView UVStreamLocation;
+	VertexBufferView NormalStreamLocation;
+	VertexBufferView ColorsStreamLocation;
+	IndexBufferView IndicesLocation;
+	uint32 MeshletsLocation;
+	uint32 MeshletVerticesLocation;
+	uint32 MeshletTrianglesLocation;
+	uint32 MeshletBoundsLocation;
+	uint32 NumMeshlets;
+
+	BoundingBox Bounds;
+
+	Ref<Buffer> pBuffer;
+	Ref<Buffer> pBLAS;
+	float ScaleFactor = 1.0f;
+};
+
+struct Model
+{
+	int MeshIndex;
+};
+
+class SceneLoader
 {
 public:
-	~Mesh();
-	bool Load(const char* pFilePath, GraphicsDevice* pDevice, CommandContext* pContext, float scale = 1.0f);
-	int GetMeshCount() const { return (int)m_Meshes.size(); }
-	SubMesh& GetMesh(const int index) { return m_Meshes[index]; }
-	const Material& GetMaterial(int materialId) const { return m_Materials[materialId]; }
-	Span<SubMeshInstance> GetMeshInstances() const { return m_MeshInstances; }
-	Span<SubMesh> GetMeshes() const { return m_Meshes; }
-	Span<Material> GetMaterials() { return m_Materials; }
-	Buffer* GetData() const { return m_pGeometryData; }
-
-private:
-	std::vector<Material> m_Materials;
-	RefCountPtr<Buffer> m_pGeometryData;
-	std::vector<SubMesh> m_Meshes;
-	std::vector<SubMeshInstance> m_MeshInstances;
-	std::vector<RefCountPtr<Texture>> m_Textures;
+	static bool Load(const char* pFilePath, GraphicsDevice* pDevice, World& world, float scale = 1.0f);
 };

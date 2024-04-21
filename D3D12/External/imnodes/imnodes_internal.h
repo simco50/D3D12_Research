@@ -2,9 +2,9 @@
 
 #include "imnodes.h"
 
-#include <imgui.h>
+#include <External/ImGui/imgui.h>
 #define IMGUI_DEFINE_MATH_OPERATORS
-#include <imgui_internal.h>
+#include <External/ImGui/imgui_internal.h>
 
 #include <assert.h>
 #include <limits.h>

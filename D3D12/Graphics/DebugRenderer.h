@@ -1,19 +1,17 @@
 #pragma once
+#include "Graphics/RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 
-class GraphicsDevice;
-class RootSignature;
-class PipelineState;
-class RGGraph;
 struct Light;
 struct SceneView;
+struct Transform;
 
 struct IntColor
 {
-	IntColor(const Color& color) : Color(Math::EncodeRGBA(color)) {}
+	IntColor(const Color& color) : Color(Math::Pack_RGBA8_UNORM(color)) {}
 	IntColor(uint32 color = 0) : Color(color) {}
 	operator uint32() const { return Color; }
-	operator Color() const { return Math::DecodeRGBA(Color); }
+	operator Color() const { return Math::Unpack_RGBA8_UNORM(Color); }
 
 	uint32 Color;
 };
@@ -23,6 +21,7 @@ class DebugRenderer
 private:
 	struct DebugLine
 	{
+		DebugLine() = default;
 		DebugLine(const Vector3& start, const Vector3& end, const uint32& color)
 			: Start(start), ColorA(color), End(end), ColorB(color)
 		{}
@@ -34,6 +33,7 @@ private:
 
 	struct DebugTriangle
 	{
+		DebugTriangle() = default;
 		DebugTriangle(const Vector3& a, const Vector3& b, const Vector3& c, const uint32& color)
 			: A(a), ColorA(color), B(b), ColorB(color), C(c), ColorC(color)
 		{}
@@ -65,14 +65,19 @@ public:
 	void AddWireCylinder(const Vector3& position, const Quaternion& rotation, float height, float radius, int segments, const IntColor& color);
 	void AddCone(const Vector3& position, const Quaternion& rotation, float height, float angle, int segments, const IntColor& color, bool solid = false);
 	void AddBone(const Matrix& matrix, float length, const IntColor& color);
-	void AddLight(const Light& light, const IntColor& color = Colors::Yellow);
+	void AddLight(const Transform& transform, const Light& light, const IntColor& color = Colors::Yellow);
 
 private:
-	std::vector<DebugLine> m_Lines;
-	std::vector<DebugTriangle> m_Triangles;
+	constexpr static uint32 MaxLines = 1024 * 16;
+	DebugLine m_Lines[MaxLines];
+	uint32 m_NumLines = 0;
 
-	RefCountPtr<PipelineState> m_pTrianglesPSO;
-	RefCountPtr<PipelineState> m_pLinesPSO;
-	RefCountPtr<RootSignature> m_pRS;
+	constexpr static uint32 MaxTriangles = 2048;
+	DebugTriangle m_Triangles[MaxTriangles];
+	uint32 m_NumTriangles = 0;
+
+	Ref<PipelineState> m_pTrianglesPSO;
+	Ref<PipelineState> m_pLinesPSO;
+	Ref<RootSignature> m_pRS;
 	DebugRenderer() = default;
 };

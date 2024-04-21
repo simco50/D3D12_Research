@@ -2,13 +2,12 @@
 
 class FileWatcher;
 
-using ShaderBlob = RefCountPtr<ID3DBlob>;
+using ShaderBlob = Ref<ID3DBlob>;
 
 enum class ShaderType
 {
 	Vertex,
 	Pixel,
-	Geometry,
 	Mesh,
 	Amplification,
 	Compute,
@@ -28,6 +27,11 @@ struct ShaderDefine
 class ShaderDefineHelper
 {
 public:
+	ShaderDefineHelper() = default;
+	ShaderDefineHelper(const ShaderDefineHelper& parent)
+		: pParent(&parent)
+	{}
+
 	void Set(const char* pName, const char* pValue)
 	{
 		Get(pName).Value = pValue;
@@ -49,15 +53,22 @@ public:
 	{
 		std::vector<ShaderDefine> defines;
 		defines.reserve(Defines.size());
-		for (const DefineData& v : Defines)
-		{
-			ShaderDefine& define = defines.emplace_back();
-			define.Value = Sprintf("%s=%s", v.Name, v.Value.c_str());
-		}
+		Resolve(defines);
 		return defines;
 	}
 
 private:
+	void Resolve(std::vector<ShaderDefine>& outDefines) const
+	{
+		if (pParent)
+			pParent->Resolve(outDefines);
+		for (const DefineData& v : Defines)
+		{
+			ShaderDefine& define = outDefines.emplace_back();
+			define.Value = Sprintf("%s=%s", v.Name, v.Value.c_str());
+		}
+	}
+
 	struct DefineData
 	{
 		StringHash Hash;
@@ -78,28 +89,26 @@ private:
 		return Defines.emplace_back(DefineData{ hash, pName, "" });
 	}
 
+	const ShaderDefineHelper* pParent = nullptr;
 	std::vector<DefineData> Defines;
 };
 
-struct ShaderLibrary
+struct Shader
 {
-	ShaderLibrary(const ShaderBlob& shaderBlob, const Span<ShaderDefine>& defines)
-		: pByteCode(shaderBlob), Defines(defines.Copy())
-	{}
-
-	D3D12_SHADER_BYTECODE GetByteCode() const { return { pByteCode->GetBufferPointer(), pByteCode->GetBufferSize() }; };
-
+	uint64 Hash[2];
 	ShaderBlob pByteCode;
 	std::vector<ShaderDefine> Defines;
-};
-
-struct Shader : public ShaderLibrary
-{
-	Shader(const ShaderBlob& shaderBlob, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines)
-		: ShaderLibrary(shaderBlob, defines), Type(shaderType), EntryPoint(pEntryPoint)
-	{}
 	ShaderType Type;
 	std::string EntryPoint;
+	bool IsDirty = false;
+};
+
+struct ShaderResult
+{
+	Shader* pShader;
+	std::string Error;
+
+	operator Shader* () const { return pShader; }
 };
 
 class ShaderManager
@@ -111,18 +120,15 @@ public:
 	void ConditionallyReloadShaders();
 	void AddIncludeDir(const std::string& includeDir);
 
-	Shader* GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines = {}, bool force = false);
-	ShaderLibrary* GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines = {}, bool force = false);
+	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, Span<ShaderDefine> defines = {});
 
-	DECLARE_MULTICAST_DELEGATE(OnShaderRecompiled, Shader* /*pOldShader*/, Shader* /*pRecompiledShader*/);
-	OnShaderRecompiled& OnShaderRecompiledEvent() { return m_OnShaderRecompiledEvent; }
-	DECLARE_MULTICAST_DELEGATE(OnLibraryRecompiled, ShaderLibrary* /*pOldShader*/, ShaderLibrary* /*pRecompiledShader*/);
-	OnLibraryRecompiled& OnLibraryRecompiledEvent() { return m_OnLibraryRecompiledEvent; }
+	DECLARE_MULTICAST_DELEGATE(OnShaderEdited, Shader* /*pShader*/);
+	OnShaderEdited& OnShaderEditedEvent() { return m_OnShaderEditedEvent; }
 
 private:
 	using ShaderStringHash = TStringHash<false>;
 
-	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, const Span<ShaderDefine>& defines);
+	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, Span<ShaderDefine> defines);
 
 	void RecompileFromFileChange(const std::string& filePath);
 
@@ -130,18 +136,13 @@ private:
 
 	std::unique_ptr<FileWatcher> m_pFileWatcher;
 
-	using ShaderPtr = std::unique_ptr<Shader>;
-	using LibraryPtr = std::unique_ptr<ShaderLibrary>;
-
-	std::list<ShaderPtr> m_Shaders;
-	std::list<LibraryPtr> m_Libraries;
+	std::vector<Shader*> m_Shaders;
 
 	std::unordered_map<ShaderStringHash, std::unordered_set<std::string>> m_IncludeDependencyMap;
 
 	struct ShadersInFileMap
 	{
 		std::unordered_map<ShaderStringHash, Shader*> Shaders;
-		std::unordered_map<ShaderStringHash, ShaderLibrary*> Libraries;
 	};
 	std::unordered_map<ShaderStringHash, ShadersInFileMap> m_FilepathToObjectMap;
 
@@ -149,6 +150,5 @@ private:
 	uint8 m_ShaderModelMinor;
 
 	std::mutex m_CompileMutex;
-	OnShaderRecompiled m_OnShaderRecompiledEvent;
-	OnLibraryRecompiled m_OnLibraryRecompiledEvent;
+	OnShaderEdited m_OnShaderEditedEvent;
 };

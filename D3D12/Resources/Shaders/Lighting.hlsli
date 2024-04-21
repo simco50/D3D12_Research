@@ -2,7 +2,6 @@
 
 #include "Common.hlsli"
 #include "ShadingModels.hlsli"
-#include "SkyCommon.hlsli"
 
 struct BrdfData
 {
@@ -49,11 +48,19 @@ float3 UnpackBC5Normal(float2 packedNormal)
 
 float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN)
 {
+	// Flip Y
+	//sampledNormal.y = 1 - sampledNormal.y;
+
 	float3 normal = UnpackBC5Normal(sampledNormal.xy);
 	normal.xy = sampledNormal.xy * 2.0f - 1.0f;
-	normal.y = -normal.y;
 	normal = normalize(normal);
 	return mul(normal, TBN);
+}
+
+float4x4 GetLightMatrix(uint index)
+{
+	StructuredBuffer<float4x4> matrices = ResourceDescriptorHeap[cView.LightMatricesIndex];
+	return matrices[index];
 }
 
 float LightTextureMask(Light light, float3 worldPosition)
@@ -62,7 +69,7 @@ float LightTextureMask(Light light, float3 worldPosition)
 	if(light.MaskTexture != INVALID_HANDLE)
 	{
 		uint matrixIndex = light.MatrixIndex;
-		float4 lightPos = mul(float4(worldPosition, 1), cView.LightMatrices[matrixIndex]);
+		float4 lightPos = mul(float4(worldPosition, 1), GetLightMatrix(matrixIndex));
 		lightPos.xyz /= lightPos.w;
 		lightPos.xy = (lightPos.xy + 1) / 2;
 		mask = SampleLevel2D(light.MaskTexture, sLinearClamp, lightPos.xy, 0).r;
@@ -101,7 +108,7 @@ uint GetShadowMapIndex(Light light, float3 worldPosition, float viewDepth, float
 
 float Shadow3x3PCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invShadowSize)
 {
-	float4x4 lightViewProjection = cView.LightMatrices[lightMatrix];
+	float4x4 lightViewProjection = GetLightMatrix(lightMatrix);
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
@@ -130,7 +137,7 @@ float Shadow3x3PCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invSh
 
 float ShadowNoPCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invShadowSize)
 {
-	float4x4 lightViewProjection = cView.LightMatrices[lightMatrix];
+	float4x4 lightViewProjection = GetLightMatrix(lightMatrix);
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
 	lightPos.x = lightPos.x / 2.0f + 0.5f;
@@ -189,7 +196,7 @@ float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<
 	for(uint i = 0; i < stepCount; ++i)
 	{
 		float3 rayPos = rayStartPS.xyz + n * rayStep;
-		float depth = depthTexture.SampleLevel(sLinearClamp, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
+		float depth = depthTexture.SampleLevel(sPointClamp, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
 		float diff = rayPos.z - depth;
 
 		bool hit = abs(diff + tolerance) < tolerance;
@@ -205,7 +212,17 @@ float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<
 	return 1.0f - occlusion;
 }
 
-float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R, Texture2D<float> depthTexture, Texture2D previousSceneColor, float dither, inout float ssrWeight)
+// Convert view space position to screen UVs (0, 1). Non-linear Z
+float3 ViewPositionToUV(float3 view, float4x4 projection)
+{
+	float4 proj = mul(float4(view, 1), projection);
+	proj.xyz /= proj.w;
+	proj.x = (proj.x + 1) / 2;
+	proj.y = 1 - (proj.y + 1) / 2;
+	return proj.xyz;
+}
+
+float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R, Texture2D<float> depthTexture, Texture2D<float4> previousSceneColor, float dither, inout float ssrWeight)
 {
 	float3 ssr = 0;
 	const float roughnessThreshold = 0.7f;
@@ -219,13 +236,13 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 			float jitter = dither - 1.0f;
 			uint maxSteps = cView.SsrSamples;
 
-			float3 rayStartVS = mul(float4(worldPosition, 1), cView.ViewInverse).xyz;
+			float3 rayStartVS = mul(float4(worldPosition, 1), cView.View).xyz;
 			float linearDepth = rayStartVS.z;
 			float3 reflectionVs = mul(reflectionWs, (float3x3)cView.View);
 			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
 
-			float3 rayStart = ViewToWindow(rayStartVS, cView.Projection);
-			float3 rayEnd = ViewToWindow(rayEndVS, cView.Projection);
+			float3 rayStart = ViewPositionToUV(rayStartVS, cView.Projection);
+			float3 rayEnd = ViewPositionToUV(rayEndVS, cView.Projection);
 
 			float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
 			rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
@@ -239,10 +256,10 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 			{
 				uint4 step = float4(1, 2, 3, 4) + currStep;
 				float4 sceneZ = float4(
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.x, 0).x,
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.y, 0).x,
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.z, 0).x,
-					depthTexture.SampleLevel(sLinearClamp, rayPos.xy + rayStep.xy * step.w, 0).x
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.x, 0).x,
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.y, 0).x,
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.z, 0).x,
+					depthTexture.SampleLevel(sPointClamp, rayPos.xy + rayStep.xy * step.w, 0).x
 				);
 				float4 currentPosition = rayPos.z + rayStep.z * step;
 				uint4 zTest = abs(sceneZ - currentPosition - zThickness) < zThickness;
@@ -285,6 +302,13 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 	return ssr;
 }
 
+float3 GetSky(float3 rayDir)
+{
+	float3 uv = normalize(rayDir);
+	TextureCube<float4> skyTexture = ResourceDescriptorHeap[cView.SkyIndex];
+	return skyTexture.SampleLevel(sLinearWrap, uv, 0).rgb;
+}
+
 LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, float3 N, float3 V, float3 worldPosition, float linearDepth, float dither)
 {
 	LightResult result = (LightResult)0;
@@ -302,27 +326,29 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 #if VISUALIZE_CASCADES
 		if(light.IsDirectional)
 		{
-			float4x4 lightViewProjection = cView.LightMatrices[light.MatrixIndex];
+			float4x4 lightViewProjection = GetLightMatrix(light.MatrixIndex + shadowIndex);
 			float4 lightPos = mul(float4(worldPosition, 1), lightViewProjection);
 			lightPos.xyz /= lightPos.w;
 			lightPos.x = lightPos.x / 2.0f + 0.5f;
 			lightPos.y = lightPos.y / -2.0f + 0.5f;
 			float2 uv = lightPos.xy;
-			float strength = 0.1f;
+
+			static const float3 COLORS[] = {
+					float3(1,0,0),
+					float3(0,1,0),
+					float3(0,0,1),
+					float3(0,1,1),
+				};
+			float3 color = COLORS[shadowIndex];
 
 			if(any(uv < 0) || any(uv) > 1)
 			{
 				float modulate = cos((float)cView.FrameIndex / 30) * 0.5f + 0.5f;
-				strength = saturate(strength + modulate * 0.2f);
+				color = float3(1, 0, 1);
+				color *= 3.0f * saturate(0.2f + modulate * 0.2f);
 			}
-			static float3 COLORS[] = {
-				float3(1,0,0),
-				float3(0,1,0),
-				float3(0,0,1),
-				float3(1,0,1),
-			};
-
-			result.Diffuse += strength * COLORS[shadowIndex];
+			result.Specular = 0;
+			result.Diffuse = 0.1f * color;
 			return result;
 		}
 #endif

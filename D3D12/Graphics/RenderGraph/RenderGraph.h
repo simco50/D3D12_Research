@@ -4,42 +4,36 @@
 #include "Graphics/RHI/CommandContext.h"
 #include "Blackboard.h"
 
-#define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_,__COUNTER__)(name, graph)
+#define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_,__COUNTER__)(name, graph, __FILE__, __LINE__)
 
 class RGGraph;
 class RGPass;
 
 // Flags assigned to a pass that can determine various things
-enum class RGPassFlag
+enum class RGPassFlag : uint8
 {
 	None =		0,
-	// Raster pass
-	Raster =	1 << 0,
-	// Compute pass
-	Compute =	1 << 1,
-	// Pass that performs a copy resource operation. Does not play well with Raster/Compute passes
-	Copy =		1 << 2,
-	// Makes a pass never be culled when not referenced.
-	NeverCull = 1 << 3,
-	// Automatically begin/end render pass
-	NoRenderPass = 1 << 4,
+	Raster =	1 << 0,		///< Raster pass
+	Compute =	1 << 1,		///< Compute pass
+	Copy =		1 << 2,		///< Pass that performs a copy resource operation. Does not play well with Raster/Compute passes
+	NeverCull = 1 << 3,		///< Makes a pass never be culled when not referenced.
 };
 DECLARE_BITMASK_TYPE(RGPassFlag);
 
 class RGPassResources
 {
 public:
-	RGPassResources(RGPass& pass)
+	RGPassResources(const RGPass& pass)
 		: m_Pass(pass)
 	{}
 
 	RGPassResources(const RGPassResources& other) = delete;
 	RGPassResources& operator=(const RGPassResources& other) = delete;
 
-	RenderPassInfo GetRenderPassInfo() const;
+	NO_DISCARD RenderPassInfo GetRenderPassInfo() const;
 
 private:
-	RGPass& m_Pass;
+	const RGPass& m_Pass;
 };
 
 class RGGraphAllocator
@@ -74,12 +68,10 @@ public:
 	}
 
 	template<typename T, typename ...Args>
-	T* Allocate(Args&&... args)
+	NO_DISCARD T* AllocateObject(Args&&... args)
 	{
 		using AllocatedType = std::conditional_t<std::is_trivial_v<T>, T, TAllocatedObject<T>>;
-		check(m_pCurrentOffset - m_pData + sizeof(AllocatedType) < m_Size);
-		void* pData = m_pCurrentOffset;
-		m_pCurrentOffset += sizeof(AllocatedType);
+		void* pData = Allocate(sizeof(AllocatedType));
 		AllocatedType* pAllocation = new (pData) AllocatedType(std::forward<Args&&>(args)...);
 
 		if constexpr (std::is_trivial_v<T>)
@@ -93,12 +85,50 @@ public:
 		}
 	}
 
+	NO_DISCARD const char* AllocateString(const char* pStr)
+	{
+		uint32 len = CString::StrLen(pStr);
+		char* pAlloc = (char*)Allocate(len + 1);
+		strcpy_s(pAlloc, len + 1, pStr);
+		return pAlloc;
+	}
+
+	NO_DISCARD void* Allocate(uint64 size)
+	{
+		check(m_pCurrentOffset - m_pData + size < m_Size);
+		void* pData = m_pCurrentOffset;
+		m_pCurrentOffset += size;
+
+		// For debugging allocations
+#if 0
+		E_LOG(Info, "Allocating %s (%s / %s - %.0f%%)",
+			Math::PrettyPrintDataSize(size).c_str(),
+			Math::PrettyPrintDataSize(GetSize()).c_str(),
+			Math::PrettyPrintDataSize(GetCapacity()).c_str(),
+			(float)GetSize() / GetCapacity() * 100.0f
+		);
+#endif
+
+		return pData;
+	}
+
+	uint64 GetSize() const { return m_pCurrentOffset - m_pData; }
+	uint64 GetCapacity() const { return m_Size; }
+
 private:
 	std::vector<AllocatedObject*> m_NonPODAllocations;
 	uint64 m_Size;
 	char* m_pData;
 	char* m_pCurrentOffset;
 };
+
+struct RGEvent
+{
+	const char*		pName		= "";
+	const char*		pFilePath	= nullptr;
+	uint32			LineNumber	= 0;
+};
+using RGEventID = RGHandle<RGEvent, uint16>;
 
 class RGPass
 {
@@ -121,13 +151,9 @@ private:
 		virtual void Execute(CommandContext& context, const RGPassResources& resources)
 		{
 			if constexpr (HasPassResources)
-			{
 				(Lambda)(context, resources);
-			}
 			else
-			{
 				(Lambda)(context);
-			}
 		}
 
 		TLambda Lambda;
@@ -139,23 +165,21 @@ public:
 
 	struct RenderTargetAccess
 	{
-		RGTexture* pResource = nullptr;
-		RenderTargetLoadAction LoadAccess;
-		RGTexture* pResolveTarget = nullptr;
+		RGTexture*				pResource		= nullptr;
+		RenderPassColorFlags	Flags			= RenderPassColorFlags::None;
+		RGTexture*				pResolveTarget	= nullptr;
 	};
 
 	struct DepthStencilAccess
 	{
-		RGTexture* pResource = nullptr;
-		RenderTargetLoadAction LoadAccess;
-		RenderTargetLoadAction StencilLoadAccess;
-		bool Write;
+		RGTexture*				pResource		= nullptr;
+		RenderPassDepthFlags	Flags			= RenderPassDepthFlags::None;
+		bool					Write;
 	};
 
-	RGPass(RGGraph& graph, RGGraphAllocator& allocator, const char* pName, RGPassFlag flags, uint32 id)
-		: Graph(graph), Allocator(allocator), ID(id), Flags(flags)
+	RGPass(RGGraph& graph, RGGraphAllocator& allocator, const char* pName, RGPassFlag flags, RGPassID id)
+		: Graph(graph), Allocator(allocator), pName(pName), ID(id), Flags(flags)
 	{
-		strcpy_s(Name, pName);
 	}
 
 	RGPass(const RGPass& rhs) = delete;
@@ -165,19 +189,17 @@ public:
 	RGPass& Bind(ExecuteFn&& callback)
 	{
 		static_assert(sizeof(ExecuteFn) < 1024, "The Execute callback exceeds the maximum size");
-		checkf(!pExecuteCallback, "Pass is already bound! This may be unintentional");
-		pExecuteCallback = Allocator.Allocate<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
-		if constexpr (RGPassCallback<ExecuteFn>::HasPassResources)
-		{
-			Flags |= RGPassFlag::NoRenderPass;
-		}
+		check(!pExecuteCallback, "Pass is already bound! This may be unintentional");
+		pExecuteCallback = Allocator.AllocateObject<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
 		return *this;
 	}
 
 	RGPass& Write(Span<RGResource*> resources);
 	RGPass& Read(Span<RGResource*> resources);
-	RGPass& RenderTarget(RGTexture* pResource, RenderTargetLoadAction access, RGTexture* pResolveTarget = nullptr);
-	RGPass& DepthStencil(RGTexture* pResource, RenderTargetLoadAction depthAccess, bool write, RenderTargetLoadAction stencilAccess = RenderTargetLoadAction::NoAccess);
+	RGPass& RenderTarget(RGTexture* pResource, RenderPassColorFlags flags = RenderPassColorFlags::None, RGTexture* pResolveTarget = nullptr);
+	RGPass& DepthStencil(RGTexture* pResource, RenderPassDepthFlags flags = RenderPassDepthFlags::None);
+
+	NO_DISCARD const char* GetName() const { return pName; }
 
 private:
 	struct ResourceAccess
@@ -188,38 +210,52 @@ private:
 
 	void AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state);
 
-	char Name[128];
-	RGGraph& Graph;
-	RGGraphAllocator& Allocator;
-	uint32 ID;
-	RGPassFlag Flags;
-	bool IsCulled = true;
-	uint32 m_NumEventsToEnd = 0;
-	std::vector<std::string> m_EventsToStart;
+	struct ResourceTransition
+	{
+		RGResource*				pResource;
+		D3D12_RESOURCE_STATES	BeforeState;
+		D3D12_RESOURCE_STATES	AfterState;
+		uint32					SubResource;
+	};
 
-	std::vector<ResourceAccess> Accesses;
-	std::vector<RGPass*> PassDependencies;
+	const char*						pName;
+	RGGraph&						Graph;
+	RGGraphAllocator&				Allocator;
+	RGPassID						ID;
+	RGPassFlag						Flags;
+	bool							IsCulled			= true;
+
+	// Profiling
+	std::vector<RGEventID>			EventsToStart;
+	std::vector<RGEventID>			CPUEventsToStart;
+	uint32							NumEventsToEnd		= 0;
+	uint32							NumCPUEventsToEnd	= 0;
+
 	std::vector<RenderTargetAccess> RenderTargets;
-	DepthStencilAccess DepthStencilTarget{};
-	IRGPassCallback* pExecuteCallback = nullptr;
+	DepthStencilAccess				DepthStencilTarget{};
+	IRGPassCallback*				pExecuteCallback = nullptr;
+
+	std::vector<ResourceTransition> Transitions;
+	std::vector<ResourceAccess>		Accesses;
+	std::vector<RGPassID>			PassDependencies;
 };
 
-class RGResourcePool : public GraphicsObject
+class RGResourcePool : public DeviceObject
 {
 public:
 	RGResourcePool(GraphicsDevice* pDevice)
-		: GraphicsObject(pDevice)
+		: DeviceObject(pDevice)
 	{}
 
-	RefCountPtr<Texture> Allocate(const char* pName, const TextureDesc& desc);
-	RefCountPtr<Buffer> Allocate(const char* pName, const BufferDesc& desc);
+	NO_DISCARD Ref<Texture> Allocate(const char* pName, const TextureDesc& desc);
+	NO_DISCARD Ref<Buffer> Allocate(const char* pName, const BufferDesc& desc);
 	void Tick();
 
 private:
 	template<typename T>
 	struct PooledResource
 	{
-		RefCountPtr<T> pResource;
+		Ref<T> pResource;
 		uint32 LastUsedFrame;
 	};
 	using PooledTexture = PooledResource<Texture>;
@@ -229,87 +265,98 @@ private:
 	uint32 m_FrameIndex = 0;
 };
 
+struct RGGraphOptions
+{
+	bool ResourceAliasing		= true;
+	bool Jobify					= true;
+	bool PassCulling			= true;
+	bool StateTracking			= true;
+	uint32 CommandlistGroupSize = 10;
+};
+
 class RGGraph
 {
 public:
-	RGGraph(RGResourcePool& resourcePool, uint64 allocatorSize = 0xFFFF);
+	RGGraph(uint64 allocatorSize = 1024 * 128);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
-	void Compile();
-	void Execute(CommandContext* pContext);
-	void DumpGraph(const char* pPath) const;
+	void Compile(RGResourcePool& resourcePool, const RGGraphOptions& options);
+
+	void Execute(GraphicsDevice* pDevice);
 
 	template<typename T, typename... Args>
-	T* Allocate(Args&&... args)
+	NO_DISCARD T* Allocate(Args&&... args)
 	{
-		return m_Allocator.Allocate<T>(std::forward<Args&&>(args)...);
+		return m_Allocator.AllocateObject<T>(std::forward<Args&&>(args)...);
 	}
 
 	RGPass& AddPass(const char* pName, RGPassFlag flags)
 	{
-		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, pName, flags, (int)m_RenderPasses.size());
+		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, m_Allocator.AllocateString(pName), flags, RGPassID((uint16)m_Passes.size()));
 
-		for(const std::string& eventName : m_Events)
-		{
-			pPass->m_EventsToStart.push_back(eventName);
-		}
-		m_Events.clear();
+		for (RGEventID eventIndex : m_PendingEvents)
+			pPass->EventsToStart.push_back(eventIndex);
+		m_PendingEvents.clear();
 
-		m_RenderPasses.push_back(pPass);
-		return *m_RenderPasses.back();
+		m_Passes.push_back(pPass);
+		return *m_Passes.back();
 	}
 
-	RGTexture* Create(const char* pName, const TextureDesc& desc)
+	NO_DISCARD RGTexture* Create(const char* pName, const TextureDesc& desc)
 	{
-		RGTexture* pResource = Allocate<RGTexture>(pName, (int)m_Resources.size(), desc);
+		RGTexture* pResource = Allocate<RGTexture>(m_Allocator.AllocateString(pName), RGResourceID((uint16)m_Resources.size()), desc);
 		m_Resources.emplace_back(pResource);
 		return pResource;
 	}
 
 	RGBuffer* Create(const char* pName, const BufferDesc& desc)
 	{
-		RGBuffer* pResource = Allocate<RGBuffer>(pName, (int)m_Resources.size(), desc);
+		RGBuffer* pResource = Allocate<RGBuffer>(m_Allocator.AllocateString(pName), RGResourceID((uint16)m_Resources.size()), desc);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
 
-	RGTexture* Import(Texture* pTexture)
+	NO_DISCARD RGTexture* Import(Texture* pTexture)
 	{
 		check(pTexture);
-		RGTexture* pResource = Allocate<RGTexture>(pTexture->GetName().c_str(), (int)m_Resources.size(), pTexture->GetDesc(), pTexture);
+		RGTexture* pResource = Allocate<RGTexture>(m_Allocator.AllocateString(pTexture->GetName()), RGResourceID((uint16)m_Resources.size()), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
 
-	RGTexture* TryImport(Texture* pTexture)
+	NO_DISCARD RGTexture* TryImport(Texture* pTexture, Texture* pFallback = nullptr)
 	{
-		return pTexture ? Import(pTexture) : nullptr;
+		if (pTexture)
+			return Import(pTexture);
+		return pFallback ? Import(pFallback) : nullptr;
 	}
 
-	RGBuffer* Import(Buffer* pBuffer)
+	NO_DISCARD RGBuffer* Import(Buffer* pBuffer)
 	{
 		check(pBuffer);
-		RGBuffer* pResource = Allocate<RGBuffer>(pBuffer->GetName().c_str(), (int)m_Resources.size(), pBuffer->GetDesc(), pBuffer);
+		RGBuffer* pResource = Allocate<RGBuffer>(m_Allocator.AllocateString(pBuffer->GetName()), RGResourceID((uint16)m_Resources.size()), pBuffer->GetDesc(), pBuffer);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
 
-	RGBuffer* TryImport(Buffer* pBuffer)
+	NO_DISCARD RGBuffer* TryImport(Buffer* pBuffer, Buffer* pFallback = nullptr)
 	{
-		return pBuffer ? Import(pBuffer) : nullptr;
+		if (pBuffer)
+			return Import(pBuffer);
+		return pFallback ? Import(pFallback) : nullptr;
 	}
 
-	void Export(RGTexture* pTexture, RefCountPtr<Texture>* pTarget);
-	void Export(RGBuffer* pBuffer, RefCountPtr<Buffer>* pTarget);
+	void Export(RGTexture* pTexture, Ref<Texture>* pTarget, TextureFlag additionalFlags = TextureFlag::None);
+	void Export(RGBuffer* pBuffer, Ref<Buffer>* pTarget, BufferFlag additionalFlags = BufferFlag::None);
 
-	RGTexture* FindTexture(const char* pName) const
+	NO_DISCARD RGTexture* FindTexture(const char* pName) const
 	{
 		for (RGResource* pResource : m_Resources)
 		{
-			if (pResource->Type == RGResourceType::Texture && strcmp(pResource->GetName(), pName) == 0)
+			if (pResource->GetType() == RGResourceType::Texture && strcmp(pResource->GetName(), pName) == 0)
 			{
 				return (RGTexture*)pResource;
 			}
@@ -317,47 +364,58 @@ public:
 		return nullptr;
 	}
 
-	void PushEvent(const char* pName);
+	void DumpDebugGraph(const char* pFilePath) const;
+	void DrawResourceTracker(bool& enabled) const;
+	void DrawPassView(bool& enabled) const;
+	
+	void PushEvent(const char* pName, const char* pFilePath = "", uint32 lineNumber = 0);
 	void PopEvent();
 
 	RGBlackboard Blackboard;
 
 private:
-	void ExecutePass(RGPass* pPass, CommandContext& context);
-	void PrepareResources(RGPass* pPass, CommandContext& context);
+	RGEventID AddEvent(const char* pName, const char* pFilePath, uint32 lineNumber)
+	{
+		m_Events.push_back(RGEvent{ m_Allocator.AllocateString(pName), pFilePath, lineNumber });
+		return RGEventID((uint16)(m_Events.size() - 1));
+	}
+
+	void ExecutePass(const RGPass* pPass, CommandContext& context) const;
+	void PrepareResources(const RGPass* pPass, CommandContext& context) const;
 	void DestroyData();
 
-	std::vector<std::string> m_Events;
+	bool								m_IsCompiled		= false;
+	std::vector<RGEventID>				m_PendingEvents;
+	std::vector<RGEvent>				m_Events;
 
-	RGGraphAllocator m_Allocator;
-	SyncPoint m_LastSyncPoint;
+	RGGraphAllocator					m_Allocator;
 
-	std::vector<RGPass*> m_RenderPasses;
-	std::vector<RGResource*> m_Resources;
-	RGResourcePool& m_ResourcePool;
+	std::vector<Span<const RGPass*>>	m_PassExecuteGroups;
+	std::vector<RGPass*>				m_Passes;
+	std::vector<RGResource*>			m_Resources;
 
 	struct ExportedTexture
 	{
-		RGTexture* pTexture;
-		RefCountPtr<Texture>* pTarget;
+		RGTexture*		pTexture;
+		Ref<Texture>*	pTarget;
 	};
-	std::vector<ExportedTexture> m_ExportTextures;
+	std::vector<ExportedTexture>		m_ExportTextures;
 
 	struct ExportedBuffer
 	{
-		RGBuffer* pBuffer;
-		RefCountPtr<Buffer>* pTarget;
+		RGBuffer*		pBuffer;
+		Ref<Buffer>*	pTarget;
 	};
-	std::vector<ExportedBuffer> m_ExportBuffers;
+	std::vector<ExportedBuffer>			m_ExportBuffers;
 };
 
 class RGGraphScope
 {
 public:
-	RGGraphScope(const char* pName, RGGraph& graph)
+	RGGraphScope(const char* pName, RGGraph& graph, const char* pFilePath = "", uint32 lineNumber = 0)
 		: m_Graph(graph)
 	{
-		graph.PushEvent(pName);
+		graph.PushEvent(pName, pFilePath, lineNumber);
 	}
 	~RGGraphScope()
 	{
@@ -369,8 +427,8 @@ private:
 
 namespace RGUtils
 {
-	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
-	RGPass& AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
-	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, RefCountPtr<Buffer>* pStorageTarget, bool doExport);
-	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, RefCountPtr<Texture>* pStorageTarget, bool doExport);
+	RGPass&		AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
+	RGPass&		AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
+	RGBuffer*	CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool doExport);
+	RGTexture*	CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool doExport);
 }

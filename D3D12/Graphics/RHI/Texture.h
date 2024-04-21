@@ -1,17 +1,18 @@
 #pragma once
 #include "GraphicsResource.h"
 
-enum class TextureFlag
+enum class TextureFlag : uint8
 {
 	None = 0,
 	UnorderedAccess = 1 << 0,
 	ShaderResource	= 1 << 1,
 	RenderTarget	= 1 << 2,
 	DepthStencil	= 1 << 3,
+	sRGB			= 1 << 4,
 };
 DECLARE_BITMASK_TYPE(TextureFlag)
 
-enum class TextureDimension
+enum class TextureType : uint8
 {
 	Texture1D,
 	Texture1DArray,
@@ -79,32 +80,20 @@ struct ClearBinding
 
 struct TextureDesc
 {
-	TextureDesc()
-		: Width(1), 
-		Height(1), 
-		DepthOrArraySize(1),
-		Mips(1), 
-		SampleCount(1), 
-		Format(ResourceFormat::Unknown), 
-		Usage(TextureFlag::None),
-		ClearBindingValue(ClearBinding()),
-		Dimensions(TextureDimension::Texture2D)
-	{}
+	uint32				Width				: 14	= 1;
+	uint32				Height				: 14	= 1;
+	uint32				DepthOrArraySize	: 10	= 1;
+	uint32				Mips				: 5		= 1;
+	uint32				SampleCount			: 3		= 1;
+	TextureType			Type						= TextureType::Texture2D;
+	ResourceFormat		Format						= ResourceFormat::Unknown;
+	TextureFlag			Flags						= TextureFlag::None;
+	ClearBinding		ClearBindingValue			= ClearBinding(Colors::Black);
 
-	uint32 Width;
-	uint32 Height;
-	uint32 DepthOrArraySize;
-	uint32 Mips;
-	uint32 SampleCount;
-	ResourceFormat Format;
-	TextureFlag Usage;
-	ClearBinding ClearBindingValue;
-	TextureDimension Dimensions;
+	Vector3u Size() const { return Vector3u(Width, Height, DepthOrArraySize); }
+	Vector2u Size2D() const { return Vector2u(Width, Height); }
 
-	Vector3i Size() const { return Vector3i(Width, Height, DepthOrArraySize); }
-	Vector2i Size2D() const { return Vector2i(Width, Height); }
-
-	static TextureDesc CreateCube(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc CreateCube(uint32 width, uint32 height, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
 		check(width);
 		check(height);
@@ -115,13 +104,13 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags | TextureFlag::ShaderResource;
-		desc.ClearBindingValue = ClearBinding();
-		desc.Dimensions = TextureDimension::TextureCube;
+		desc.Flags = flags;
+		desc.ClearBindingValue = clearBinding;
+		desc.Type = TextureType::TextureCube;
 		return desc;
 	}
 
-	static TextureDesc Create2D(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc Create2D(uint32 width, uint32 height, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
 		check(width);
 		check(height);
@@ -132,13 +121,13 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags | TextureFlag::ShaderResource;
-		desc.ClearBindingValue = ClearBinding();
-		desc.Dimensions = TextureDimension::Texture2D;
+		desc.Flags = flags;
+		desc.ClearBindingValue = clearBinding;
+		desc.Type = TextureType::Texture2D;
 		return desc;
 	}
 
-	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, uint32 mips = 1)
+	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
 		check(width);
 		check(height);
@@ -149,43 +138,9 @@ struct TextureDesc
 		desc.Mips = mips;
 		desc.SampleCount = sampleCount;
 		desc.Format = format;
-		desc.Usage = flags | TextureFlag::ShaderResource;
-		desc.ClearBindingValue = ClearBinding();
-		desc.Dimensions = TextureDimension::Texture3D;
-		return desc;
-	}
-
-	static TextureDesc CreateDepth(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(1, 0))
-	{
-		check(width);
-		check(height);
-		TextureDesc desc;
-		desc.Width = width;
-		desc.Height = height;
-		desc.DepthOrArraySize = 1;
-		desc.Mips = 1;
-		desc.SampleCount = sampleCount;
-		desc.Format = format;
-		desc.Usage = flags | TextureFlag::DepthStencil;
+		desc.Flags = flags;
 		desc.ClearBindingValue = clearBinding;
-		desc.Dimensions = TextureDimension::Texture2D;
-		return desc;
-	}
-
-	static TextureDesc CreateRenderTarget(uint32 width, uint32 height, ResourceFormat format, TextureFlag flags = TextureFlag::None, uint32 sampleCount = 1, const ClearBinding& clearBinding = ClearBinding(Color(0, 0, 0)))
-	{
-		check(width);
-		check(height);
-		TextureDesc desc;
-		desc.Width = width;
-		desc.Height = height;
-		desc.DepthOrArraySize = 1;
-		desc.Mips = 1;
-		desc.SampleCount = sampleCount;
-		desc.Format = format;
-		desc.Usage = flags | TextureFlag::RenderTarget;
-		desc.ClearBindingValue = clearBinding;
-		desc.Dimensions = TextureDimension::Texture2D;
+		desc.Type = TextureType::Texture3D;
 		return desc;
 	}
 
@@ -197,9 +152,14 @@ struct TextureDesc
 			&& Mips == other.Mips
 			&& SampleCount == other.SampleCount
 			&& Format == other.Format
-			&& Usage == other.Usage
+			&& Flags == other.Flags
 			&& ClearBindingValue == other.ClearBindingValue
-			&& Dimensions == other.Dimensions;
+			&& Type == other.Type;
+	}
+
+	bool operator!=(const TextureDesc& other) const
+	{
+		return !operator==(other);
 	}
 
 	bool IsCompatible(const TextureDesc& other) const
@@ -211,17 +171,12 @@ struct TextureDesc
 			&& SampleCount == other.SampleCount
 			&& Format == other.Format
 			&& ClearBindingValue == other.ClearBindingValue
-			&& Dimensions == other.Dimensions
-			&& EnumHasAllFlags(Usage, other.Usage);
-	}
-
-	bool operator!=(const TextureDesc& other) const
-	{
-		return !operator==(other);
+			&& Type == other.Type
+			&& EnumHasAllFlags(Flags, other.Flags);
 	}
 };
 
-class Texture : public GraphicsResource
+class Texture : public DeviceResource
 {
 public:
 	friend class GraphicsDevice;
@@ -238,14 +193,14 @@ public:
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 	const TextureDesc& GetDesc() const { return m_Desc; }
 
-	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV() const;
-	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(bool writeable = true) const;
-	UnorderedAccessView* GetSubResourceUAV(uint32 subresourceIndex);
+	UnorderedAccessView* GetUAV(uint32 subresourceIndex = 0) const;
+	ShaderResourceView* GetSRV() const { return m_pSRV; }
+	uint32 GetUAVIndex(uint32 subresourceIndex = 0) const;
+	uint32 GetSRVIndex() const;
 
 private:
 	TextureDesc m_Desc;
-	std::vector<RefCountPtr<UnorderedAccessView>> m_SubresourceUAVs;
-
-	D3D12_CPU_DESCRIPTOR_HANDLE m_Rtv = {};
-	D3D12_CPU_DESCRIPTOR_HANDLE m_ReadOnlyDsv = {};
+	
+	Ref<ShaderResourceView> m_pSRV;
+	std::vector<Ref<UnorderedAccessView>> m_UAVs;
 };

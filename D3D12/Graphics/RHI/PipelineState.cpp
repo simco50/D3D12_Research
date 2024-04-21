@@ -6,16 +6,13 @@
 
 PipelineStateInitializer::PipelineStateInitializer()
 {
-	m_pSubobjectData.resize(sizeof(CD3DX12_PIPELINE_STATE_STREAM2));
-	m_pSubobjectLocations.fill(-1);
-
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND>() = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1>() = CD3DX12_DEPTH_STENCIL_DESC1(D3D12_DEFAULT);
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>() = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC>() = DefaultSampleDesc();
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY>() = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS>() = D3D12_PIPELINE_STATE_FLAG_NONE;
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK>() = DefaultSampleMask();
+	m_Stream.Blend = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
+	m_Stream.DepthStencil = CD3DX12_DEPTH_STENCIL_DESC1(D3D12_DEFAULT);
+	m_Stream.Rasterizer = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+	m_Stream.SampleDesc = DXGI_SAMPLE_DESC{1, 0};
+	m_Stream.SampleMask = 0xFFFFFFFF;
+	m_Stream.PrimitiveTopology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	m_Stream.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 }
 
 void PipelineStateInitializer::SetName(const char* pName)
@@ -25,18 +22,12 @@ void PipelineStateInitializer::SetName(const char* pName)
 
 void PipelineStateInitializer::SetDepthOnlyTarget(ResourceFormat dsvFormat, uint32 msaa)
 {
-	D3D12_RT_FORMAT_ARRAY& formatArray = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS>();
-	formatArray.NumRenderTargets = 0;
-	DXGI_SAMPLE_DESC& sampleDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC>();
-	sampleDesc.Count = msaa;
-	sampleDesc.Quality = 0;
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>().MultisampleEnable = msaa > 1;
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT>() = D3D::ConvertFormat(dsvFormat);
+	SetRenderTargetFormats({}, dsvFormat, msaa);
 }
 
-void PipelineStateInitializer::SetRenderTargetFormats(const Span<ResourceFormat>& rtvFormats, ResourceFormat dsvFormat, uint32 msaa)
+void PipelineStateInitializer::SetRenderTargetFormats(Span<ResourceFormat> rtvFormats, ResourceFormat dsvFormat, uint32 msaa)
 {
-	D3D12_RT_FORMAT_ARRAY& formatArray = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS>();
+	D3D12_RT_FORMAT_ARRAY& formatArray = m_Stream.RTFormats;
 	// Validation layer bug - Throws error about RT Format even if NumRenderTargets == 0.
 	memset(formatArray.RTFormats, 0, sizeof(DXGI_FORMAT) * ARRAYSIZE(formatArray.RTFormats));
 	formatArray.NumRenderTargets = 0;
@@ -44,16 +35,20 @@ void PipelineStateInitializer::SetRenderTargetFormats(const Span<ResourceFormat>
 	{
 		formatArray.RTFormats[formatArray.NumRenderTargets++] = D3D::ConvertFormat(format);
 	}
-	DXGI_SAMPLE_DESC& sampleDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC>();
+
+	DXGI_SAMPLE_DESC& sampleDesc = m_Stream.SampleDesc;
 	sampleDesc.Count = msaa;
 	sampleDesc.Quality = 0;
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>().MultisampleEnable = msaa > 1;
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT>() = D3D::ConvertFormat(dsvFormat);
+
+	D3D12_RASTERIZER_DESC& rasterDesc = m_Stream.Rasterizer;
+	rasterDesc.MultisampleEnable = msaa > 1;
+
+	m_Stream.DSVFormat = D3D::ConvertFormat(dsvFormat);
 }
 
 void PipelineStateInitializer::SetBlendMode(const BlendMode& blendMode, bool /*alphaToCoverage*/)
 {
-	D3D12_BLEND_DESC& blendDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND>();
+	D3D12_BLEND_DESC& blendDesc = m_Stream.Blend;
 	D3D12_RENDER_TARGET_BLEND_DESC& desc = blendDesc.RenderTarget[0];
 	desc.RenderTargetWriteMask = 0xf;
 	desc.BlendEnable = blendMode == BlendMode::Replace ? false : true;
@@ -140,22 +135,25 @@ void PipelineStateInitializer::SetBlendMode(const BlendMode& blendMode, bool /*a
 
 void PipelineStateInitializer::SetDepthEnabled(bool enabled)
 {
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1>().DepthEnable = enabled;
+	D3D12_DEPTH_STENCIL_DESC1& dssDesc = m_Stream.DepthStencil;
+	dssDesc.DepthEnable = enabled;
 }
 
 void PipelineStateInitializer::SetDepthWrite(bool enabled)
 {
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1>().DepthWriteMask = enabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+	D3D12_DEPTH_STENCIL_DESC1& dssDesc = m_Stream.DepthStencil;
+	dssDesc.DepthWriteMask = enabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
 }
 
 void PipelineStateInitializer::SetDepthTest(D3D12_COMPARISON_FUNC func)
 {
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1>().DepthFunc = func;
+	D3D12_DEPTH_STENCIL_DESC1& dssDesc = m_Stream.DepthStencil;
+	dssDesc.DepthFunc = func;
 }
 
-void PipelineStateInitializer::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, unsigned int /*stencilRef*/, unsigned char compareMask, unsigned char writeMask)
+void PipelineStateInitializer::SetStencilTest(bool stencilEnabled, D3D12_COMPARISON_FUNC mode, D3D12_STENCIL_OP pass, D3D12_STENCIL_OP fail, D3D12_STENCIL_OP zFail, unsigned char compareMask, unsigned char writeMask)
 {
-	D3D12_DEPTH_STENCIL_DESC1& dssDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1>();
+	D3D12_DEPTH_STENCIL_DESC1& dssDesc = m_Stream.DepthStencil;
 	dssDesc.StencilEnable = stencilEnabled;
 	dssDesc.FrontFace.StencilFunc = mode;
 	dssDesc.FrontFace.StencilPassOp = pass;
@@ -168,30 +166,33 @@ void PipelineStateInitializer::SetStencilTest(bool stencilEnabled, D3D12_COMPARI
 
 void PipelineStateInitializer::SetFillMode(D3D12_FILL_MODE fillMode)
 {
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>().FillMode = fillMode;
+	D3D12_RASTERIZER_DESC& rasterDesc = m_Stream.Rasterizer;
+	rasterDesc.FillMode = fillMode;
 }
 
 void PipelineStateInitializer::SetCullMode(D3D12_CULL_MODE cullMode)
 {
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>().CullMode = cullMode;
+	D3D12_RASTERIZER_DESC& rasterDesc = m_Stream.Rasterizer;
+	rasterDesc.CullMode = cullMode;
 }
 
 void PipelineStateInitializer::SetLineAntialias(bool lineAntiAlias)
 {
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>().AntialiasedLineEnable = lineAntiAlias;
+	D3D12_RASTERIZER_DESC& rasterDesc = m_Stream.Rasterizer;
+	rasterDesc.AntialiasedLineEnable = lineAntiAlias;
 }
 
 void PipelineStateInitializer::SetDepthBias(int depthBias, float depthBiasClamp, float slopeScaledDepthBias)
 {
-	D3D12_RASTERIZER_DESC& rsDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER>();
-	rsDesc.SlopeScaledDepthBias = slopeScaledDepthBias;
-	rsDesc.DepthBias = depthBias;
-	rsDesc.DepthBiasClamp = depthBiasClamp;
+	D3D12_RASTERIZER_DESC& rasterDesc = m_Stream.Rasterizer;
+	rasterDesc.SlopeScaledDepthBias = slopeScaledDepthBias;
+	rasterDesc.DepthBias = depthBias;
+	rasterDesc.DepthBiasClamp = depthBiasClamp;
 }
 
-void PipelineStateInitializer::SetInputLayout(const Span<VertexElementDesc>& layout)
+void PipelineStateInitializer::SetInputLayout(Span<VertexElementDesc> layout)
 {
-	D3D12_INPUT_LAYOUT_DESC& ilDesc = GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
+	D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Stream.InputLayout;
 
 	m_IlDesc.clear();
 	for (const VertexElementDesc& element : layout)
@@ -212,145 +213,144 @@ void PipelineStateInitializer::SetInputLayout(const Span<VertexElementDesc>& lay
 
 void PipelineStateInitializer::SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology)
 {
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY>() = topology;
+	m_Stream.PrimitiveTopology = topology;
 }
 
 void PipelineStateInitializer::SetRootSignature(RootSignature* pRootSignature)
 {
-	GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>() = pRootSignature->GetRootSignature();
+	m_Stream.pRootSignature = pRootSignature->GetRootSignature();
 }
 
-void PipelineStateInitializer::SetVertexShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetVertexShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
-	m_Type = PipelineStateType::Graphics;
 	m_ShaderDescs[(int)ShaderType::Vertex] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetPixelShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetPixelShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
 	m_ShaderDescs[(int)ShaderType::Pixel] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetGeometryShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetComputeShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
-	m_Type = PipelineStateType::Graphics;
-	m_ShaderDescs[(int)ShaderType::Geometry] = { pShaderPath, entryPoint, defines.Copy() };
-}
-
-void PipelineStateInitializer::SetComputeShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
-{
-	m_Type = PipelineStateType::Compute;
 	m_ShaderDescs[(int)ShaderType::Compute] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetMeshShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetMeshShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
-	m_Type = PipelineStateType::Mesh;
 	m_ShaderDescs[(int)ShaderType::Mesh] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, const char* entryPoint, const Span<ShaderDefine>& defines)
+void PipelineStateInitializer::SetAmplificationShader(const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)
 {
-	m_Type = PipelineStateType::Mesh;
 	m_ShaderDescs[(int)ShaderType::Amplification] = { pShaderPath, entryPoint, defines.Copy() };
 }
 
-D3D12_PIPELINE_STATE_STREAM_DESC PipelineStateInitializer::GetDesc(GraphicsDevice* pDevice)
+PipelineState::PipelineState(GraphicsDevice* pParent, const PipelineStateInitializer& initializer)
+	: DeviceObject(pParent), m_Desc(initializer)
 {
+	m_ReloadHandle = pParent->GetShaderManager()->OnShaderEditedEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
+}
+
+PipelineState::~PipelineState()
+{
+	GetParent()->GetShaderManager()->OnShaderEditedEvent().Remove(m_ReloadHandle);
+	GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
+}
+
+void PipelineState::CreateInternal()
+{
+	std::lock_guard lock(m_BuildLock);
+	if (!m_NeedsReload)
+		return;
+
+	if (m_Desc.m_IlDesc.size() > 0)
+	{
+		D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.m_Stream.InputLayout;
+		ilDesc.pInputElementDescs = m_Desc.m_IlDesc.data();
+	}
+
 	auto GetByteCode = [this](ShaderType type) -> D3D12_SHADER_BYTECODE& {
 		switch (type)
 		{
-		case ShaderType::Vertex: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS>();
-		case ShaderType::Pixel: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS>();
-		case ShaderType::Geometry: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS>();
-		case ShaderType::Mesh: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS>();
-		case ShaderType::Amplification: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS>();
-		case ShaderType::Compute: return GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS>();
+		case ShaderType::Vertex:		return m_Desc.m_Stream.VS;
+		case ShaderType::Pixel:			return m_Desc.m_Stream.PS;
+		case ShaderType::Mesh:			return m_Desc.m_Stream.MS;
+		case ShaderType::Amplification:	return m_Desc.m_Stream.AS;
+		case ShaderType::Compute:		return m_Desc.m_Stream.CS;
 		case ShaderType::MAX:
 		default:
 			noEntry();
 			static D3D12_SHADER_BYTECODE dummy;
 			return dummy;
 		}
-	};
+		};
 
+	bool shaderCompileError = false;
+	std::string name = m_Desc.m_Name;
 	for (uint32 i = 0; i < (int)ShaderType::MAX; ++i)
 	{
 		Shader* pShader = nullptr;
-		const ShaderDesc& desc = m_ShaderDescs[i];
+		const PipelineStateInitializer::ShaderDesc& desc = m_Desc.m_ShaderDescs[i];
 		if (desc.Path.length() > 0)
 		{
-			pShader = pDevice->GetShaderManager()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
-			check(pShader);
-			if (pShader)
+			while(!pShader)
 			{
-				GetByteCode((ShaderType)i) = pShader->GetByteCode();
-				if (m_Name.empty())
+				ShaderResult result = GetParent()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
+				pShader = result.pShader;
+				if (result.Error.length())
 				{
-					m_Name = Sprintf("%s (Unnamed)", pShader->EntryPoint.c_str());
+					bool retry = ::MessageBoxA(GetActiveWindow(), result.Error.c_str(), "Shader Compilation Failed", MB_RETRYCANCEL) == IDRETRY;
+					if (!retry)
+						break;
 				}
 			}
 
-			m_Shaders[i] = pShader;
+			if(pShader)
+			{
+				GetByteCode((ShaderType)i) = CD3DX12_SHADER_BYTECODE(pShader->pByteCode->GetBufferPointer(), pShader->pByteCode->GetBufferSize());
+				if (name.empty())
+					name = Sprintf("%s (Unnamed)", pShader->EntryPoint.c_str());
+				m_Shaders[i] = pShader;
+			}
 		}
 	}
 
-	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
-	streamDesc.pPipelineStateSubobjectStream = m_pSubobjectData.data();
-	streamDesc.SizeInBytes = m_Size;
-
-	return streamDesc;
-}
-
-PipelineState::PipelineState(GraphicsDevice* pParent)
-	: GraphicsObject(pParent)
-{
-	m_ReloadHandle = pParent->GetShaderManager()->OnShaderRecompiledEvent().AddRaw(this, &PipelineState::OnShaderReloaded);
-}
-
-PipelineState::~PipelineState()
-{
-	GetParent()->GetShaderManager()->OnShaderRecompiledEvent().Remove(m_ReloadHandle);
-}
-
-void PipelineState::Create(const PipelineStateInitializer& initializer)
-{
-	GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
-
-	check(initializer.m_Type != PipelineStateType::MAX);
-	RefCountPtr<ID3D12Device2> pDevice2;
-	VERIFY_HR_EX(GetParent()->GetDevice()->QueryInterface(IID_PPV_ARGS(pDevice2.GetAddressOf())), GetParent()->GetDevice());
-
-	m_Desc = initializer;
-	if (m_Desc.m_IlDesc.size() > 0)
+	if (!shaderCompileError)
 	{
-		D3D12_INPUT_LAYOUT_DESC& ilDesc = m_Desc.GetSubobject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT>();
-		ilDesc.pInputElementDescs = m_Desc.m_IlDesc.data();
+		GetParent()->DeferReleaseObject(m_pPipelineState.Detach());
+		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
+		streamDesc.SizeInBytes = sizeof(m_Desc.m_Stream);
+		streamDesc.pPipelineStateSubobjectStream = &m_Desc.m_Stream;
+		VERIFY_HR_EX(GetParent()->GetDevice()->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
+		D3D::SetObjectName(m_pPipelineState.Get(), name.c_str());
+	}
+	else
+	{
+		E_LOG(Warning, "Failed to compile PipelineState '%s'", m_Desc.m_Name);
 	}
 
-	D3D12_PIPELINE_STATE_STREAM_DESC streamDesc = m_Desc.GetDesc(GetParent());
-	VERIFY_HR_EX(pDevice2->CreatePipelineState(&streamDesc, IID_PPV_ARGS(m_pPipelineState.ReleaseAndGetAddressOf())), GetParent()->GetDevice());
-	D3D::SetObjectName(m_pPipelineState.Get(), m_Desc.m_Name.c_str());
+	check(m_pPipelineState);
+	E_LOG(Info, "Compiled Pipeline: %s", m_Desc.m_Name.c_str());
+	m_NeedsReload = false;
 }
 
 void PipelineState::ConditionallyReload()
 {
-	if (m_NeedsReload)
+	if (m_NeedsReload || !m_pPipelineState)
 	{
-		Create(m_Desc);
-		m_NeedsReload = false;
-		E_LOG(Info, "Reloaded Pipeline: %s", m_Desc.m_Name.c_str());
+		CreateInternal();
 	}
 }
 
-void PipelineState::OnShaderReloaded(Shader* pOldShader, Shader* pNewShader)
+void PipelineState::OnShaderReloaded(Shader* pShader)
 {
-	for (Shader*& pShader : m_Desc.m_Shaders)
+	for (Shader*& pCurrentShader : m_Shaders)
 	{
-		if (pShader && pShader == pOldShader)
+		if (pCurrentShader && pCurrentShader == pShader)
 		{
-			pShader = pNewShader;
 			m_NeedsReload = true;
+			break;
 		}
 	}
 }

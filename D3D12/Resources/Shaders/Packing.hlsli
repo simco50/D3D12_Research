@@ -39,9 +39,12 @@ uint2 Pack_RGBA16_FLOAT(float4 value)
 	return uint2(packed.x | (packed.y << 16u), packed.z | (packed.w << 16u));
 }
 
-float4 Pack_RGBA16_FLOAT(uint2 value)
+float4 Unpack_RGBA16_FLOAT(uint2 value)
 {
-	return f16tof32(uint4(value.x & 0xFFFF, value.x >> 16, value.y & 0xFFFF, value.y >> 16));
+	return float4(
+		Unpack_RG16_FLOAT(value.x), 
+		Unpack_RG16_FLOAT(value.y)
+	);
 }
 
 uint Pack_RGBA8_UNORM(float4 value)
@@ -69,6 +72,22 @@ float4 Unpack_RGBA8_SNORM(uint value)
     return clamp(float4(packed) / 127.0, -1.0, 1.0);
 }
 
+float2 Unpack_RG16_SNORM(uint value)
+{
+	int2 signedV;
+	signedV.x = (int)(value << 16) >> 16;
+	signedV.y = (int)value >> 16;
+	return max(float2(signedV) / 32767.0f, -1.0f);
+}
+
+float4 Unpack_RGBA16_SNORM(uint2 value)
+{
+	return float4(
+		Unpack_RG16_SNORM(value.x), 
+		Unpack_RG16_SNORM(value.y)
+	);
+}
+
 uint Pack_R11G11B10_FLOAT(float3 rgb)
 {
 	uint r = (f32tof16(rgb.x) << 17) & 0xFFE00000;
@@ -83,4 +102,16 @@ float3 Unpack_R11G11B10_FLOAT(uint rgb)
 	float g = f16tof32((rgb >> 6) & 0x7FF0);
 	float b = f16tof32((rgb << 5) & 0x7FE0);
 	return float3(r, g, b);
+}
+
+float4 Unpack_RGB10A2_SNORM(uint value)
+{
+	const float scaleXYZ = 1.0f / 511.0f;
+	int sValue = int(value);
+	return float4(
+		((sValue << 22) >> 22) * scaleXYZ,
+		((sValue << 12) >> 22) * scaleXYZ,
+		((sValue << 2) >> 22) * scaleXYZ,
+		((sValue << 0) >> 30) * 1.0f
+	);
 }

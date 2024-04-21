@@ -1,13 +1,24 @@
 #pragma once
 
+class CommandQueue;
 class GraphicsDevice;
 class PipelineState;
 class StateObject;
 class Texture;
+struct TextureDesc;
 class Buffer;
+struct BufferDesc;
 class RootSignature;
+class CommandSignature;
+class CommandContext;
+class ShaderBindingTable;
+class ResourceView;
+class ShaderResourceView;
+class UnorderedAccessView;
+class PipelineStateInitializer;
+class StateObjectInitializer;
 
-enum class ResourceFormat
+enum class ResourceFormat : uint8
 {
 	Unknown,
 
@@ -32,8 +43,6 @@ enum class ResourceFormat
 	RGBA8_UNORM,
 	RGBA8_SNORM,
 	BGRA8_UNORM,
-	RGBA8_UNORM_SRGB,
-	BGRA8_UNORM_SRGB,
 	RGB10A2_UNORM,
 	R11G11B10_FLOAT,
 	RG16_UINT,
@@ -59,19 +68,9 @@ enum class ResourceFormat
 	RGBA32_SINT,
 	RGBA32_FLOAT,
 
-	D16_UNORM,
-	D24S8,
-	X24G8_UINT,
-	D32_FLOAT,
-	D32S8,
-	X32G8_UINT,
-
 	BC1_UNORM,
-	BC1_UNORM_SRGB,
 	BC2_UNORM,
-	BC2_UNORM_SRGB,
 	BC3_UNORM,
-	BC3_UNORM_SRGB,
 	BC4_UNORM,
 	BC4_SNORM,
 	BC5_UNORM,
@@ -79,12 +78,16 @@ enum class ResourceFormat
 	BC6H_UFLOAT,
 	BC6H_SFLOAT,
 	BC7_UNORM,
-	BC7_UNORM_SRGB,
+
+	D16_UNORM,
+	D32_FLOAT,
+	D24S8,
+	D32S8,
 
 	Num,
 };
 
-enum class FormatType
+enum class FormatType : uint8
 {
 	Integer,
 	Normalized,
@@ -94,70 +97,59 @@ enum class FormatType
 
 struct FormatInfo
 {
-	ResourceFormat Format;
-	const char* pName;
-	uint8 BytesPerBlock;
-	uint8 BlockSize;
-	FormatType Type;
-	uint32 NumComponents;
-	bool IsDepth : 1;
-	bool IsStencil : 1;
-	bool IsSigned : 1;
-	bool IsSRGB : 1;
-	bool IsBC : 1;
+	const char*		pName;
+	ResourceFormat	Format;
+	FormatType		Type;
+	uint8			BytesPerBlock	: 8;
+	uint8			BlockSize		: 4;
+	uint8			NumComponents	: 3;
+	uint8			IsDepth			: 1;
+	uint8			IsStencil		: 1;
+	uint8			IsSigned		: 1;
+	uint8			IsBC			: 1;
 };
 
-const FormatInfo& GetFormatInfo(ResourceFormat format);
-const uint32 GetFormatByteSize(ResourceFormat format, uint32 width, uint32 height = 1, uint32 depth = 1);
-ResourceFormat SRVFormatFromDepth(ResourceFormat format);
-ResourceFormat DSVFormat(ResourceFormat format);
+namespace RHI
+{
+	const FormatInfo& GetFormatInfo(ResourceFormat format);
 
-template<bool ThreadSafe>
+	uint64 GetRowPitch(ResourceFormat format, uint32 width, uint32 mipIndex = 0);
+	uint64 GetSlicePitch(ResourceFormat format, uint32 width, uint32 height, uint32 mipIndex = 0);
+	uint64 GetTextureMipByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth, uint32 mipIndex);
+	uint64 GetTextureByteSize(ResourceFormat format, uint32 width, uint32 height, uint32 depth = 1, uint32 numMips = 1);
+}
+
 struct FreeList
 {
 public:
-	FreeList(uint32 chunkSize, bool canResize = true)
-		: m_NumAllocations(0), m_ChunkSize(chunkSize), m_CanResize(canResize)
+	FreeList(uint32 size)
 	{
-		m_FreeList.resize(chunkSize);
+		m_FreeList.resize(size);
 		std::iota(m_FreeList.begin(), m_FreeList.end(), 0);
+	}
+
+	~FreeList()
+	{
+		check(m_NumAllocations == 0, "Free list not fully released");
 	}
 
 	uint32 Allocate()
 	{
-		std::scoped_lock lock(m_Mutex);
-		if (m_NumAllocations + 1 > m_FreeList.size())
-		{
-			check(m_CanResize);
-			uint32 size = (uint32)m_FreeList.size();
-			m_FreeList.resize(size + m_ChunkSize);
-			std::iota(m_FreeList.begin() + size, m_FreeList.end(), size);
-		}
-		return m_FreeList[m_NumAllocations++];
+		uint32 slot = m_NumAllocations++;
+		check(slot < m_FreeList.size());
+		return m_FreeList[slot];
 	}
 
 	void Free(uint32 index)
 	{
-		std::scoped_lock lock(m_Mutex);
-		check(m_NumAllocations > 0);
-		--m_NumAllocations;
-		m_FreeList[m_NumAllocations] = index;
+		uint32 freed_index = m_NumAllocations--;
+		check(freed_index > 0);
+		m_FreeList[freed_index - 1] = index;
 	}
 
-	uint32 GetNumAllocations() const { return m_NumAllocations; }
 	bool CanAllocate() const { return m_NumAllocations < m_FreeList.size(); }
 
 private:
-	struct DummyMutex
-	{
-		void lock() {}
-		void unlock() {}
-	};
-	using TMutex = std::conditional_t<ThreadSafe, std::mutex, DummyMutex>;
-
 	std::vector<uint32> m_FreeList;
-	uint32 m_NumAllocations;
-	uint32 m_ChunkSize;
-	TMutex m_Mutex;
-	bool m_CanResize;
+	uint32 m_NumAllocations = 0;
 };

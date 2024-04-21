@@ -14,36 +14,23 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
 	{
-		m_pCommonRS = new RootSignature(pDevice);
-		m_pCommonRS->AddRootConstants(0, 4);
-		m_pCommonRS->AddConstantBufferView(100);
-		m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1);
-		m_pCommonRS->AddDescriptorTableSimple(0, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 4);
-		m_pCommonRS->Finalize("Global");
-
 		StateObjectInitializer stateDesc;
 		stateDesc.AddLibrary("RayTracing/RTAOTraceRays.hlsl");
 		stateDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS" });
 		stateDesc.Name = "RT AO";
 		stateDesc.MaxPayloadSize = sizeof(float);
-		stateDesc.pGlobalRootSignature = m_pCommonRS;
+		stateDesc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 		stateDesc.RayGenShader = "RayGen";
 		stateDesc.AddMissShader("OcclusionMS");
 		m_pTraceRaysSO = pDevice->CreateStateObject(stateDesc);
 
-		m_pDenoisePSO = pDevice->CreateComputePipeline(m_pCommonRS, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
-		m_pBilateralBlurPSO = pDevice->CreateComputePipeline(m_pCommonRS, "SSAOBlur.hlsl", "CSMain");
+		m_pDenoisePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
+		m_pBilateralBlurPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/SSAOBlur.hlsl", "CSMain");
 	}
 }
 
-void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
+RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
 {
-	TextureDesc aoDesc = sceneTextures.pAmbientOcclusion->GetDesc();
-
-	RGTexture* pRayTraceTarget = graph.Create("AO Target 0", aoDesc);
-	RGTexture* pDenoiseTarget = graph.Create("AO Target 1", aoDesc);
-	RGTexture* pAOHistory = RGUtils::CreatePersistent(graph, "AO History", aoDesc, &m_pHistory, true);
-
 	static float g_AoPower = 1.0f;
 	static float g_AoRadius = 2.0f;
 	static int32 g_AoSamples = 1;
@@ -61,14 +48,16 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 
 	RG_GRAPH_SCOPE("RTAO", graph);
 
+	TextureDesc aoDesc = TextureDesc::Create2D(sceneTextures.pDepth->GetDesc().Width, sceneTextures.pDepth->GetDesc().Height, ResourceFormat::R8_UNORM);
+	RGTexture* pRayTraceTarget = graph.Create("Raytrace Target", aoDesc);
+
 	graph.AddPass("Trace Rays", RGPassFlag::Compute)
 		.Read(sceneTextures.pDepth)
 		.Write(pRayTraceTarget)
 		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pRayTraceTarget->Get();
-
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTraceRaysSO);
 
 				struct
@@ -86,8 +75,8 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 				bindingTable.BindRayGenShader("RayGen");
 				bindingTable.BindMissShader("OcclusionMS", {});
 
-				context.SetRootConstants(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, parameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -96,18 +85,20 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 				context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 			});
 
+	RGTexture* pDenoiseTarget = graph.Create("Denoise Target", aoDesc);
+	RGTexture* pAOHistory = graph.TryImport(m_pHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
+
 	graph.AddPass("Denoise", RGPassFlag::Compute)
 		.Read({ pRayTraceTarget, sceneTextures.pVelocity, sceneTextures.pDepth, pAOHistory })
 		.Write(pDenoiseTarget)
 		.Bind([=](CommandContext& context)
 			{
 				Texture* pTarget = pDenoiseTarget->Get();
-
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pDenoisePSO);
 
-				//context.SetRootCBV(0, parameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				//context.BindRootCBV(0, parameters);
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -118,16 +109,17 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 			});
 
-	RGUtils::AddCopyPass(graph, pDenoiseTarget, pAOHistory);
+	graph.Export(pDenoiseTarget, &m_pHistory, TextureFlag::ShaderResource);
+
+	RGTexture* pBlurTarget1 = graph.Create("Bilateral Blur Target", aoDesc);
 
 	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
 		.Read({ pDenoiseTarget, sceneTextures.pDepth })
-		.Write(pRayTraceTarget)
+		.Write(pBlurTarget1)
 		.Bind([=](CommandContext& context)
 			{
-				Texture* pTarget = pRayTraceTarget->Get();
-
-				context.SetComputeRootSignature(m_pCommonRS);
+				Texture* pTarget = pBlurTarget1->Get();
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBilateralBlurPSO);
 
 				struct
@@ -139,25 +131,26 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 				shaderParameters.Horizontal = 1;
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
-				context.SetRootConstants(0, shaderParameters);
-				context.SetRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+				context.BindRootCBV(0, shaderParameters);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
-				 pDenoiseTarget->Get()->GetSRV()
+					pDenoiseTarget->Get()->GetSRV()
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 256, pTarget->GetHeight(), 1));
 			});
 
-	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
+	RGTexture* pFinalAOTarget = graph.Create("Ambient Occlusion", aoDesc);
+
+	graph.AddPass("Blur AO - Vertical", RGPassFlag::Compute)
 		.Read({ pRayTraceTarget, sceneTextures.pDepth })
-		.Write(sceneTextures.pAmbientOcclusion)
+		.Write(pFinalAOTarget)
 		.Bind([=](CommandContext& context)
 			{
-				Texture* pTarget = sceneTextures.pAmbientOcclusion->Get();
+				Texture* pTarget = pFinalAOTarget->Get();
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBilateralBlurPSO);
 
 				struct
@@ -169,7 +162,7 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 				shaderParameters.Horizontal = 0;
 
-				context.SetRootConstants(0, shaderParameters);
+				context.BindRootCBV(0, shaderParameters);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					sceneTextures.pDepth->Get()->GetSRV(),
@@ -178,4 +171,5 @@ void RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneT
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 1, pTarget->GetHeight(), 256));
 			});
+	return pFinalAOTarget;
 }

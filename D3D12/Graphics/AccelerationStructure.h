@@ -1,29 +1,33 @@
 #pragma once
+
+#include "Graphics/RHI/RHI.h"
 #include "RHI/Fence.h"
-class Buffer;
-class CommandContext;
-class ShaderResourceView;
+
 struct SceneView;
 struct SubMesh;
 
 class AccelerationStructure
 {
 public:
+	void Init(GraphicsDevice* pDevice);
 	void Build(CommandContext& context, const SceneView& view);
 	ShaderResourceView* GetSRV() const;
 
 private:
 	void ProcessCompaction(CommandContext& context);
 
-	RefCountPtr<Buffer> m_pTLAS;
-	RefCountPtr<Buffer> m_pScratch;
-	RefCountPtr<Buffer> m_pBLASInstancesTargetBuffer;
-	RefCountPtr<Buffer> m_pBLASInstancesSourceBuffer;
+	Ref<RootSignature> m_pCommonRS;
+	Ref<PipelineState> m_pUpdateTLASPSO;
+
+	Ref<Buffer> m_pTLAS;
+	Ref<Buffer> m_pScratch;
+	Ref<Buffer> m_pBLASInstancesTargetBuffer;
+	Ref<Buffer> m_pBLASInstancesSourceBuffer;
 
 	// Compaction
-	RefCountPtr<Buffer> m_pPostBuildInfoBuffer;
-	RefCountPtr<Buffer> m_pPostBuildInfoReadbackBuffer;
+	Ref<Buffer> m_pPostBuildInfoBuffer;
+	Ref<Buffer> m_pPostBuildInfoReadbackBuffer;
 	SyncPoint m_PostBuildInfoFence;
-	std::vector<RefCountPtr<Buffer>*> m_QueuedRequests;
-	std::vector<RefCountPtr<Buffer>*> m_ActiveRequests;
+	std::vector<Ref<Buffer>*> m_QueuedRequests;
+	std::vector<Ref<Buffer>*> m_ActiveRequests;
 };

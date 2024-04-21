@@ -6,7 +6,7 @@ namespace ShaderGraph
 {
 	int gExpressionID = 0;
 
-	std::map<const char*, ExpressionFactory> gFactories ={};
+	std::unordered_map<const char*, ExpressionFactory> gFactories ={};
 
 	int ExpressionInput::Compile(Compiler& compiler) const
 	{

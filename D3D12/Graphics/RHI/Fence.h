@@ -1,9 +1,7 @@
 #pragma once
 #include "GraphicsResource.h"
 
-class CommandQueue;
-
-class Fence : public GraphicsObject
+class Fence : public DeviceObject
 {
 public:
 	Fence(GraphicsDevice* pParent, const char* pName, uint64 fenceValue = 0);
@@ -24,7 +22,7 @@ public:
 	inline ID3D12Fence* GetFence() const { return m_pFence.Get(); }
 
 private:
-	RefCountPtr<ID3D12Fence> m_pFence;
+	Ref<ID3D12Fence> m_pFence;
 	std::mutex m_FenceWaitCS;
 	HANDLE m_CompleteEvent;
 	uint64 m_CurrentValue;

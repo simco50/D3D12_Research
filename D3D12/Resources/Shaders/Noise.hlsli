@@ -15,12 +15,47 @@ float3 hash33(float3 p)
 	return -1. + 2. * float3(q) * UIF;
 }
 
+float2 hash33(float2 p)
+{
+	uint2 q = uint2(p) * UI2;
+	q = (q.x ^ q.y)*UI2;
+	return -1. + 2. * float2(q) * UIF;
+}
+
+// From https://iquilezles.org/articles/gradientnoise/ converted to HLSL
+
+// returns 2D value noise (in .x)  and its derivatives (in .yz)
+float3 GradientNoise(in float2 p)
+{
+    float2 i = floor(p);
+    float2 f = frac(p);
+
+    float2 u = f * f * f * (f * (f * 6.0f - 15.0f) + 10.0f);
+    float2 du = 30.0f* f * f * (f * (f - 2.0f) + 1.0f);
+
+    float2 ga = hash33(i + float2(0.0f, 0.0f));
+    float2 gb = hash33(i + float2(1.0f, 0.0f));
+    float2 gc = hash33(i + float2(0.0f, 1.0f));
+    float2 gd = hash33(i + float2(1.0f, 1.0f));
+
+    float va = dot(ga, f - float2(0.0f, 0.0f));
+    float vb = dot(gb, f - float2(1.0f, 0.0f));
+    float vc = dot(gc, f - float2(0.0f, 1.0f));
+    float vd = dot(gd, f - float2(1.0f, 1.0f));
+
+    return float3(
+		va + u.x * (vb - va) + u.y * (vc - va) + u.x * u.y * (va - vb - vc + vd),	// value
+        ga + u.x * (gb - ga) + u.y * (gc - ga) + u.x * u.y * (ga - gb - gc + gd) +  // derivatives
+    	du * (u.yx * (va - vb - vc + vd) + float2(vb, vc) - va)
+	);
+}
+
 float3 WrapNoiseValue(float3 value, float frequency)
 {
     return frac(value / frequency) * frequency;
 }
 
-// From https://iquilezles.org/articles/gradientnoise/
+// 3D Wrapped version
 float GradientNoise(float3 x, float freq)
 {
     // grid
@@ -83,4 +118,18 @@ float WorleyNoise(float3 uvw, uint pointsPerRow, uint seed)
 		}
 	}
 	return 1.0f - sqrt(minDistSq);
+}
+
+//From "NEXT GENERATION POST PROCESSING IN CALL OF DUTY: ADVANCED WARFARE"
+//http://advances.realtimerendering.com/s2014/index.html
+float InterleavedGradientNoise(float2 uv)
+{
+	const float3 magic = float3(0.06711056f, 0.00583715f, 52.9829189f);
+	return frac(magic.z * frac(dot(uv, magic.xy)));
+}
+float InterleavedGradientNoise(float2 uv, float offset)
+{
+	uv += offset * (float2(47, 17) * 0.695f);
+	const float3 magic = float3( 0.06711056f, 0.00583715f, 52.9829189f );
+	return frac(magic.z * frac(dot(uv, magic.xy)));
 }

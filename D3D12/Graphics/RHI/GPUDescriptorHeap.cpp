@@ -5,12 +5,12 @@
 #include "CommandContext.h"
 #include "CommandQueue.h"
 
-GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicBlockSize, uint32 numDescriptors)
-	: GraphicsObject(pParent), m_Type(type), m_DynamicBlockSize(dynamicBlockSize), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2), m_PersistentHandles(numDescriptors / 2, false)
+GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicPageSize, uint32 numDescriptors)
+	: DeviceObject(pParent), m_Type(type), m_DynamicPageSize(dynamicPageSize), m_NumDynamicDescriptors(numDescriptors / 2), m_NumPersistentDescriptors(numDescriptors / 2), m_PersistentHandles(numDescriptors / 2)
 {
-	checkf(dynamicBlockSize >= 32, "Block size must be at least 128 (is %d)", dynamicBlockSize);
-	checkf(m_NumDynamicDescriptors % dynamicBlockSize == 0, "Number of descriptors must be a multiple of blockSize (%d)", dynamicBlockSize);
-	checkf(type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, "Online Descriptor Heap must be either of CBV/SRV/UAV or Sampler type.");
+	check(dynamicPageSize >= 32, "Page size must be at least 128 (is %d)", dynamicPageSize);
+	check(m_NumDynamicDescriptors % dynamicPageSize == 0, "Number of descriptors must be a multiple of Page Size (%d)", dynamicPageSize);
+	check(type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, "Online Descriptor Heap must be either of CBV/SRV/UAV or Sampler type.");
 
 	D3D12_DESCRIPTOR_HEAP_DESC desc{};
 	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -23,25 +23,24 @@ GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_H
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 	m_StartHandle = DescriptorHandle(m_pHeap->GetCPUDescriptorHandleForHeapStart(), 0, m_pHeap->GetGPUDescriptorHandleForHeapStart());
 
-	uint32 numBlocks = m_NumDynamicDescriptors / dynamicBlockSize;
+	uint32 numPages = m_NumDynamicDescriptors / dynamicPageSize;
 
 	DescriptorHandle currentOffset = m_StartHandle.Offset(m_NumPersistentDescriptors, m_DescriptorSize);
-	for (uint32 i = 0; i < numBlocks; ++i)
+	for (uint32 i = 0; i < numPages; ++i)
 	{
-		m_DynamicBlocks.emplace_back(std::make_unique<DescriptorHeapBlock>(currentOffset, dynamicBlockSize));
-		m_FreeDynamicBlocks.push_back(m_DynamicBlocks.back().get());
-		currentOffset.OffsetInline(dynamicBlockSize, m_DescriptorSize);
+		m_DynamicPages.emplace_back(std::make_unique<DescriptorHeapPage>(currentOffset, dynamicPageSize));
+		m_FreeDynamicPages.push_back(m_DynamicPages.back().get());
+		currentOffset.OffsetInline(dynamicPageSize, m_DescriptorSize);
 	}
 }
 
 GPUDescriptorHeap::~GPUDescriptorHeap()
 {
 	CleanupPersistent();
-	checkf(m_PersistentHandles.GetNumAllocations() == 0, "Not all persistent GPU descriptors are freed.");
 
 	CleanupDynamic();
-	checkf(m_ReleasedDynamicBlocks.size() == 0, "Not all dynamic GPU descriptors are freed.");
-	checkf(m_FreeDynamicBlocks.size() == m_DynamicBlocks.size(), "Not all dynamic GPU descriptor blocks are freed.");
+	check(m_ReleasedDynamicPages.size() == 0, "Not all dynamic GPU descriptors are freed.");
+	check(m_FreeDynamicPages.size() == m_DynamicPages.size(), "Not all dynamic GPU descriptor pages are freed.");
 }
 
 DescriptorHandle GPUDescriptorHeap::AllocatePersistent()
@@ -52,7 +51,7 @@ DescriptorHandle GPUDescriptorHeap::AllocatePersistent()
 		CleanupPersistent();
 	}
 
-	checkf(m_PersistentHandles.CanAllocate(), "Out of persistent descriptor heap space (%d), increase heap size", m_NumPersistentDescriptors);
+	check(m_PersistentHandles.CanAllocate(), "Out of persistent descriptor heap space (%d), increase heap size", m_NumPersistentDescriptors);
 	return m_StartHandle.Offset(m_PersistentHandles.Allocate(), m_DescriptorSize);
 }
 
@@ -64,39 +63,38 @@ void GPUDescriptorHeap::FreePersistent(uint32& heapIndex)
 	heapIndex = DescriptorHandle::InvalidHeapIndex;
 }
 
-DescriptorHeapBlock* GPUDescriptorHeap::AllocateDynamicBlock()
+DescriptorHeapPage* GPUDescriptorHeap::AllocateDynamicPage()
 {
-	std::lock_guard lock(m_DynamicBlockAllocateMutex);
-	if (m_FreeDynamicBlocks.empty())
+	std::lock_guard lock(m_DynamicPageAllocateMutex);
+	if (m_FreeDynamicPages.empty())
 	{
 		CleanupDynamic();
 	}
 
-	checkf(!m_FreeDynamicBlocks.empty(), "Ran out of dynamic descriptor heap space (%d). Increase heap size.", m_NumDynamicDescriptors);
-	DescriptorHeapBlock* pBlock = m_FreeDynamicBlocks.back();
-	m_FreeDynamicBlocks.pop_back();
-	return pBlock;
+	check(!m_FreeDynamicPages.empty(), "Ran out of dynamic descriptor heap space (%d). Increase heap size.", m_NumDynamicDescriptors);
+	DescriptorHeapPage* pPage = m_FreeDynamicPages.back();
+	m_FreeDynamicPages.pop_back();
+	return pPage;
 }
 
-void GPUDescriptorHeap::FreeDynamicBlock(const SyncPoint& syncPoint, DescriptorHeapBlock* pBlock)
+void GPUDescriptorHeap::FreeDynamicPage(const SyncPoint& syncPoint, DescriptorHeapPage* pPage)
 {
-	std::lock_guard lock(m_DynamicBlockAllocateMutex);
-	pBlock->SyncPoint = syncPoint;
-	pBlock->CurrentOffset = 0;
-	m_ReleasedDynamicBlocks.push(pBlock);
+	std::lock_guard lock(m_DynamicPageAllocateMutex);
+	pPage->SyncPoint = syncPoint;
+	pPage->CurrentOffset = 0;
+	m_ReleasedDynamicPages.push(pPage);
 }
 
 void GPUDescriptorHeap::CleanupDynamic()
 {
-	while (!m_ReleasedDynamicBlocks.empty())
+	while (!m_ReleasedDynamicPages.empty())
 	{
-		DescriptorHeapBlock* pBlock = m_ReleasedDynamicBlocks.front();
-		if (!pBlock->SyncPoint.IsComplete())
-		{
+		DescriptorHeapPage* pPage = m_ReleasedDynamicPages.front();
+		if (!pPage->SyncPoint.IsComplete())
 			break;
-		}
-		m_ReleasedDynamicBlocks.pop();
-		m_FreeDynamicBlocks.push_back(pBlock);
+
+		m_ReleasedDynamicPages.pop();
+		m_FreeDynamicPages.push_back(pPage);
 	}
 }
 
@@ -105,53 +103,44 @@ void GPUDescriptorHeap::CleanupPersistent()
 	while (m_PersistentDeletionQueue.size())
 	{
 		const auto& f = m_PersistentDeletionQueue.front();
-		if (GetParent()->GetFrameFence()->IsComplete(f.second))
-		{
-			m_PersistentHandles.Free(f.first);
-			m_PersistentDeletionQueue.pop();
-		}
-		else
-		{
+		if (!GetParent()->GetFrameFence()->IsComplete(f.second))
 			break;
-		}
+
+		m_PersistentHandles.Free(f.first);
+		m_PersistentDeletionQueue.pop();
 	}
 }
 
 DynamicGPUDescriptorAllocator::DynamicGPUDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap)
-	: GraphicsObject(pGlobalHeap->GetParent()), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
+	: DeviceObject(pGlobalHeap->GetParent()), m_Type(pGlobalHeap->GetType()), m_pHeapAllocator(pGlobalHeap)
 {
 }
 
 DynamicGPUDescriptorAllocator::~DynamicGPUDescriptorAllocator()
 {
-	if (m_pCurrentHeapBlock)
+	if (m_pCurrentHeapPage)
 	{
-		m_ReleasedBlocks.push_back(m_pCurrentHeapBlock);
+		m_ReleasedPages.push_back(m_pCurrentHeapPage);
 	}
 	Fence* pFrameFence = GetParent()->GetFrameFence();
 	SyncPoint syncPoint(pFrameFence, pFrameFence->GetLastSignaledValue());
 	ReleaseUsedHeaps(syncPoint);
 }
 
-void DynamicGPUDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, const Span< D3D12_CPU_DESCRIPTOR_HANDLE>& handles)
+void DynamicGPUDescriptorAllocator::SetDescriptors(uint32 rootIndex, uint32 offset, Span<const ResourceView*> handles)
 {
-	RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-	if (!m_StaleRootParameters.GetBit(rootIndex))
-	{
-		uint32 tableSize = entry.TableSize;
-		checkf(tableSize != ~0u, "Descriptor table at RootIndex '%d' is unbounded and should not use the descriptor allocator", rootIndex);
-		checkf(offset + handles.GetSize() <= tableSize, "Attempted to set a descriptor (Offset: %d, Range: %d) out of the descriptor table bounds (Size: %d)", offset, handles.GetSize(), rootIndex);
-		
-		entry.Descriptor = Allocate(tableSize);
-		m_StaleRootParameters.SetBit(rootIndex);
-	}
+	m_StaleRootParameters.SetBit(rootIndex);
 
-	DescriptorHandle targetHandle = entry.Descriptor.Offset(offset, m_pHeapAllocator->GetDescriptorSize());
-	for(uint32 i = 0; i < handles.GetSize(); ++i)
+	StagedDescriptorTable& table = m_StagedDescriptors[rootIndex];
+	check(table.Capacity != 0, "Root parameter at index '%d' is not a descriptor table", rootIndex);
+	check(offset + handles.GetSize() <= table.Capacity, "Descriptor table at root index '%d' is too small (is %d but requires %d)", rootIndex, table.Capacity, offset + handles.GetSize());
+
+	table.Descriptors.resize(Math::Max((uint32)table.Descriptors.size(), offset + handles.GetSize()));
+	table.StartIndex = Math::Min(offset, table.StartIndex);
+	for (int i = 0; i < (int)handles.GetSize(); ++i)
 	{
-		checkf(handles[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr, "Invalid Descriptor provided (RootIndex: %d, Offset: %d)", rootIndex, offset + i);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, targetHandle.CpuHandle, handles[i], m_Type);
-		targetHandle.OffsetInline(1, m_pHeapAllocator->GetDescriptorSize());
+		check(handles[i]);
+		table.Descriptors[offset + i] = handles[i]->GetDescriptor();
 	}
 }
 
@@ -159,61 +148,61 @@ void DynamicGPUDescriptorAllocator::BindStagedDescriptors(CommandContext& contex
 {
 	for (uint32 rootIndex : m_StaleRootParameters)
 	{
-		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-		switch (descriptorTableType)
+		StagedDescriptorTable& table = m_StagedDescriptors[rootIndex];
+		DescriptorHandle handle = Allocate((uint32)table.Descriptors.size());
+		for (int i = table.StartIndex; i < table.Descriptors.size(); ++i)
 		{
-		case CommandListContext::Graphics:
-			context.GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-			break;
-		case CommandListContext::Compute:
-			context.GetCommandList()->SetComputeRootDescriptorTable(rootIndex, entry.Descriptor.GpuHandle);
-			break;
-		default:
-			noEntry();
-			break;
+			if (table.Descriptors[i].ptr != DescriptorHandle::InvalidCPUHandle.ptr && table.Descriptors[i].ptr != 0)
+			{
+				DescriptorHandle target = handle.Offset(i, m_pHeapAllocator->GetDescriptorSize());
+				GetParent()->GetDevice()->CopyDescriptorsSimple(1, target.CpuHandle, table.Descriptors[i], m_Type);
+			}
 		}
-	}
+		table.Descriptors.clear();
+		table.StartIndex = 0xFFFFFFFF;
 
+		if (descriptorTableType == CommandListContext::Graphics)
+			context.GetCommandList()->SetGraphicsRootDescriptorTable(rootIndex, handle.GpuHandle);
+		else if (descriptorTableType == CommandListContext::Compute)
+			context.GetCommandList()->SetComputeRootDescriptorTable(rootIndex, handle.GpuHandle);
+		else
+			noEntry();
+	}
 	m_StaleRootParameters.ClearAll();
 }
 
 void DynamicGPUDescriptorAllocator::ParseRootSignature(const RootSignature* pRootSignature)
 {
-	m_RootDescriptorMask = m_Type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ?
-		pRootSignature->GetSamplerTableMask() : pRootSignature->GetDescriptorTableMask();
-
-	m_StaleRootParameters.ClearAll();
-
-	const std::array<uint32, MAX_NUM_ROOT_PARAMETERS>& descriptorTableSizes = pRootSignature->GetDescriptorTableSizes();
-	for (uint32 rootIndex : m_RootDescriptorMask)
+	for (uint32 i = 0; i < (uint32)m_StagedDescriptors.size(); ++i)
 	{
-		RootDescriptorEntry& entry = m_RootDescriptorTable[rootIndex];
-		entry.TableSize = descriptorTableSizes[rootIndex];
-		entry.Descriptor.Reset();
+		StagedDescriptorTable& table = m_StagedDescriptors[i];
+		table.StartIndex = 0xFFFFFFF;
+
+		if (i < pRootSignature->GetNumRootParameters())
+			table.Capacity = pRootSignature->GetDescriptorTableSize(i);
+		else
+			table.Capacity = 0;
 	}
+	m_StaleRootParameters.ClearAll();
 }
 
 void DynamicGPUDescriptorAllocator::ReleaseUsedHeaps(const SyncPoint& syncPoint)
 {
-	for (DescriptorHeapBlock* pBlock : m_ReleasedBlocks)
-	{
-		m_pHeapAllocator->FreeDynamicBlock(syncPoint, pBlock);
-	}
-	m_ReleasedBlocks.clear();
+	for (DescriptorHeapPage* pPage : m_ReleasedPages)
+		m_pHeapAllocator->FreeDynamicPage(syncPoint, pPage);
+	m_ReleasedPages.clear();
 }
 
 DescriptorHandle DynamicGPUDescriptorAllocator::Allocate(uint32 descriptorCount)
 {
-	if (!m_pCurrentHeapBlock || m_pCurrentHeapBlock->Size - m_pCurrentHeapBlock->CurrentOffset < descriptorCount)
+	if (!m_pCurrentHeapPage || m_pCurrentHeapPage->Size - m_pCurrentHeapPage->CurrentOffset < descriptorCount)
 	{
-		if (m_pCurrentHeapBlock)
-		{
-			m_ReleasedBlocks.push_back(m_pCurrentHeapBlock);
-		}
-		m_pCurrentHeapBlock = m_pHeapAllocator->AllocateDynamicBlock();
+		if (m_pCurrentHeapPage)
+			m_ReleasedPages.push_back(m_pCurrentHeapPage);
+		m_pCurrentHeapPage = m_pHeapAllocator->AllocateDynamicPage();
 	}
 
-	DescriptorHandle handle = m_pCurrentHeapBlock->StartHandle.Offset(m_pCurrentHeapBlock->CurrentOffset, m_pHeapAllocator->GetDescriptorSize());
-	m_pCurrentHeapBlock->CurrentOffset += descriptorCount;
+	DescriptorHandle handle = m_pCurrentHeapPage->StartHandle.Offset(m_pCurrentHeapPage->CurrentOffset, m_pHeapAllocator->GetDescriptorSize());
+	m_pCurrentHeapPage->CurrentOffset += descriptorCount;
 	return handle;
 }

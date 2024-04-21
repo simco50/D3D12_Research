@@ -2,18 +2,23 @@
 #include "ConsoleVariables.h"
 #include "Core/Input.h"
 #include "Paths.h"
-#include "imgui_internal.h"
+#include "Stream.h"
+
+#include <External/Imgui/imgui_internal.h>
 
 static std::unordered_map<StringHash, IConsoleObject*> gCvarMap;
 static std::vector<IConsoleObject*> gConsoleObjects;
 
 void ConsoleManager::Initialize()
 {
-	std::ifstream fs(Sprintf("%sConsoleVariables.ini", Paths::SavedDir().c_str()));
-	std::string line;
-	while (getline(fs, line))
+	FileStream file;
+	if (file.Open(Sprintf("%sConsoleVariables.ini", Paths::SavedDir()).c_str(), FileMode::Read))
 	{
-		Execute(line.c_str());
+		char line[256];
+		while (file.ReadLine(line, ARRAYSIZE(line)))
+		{
+			Execute(line);
+		}
 	}
 }
 
@@ -89,10 +94,10 @@ void ImGuiConsole::Update()
 	{
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
 
-		ImVec2 viewSize = ImGui::GetIO().DisplaySize;
+		ImGuiViewport* pViewport = ImGui::GetMainViewport();
 		ImVec2 widgetSize = ImVec2(600, 300);
 
-		ImGui::SetNextWindowPos(ImVec2(viewSize.x / 2, viewSize.y), 0, ImVec2(0.5f, 1.0f));
+		ImGui::SetNextWindowPos(ImVec2(pViewport->GetCenter().x, pViewport->WorkPos.y + pViewport->WorkSize.y), 0, ImVec2(0.5f, 1.0f));
 		ImGui::SetNextWindowSize(widgetSize);
 
 		uint32 windowFlags =
@@ -146,7 +151,7 @@ void ImGuiConsole::Update()
 					return pConsole->InputCallback(pData);
 				};
 
-				ImGui::PushItemWidth(widgetSize.x);
+				ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x);
 				if (ImGui::InputText("##ConsoleInput", m_Input.data(), (int)m_Input.size(), inputFlags, inputCallback, this))
 				{
 					if (m_Input[0] != '\0')

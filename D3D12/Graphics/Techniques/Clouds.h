@@ -1,9 +1,7 @@
 #pragma once
-#include "../RenderGraph/RenderGraphDefinitions.h"
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
 
-class Texture;
-class GraphicsDevice;
-class RGGraph;
 struct SceneTextures;
 struct SceneView;
 
@@ -14,7 +12,14 @@ public:
 	RGTexture* Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView);
 
 private:
-	RefCountPtr<Texture> m_pShapeNoise;
-	RefCountPtr<Texture> m_pDetailNoise;
-	RefCountPtr<Texture> m_pCloudHeightDensityLUT;
+	Ref<PipelineState> m_pCloudShapeNoisePSO;
+	Ref<PipelineState> m_pCloudDetailNoisePSO;
+	Ref<PipelineState> m_pCloudHeighDensityLUTPSO;
+
+	Ref<RootSignature> m_pCloudsRS;
+	Ref<PipelineState> m_pCloudsPSO;
+
+	Ref<Texture> m_pShapeNoise;
+	Ref<Texture> m_pDetailNoise;
+	Ref<Texture> m_pCloudHeightDensityLUT;
 };

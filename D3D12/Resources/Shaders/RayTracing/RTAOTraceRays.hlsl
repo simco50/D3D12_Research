@@ -3,7 +3,7 @@
 #include "Random.hlsli"
 
 RWTexture2D<float> uOutput : register(u0);
-Texture2D tSceneDepth : register(t0);
+Texture2D<float> tSceneDepth : register(t0);
 
 struct PassData
 {
@@ -31,9 +31,9 @@ void RayGen()
 	uint launchIndex1d = launchIndex.x + launchIndex.y * launchDim.x;
 	float2 uv = (launchIndex + 0.5f) * dimInv;
 
-	float3 world = WorldFromDepth(uv, tSceneDepth.SampleLevel(sLinearClamp, uv, 0).r, cView.ViewProjectionInverse);
-	float3 normal = NormalFromDepth(tSceneDepth, sLinearClamp, uv, dimInv, cView.ProjectionInverse);
-	normal = mul(normal, (float3x3)cView.ViewInverse);
+	float3 world = WorldPositionFromDepth(uv, tSceneDepth.SampleLevel(sPointClamp, uv, 0).r, cView.ViewProjectionInverse);
+	float3 viewNormal = ViewNormalFromDepth(uv, tSceneDepth, NormalReconstructMethod::Taps5);
+	float3 normal = mul(viewNormal, (float3x3)cView.ViewInverse);
 
 	uint seed = SeedThread(launchIndex, launchDim, cView.FrameIndex);
 

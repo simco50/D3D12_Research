@@ -34,12 +34,12 @@ public:
 		m_pValue(&value), m_Count(1)
 	{}
 
-	Span Subspan(uint32 from, uint32 count = 0xFFFFFFFF)
+	Span Subspan(uint32 from, uint32 count = 0xFFFFFFFF) const
 	{
-		uint32 count = count == 0xFFFFFFFF ? m_Count : count;
-		check(from < m_Count);
-		check(from + count < m_Count);
-		return Span(m_pValue + from, count);
+		uint32 num = count == 0xFFFFFFFF ? m_Count - from : count;
+		check(from <= m_Count);
+		check(from + count <= m_Count);
+		return Span(m_pValue + from, num);
 	}
 
 	std::vector<T> Copy() const
@@ -53,12 +53,6 @@ public:
 	}
 
 	const T& operator[](uint32 idx) const
-	{
-		check(idx < m_Count);
-		return m_pValue[idx];
-	}
-
-	T& operator[](uint32 idx)
 	{
 		check(idx < m_Count);
 		return m_pValue[idx];

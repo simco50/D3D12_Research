@@ -1,11 +1,10 @@
 #pragma once
 #include "GraphicsResource.h"
 #include "Shader.h"
+#include "Core/TaskQueue.h"
 
-class RootSignature;
-class StateObject;
 class ShaderManager;
-struct ShaderLibrary;
+struct Shader;
 
 class StateObjectInitializer
 {
@@ -13,11 +12,11 @@ public:
 	friend class StateObject;
 
 	void AddHitGroup(const std::string& name, const std::string& closestHit = "", const std::string& anyHit = "", const std::string& intersection = "", RootSignature* pRootSignature = nullptr);
-	void AddLibrary(const char* pShaderPath, const std::vector<std::string>& exports = {}, const Span<ShaderDefine>& defines = {});
+	void AddLibrary(const char* pShaderPath, Span<const char*> exports = {}, Span<ShaderDefine> defines = {});
 	void AddCollection(StateObject* pOtherObject);
 	void AddMissShader(const std::string& exportName, RootSignature* pRootSignature = nullptr);
 
-	void CreateStateObjectStream(class StateObjectStream& stateObjectStream, GraphicsDevice* pDevice);
+	bool CreateStateObjectStream(class StateObjectStream& stateObjectStream, GraphicsDevice* pDevice);
 	void SetMaxPipelineStackSize(StateObject* pStateObject);
 
 	std::string Name;
@@ -48,35 +47,36 @@ private:
 	{
 		std::string Path;
 		std::vector<ShaderDefine> Defines;
-		std::vector<std::string> Exports;
+		std::vector<const char*> Exports;
 	};
-	std::vector<ShaderLibrary*> m_Shaders;
+	std::vector<Shader*> m_Shaders;
 	std::vector<LibraryExports> m_Libraries;
 	std::vector<HitGroupDefinition> m_HitGroups;
 	std::vector<LibraryShaderExport> m_MissShaders;
 	std::vector<StateObject*> m_Collections;
 };
 
-class StateObject : public GraphicsObject
+class StateObject : public DeviceObject
 {
 public:
-	StateObject(GraphicsDevice* pParent);
+	StateObject(GraphicsDevice* pParent, const StateObjectInitializer& initializer);
 	StateObject(const StateObject& rhs) = delete;
 	StateObject& operator=(const StateObject& rhs) = delete;
 
-	void Create(const StateObjectInitializer& initializer);
 	void ConditionallyReload();
 	const StateObjectInitializer& GetDesc() const { return m_Desc; }
 
-	ID3D12StateObject* GetStateObject() const { return m_pStateObject.Get(); }
-	ID3D12StateObjectProperties* GetStateObjectProperties() const { return m_pStateObjectProperties.Get(); }
+	ID3D12StateObject* GetStateObject() const { return m_pStateObject; }
+	ID3D12StateObjectProperties1* GetStateObjectProperties() const { return m_pStateObjectProperties.Get(); }
+	uint64 GetWorkgraphBufferSize() const;
 
 private:
-	void OnLibraryReloaded(ShaderLibrary* pOldShaderLibrary, ShaderLibrary* pNewShaderLibrary);
+	void CreateInternal();
+	void OnLibraryReloaded(Shader* pLibrary);
 
 	bool m_NeedsReload = false;
-	RefCountPtr<ID3D12StateObject> m_pStateObject;
-	RefCountPtr<ID3D12StateObjectProperties> m_pStateObjectProperties;
+	Ref<ID3D12StateObject> m_pStateObject;
+	Ref<ID3D12StateObjectProperties1> m_pStateObjectProperties;
 	StateObjectInitializer m_Desc;
 	DelegateHandle m_ReloadHandle;
 };

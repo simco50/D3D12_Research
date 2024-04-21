@@ -1,6 +1,12 @@
 #pragma once
 
+#define ENABLE_PIX 1
+
+#if ENABLE_PIX
+#define USE_PIX
 #include "pix3.h"
+#endif
+
 #include "RHI.h"
 #include "Core/Paths.h"
 #include "Core/Utils.h"
@@ -13,9 +19,9 @@ namespace D3D
 	inline std::string ResourceStateToString(D3D12_RESOURCE_STATES state)
 	{
 		if (state == 0)
-		{
 			return "COMMON";
-		}
+		if (state == -1)
+			return "UNKNOWN";
 
 		char outString[1024];
 		outString[0] = '\0';
@@ -79,6 +85,7 @@ namespace D3D
 
 	inline void EnqueuePIXCapture(uint32 numFrames = 1)
 	{
+#ifdef USE_PIX
 		HWND window = GetActiveWindow();
 		if (SUCCEEDED(PIXSetTargetWindow(window)))
 		{
@@ -91,6 +98,7 @@ namespace D3D
 				E_LOG(Info, "Captured %d frames to '%s'", numFrames, filePath.c_str());
 			}
 		}
+#endif
 	}
 
 	inline std::string GetErrorString(HRESULT errorCode, ID3D12Device* pDevice)
@@ -107,7 +115,7 @@ namespace D3D
 		}
 		if (errorCode == DXGI_ERROR_DEVICE_REMOVED && pDevice)
 		{
-			RefCountPtr<ID3D12InfoQueue> pInfo;
+			Ref<ID3D12InfoQueue> pInfo;
 			pDevice->QueryInterface(pInfo.GetAddressOf());
 			if (pInfo)
 			{
@@ -141,12 +149,81 @@ namespace D3D
 		return true;
 	}
 
+	static bool HasWriteResourceState(D3D12_RESOURCE_STATES state)
+	{
+		return EnumHasAnyFlags(state,
+			D3D12_RESOURCE_STATE_STREAM_OUT |
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS |
+			D3D12_RESOURCE_STATE_RENDER_TARGET |
+			D3D12_RESOURCE_STATE_DEPTH_WRITE |
+			D3D12_RESOURCE_STATE_COPY_DEST |
+			D3D12_RESOURCE_STATE_RESOLVE_DEST |
+			D3D12_RESOURCE_STATE_VIDEO_DECODE_WRITE |
+			D3D12_RESOURCE_STATE_VIDEO_PROCESS_WRITE |
+			D3D12_RESOURCE_STATE_VIDEO_ENCODE_WRITE
+		);
+	};
+
+	static bool CanCombineResourceState(D3D12_RESOURCE_STATES stateA, D3D12_RESOURCE_STATES stateB)
+	{
+		return !HasWriteResourceState(stateA) && !HasWriteResourceState(stateB);
+	}
+
+	static bool IsTransitionAllowed(D3D12_COMMAND_LIST_TYPE commandlistType, D3D12_RESOURCE_STATES state)
+	{
+		constexpr int VALID_COMPUTE_QUEUE_RESOURCE_STATES =
+			D3D12_RESOURCE_STATE_COMMON
+			| D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+			| D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+			| D3D12_RESOURCE_STATE_COPY_DEST
+			| D3D12_RESOURCE_STATE_COPY_SOURCE
+			| D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+
+		constexpr int VALID_COPY_QUEUE_RESOURCE_STATES =
+			D3D12_RESOURCE_STATE_COMMON
+			| D3D12_RESOURCE_STATE_COPY_DEST
+			| D3D12_RESOURCE_STATE_COPY_SOURCE;
+
+		if (commandlistType == D3D12_COMMAND_LIST_TYPE_COMPUTE)
+		{
+			return (state & VALID_COMPUTE_QUEUE_RESOURCE_STATES) == state;
+		}
+		else if (commandlistType == D3D12_COMMAND_LIST_TYPE_COPY)
+		{
+			return (state & VALID_COPY_QUEUE_RESOURCE_STATES) == state;
+		}
+		return true;
+	}
+
+	static bool NeedsTransition(D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES& after, bool allowCombine)
+	{
+		if (before == after)
+			return false;
+
+		// When resolving pending resource barriers, combining resource states is not working
+		// This is because the last known resource state of the resource is used to update the resource
+		// And so combining after_state during the result will result in the last known resource state not matching up.
+		if (!allowCombine)
+			return true;
+
+		//Can read from 'write' DSV
+		if (before == D3D12_RESOURCE_STATE_DEPTH_WRITE && after == D3D12_RESOURCE_STATE_DEPTH_READ)
+			return false;
+
+		if (after == D3D12_RESOURCE_STATE_COMMON)
+			return before != D3D12_RESOURCE_STATE_COMMON;
+
+		//Combine already transitioned bits
+		if (D3D::CanCombineResourceState(before, after) && !EnumHasAllFlags(before, after))
+			after |= before;
+
+		return true;
+	}
+
 	inline void SetObjectName(ID3D12Object* pObject, const char* pName)
 	{
-		if (pObject && pName)
-		{
-			VERIFY_HR_EX(pObject->SetPrivateData(WKPDID_D3DDebugObjectName, (uint32)strlen(pName), pName), nullptr);
-		}
+		if (pObject)
+			VERIFY_HR_EX(pObject->SetPrivateData(WKPDID_D3DDebugObjectName, (uint32)strlen(pName) + 1, pName), nullptr);
 	}
 
 	inline std::string GetObjectName(ID3D12Object* pObject)
@@ -162,6 +239,31 @@ namespace D3D
 			}
 		}
 		return out;
+	}
+
+	inline std::string BarrierToString(const D3D12_RESOURCE_BARRIER& barrier)
+	{
+		if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
+		{
+			return Sprintf("Transition | Resource: '%s' (%x) | Before %s | After %s",
+				D3D::GetObjectName(barrier.Transition.pResource),
+				barrier.Transition.pResource,
+				D3D::ResourceStateToString(barrier.Transition.StateBefore),
+				D3D::ResourceStateToString(barrier.Transition.StateAfter));
+		}
+		if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_UAV)
+		{
+			return Sprintf("UAV | Resource: '%s' (%x)",
+				D3D::GetObjectName(barrier.UAV.pResource),
+				barrier.UAV.pResource);
+		}
+		if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_UAV)
+		{
+			return Sprintf("Aliasing | Before: '%s' (%x) | After: '%s' (%x)",
+				D3D::GetObjectName(barrier.Aliasing.pResourceBefore), barrier.Aliasing.pResourceBefore,
+				D3D::GetObjectName(barrier.Aliasing.pResourceAfter), barrier.Aliasing.pResourceAfter);
+		}
+		return "[Invalid]";
 	}
 
 	constexpr static const DXGI_FORMAT gDXGIFormatMap[] =
@@ -188,8 +290,6 @@ namespace D3D
 		DXGI_FORMAT_R8G8B8A8_UNORM,
 		DXGI_FORMAT_R8G8B8A8_SNORM,
 		DXGI_FORMAT_B8G8R8A8_UNORM,
-		DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-		DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
 		DXGI_FORMAT_R10G10B10A2_UNORM,
 		DXGI_FORMAT_R11G11B10_FLOAT,
 		DXGI_FORMAT_R16G16_UINT,
@@ -215,19 +315,9 @@ namespace D3D
 		DXGI_FORMAT_R32G32B32A32_SINT,
 		DXGI_FORMAT_R32G32B32A32_FLOAT,
 
-		DXGI_FORMAT_D16_UNORM,
-		DXGI_FORMAT_D24_UNORM_S8_UINT,
-		DXGI_FORMAT_X24_TYPELESS_G8_UINT,
-		DXGI_FORMAT_D32_FLOAT,
-		DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
-		DXGI_FORMAT_X32_TYPELESS_G8X24_UINT,
-
 		DXGI_FORMAT_BC1_UNORM,
-		DXGI_FORMAT_BC1_UNORM_SRGB,
 		DXGI_FORMAT_BC2_UNORM,
-		DXGI_FORMAT_BC2_UNORM_SRGB,
 		DXGI_FORMAT_BC3_UNORM,
-		DXGI_FORMAT_BC3_UNORM_SRGB,
 		DXGI_FORMAT_BC4_UNORM,
 		DXGI_FORMAT_BC4_SNORM,
 		DXGI_FORMAT_BC5_UNORM,
@@ -235,7 +325,11 @@ namespace D3D
 		DXGI_FORMAT_BC6H_UF16,
 		DXGI_FORMAT_BC6H_SF16,
 		DXGI_FORMAT_BC7_UNORM,
-		DXGI_FORMAT_BC7_UNORM_SRGB,
+
+		DXGI_FORMAT_D16_UNORM,
+		DXGI_FORMAT_D32_FLOAT,
+		DXGI_FORMAT_D24_UNORM_S8_UINT,
+		DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
 	};
 
 	static_assert(ARRAYSIZE(gDXGIFormatMap) == (uint32)ResourceFormat::Num);
@@ -244,4 +338,61 @@ namespace D3D
 	{
 		return gDXGIFormatMap[(uint32)format];
 	}
+
+	static std::string GetResourceDescription(ID3D12Resource* pResource)
+	{
+		if (!pResource)
+			return "nullptr";
+
+		D3D12_RESOURCE_DESC resourceDesc = pResource->GetDesc();
+		Ref<ID3D12Device> pDevice;
+		pResource->GetDevice(IID_PPV_ARGS(pDevice.GetAddressOf()));
+		D3D12_RESOURCE_ALLOCATION_INFO allocationInfo = pDevice->GetResourceAllocationInfo(1, 1, &resourceDesc);
+
+		if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+		{
+			return Sprintf("[Buffer] '%s' | %s | Alignment: %s",
+				D3D::GetObjectName(pResource),
+				Math::PrettyPrintDataSize(allocationInfo.SizeInBytes),
+				Math::PrettyPrintDataSize(allocationInfo.Alignment));
+		}
+		else if(resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D ||
+			resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
+			resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D)
+		{
+			const char* pType = "";
+			switch (resourceDesc.Dimension)
+			{
+			case D3D12_RESOURCE_DIMENSION_TEXTURE1D:	pType = "Texture1D"; break;
+			case D3D12_RESOURCE_DIMENSION_TEXTURE2D:	pType = "Texture2D"; break;
+			case D3D12_RESOURCE_DIMENSION_TEXTURE3D:	pType = "Texture3D"; break;
+			default: noEntry();
+			}
+
+			// Find ResourceFormat from DXGI_FORMAT
+			ResourceFormat format = ResourceFormat::Unknown;
+			for (int i = 0; i < ARRAYSIZE(gDXGIFormatMap); ++i)
+			{
+				if (resourceDesc.Format == gDXGIFormatMap[i])
+				{
+					format = (ResourceFormat)i;
+					break;
+				} 
+			}
+			const FormatInfo& info = RHI::GetFormatInfo(format);
+
+			return Sprintf("[%s] '%s' | %s | %dx%dx%d | %s | Alignment: %s",
+				pType,
+				D3D::GetObjectName(pResource),
+				info.pName,
+				resourceDesc.Width,
+				resourceDesc.Height,
+				resourceDesc.DepthOrArraySize,
+				Math::PrettyPrintDataSize(allocationInfo.SizeInBytes),
+				Math::PrettyPrintDataSize(allocationInfo.Alignment));
+		}
+		return "Unknown";
+	}
+
+	static Utils::ForceFunctionToBeLinked forceLink(GetResourceDescription);
 }

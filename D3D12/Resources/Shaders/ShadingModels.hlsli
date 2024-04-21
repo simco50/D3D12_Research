@@ -39,6 +39,14 @@ struct LightResult
 {
 	float3 Diffuse;
 	float3 Specular;
+
+	LightResult operator+(LightResult rhs)
+	{
+		LightResult result;
+		result.Diffuse = Diffuse + rhs.Diffuse;
+		result.Specular = Specular + rhs.Specular;
+		return result;
+	}
 };
 
 LightResult DefaultLitBxDF(float3 specularColor, float specularRoughness, float3 diffuseColor, half3 N, half3 V, half3 L, float falloff)

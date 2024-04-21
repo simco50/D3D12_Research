@@ -1,10 +1,10 @@
 #pragma once
-class GraphicsDevice;
-class RootSignature;
-class RGGraph;
+
+#include "Graphics/RHI/RHI.h"
+#include "Graphics/RenderGraph/RenderGraphDefinitions.h"
+
 struct SceneView;
 struct SceneTextures;
-class StateObject;
 
 class RTReflections
 {
@@ -13,7 +13,6 @@ public:
 	void Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
 
 private:
-	RefCountPtr<StateObject> m_pRtSO;
-	RefCountPtr<RootSignature> m_pGlobalRS;
+	Ref<StateObject> m_pRtSO;
 };
 

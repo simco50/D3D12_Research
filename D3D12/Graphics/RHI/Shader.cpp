@@ -6,16 +6,27 @@
 #include "dxc/dxcapi.h"
 #include "dxc/d3d12shader.h"
 #include "D3D.h"
+#include "Core/Stream.h"
+#include "Core/Profiler.h"
 
 namespace ShaderCompiler
 {
 	constexpr const char* pCompilerPath = "dxcompiler.dll";
 	constexpr const char* pShaderSymbolsPath = "Saved/ShaderSymbols/";
 
-	static RefCountPtr<IDxcUtils> pUtils;
-	static RefCountPtr<IDxcCompiler3> pCompiler3;
-	static RefCountPtr<IDxcValidator> pValidator;
-	static RefCountPtr<IDxcIncludeHandler> pDefaultIncludeHandler;
+	static Ref<IDxcUtils> pUtils;
+	static Ref<IDxcCompiler3> pCompiler3;
+	static Ref<IDxcValidator> pValidator;
+	static Ref<IDxcIncludeHandler> pDefaultIncludeHandler;
+	static std::mutex IncludeCacheMutex;
+
+	struct CachedFile
+	{
+		Ref<IDxcBlobEncoding> pBlob;
+		uint64 Timestamp;
+	};
+	static std::unordered_map<StringHash, CachedFile> IncludeCache;
+	std::mutex ShaderCacheMutex;
 
 	struct CompileJob
 	{
@@ -26,14 +37,19 @@ namespace ShaderCompiler
 		std::vector<std::string> IncludeDirs;
 		uint8 MajVersion;
 		uint8 MinVersion;
+		bool EnableDebugMode;
 	};
 
 	struct CompileResult
 	{
+		static constexpr int Version = 7;
+
 		std::string ErrorMessage;
 		ShaderBlob pBlob;
-		RefCountPtr<IUnknown> pReflection;
+		Ref<IUnknown> pReflection;
 		std::vector<std::string> Includes;
+		uint64 ShaderHash[2];
+		bool IsDebug;
 
 		bool Success() const { return pBlob.Get() && ErrorMessage.length() == 0; }
 	};
@@ -44,61 +60,250 @@ namespace ShaderCompiler
 		{
 		case ShaderType::Vertex:		return "vs";
 		case ShaderType::Pixel:			return "ps";
-		case ShaderType::Geometry:		return "gs";
 		case ShaderType::Compute:		return "cs";
 		case ShaderType::Mesh:			return "ms";
 		case ShaderType::Amplification: return "as";
-		default: noEntry();				return "";
+		default:						return "lib";
 		}
 	}
 
-	void LoadDXC()
+	static void LoadDXC()
 	{
-		FN_PROC(DxcCreateInstance);
+		using DxcCreateInstanceFn = decltype(&::DxcCreateInstance);
 
 		HMODULE lib = LoadLibraryA(pCompilerPath);
-		DxcCreateInstanceFn.Load(lib);
+		DxcCreateInstanceFn CreateInstance = (DxcCreateInstanceFn)GetProcAddress(lib, "DxcCreateInstance");
 
-		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
-		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
-		VERIFY_HR(DxcCreateInstanceFn(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
+		VERIFY_HR(CreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(pUtils.GetAddressOf())));
+		VERIFY_HR(CreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(pCompiler3.GetAddressOf())));
+		VERIFY_HR(CreateInstance(CLSID_DxcValidator, IID_PPV_ARGS(pValidator.GetAddressOf())));
 		VERIFY_HR(pUtils->CreateDefaultIncludeHandler(pDefaultIncludeHandler.GetAddressOf()));
 		E_LOG(Info, "Loaded %s", pCompilerPath);
 	}
 
-	bool TryLoadFile(const char* pFilePath, const std::vector<std::string>& includeDirs, RefCountPtr<IDxcBlobEncoding>& file, std::string* pFullPath)
+	static bool ResolveFilePath(const CompileJob& job, std::string& outPath)
 	{
-		for (const std::string& includeDir : includeDirs)
+		for (const std::string& includeDir : job.IncludeDirs)
 		{
-			std::string path = Paths::Combine(includeDir, pFilePath);
-			if (Paths::FileExists(path.c_str()))
+			outPath = Paths::Combine(includeDir, job.FilePath);
+			if (Paths::FileExists(outPath.c_str()))
+				return true;
+		}
+		outPath = "";
+		return false;
+	}
+
+	static bool TryLoadFromCache(const char* pCachePath, const CompileJob& compileJob, CompileResult& result)
+	{
+		std::lock_guard lock(ShaderCacheMutex);
+
+		// See if the cache file exists
+		if (!Paths::FileExists(pCachePath))
+			return false;
+
+		std::string shaderFullPath;
+		if (!ResolveFilePath(compileJob, shaderFullPath))
+			return false;
+
+		// Check if the shader source is not newer than the cached file
+		uint64 cacheTime, temp;
+		Paths::GetFileTime(pCachePath, temp, temp, cacheTime);
+
+		auto TestFileTime = [&](const char* pFilePath) {
+			uint64 shaderTime;
+			Paths::GetFileTime(pFilePath, temp, temp, shaderTime);
+			return cacheTime >= shaderTime;
+		};
+
+		if (!TestFileTime(shaderFullPath.c_str()))
+			return false;
+
+		FileStream fs;
+		fs.Open(pCachePath, FileMode::Read);
+		uint32 version = 0;
+		fs >> version;
+		if (version != CompileResult::Version)
+			return false;
+
+		fs >> result.ShaderHash;
+		fs >> result.Includes;
+
+		// Test if includes sources are not newer than the cached file
+		for (std::string& include : result.Includes)
+		{
+			if (!TestFileTime(include.c_str()))
 			{
-				if (SUCCEEDED(pUtils->LoadFile(MULTIBYTE_TO_UNICODE(path.c_str()), nullptr, file.GetAddressOf())))
+				result.Includes.clear();
+				return false;
+			}
+		}
+
+		uint32 size;
+		fs >> size;
+
+		char* pData = new char[size];
+		fs.Read(pData, size);
+		pUtils->CreateBlob(pData, size, DXC_CP_ACP, (IDxcBlobEncoding**)result.pBlob.GetAddressOf());
+		delete[] pData;
+
+		return true;
+	}
+
+	static bool SaveToCache(const char* pCachePath, const CompileJob& compileJob, CompileResult& result)
+	{
+		std::lock_guard lock(ShaderCacheMutex);
+
+		Paths::CreateDirectoryTree(pCachePath);
+
+		FileStream fs;
+		fs.Open(pCachePath, FileMode::Write);
+		uint32 version = CompileResult::Version;
+		fs << version;
+		fs << result.ShaderHash;
+		fs << result.Includes;
+		void* pBlob = result.pBlob->GetBufferPointer();
+		uint32 size = (uint32)result.pBlob->GetBufferSize();
+		fs << size;
+		fs.Write(pBlob, size);
+		return true;
+	}
+
+	static std::string CustomPreprocess(const std::string& input)
+	{
+		std::string output;
+		output.reserve(input.size());
+
+		size_t index = 0;
+		constexpr const char* pSearchText = "TEXT(\"";
+		constexpr uint32 searchLength = CString::StrLen(pSearchText);
+
+		while (index < input.length())
+		{
+			size_t foundIndex = input.find(pSearchText, index);
+			if (foundIndex != std::string::npos)
+			{
+				output += input.substr(index, foundIndex - index);
+
+				// Find the closing parenthesis of the TEXT macro
+				size_t closingQuoteIndex = input.find(')', foundIndex + searchLength);
+				if (closingQuoteIndex != std::string::npos)
 				{
-					*pFullPath = path;
-					break;
+					output += "{'";
+					size_t targetStart = foundIndex + searchLength;
+					size_t targetEnd = closingQuoteIndex - foundIndex - searchLength - 1;
+					for (int i = 0; i < targetEnd; ++i)
+					{
+						output += input[targetStart + i];
+						output += "','";
+					}
+					output.pop_back();
+					output.pop_back();
+					output += "}";
+
+					index = closingQuoteIndex + 1;
+				}
+				else
+				{
+					output += input.substr(foundIndex, searchLength);
+					index = foundIndex + searchLength;
+				}
+			}
+			else
+			{
+				output += input.substr(index);
+				break;
+			}
+		}
+		return output;
+	}
+
+	static HRESULT TryLoadFile(const char* pFileName, Ref<IDxcBlobEncoding>* pOutFile)
+	{
+		HRESULT hr = E_FAIL;
+		if (!Paths::FileExists(pFileName))
+			return hr;
+
+		uint64 temp, fileTime;
+		Paths::GetFileTime(pFileName, temp, temp, fileTime);
+
+		{
+			std::lock_guard cacheLock(IncludeCacheMutex);
+			auto it = IncludeCache.find(pFileName);
+			if (it != IncludeCache.end())
+			{
+				CachedFile& file = it->second;
+				if (fileTime <= file.Timestamp)
+				{
+					*pOutFile = file.pBlob;
+					return S_OK;
 				}
 			}
 		}
-		return file.Get();
-	};
 
-	CompileResult Compile(const CompileJob& compileJob)
+		FileStream stream;
+		if(stream.Open(pFileName, FileMode::Read))
+		{
+			// +1 null terminator
+			std::vector<char> charBuffer(stream.GetLength() + 1);
+			stream.Read(charBuffer.data(), (uint32)charBuffer.size());
+			std::string buffer = CustomPreprocess(charBuffer.data());
+
+			CachedFile file;
+			file.Timestamp = fileTime;
+			hr = pUtils->CreateBlob(buffer.data(), (int)buffer.size(), 0, file.pBlob.GetAddressOf());
+			if (SUCCEEDED(hr))
+			{
+				std::lock_guard cacheLock(IncludeCacheMutex);
+				*pOutFile = file.pBlob;
+				IncludeCache[pFileName] = file;
+			}
+		}
+
+		return hr;
+	}
+
+	static CompileResult Compile(const CompileJob& compileJob)
 	{
 		CompileResult result;
 
-		RefCountPtr<IDxcBlobEncoding> pSource;
+		std::string defineKey;
+		for (const ShaderDefine& define : compileJob.Defines)
+			defineKey += define.Value;
+		StringHash hash(defineKey.c_str());
+
+		std::string cachePath = Sprintf(
+			"%s%s_%s_%d_%d_%s_%x%s.bin",
+			Paths::ShaderCacheDir().c_str(),
+			Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(),
+			compileJob.Target.c_str(),
+			(int)compileJob.MajVersion,
+			(int)compileJob.MinVersion,
+			compileJob.EntryPoint.c_str(),
+			hash.m_Hash,
+			compileJob.EnableDebugMode ? "_DEBUG" : ""
+		);
+		Paths::CreateDirectoryTree(cachePath);
+
+		if (TryLoadFromCache(cachePath.c_str(), compileJob, result))
+		{
+			E_LOG(Info, "Loaded shader '%s.%s' from cache.", compileJob.FilePath.c_str(), compileJob.EntryPoint.c_str());
+			return result;
+		}
+
+		Utils::TimeScope timer;
+		Ref<IDxcBlobEncoding> pSource;
 		std::string fullPath;
-		if (!TryLoadFile(compileJob.FilePath.c_str(), compileJob.IncludeDirs, pSource, &fullPath))
+		if (!ResolveFilePath(compileJob, fullPath))
 		{
 			result.ErrorMessage = Sprintf("Failed to open file '%s'", compileJob.FilePath.c_str());
 			return result;
 		}
 
-		bool debugShaders = CommandLine::GetBool("debugshaders");
-		bool shaderSymbols = CommandLine::GetBool("shadersymbols");
-
-		std::string target = Sprintf("%s_%d_%d", compileJob.Target.c_str(), compileJob.MajVersion, compileJob.MinVersion);
+		if (!SUCCEEDED(TryLoadFile(fullPath.c_str(), &pSource)))
+		{
+			result.ErrorMessage = Sprintf("Failed to load file '%s'", fullPath.c_str());
+			return result;
+		}
 
 		class CompileArguments
 		{
@@ -107,38 +312,28 @@ namespace ShaderCompiler
 			{
 				m_Arguments.push_back(MULTIBYTE_TO_UNICODE(pArgument));
 				if (pValue)
-				{
 					m_Arguments.push_back(MULTIBYTE_TO_UNICODE(pValue));
-				}
 			}
 			void AddArgument(const wchar_t* pArgument, const wchar_t* pValue = nullptr)
 			{
 				m_Arguments.push_back(pArgument);
 				if (pValue)
-				{
 					m_Arguments.push_back(pValue);
-				}
 			}
 
 			void AddDefine(const char* pDefine, const char* pValue = nullptr)
 			{
 				if (strstr(pDefine, "=") != nullptr)
-				{
 					AddArgument("-D", pDefine);
-				}
 				else
-				{
 					AddArgument("-D", Sprintf("%s=%s", pDefine, pValue ? pValue : "1").c_str());
-				}
 			}
 
 			const wchar_t** GetArguments()
 			{
 				m_ArgumentArr.reserve(GetNumArguments());
 				for (const auto& arg : m_Arguments)
-				{
 					m_ArgumentArr.push_back(arg.c_str());
-				}
 				return m_ArgumentArr.data();
 			}
 
@@ -151,9 +346,7 @@ namespace ShaderCompiler
 			{
 				std::string str;
 				for (const std::wstring& arg : m_Arguments)
-				{
 					str += Sprintf(" %s", UNICODE_TO_MULTIBYTE(arg.c_str()));
-				}
 				return str;
 			}
 
@@ -162,6 +355,7 @@ namespace ShaderCompiler
 			std::vector<std::wstring> m_Arguments;
 		} arguments;
 
+		std::string target = Sprintf("%s_%d_%d", compileJob.Target.c_str(), compileJob.MajVersion, compileJob.MinVersion);
 		arguments.AddArgument(Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str());
 		arguments.AddArgument("-E", compileJob.EntryPoint.c_str());
 		arguments.AddArgument("-T", target.c_str());
@@ -171,133 +365,58 @@ namespace ShaderCompiler
 
 		arguments.AddArgument("-HV", "2021");
 
-#if 0
-		if (majVersion >= 6 && minVersion >= 6)
-		{
-			arguments.AddArgument("-enable-payload-qualifiers");
-			arguments.AddDefine("_PAYLOAD_QUALIFIERS", "1");
-		}
-		else
-#endif
-		{
-			arguments.AddArgument("-disable-payload-qualifiers");
-			arguments.AddDefine("_PAYLOAD_QUALIFIERS", "0");
-		}
+		result.IsDebug = compileJob.EnableDebugMode;
 
-		if (debugShaders || shaderSymbols)
-		{
-			arguments.AddArgument("-Qembed_debug");
-			arguments.AddArgument(DXC_ARG_DEBUG);
-		}
-		else
-		{
-			arguments.AddArgument("-Qstrip_debug");
-			arguments.AddArgument("-Fd", pShaderSymbolsPath);
-			arguments.AddArgument("-Qstrip_reflect");
-		}
+		arguments.AddArgument(DXC_ARG_DEBUG);
+		arguments.AddArgument("-Qembed_debug");
 
-		if (debugShaders)
-		{
+		if (compileJob.EnableDebugMode)
 			arguments.AddArgument(DXC_ARG_SKIP_OPTIMIZATIONS);
-		}
-		else
-		{
-			arguments.AddArgument(DXC_ARG_OPTIMIZATION_LEVEL3);
-		}
-
 
 		arguments.AddArgument("-I", Paths::GetDirectoryPath(fullPath).c_str());
 		for (const std::string& includeDir : compileJob.IncludeDirs)
-		{
 			arguments.AddArgument("-I", includeDir.c_str());
-		}
-
-		arguments.AddDefine(Sprintf("_SM_MAJ=%d", compileJob.MajVersion).c_str());
-		arguments.AddDefine(Sprintf("_SM_MIN=%d", compileJob.MinVersion).c_str());
-		arguments.AddDefine("_DXC");
 
 		for (const ShaderDefine& define : compileJob.Defines)
-		{
 			arguments.AddDefine(define.Value.c_str());
-		}
 
 		DxcBuffer sourceBuffer;
 		sourceBuffer.Ptr = pSource->GetBufferPointer();
 		sourceBuffer.Size = pSource->GetBufferSize();
-		sourceBuffer.Encoding = 0;
+		sourceBuffer.Encoding = DXC_CP_ACP;
 
 		class CustomIncludeHandler : public IDxcIncludeHandler
 		{
 		public:
 			HRESULT STDMETHODCALLTYPE LoadSource(_In_ LPCWSTR pFilename, _COM_Outptr_result_maybenull_ IDxcBlob** ppIncludeSource) override
 			{
-				RefCountPtr<IDxcBlobEncoding> pEncoding;
+				Ref<IDxcBlobEncoding> pEncoding;
 				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
 				check(Paths::ResolveRelativePaths(path));
 
-				if (!Paths::FileExists(path.c_str()))
-				{
-					*ppIncludeSource = nullptr;
-					return E_FAIL;
-				}
-
 				auto existingInclude = std::find_if(IncludedFiles.begin(), IncludedFiles.end(), [&path](const std::string& include) {
 					return CString::StrCmp(include.c_str(), path.c_str(), false);
-				});
+					});
 
 				if (existingInclude != IncludedFiles.end())
 				{
 					static const char nullStr[] = " ";
-					pUtils->CreateBlob(nullStr, ARRAYSIZE(nullStr), CP_UTF8, pEncoding.GetAddressOf());
+					pUtils->CreateBlobFromPinned(nullStr, ARRAYSIZE(nullStr), DXC_CP_ACP, pEncoding.GetAddressOf());
 					*ppIncludeSource = pEncoding.Detach();
 					return S_OK;
 				}
 
-				if (!IsValidIncludePath(path.c_str()))
-				{
-					E_LOG(Warning, "Include path '%s' does not have a valid extension", path.c_str());
-					return E_FAIL;
-				}
-
-				HRESULT hr = pUtils->LoadFile(pFilename, nullptr, pEncoding.GetAddressOf());
+				HRESULT hr = TryLoadFile(UNICODE_TO_MULTIBYTE(pFilename), &pEncoding);
 				if (SUCCEEDED(hr))
 				{
 					IncludedFiles.push_back(path);
 					*ppIncludeSource = pEncoding.Detach();
 				}
-				else
-				{
-					*ppIncludeSource = nullptr;
-				}
 				return hr;
 			}
 
-			bool IsValidIncludePath(const char* pFilePath) const
-			{
-				std::string extension = Paths::GetFileExtenstion(pFilePath);
-				CString::ToLower(extension.c_str(), extension.data());
-				constexpr const char* pValidExtensions[] = { "hlsli", "h" };
-				for (uint32 i = 0; i < ARRAYSIZE(pValidExtensions); ++i)
-				{
-					if (strcmp(pValidExtensions[i], extension.c_str()) == 0)
-					{
-						return true;
-					}
-				}
-				return false;
-			}
-
-			HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, _COM_Outptr_ void __RPC_FAR* __RPC_FAR* ppvObject) override
-			{
-				return pDefaultIncludeHandler->QueryInterface(riid, ppvObject);
-			}
-
-			void Reset()
-			{
-				IncludedFiles.clear();
-			}
-
-			ULONG STDMETHODCALLTYPE AddRef(void) override {	return 0; }
+			HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, _COM_Outptr_ void __RPC_FAR* __RPC_FAR* ppvObject) override {	return E_NOINTERFACE; }
+			ULONG STDMETHODCALLTYPE AddRef(void) override { return 0; }
 			ULONG STDMETHODCALLTYPE Release(void) override { return 0; }
 
 			std::vector<std::string> IncludedFiles;
@@ -306,41 +425,48 @@ namespace ShaderCompiler
 		if (CommandLine::GetBool("dumpshaders"))
 		{
 			// Preprocessed source
-			RefCountPtr<IDxcResult> pPreprocessOutput;
+			Ref<IDxcResult> pPreprocessOutput;
 			CompileArguments preprocessArgs = arguments;
 			preprocessArgs.AddArgument("-P", ".");
 			CustomIncludeHandler preprocessIncludeHandler;
 			if (SUCCEEDED(pCompiler3->Compile(&sourceBuffer, preprocessArgs.GetArguments(), (uint32)preprocessArgs.GetNumArguments(), &preprocessIncludeHandler, IID_PPV_ARGS(pPreprocessOutput.GetAddressOf()))))
 			{
-				RefCountPtr<IDxcBlobUtf8> pHLSL;
-				if(SUCCEEDED(pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr)))
+				Ref<IDxcBlobUtf8> pHLSL;
+				if (SUCCEEDED(pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr)))
 				{
-					Paths::CreateDirectoryTree(pShaderSymbolsPath);
-					std::string filePathBase = Sprintf("%s_%s_%s", Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(), compileJob.EntryPoint.c_str(), compileJob.Target.c_str());
+					std::string filePathBase = Paths::GetFileNameWithoutExtension(cachePath);
 					{
-						std::ofstream str(Sprintf("%s%s.hlsl", pShaderSymbolsPath, filePathBase.c_str()));
-						str.write(pHLSL->GetStringPointer(), pHLSL->GetStringLength());
+						FileStream stream;
+						if(stream.Open(Sprintf("%s%s.hlsl", Paths::ShaderCacheDir(), filePathBase).c_str(), FileMode::Write))
+							stream.Write(pHLSL->GetStringPointer(), (uint32)pHLSL->GetStringLength());
 					}
 					{
-						std::ofstream str(Sprintf("%s%s.bat", pShaderSymbolsPath, filePathBase.c_str()));
-						str << "dxc.exe " << arguments.ToString() << " -Fo " << filePathBase << ".bin " << filePathBase << ".hlsl";
+						FileStream stream;
+						if (stream.Open(Sprintf("%s%s.bat", Paths::ShaderCacheDir(), filePathBase).c_str(), FileMode::Write))
+						{
+							std::string txt = Sprintf("dxc.exe %s -Fo %s.shaderbin %s.hlsl", arguments.ToString(), filePathBase, filePathBase);
+							stream.Write(txt.c_str(), (uint32)txt.size());
+						}
 					}
 				}
 			}
 		}
 
 		CustomIncludeHandler includeHandler;
-		RefCountPtr<IDxcResult> pCompileResult;
+		Ref<IDxcResult> pCompileResult;
 		VERIFY_HR(pCompiler3->Compile(&sourceBuffer, arguments.GetArguments(), (uint32)arguments.GetNumArguments(), &includeHandler, IID_PPV_ARGS(pCompileResult.GetAddressOf())));
 
-		RefCountPtr<IDxcBlobUtf8> pErrors;
+		Ref<IDxcBlobUtf8> pErrors;
 		if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(pErrors.GetAddressOf()), nullptr)))
 		{
 			if (pErrors && pErrors->GetStringLength())
-			{
 				result.ErrorMessage = (char*)pErrors->GetStringPointer();
-				return result;
-			}
+		}
+
+		HRESULT hrStatus;
+		if (FAILED(pCompileResult->GetStatus(&hrStatus)) || FAILED(hrStatus))
+		{
+			return result;
 		}
 
 		//Shader object
@@ -350,14 +476,14 @@ namespace ShaderCompiler
 
 		//Validation
 		{
-			RefCountPtr<IDxcOperationResult> pResult;
+			Ref<IDxcOperationResult> pResult;
 			VERIFY_HR(pValidator->Validate((IDxcBlob*)result.pBlob.Get(), DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
 			HRESULT validationResult;
 			pResult->GetStatus(&validationResult);
 			if (validationResult != S_OK)
 			{
-				RefCountPtr<IDxcBlobEncoding> pPrintBlob;
-				RefCountPtr<IDxcBlobUtf8> pPrintBlobUtf8;
+				Ref<IDxcBlobEncoding> pPrintBlob;
+				Ref<IDxcBlobUtf8> pPrintBlobUtf8;
 				pResult->GetErrorBuffer(pPrintBlob.GetAddressOf());
 				pUtils->GetBlobAsUtf8(pPrintBlob.Get(), pPrintBlobUtf8.GetAddressOf());
 				result.ErrorMessage = pPrintBlobUtf8->GetStringPointer();
@@ -365,25 +491,36 @@ namespace ShaderCompiler
 			}
 		}
 
-		//Symbols
+		// Hash
 		{
-			RefCountPtr<IDxcBlobUtf16> pDebugDataPath;
-			RefCountPtr<IDxcBlob> pSymbolsBlob;
-			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf())))
+			Ref<IDxcBlob> pHash;
+			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_SHADER_HASH, IID_PPV_ARGS(pHash.GetAddressOf()), nullptr)))
 			{
-				Paths::CreateDirectoryTree(pShaderSymbolsPath);
-
-				RefCountPtr<IDxcBlobUtf8> pDebugDataPathUTF8;
-				pUtils->GetBlobAsUtf8(pDebugDataPath.Get(), pDebugDataPathUTF8.GetAddressOf());
-				std::string debugPath = Sprintf("%s%s", pShaderSymbolsPath, pDebugDataPathUTF8->GetStringPointer());
-				std::ofstream str(debugPath, std::ios::binary);
-				str.write((char*)pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize());
+				DxcShaderHash* pHashBuf = (DxcShaderHash*)pHash->GetBufferPointer();
+				memcpy(result.ShaderHash, pHashBuf->HashDigest, sizeof(uint64) * 2);
 			}
 		}
 
+		//Symbols
+#if 0
+		{
+			Ref<IDxcBlobUtf16> pDebugDataPath;
+			Ref<IDxcBlob> pSymbolsBlob;
+			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_PDB, IID_PPV_ARGS(pSymbolsBlob.GetAddressOf()), pDebugDataPath.GetAddressOf())))
+			{
+				Ref<IDxcBlobUtf8> pDebugDataPathUTF8;
+				pUtils->GetBlobAsUtf8(pDebugDataPath.Get(), pDebugDataPathUTF8.GetAddressOf());
+				std::string symbolsPath = Sprintf("%s%s", Paths::ShaderCacheDir().c_str(), pDebugDataPathUTF8->GetStringPointer());
+				FileStream stream;
+				if(stream.Open(symbolsPath.c_str(), FileMode::Write))
+					stream.Write(pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize());
+			}
+		}
+#endif
+
 		//Reflection
 		{
-			RefCountPtr<IDxcBlob> pReflectionData;
+			Ref<IDxcBlob> pReflectionData;
 			if (SUCCEEDED(pCompileResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(pReflectionData.GetAddressOf()), nullptr)))
 			{
 				DxcBuffer reflectionBuffer;
@@ -396,21 +533,20 @@ namespace ShaderCompiler
 
 		result.Includes.push_back(fullPath);
 		for (const std::string& includePath : includeHandler.IncludedFiles)
-		{
 			result.Includes.push_back(includePath);
-		}
+
+		check(SaveToCache(cachePath.c_str(), compileJob, result));
+		E_LOG(Warning, "Missing cached shader. Compile time: %.1fms ('%s.%s')", timer.Stop() * 1000, compileJob.FilePath.c_str(), compileJob.EntryPoint.c_str());
 
 		return result;
 	}
 }
 
-ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEntryPoint, const Span<ShaderDefine>& defines)
+ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEntryPoint, Span<ShaderDefine> defines)
 {
 	ShaderStringHash hash(pEntryPoint);
 	for (const ShaderDefine& define : defines)
-	{
 		hash.Combine(ShaderStringHash(define.Value));
-	}
 	return hash;
 }
 
@@ -419,7 +555,7 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 	auto it = m_IncludeDependencyMap.find(ShaderStringHash(filePath));
 	if (it != m_IncludeDependencyMap.end())
 	{
-		E_LOG(Info, "Modified \"%s\". Recompiling dependencies...", filePath.c_str());
+		E_LOG(Info, "Modified \"%s\". Dirtying dependent shaders...", filePath.c_str());
 		const std::unordered_set<std::string>& dependencies = it->second;
 		for (const std::string& dependency : dependencies)
 		{
@@ -429,33 +565,9 @@ void ShaderManager::RecompileFromFileChange(const std::string& filePath)
 				ShadersInFileMap objectMap = objectMapIt->second;
 				for (auto shader : objectMap.Shaders)
 				{
-					Shader* pOldShader = shader.second;
-					Shader* pNewShader = GetShader(dependency.c_str(), pOldShader->Type, pOldShader->EntryPoint.c_str(), pOldShader->Defines, true);
-					if (pNewShader)
-					{
-						E_LOG(Info, "Reloaded shader: \"%s - %s\"", dependency.c_str(), pNewShader->EntryPoint.c_str());
-						m_OnShaderRecompiledEvent.Broadcast(pOldShader, pNewShader);
-						m_Shaders.remove_if([pOldShader](const std::unique_ptr<Shader>& pS) { return pS.get() == pOldShader; });
-					}
-					else
-					{
-						E_LOG(Warning, "Failed to reload shader: \"%s\"", dependency.c_str());
-					}
-				}
-				for (auto library : objectMap.Libraries)
-				{
-					ShaderLibrary* pOldLibrary = library.second;
-					ShaderLibrary* pNewLibrary = GetLibrary(dependency.c_str(), pOldLibrary->Defines, true);
-					if (pNewLibrary)
-					{
-						E_LOG(Info, "Reloaded library: \"%s\"", dependency.c_str());
-						m_OnLibraryRecompiledEvent.Broadcast(pOldLibrary, pNewLibrary);
-						m_Libraries.remove_if([pOldLibrary](const std::unique_ptr<ShaderLibrary>& pS) { return pS.get() == pOldLibrary; });
-					}
-					else
-					{
-						E_LOG(Warning, "Failed to reload library: \"%s\"", dependency.c_str());
-					}
+					shader.second->IsDirty = true;
+					if (shader.second)
+						m_OnShaderEditedEvent.Broadcast(shader.second);
 				}
 			}
 		}
@@ -471,6 +583,8 @@ ShaderManager::ShaderManager(uint8 shaderModelMaj, uint8 shaderModelMin)
 
 ShaderManager::~ShaderManager()
 {
+	for (Shader* pShader : m_Shaders)
+		delete pShader;
 }
 
 void ShaderManager::ConditionallyReloadShaders()
@@ -499,26 +613,35 @@ void ShaderManager::AddIncludeDir(const std::string& includeDir)
 	m_IncludeDirs.push_back(includeDir);
 	if (m_pFileWatcher)
 	{
-		m_pFileWatcher->StartWatching(includeDir.c_str(), true);
-		E_LOG(Info, "Shader Hot-Reload enabled for: \"%s\"", includeDir.c_str());
+		if (m_pFileWatcher->StartWatching(includeDir.c_str(), true))
+			E_LOG(Info, "Shader Hot-Reload enabled for: \"%s\"", includeDir.c_str());
+		else
+			E_LOG(Warning, "Shader Hot-Reload for \"%s\" failed.", includeDir.c_str());
 	}
 }
 
-Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, const Span<ShaderDefine>& defines /*= {}*/, bool force /*= false*/)
+ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, Span<ShaderDefine> defines /*= {}*/)
 {
+	std::lock_guard lock(m_CompileMutex);
+
+	// Libs have no entry point
+	if (!pEntryPoint)
+		pEntryPoint = "";
+
 	ShaderStringHash pathHash(pShaderPath);
 	ShaderStringHash hash = GetEntryPointHash(pEntryPoint, defines);
 
-	if(!force)
+	Shader* pShader = nullptr;
+
 	{
-		std::lock_guard lock(m_CompileMutex);
 		auto& shaderMap = m_FilepathToObjectMap[pathHash].Shaders;
 		auto it = shaderMap.find(hash);
 		if (it != shaderMap.end())
-		{
-			return it->second;
-		}
+			pShader = it->second;
 	}
+
+	if (pShader && !pShader->IsDirty)
+		return { pShader, "" };
 
 	ShaderCompiler::CompileJob job;
 	job.Defines = defines;
@@ -528,72 +651,31 @@ Shader* ShaderManager::GetShader(const char* pShaderPath, ShaderType shaderType,
 	job.MajVersion = m_ShaderModelMajor;
 	job.MinVersion = m_ShaderModelMinor;
 	job.Target = ShaderCompiler::GetShaderTarget(shaderType);
+	job.EnableDebugMode = CommandLine::GetBool("debugshaders");
 
 	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(job);
 
 	if (!result.Success())
 	{
-		E_LOG(Warning, "Failed to compile shader \"%s:%s\": %s", pShaderPath, pEntryPoint, result.ErrorMessage.c_str());
-		return nullptr;
+		std::string error = Sprintf("Failed to compile shader %s_%d_%d \"%s:%s\": %s", job.Target, job.MajVersion, job.MinVersion, pShaderPath, pEntryPoint, result.ErrorMessage.c_str());
+		E_LOG(Warning, "%s", error);
+		return { nullptr, error };
 	}
 
-	Shader* pShader = nullptr;
 	{
-		std::lock_guard lock(m_CompileMutex);
-		m_Shaders.push_back(std::make_unique<Shader>(result.pBlob, shaderType, pEntryPoint, defines));
-		pShader = m_Shaders.back().get();
+		if (!pShader)
+			pShader = m_Shaders.emplace_back(new Shader());
+
+		pShader->Defines = defines.Copy();
+		pShader->EntryPoint = pEntryPoint;
+		pShader->Type = shaderType;
+		pShader->pByteCode = result.pBlob;
+		pShader->IsDirty = false;
+		memcpy(pShader->Hash, result.ShaderHash, sizeof(uint64) * 2);
+
 		for (const std::string& include : result.Includes)
-		{
 			m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
-		}
 		m_FilepathToObjectMap[pathHash].Shaders[hash] = pShader;
 	}
-
-	return pShader;
-}
-
-ShaderLibrary* ShaderManager::GetLibrary(const char* pShaderPath, const Span<ShaderDefine>& defines /*= {}*/, bool force /*= false*/)
-{
-	ShaderStringHash pathHash(pShaderPath);
-	ShaderStringHash hash = GetEntryPointHash("", defines);
-
-	if (!force)
-	{
-		std::lock_guard lock(m_CompileMutex);
-		auto& libraryMap = m_FilepathToObjectMap[pathHash].Libraries;
-		auto it = libraryMap.find(hash);
-		if (it != libraryMap.end())
-		{
-			return it->second;
-		}
-	}
-
-	ShaderCompiler::CompileJob job;
-	job.Defines = defines;
-	job.FilePath = pShaderPath;
-	job.IncludeDirs = m_IncludeDirs;
-	job.MajVersion = m_ShaderModelMajor;
-	job.MinVersion = m_ShaderModelMinor;
-	job.Target = "lib";
-
-	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(job);
-
-	if (!result.Success())
-	{
-		E_LOG(Warning, "Failed to compile library \"%s\": %s", pShaderPath, result.ErrorMessage.c_str());
-		return nullptr;
-	}
-
-	ShaderLibrary* pLibrary = nullptr;
-	{
-		std::lock_guard lock(m_CompileMutex);
-		m_Libraries.push_back(std::make_unique<ShaderLibrary>(result.pBlob, defines));
-		pLibrary = m_Libraries.back().get();
-		for (const std::string& include : result.Includes)
-		{
-			m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
-		}
-		m_FilepathToObjectMap[pathHash].Libraries[hash] = pLibrary;
-	}
-	return pLibrary;
+	return { pShader };
 }

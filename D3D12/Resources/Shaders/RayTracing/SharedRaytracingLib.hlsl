@@ -4,7 +4,7 @@
 [shader("miss")]
 void OcclusionMS(inout OcclusionPayload payload : SV_RayPayload)
 {
-    payload.SetMiss();
+    payload.HitT = -1.0f;
 }
 
 [shader("closesthit")]

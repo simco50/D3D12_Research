@@ -40,43 +40,59 @@ private:
 	DataAllocator<1 << 10> ContentData{};
 };
 
-StateObject::StateObject(GraphicsDevice* pParent)
-	: GraphicsObject(pParent)
+StateObject::StateObject(GraphicsDevice* pParent, const StateObjectInitializer& initializer)
+	: DeviceObject(pParent), m_Desc(initializer)
 {
-	m_ReloadHandle = pParent->GetShaderManager()->OnLibraryRecompiledEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
+	m_ReloadHandle = pParent->GetShaderManager()->OnShaderEditedEvent().AddRaw(this, &StateObject::OnLibraryReloaded);
 }
 
-void StateObject::Create(const StateObjectInitializer& initializer)
+uint64 StateObject::GetWorkgraphBufferSize() const
 {
-	GetParent()->DeferReleaseObject(m_pStateObject.Detach());
+	check(m_Desc.Type == D3D12_STATE_OBJECT_TYPE_EXECUTABLE);
 
-	m_Desc = initializer;
+	Ref<ID3D12WorkGraphProperties> pProps;
+	m_pStateObject->QueryInterface(pProps.GetAddressOf());
+	D3D12_WORK_GRAPH_MEMORY_REQUIREMENTS reqs{};
+	pProps->GetWorkGraphMemoryRequirements(0, &reqs);
+	return reqs.MaxSizeInBytes;
+}
+
+void StateObject::CreateInternal()
+{
 	StateObjectStream stateObjectStream;
-	m_Desc.CreateStateObjectStream(stateObjectStream, GetParent());
-	VERIFY_HR(GetParent()->GetRaytracingDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
-	D3D::SetObjectName(m_pStateObject, m_Desc.Name.c_str());
-	VERIFY_HR(m_pStateObject->QueryInterface(m_pStateObjectProperties.ReleaseAndGetAddressOf()));
-	//m_Desc.SetMaxPipelineStackSize(this); #todo: This is causing trouble with recursion!
+	if (m_Desc.CreateStateObjectStream(stateObjectStream, GetParent()))
+	{
+		GetParent()->DeferReleaseObject(m_pStateObject.Detach());
+		VERIFY_HR(GetParent()->GetDevice()->CreateStateObject(&stateObjectStream.Desc, IID_PPV_ARGS(m_pStateObject.ReleaseAndGetAddressOf())));
+		D3D::SetObjectName(m_pStateObject, m_Desc.Name.c_str());
+		VERIFY_HR(m_pStateObject->QueryInterface(m_pStateObjectProperties.ReleaseAndGetAddressOf()));
+		//m_Desc.SetMaxPipelineStackSize(this); #todo: This is causing trouble with recursion!
+	}
+	else
+	{
+		E_LOG(Warning, "Failed to compile StateObject '%s'", m_Desc.Name);
+	}
+	E_LOG(Info, "Compiled State Object: %s", m_Desc.Name.c_str());
+	check(m_pStateObject);
 }
 
 void StateObject::ConditionallyReload()
 {
-	if (m_NeedsReload)
+	if (m_NeedsReload || !m_pStateObject)
 	{
-		Create(m_Desc);
+		CreateInternal();
 		m_NeedsReload = false;
-		E_LOG(Info, "Reloaded State Object: %s", m_Desc.Name.c_str());
 	}
 }
 
-void StateObject::OnLibraryReloaded(ShaderLibrary* pOldShaderLibrary, ShaderLibrary* pNewShaderLibrary)
+void StateObject::OnLibraryReloaded(Shader* pLibrary)
 {
-	for (ShaderLibrary*& pLibrary : m_Desc.m_Shaders)
+	for (Shader* pCurrentLibrary : m_Desc.m_Shaders)
 	{
-		if (pLibrary == pOldShaderLibrary)
+		if (pLibrary == pCurrentLibrary)
 		{
-			pLibrary = pNewShaderLibrary;
 			m_NeedsReload = true;
+			break;
 		}
 	}
 }
@@ -92,12 +108,12 @@ void StateObjectInitializer::AddHitGroup(const std::string& name, const std::str
 	m_HitGroups.push_back(definition);
 }
 
-void StateObjectInitializer::AddLibrary(const char* pShaderPath, const std::vector<std::string>& exports, const Span<ShaderDefine>& defines)
+void StateObjectInitializer::AddLibrary(const char* pShaderPath, Span<const char*> exports, Span<ShaderDefine> defines)
 {
 	LibraryExports library;
 	library.Path = pShaderPath;
 	library.Defines = defines.Copy();
-	library.Exports = exports;
+	library.Exports = exports.Copy();
 	m_Libraries.push_back(library);
 }
 
@@ -115,7 +131,7 @@ void StateObjectInitializer::AddMissShader(const std::string& exportName, RootSi
 }
 
 
-void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObjectStream, GraphicsDevice* pDevice)
+bool StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObjectStream, GraphicsDevice* pDevice)
 {
 	uint32 numObjects = 0;
 	auto AddStateObject = [&stateObjectStream, &numObjects](void* pDesc, D3D12_STATE_SUBOBJECT_TYPE type)
@@ -127,14 +143,16 @@ void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 		return pState;
 	};
 
-	m_Shaders.clear();
-
+	std::vector<Shader*> shaders;
 	for (const LibraryExports& library : m_Libraries)
 	{
 		D3D12_DXIL_LIBRARY_DESC* pDesc = stateObjectStream.ContentData.Allocate<D3D12_DXIL_LIBRARY_DESC>();
-		ShaderLibrary* pLibrary = pDevice->GetLibrary(library.Path.c_str(), library.Defines);
-		m_Shaders.push_back(pLibrary);
-		pDesc->DXILLibrary = pLibrary->GetByteCode();
+		Shader* pLibrary = pDevice->GetLibrary(library.Path.c_str(), library.Defines);
+		if (!pLibrary)
+			return false;
+
+		shaders.push_back(pLibrary);
+		pDesc->DXILLibrary = CD3DX12_SHADER_BYTECODE(pLibrary->pByteCode->GetBufferPointer(), pLibrary->pByteCode->GetBufferSize());
 		if (library.Exports.size())
 		{
 			D3D12_EXPORT_DESC* pExports = stateObjectStream.ContentData.Allocate<D3D12_EXPORT_DESC>((int)library.Exports.size());
@@ -199,32 +217,38 @@ void StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 		}
 	}
 
-	if (Flags != D3D12_RAYTRACING_PIPELINE_FLAG_NONE)
+	if (Type == D3D12_STATE_OBJECT_TYPE_EXECUTABLE)
 	{
-		D3D12_RAYTRACING_PIPELINE_CONFIG1* pDesc = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_PIPELINE_CONFIG1>();
-		pDesc->MaxTraceRecursionDepth = MaxRecursion;
-		pDesc->Flags = Flags;
-		AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1);
+		D3D12_WORK_GRAPH_DESC* pWG = stateObjectStream.ContentData.Allocate<D3D12_WORK_GRAPH_DESC>();
+		pWG->Flags |= D3D12_WORK_GRAPH_FLAG_INCLUDE_ALL_AVAILABLE_NODES;
+		pWG->ProgramName = stateObjectStream.GetUnicode(Name);
+		AddStateObject(pWG, D3D12_STATE_SUBOBJECT_TYPE_WORK_GRAPH);
 	}
-	else
+	else if (Type == D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE)
 	{
-		D3D12_RAYTRACING_PIPELINE_CONFIG* pDesc = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_PIPELINE_CONFIG>();
-		pDesc->MaxTraceRecursionDepth = MaxRecursion;
-		AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG);
+		D3D12_RAYTRACING_SHADER_CONFIG* pShaderConfig = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_SHADER_CONFIG>();
+		pShaderConfig->MaxPayloadSizeInBytes = MaxPayloadSize;
+		pShaderConfig->MaxAttributeSizeInBytes = MaxAttributeSize;
+		AddStateObject(pShaderConfig, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG);
+
+		D3D12_RAYTRACING_PIPELINE_CONFIG1* pRTConfig = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_PIPELINE_CONFIG1>();
+		pRTConfig->MaxTraceRecursionDepth = MaxRecursion;
+		pRTConfig->Flags = Flags;
+		AddStateObject(pRTConfig, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1);
 	}
 
 	D3D12_GLOBAL_ROOT_SIGNATURE* pRs = stateObjectStream.ContentData.Allocate<D3D12_GLOBAL_ROOT_SIGNATURE>();
 	pRs->pGlobalRootSignature = pGlobalRootSignature->GetRootSignature();
 	AddStateObject(pRs, D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE);
 
-	D3D12_RAYTRACING_SHADER_CONFIG* pDesc = stateObjectStream.ContentData.Allocate<D3D12_RAYTRACING_SHADER_CONFIG>();
-	pDesc->MaxPayloadSizeInBytes = MaxPayloadSize;
-	pDesc->MaxAttributeSizeInBytes = MaxAttributeSize;
-	AddStateObject(pDesc, D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG);
+
 
 	stateObjectStream.Desc.Type = Type;
 	stateObjectStream.Desc.NumSubobjects = numObjects;
 	stateObjectStream.Desc.pSubobjects = (D3D12_STATE_SUBOBJECT*)stateObjectStream.StateObjectData.GetData();
+
+	m_Shaders.swap(shaders);
+	return true;
 }
 
 void StateObjectInitializer::SetMaxPipelineStackSize(StateObject* pStateObject)
