@@ -105,14 +105,14 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 				graph.AddPass("Raytrace", RGPassFlag::Compute)
 					.Read(pProbeStates)
 					.Write(pRayBuffer)
-					.Bind([=](CommandContext& context)
+					.Bind([=](CommandContext& context, const RGResources& resources)
 						{
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGITraceRaysSO);
 
 							context.BindRootCBV(0, parameters);
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
-							context.BindResources(2, pRayBuffer->Get()->GetUAV());
+							context.BindResources(2, resources.GetUAV(pRayBuffer));
 
 							ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
 							bindingTable.BindRayGenShader("TraceRaysRGS");
@@ -121,32 +121,32 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 							bindingTable.BindHitGroup("MaterialHG", 0);
 
 							context.DispatchRays(bindingTable, ddgi.NumRays, numProbes);
-							context.InsertUAVBarrier(pRayBuffer->Get());
+							context.InsertUAVBarrier(resources.Get(pRayBuffer));
 						});
 
 				graph.AddPass("Update Irradiance", RGPassFlag::Compute)
 					.Read({ pIrradianceHistory, pRayBuffer, pProbeStates })
 					.Write(pIrradianceTarget)
-					.Bind([=](CommandContext& context)
+					.Bind([=](CommandContext& context, const RGResources& resources)
 						{
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
 
 							context.BindRootCBV(0, parameters);
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
-							context.BindResources(2, pIrradianceTarget->Get()->GetUAV());
+							context.BindResources(2, resources.GetUAV(pIrradianceTarget));
 							context.BindResources(3, {
-								pRayBuffer->Get()->GetSRV(),
+								resources.GetSRV(pRayBuffer),
 								});
 
 							context.Dispatch(numProbes);
-							context.InsertUAVBarrier(pIrradianceTarget->Get());
+							context.InsertUAVBarrier(resources.Get(pIrradianceTarget));
 						});
 
 				graph.AddPass("Update Depth", RGPassFlag::Compute)
 					.Read({ pDepthHistory, pRayBuffer, pProbeStates })
 					.Write(pDepthTarget)
-					.Bind([=](CommandContext& context)
+					.Bind([=](CommandContext& context, const RGResources& resources)
 						{
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
@@ -154,20 +154,20 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 							context.BindRootCBV(0, parameters);
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 							context.BindResources(2, {
-								pDepthTarget->Get()->GetUAV(),
+								resources.GetUAV(pDepthTarget),
 								});
 							context.BindResources(3, {
-								pRayBuffer->Get()->GetSRV(),
+								resources.GetSRV(pRayBuffer),
 								});
 
 							context.Dispatch(numProbes);
-							context.InsertUAVBarrier(pDepthTarget->Get());
+							context.InsertUAVBarrier(resources.Get(pDepthTarget));
 						});
 
 				graph.AddPass("Update Probe States", RGPassFlag::Compute)
 					.Read(pRayBuffer)
 					.Write({ pProbeOffsets, pProbeStates })
-					.Bind([=](CommandContext& context)
+					.Bind([=](CommandContext& context, const RGResources& resources)
 						{
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
@@ -175,11 +175,11 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 							context.BindRootCBV(0, parameters);
 							context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 							context.BindResources(2, {
-								pProbeStates->Get()->GetUAV(),
-								pProbeOffsets->Get()->GetUAV(),
+								resources.GetUAV(pProbeStates),
+								resources.GetUAV(pProbeOffsets),
 								});
 							context.BindResources(3, {
-								pRayBuffer->Get()->GetSRV(),
+								resources.GetSRV(pRayBuffer),
 								});
 
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(numProbes, 32));
@@ -200,7 +200,7 @@ void DDGI::RenderVisualization(RGGraph& graph, const SceneView* pView, const Wor
 			graph.AddPass("DDGI Visualize", RGPassFlag::Raster)
 				.DepthStencil(sceneTextures.pDepth)
 				.RenderTarget(sceneTextures.pColorTarget)
-				.Bind([=](CommandContext& context)
+				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
 						context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 						context.SetPipelineState(m_pDDGIVisualizePSO);

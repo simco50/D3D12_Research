@@ -88,13 +88,14 @@ ForwardRenderer::~ForwardRenderer()
 void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture, bool translucentOnly)
 {
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
+		.Read({ sceneTextures.pDepth })
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid })
 		.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
 		.RenderTarget(sceneTextures.pColorTarget)
 		.RenderTarget(sceneTextures.pNormals)
 		.RenderTarget(sceneTextures.pRoughness)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pForwardRS);
@@ -111,14 +112,14 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 				frameData.LightGridParams = lightCullData.LightGridParams;
 
 				context.BindRootCBV(1, frameData);
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pColorTarget)));
 
 				context.BindResources(3, {
-					sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
-					sceneTextures.pDepth->Get()->GetSRV(),
-					sceneTextures.pPreviousColor->Get()->GetSRV(),
-					pFogTexture->Get()->GetSRV(),
-					lightCullData.pLightGrid->Get()->GetSRV(),
+					resources.GetSRV(sceneTextures.pAmbientOcclusion),
+					resources.GetSRV(sceneTextures.pDepth),
+					resources.GetSRV(sceneTextures.pPreviousColor),
+					resources.GetSRV(pFogTexture),
+					resources.GetSRV(lightCullData.pLightGrid),
 					});
 
 				if (!translucentOnly)
@@ -145,26 +146,27 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture)
 {
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
+		.Read({ sceneTextures.pDepth })
 		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture })
 		.Read({ lightCullData.pLightListOpaque, lightCullData.pLightListTransparent })
 		.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
 		.RenderTarget(sceneTextures.pColorTarget)
 		.RenderTarget(sceneTextures.pNormals)
 		.RenderTarget(sceneTextures.pRoughness)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pForwardRS);
 
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pColorTarget)));
 
 				{
 					context.BindResources(3, {
-						sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
-						sceneTextures.pDepth->Get()->GetSRV(),
-						sceneTextures.pPreviousColor->Get()->GetSRV(),
-						pFogTexture->Get()->GetSRV(),
-						lightCullData.pLightListOpaque->Get()->GetSRV(),
+						resources.GetSRV(sceneTextures.pAmbientOcclusion),
+						resources.GetSRV(sceneTextures.pDepth),
+						resources.GetSRV(sceneTextures.pPreviousColor),
+						resources.GetSRV(pFogTexture),
+						resources.GetSRV(lightCullData.pLightListOpaque),
 						});
 
 					{
@@ -182,11 +184,11 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 
 				{
 					context.BindResources(3, {
-						sceneTextures.pAmbientOcclusion->Get()->GetSRV(),
-						sceneTextures.pDepth->Get()->GetSRV(),
-						sceneTextures.pPreviousColor->Get()->GetSRV(),
-						pFogTexture->Get()->GetSRV(),
-						lightCullData.pLightListTransparent->Get()->GetSRV(),
+						resources.GetSRV(sceneTextures.pAmbientOcclusion),
+						resources.GetSRV(sceneTextures.pDepth),
+						resources.GetSRV(sceneTextures.pPreviousColor),
+						resources.GetSRV(pFogTexture),
+						resources.GetSRV(lightCullData.pLightListTransparent),
 						});
 
 					{

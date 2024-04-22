@@ -74,10 +74,10 @@ public:
 			pPhysicalResource->Release();
 	}
 
-	const char*			GetName() const			{ return pName; }
-	DeviceResource*		GetPhysical() const		{ return pPhysicalResource; }
-	RGResourceType		GetType() const			{ return (RGResourceType)Type; }
-	bool				IsAllocated() const		{ return Allocated; }
+	const char*			GetName() const				{ return pName; }
+	DeviceResource*		GetPhysicalUnsafe() const	{ return pPhysicalResource; }
+	RGResourceType		GetType() const				{ return (RGResourceType)Type; }
+	bool				IsAllocated() const			{ return Allocated; }
 
 protected:
 	void SetResource(DeviceResource* resource)
@@ -122,12 +122,6 @@ public:
 	RGResourceT(const char* pName, RGResourceID id, const TDesc& desc, T* pPhysicalResource = nullptr)
 		: RGResource(pName, id, RGResourceTypeTraits<T>::Type, pPhysicalResource), Desc(desc)
 	{}
-
-	T* Get() const
-	{
-		check(GetPhysical());
-		return static_cast<T*>(GetPhysical());
-	}
 
 	const TDesc& GetDesc() const { return Desc; }
 

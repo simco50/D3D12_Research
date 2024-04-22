@@ -15,8 +15,11 @@ RGPass& RGPass::Read(Span<RGResource*> resources)
 	{
 		if (pResource)
 		{
-			bool isIndirectArgs = pResource->GetType() == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Flags, BufferFlag::IndirectArguments);
-			AddAccess(pResource, isIndirectArgs ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : state);
+			D3D12_RESOURCE_STATES resourceState = state;
+			if (pResource->GetType() == RGResourceType::Buffer && EnumHasAllFlags(static_cast<RGBuffer*>(pResource)->GetDesc().Flags, BufferFlag::IndirectArguments))
+				resourceState |= D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+
+			AddAccess(pResource, resourceState);
 		}
 	}
 	return *this;
@@ -63,7 +66,9 @@ void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 	auto it = std::find_if(Accesses.begin(), Accesses.end(), [=](const ResourceAccess& access) { return pResource == access.pResource; });
 	if (it != Accesses.end())
 	{
-		check(!EnumHasAllFlags(it->Access, state), "Redundant state set on resource '%s'", pResource->GetName());
+		if (EnumHasAllFlags(it->Access, state))
+			return;
+
 		check(it->Access == state || !D3D::HasWriteResourceState(it->Access), "Resource '%s' may not have any other states when it already has a write state (%s)", pResource->GetName(), D3D::ResourceStateToString(it->Access));
 		check(it->Access == state || !D3D::HasWriteResourceState(state), "Resource '%s' may not use a write state (%s) while it already has another state (%s)", pResource->GetName(), D3D::ResourceStateToString(state), D3D::ResourceStateToString(it->Access));
 		it->Access |= state;
@@ -195,7 +200,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
 				RGResource* pResource = access.pResource;
-				if (!pResource->GetPhysical())
+				if (!pResource->GetPhysicalUnsafe())
 				{
 					check(pResource->FirstAccess == pPass->ID);
 
@@ -208,22 +213,22 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 						noEntry();
 					pResource->SetResource(pPhysicalResource);
 				}
-				check(pResource->GetPhysical());
+				check(pResource->GetPhysicalUnsafe());
 
 
-				if (pResource->GetPhysical()->UseStateTracking())
+				if (pResource->GetPhysicalUnsafe()->UseStateTracking())
 				{
 					uint32 subResource = 0xFFFFFFFF;
 
 					// If state tracking, add a transition in this pass and keep track of the resource state
 					if (options.StateTracking)
 					{
-						D3D12_RESOURCE_STATES beforeState = pResource->GetPhysical()->GetResourceState(subResource);
+						D3D12_RESOURCE_STATES beforeState = pResource->GetPhysicalUnsafe()->GetResourceState(subResource);
 						D3D12_RESOURCE_STATES afterState = access.Access;
 						if (D3D::NeedsTransition(beforeState, afterState, true))
 						{
 							pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = beforeState, .AfterState = afterState, .SubResource = subResource });
-							pResource->GetPhysical()->SetResourceState(afterState, subResource);
+							pResource->GetPhysicalUnsafe()->SetResourceState(afterState, subResource);
 						}
 					}
 					else
@@ -262,15 +267,15 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 	// Export resources first so they can be available during pass execution.
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
-		check(exportResource.pTexture->GetPhysical(), "Exported texture doesn't have a physical resource assigned");
-		Ref<Texture> pTexture = exportResource.pTexture->Get();
+		check(exportResource.pTexture->GetPhysicalUnsafe(), "Exported texture doesn't have a physical resource assigned");
+		Ref<Texture> pTexture = (Texture*)exportResource.pTexture->GetPhysicalUnsafe();
 		pTexture->SetName(exportResource.pTexture->GetName());
 		*exportResource.pTarget = pTexture;
 	}
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
-		check(exportResource.pBuffer->GetPhysical(), "Exported buffer doesn't have a physical resource assigned");
-		Ref<Buffer> pBuffer = exportResource.pBuffer->Get();
+		check(exportResource.pBuffer->GetPhysicalUnsafe(), "Exported buffer doesn't have a physical resource assigned");
+		Ref<Buffer> pBuffer = (Buffer*)exportResource.pBuffer->GetPhysicalUnsafe();
 		pBuffer->SetName(exportResource.pBuffer->GetName());
 		*exportResource.pTarget = pBuffer;
 	}
@@ -449,9 +454,9 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 
 	// Update exported resource names
 	for (ExportedTexture& exportResource : m_ExportTextures)
-		exportResource.pTexture->GetPhysical()->SetName(exportResource.pTexture->GetName());
+		exportResource.pTexture->GetPhysicalUnsafe()->SetName(exportResource.pTexture->GetName());
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
-		exportResource.pBuffer->GetPhysical()->SetName(exportResource.pBuffer->GetName());
+		exportResource.pBuffer->GetPhysicalUnsafe()->SetName(exportResource.pBuffer->GetName());
 
 	DestroyData();
 }
@@ -477,7 +482,7 @@ void RGGraph::ExecutePass(const RGPass* pPass, CommandContext& context) const
 
 		if (pPass->pExecuteCallback)
 		{
-			RGPassResources resources(*pPass);
+			RGResources resources(*pPass);
 
 			bool useRenderPass = EnumHasAllFlags(pPass->Flags, RGPassFlag::Raster);
 			if (useRenderPass)
@@ -507,10 +512,10 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 	{
 		RGResource* pResource = transition.pResource;
 
-		check(pResource->GetPhysical(), "Resource was not allocated during the graph compile phase");
+		check(pResource->GetPhysicalUnsafe(), "Resource was not allocated during the graph compile phase");
 		check(pResource->IsImported || pResource->IsExported || !pResource->IsAllocated(), "If resource is not external, it's reference should be released during the graph compile phase");
 
-		context.InsertResourceBarrier(pResource->GetPhysical(), transition.BeforeState, transition.AfterState, transition.SubResource);
+		context.InsertResourceBarrier(pResource->GetPhysicalUnsafe(), transition.BeforeState, transition.AfterState, transition.SubResource);
 	}
 
 	context.FlushResourceBarriers();
@@ -524,7 +529,7 @@ void RGGraph::DestroyData()
 	m_ExportBuffers.clear();
 }
 
-RenderPassInfo RGPassResources::GetRenderPassInfo() const
+RenderPassInfo RGResources::GetRenderPassInfo() const
 {
 	RenderPassInfo passInfo;
 	for (const RGPass::RenderTargetAccess& renderTarget : m_Pass.RenderTargets)
@@ -533,20 +538,26 @@ RenderPassInfo RGPassResources::GetRenderPassInfo() const
 		targetInfo.ArrayIndex = 0;
 		targetInfo.MipLevel = 0;
 		targetInfo.Flags = renderTarget.Flags;
-		targetInfo.Target = renderTarget.pResource->Get();
+		targetInfo.Target = (Texture*)renderTarget.pResource->GetPhysicalUnsafe();
 		
 		if (renderTarget.pResolveTarget && renderTarget.pResource != renderTarget.pResolveTarget)
 			targetInfo.Flags |= RenderPassColorFlags::Resolve;
 
 		if (renderTarget.pResolveTarget)
-			targetInfo.ResolveTarget = renderTarget.pResolveTarget->Get();
+			targetInfo.ResolveTarget = (Texture*)renderTarget.pResolveTarget->GetPhysicalUnsafe();
 	}
 	if (m_Pass.DepthStencilTarget.pResource)
 	{
-		passInfo.DepthStencilTarget.Target = m_Pass.DepthStencilTarget.pResource->Get();
+		passInfo.DepthStencilTarget.Target = (Texture*)m_Pass.DepthStencilTarget.pResource->GetPhysicalUnsafe();
 		passInfo.DepthStencilTarget.Flags = m_Pass.DepthStencilTarget.Flags;
 	}
 	return passInfo;
+}
+
+DeviceResource* RGResources::GetResource(const RGResource* pResource, D3D12_RESOURCE_STATES requiredAccess) const
+{
+	check(std::find_if(m_Pass.Accesses.begin(), m_Pass.Accesses.end(), [=](const RGPass::ResourceAccess& access) { return access.pResource == pResource && (requiredAccess == 0 || (access.Access & requiredAccess) != 0); }) != m_Pass.Accesses.end());
+	return pResource->GetPhysicalUnsafe();
 }
 
 Ref<Texture> RGResourcePool::Allocate(const char* pName, const TextureDesc& desc)
@@ -619,9 +630,9 @@ namespace RGUtils
 		return graph.AddPass(Sprintf("Copy [%s -> %s]", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Copy)
 			.Read(pSource)
 			.Write(pTarget)
-			.Bind([=](CommandContext& context)
+			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
-					context.CopyResource(pSource->GetPhysical(), pTarget->GetPhysical());
+					context.CopyResource(resources.Get(pSource), resources.Get(pTarget));
 				});
 	}
 

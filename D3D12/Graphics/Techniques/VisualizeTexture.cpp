@@ -46,7 +46,7 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 	graph.AddPass("CaptureTexture.Process", RGPassFlag::Compute)
 		.Read({ pSource })
 		.Write({ pTarget, pPickingBuffer })
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetComputeRootSignature(m_pVisualizeRS);
 				context.SetPipelineState(m_pVisualizePSO);
@@ -68,8 +68,8 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 				const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
 
 				constants.HoveredPixel = captureContext.HoveredPixel;
-				constants.TextureSource = pSource->Get()->GetSRV()->GetHeapIndex();
-				constants.TextureTarget = pTarget->Get()->GetUAV()->GetHeapIndex();
+				constants.TextureSource = resources.GetSRV(pSource)->GetHeapIndex();
+				constants.TextureTarget = resources.GetUAV(pTarget)->GetHeapIndex();
 				constants.Dimensions = mipSize;
 				constants.TextureType = (uint32)pSource->GetDesc().Type;
 				constants.ValueRange = Vector2(captureContext.RangeMin, captureContext.RangeMax);
@@ -84,7 +84,7 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 				constants.IsIntegerFormat = formatInfo.Type == FormatType::Integer;
 
 				context.BindRootCBV(0, constants);
-				context.BindResources(1, pPickingBuffer->Get()->GetUAV());
+				context.BindResources(1, resources.GetUAV(pPickingBuffer));
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 8, desc.Height, 8));
 			});
@@ -92,9 +92,9 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 	graph.AddPass("CaptureTexture.CopyPickData", RGPassFlag::Copy)
 		.Read(pPickingBuffer)
 		.Write(pReadbackTarget)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.CopyBuffer(pPickingBuffer->Get(), pReadbackTarget->Get(), sizeof(CaptureTextureContext::PickData), 0, sizeof(CaptureTextureContext::PickData) * captureContext.ReadbackIndex);
+				context.CopyBuffer(resources.Get(pPickingBuffer), resources.Get(pReadbackTarget), sizeof(CaptureTextureContext::PickData), 0, sizeof(CaptureTextureContext::PickData) * captureContext.ReadbackIndex);
 			});
 
 	if(captureContext.pReadbackBuffer)

@@ -52,9 +52,9 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
 		.Read({ pSourceVolume, lightCullData.pLightGrid })
 		.Write(pTargetVolume)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Texture* pTarget = pTargetVolume->Get();
+				Texture* pTarget = resources.Get(pTargetVolume);
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
@@ -83,8 +83,8 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					lightCullData.pLightGrid->Get()->GetSRV(),
-					pSourceVolume->Get()->GetSRV(),
+					resources.GetSRV(lightCullData.pLightGrid),
+					resources.GetSRV(pSourceVolume),
 					});
 
 				context.Dispatch(
@@ -100,9 +100,9 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
 		.Read({ pTargetVolume })
 		.Write(pFinalVolumeFog)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Texture* pFinalFog = pFinalVolumeFog->Get();
+				Texture* pFinalFog = resources.Get(pFinalVolumeFog);
 
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
@@ -121,7 +121,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, pFinalFog->GetUAV());
 				context.BindResources(3, {
-					pTargetVolume->Get()->GetSRV(),
+					resources.GetSRV(pTargetVolume),
 					}, 1);
 
 				context.Dispatch(

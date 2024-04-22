@@ -80,11 +80,11 @@ void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pT
 	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
 		.RenderTarget(pTarget)
 		.DepthStencil(pDepth)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetGraphicsRootSignature(m_pRS);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget->Get()));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, resources.Get(pTarget)));
 
 				if (numLines != 0)
 				{

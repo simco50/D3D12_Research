@@ -20,19 +20,32 @@ enum class RGPassFlag : uint8
 };
 DECLARE_BITMASK_TYPE(RGPassFlag);
 
-class RGPassResources
+class RGResources
 {
 public:
-	RGPassResources(const RGPass& pass)
+	RGResources(const RGPass& pass)
 		: m_Pass(pass)
 	{}
 
-	RGPassResources(const RGPassResources& other) = delete;
-	RGPassResources& operator=(const RGPassResources& other) = delete;
+	RGResources(const RGResources& other) = delete;
+	RGResources& operator=(const RGResources& other) = delete;
 
 	NO_DISCARD RenderPassInfo GetRenderPassInfo() const;
 
+	DeviceResource* Get(const RGResource* pResource) const	{ return GetResource(pResource, D3D12_RESOURCE_STATE_COMMON); }
+	Texture* Get(const RGTexture* pTexture) const			{ return static_cast<Texture*>(GetResource(pTexture, D3D12_RESOURCE_STATE_COMMON)); }
+	Buffer* Get(const RGBuffer* pBuffer) const				{ return static_cast<Buffer*>(GetResource(pBuffer, D3D12_RESOURCE_STATE_COMMON)); }
+
+	ShaderResourceView* GetSRV(const RGTexture* pTexture) const						{ return static_cast<Texture*>(GetResource(pTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))->GetSRV(); }
+	ShaderResourceView* GetSRV(const RGBuffer* pBuffer) const						{ return static_cast<Buffer*>(GetResource(pBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))->GetSRV(); }
+	UnorderedAccessView* GetUAV(const RGTexture* pTexture, uint32 index = 0) const	{ return static_cast<Texture*>(GetResource(pTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))->GetUAV(index); }
+	UnorderedAccessView* GetUAV(const RGBuffer* pBuffer) const						{ return static_cast<Buffer*>(GetResource(pBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))->GetUAV(); }
+
+	DeviceResource* GetResourceUnsafe(const RGResource* pResource) const			{ return pResource->GetPhysicalUnsafe(); }
+
 private:
+	DeviceResource* GetResource(const RGResource* pResource, D3D12_RESOURCE_STATES requiredAccess) const;
+
 	const RGPass& m_Pass;
 };
 
@@ -136,24 +149,19 @@ private:
 	struct IRGPassCallback
 	{
 		virtual ~IRGPassCallback() = default;
-		virtual void Execute(CommandContext& context, const RGPassResources& resources) = 0;
+		virtual void Execute(CommandContext& context, const RGResources& resources) = 0;
 	};
 
 	template<typename TLambda>
 	struct RGPassCallback : public IRGPassCallback
 	{
-		constexpr static bool HasPassResources = std::is_invocable<TLambda, CommandContext&, const RGPassResources&>::value;
-
 		RGPassCallback(TLambda&& lambda)
 			: Lambda(std::forward<TLambda&&>(lambda))
 		{}
 
-		virtual void Execute(CommandContext& context, const RGPassResources& resources)
+		virtual void Execute(CommandContext& context, const RGResources& resources)
 		{
-			if constexpr (HasPassResources)
-				(Lambda)(context, resources);
-			else
-				(Lambda)(context);
+			(Lambda)(context, resources);
 		}
 
 		TLambda Lambda;
@@ -161,7 +169,7 @@ private:
 
 public:
 	friend class RGGraph;
-	friend class RGPassResources;
+	friend class RGResources;
 
 	struct RenderTargetAccess
 	{

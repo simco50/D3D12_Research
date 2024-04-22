@@ -81,7 +81,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 
 	graph.AddPass("Build Draw Args", RGPassFlag::Compute)
 		.Write({ pDrawArgs, pRenderData })
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.InsertUAVBarrier();
 
@@ -89,8 +89,8 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 				context.SetPipelineState(m_pBuildIndirectDrawArgsPSO);
 
 				context.BindResources(2, {
-					pRenderData->Get()->GetUAV(),
-					pDrawArgs->Get()->GetUAV(),
+					resources.GetUAV(pRenderData),
+					resources.GetUAV(pDrawArgs),
 					});
 				context.Dispatch(1);
 			});
@@ -99,26 +99,26 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 		.Read({ pRenderData, pDrawArgs, pDepth })
 		.RenderTarget(pTarget)
 		.DepthStencil(pDepth, RenderPassDepthFlags::ReadOnly)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRenderLinesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget->Get()));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, resources.Get(pTarget)));
 				context.BindResources(3, {
 					m_pFontAtlas->GetSRV(),
 					m_pGlyphData->GetSRV(),
-					pRenderData->Get()->GetSRV(),
-					pDepth->Get()->GetSRV(),
+					resources.GetSRV(pRenderData),
+					resources.GetSRV(pDepth),
 					});
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, offsetof(DrawArgs, LineArgs));
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pDrawArgs), nullptr, offsetof(DrawArgs, LineArgs));
 			});
 
 	graph.AddPass("Render Text", RGPassFlag::Raster)
 		.Read({ pRenderData, pDrawArgs })
 		.RenderTarget(pTarget)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRenderTextPSO);
@@ -135,9 +135,9 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTextu
 				context.BindResources(3, {
 					m_pFontAtlas->GetSRV(),
 					m_pGlyphData->GetSRV(),
-					pRenderData->Get()->GetSRV()
+					resources.GetSRV(pRenderData)
 					});
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pDrawArgs->Get(), nullptr, offsetof(DrawArgs, TextArgs));
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pDrawArgs), nullptr, offsetof(DrawArgs, TextArgs));
 			});
 
 	graph.AddPass("Transition Draw Data", RGPassFlag::Raster)

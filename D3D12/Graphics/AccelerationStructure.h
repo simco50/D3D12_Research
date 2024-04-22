@@ -9,6 +9,9 @@ struct SubMesh;
 class AccelerationStructure
 {
 public:
+	AccelerationStructure();
+	~AccelerationStructure();
+
 	void Init(GraphicsDevice* pDevice);
 	void Build(CommandContext& context, const SceneView& view);
 	ShaderResourceView* GetSRV() const;

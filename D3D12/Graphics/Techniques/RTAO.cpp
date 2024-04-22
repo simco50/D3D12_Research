@@ -54,9 +54,9 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 	graph.AddPass("Trace Rays", RGPassFlag::Compute)
 		.Read(sceneTextures.pDepth)
 		.Write(pRayTraceTarget)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Texture* pTarget = pRayTraceTarget->Get();
+				Texture* pTarget = resources.Get(pRayTraceTarget);
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTraceRaysSO);
 
@@ -79,7 +79,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					sceneTextures.pDepth->Get()->GetSRV(),
+					resources.GetSRV(sceneTextures.pDepth),
 					});
 
 				context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
@@ -91,9 +91,9 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 	graph.AddPass("Denoise", RGPassFlag::Compute)
 		.Read({ pRayTraceTarget, sceneTextures.pVelocity, sceneTextures.pDepth, pAOHistory })
 		.Write(pDenoiseTarget)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Texture* pTarget = pDenoiseTarget->Get();
+				Texture* pTarget = resources.Get(pDenoiseTarget);
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pDenoisePSO);
 
@@ -101,10 +101,10 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					sceneTextures.pDepth->Get()->GetSRV(),
-					pAOHistory->Get()->GetSRV(),
-					pRayTraceTarget->Get()->GetSRV(),
-					sceneTextures.pVelocity->Get()->GetSRV(),
+					resources.GetSRV(sceneTextures.pDepth),
+					resources.GetSRV(pAOHistory),
+					resources.GetSRV(pRayTraceTarget),
+					resources.GetSRV(sceneTextures.pVelocity),
 					});
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 			});
@@ -116,9 +116,9 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
 		.Read({ pDenoiseTarget, sceneTextures.pDepth })
 		.Write(pBlurTarget1)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Texture* pTarget = pBlurTarget1->Get();
+				Texture* pTarget = resources.Get(pBlurTarget1);
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBilateralBlurPSO);
 
@@ -134,8 +134,8 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.BindRootCBV(0, shaderParameters);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					sceneTextures.pDepth->Get()->GetSRV(),
-					pDenoiseTarget->Get()->GetSRV()
+					resources.GetSRV(sceneTextures.pDepth),
+					resources.GetSRV(pDenoiseTarget)
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 256, pTarget->GetHeight(), 1));
@@ -146,9 +146,9 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 	graph.AddPass("Blur AO - Vertical", RGPassFlag::Compute)
 		.Read({ pRayTraceTarget, sceneTextures.pDepth })
 		.Write(pFinalAOTarget)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Texture* pTarget = pFinalAOTarget->Get();
+				Texture* pTarget = resources.Get(pFinalAOTarget);
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBilateralBlurPSO);
@@ -165,8 +165,8 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.BindRootCBV(0, shaderParameters);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					sceneTextures.pDepth->Get()->GetSRV(),
-					pRayTraceTarget->Get()->GetSRV()
+					resources.GetSRV(sceneTextures.pDepth),
+					resources.GetSRV(pRayTraceTarget)
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 1, pTarget->GetHeight(), 256));

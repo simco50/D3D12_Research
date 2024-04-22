@@ -83,7 +83,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 		graph.AddPass("Blit", RGPassFlag::Compute)
 			.Read(pAccumulationTexture)
 			.Write(pTarget)
-			.Bind([=](CommandContext& context)
+			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
 					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pBlitPSO);
@@ -98,8 +98,8 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 					parameters.AccumulatedFrames = m_NumAccumulatedFrames;
 
 					context.BindRootCBV(0, parameters);
-					context.BindResources(2, pTarget->Get()->GetUAV());
-					context.BindResources(3, pAccumulationTexture->Get()->GetSRV());
+					context.BindResources(2, resources.GetUAV(pTarget));
+					context.BindResources(3, resources.GetSRV(pAccumulationTexture));
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetDesc().Width, 8, pTarget->GetDesc().Height, 8));
 				});
 	}
@@ -110,9 +110,9 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 
 		graph.AddPass("Path Tracing", RGPassFlag::Compute)
 			.Write({ pTarget, pAccumulationTexture })
-			.Bind([=](CommandContext& context)
+			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
-					Texture* pRTTarget = pTarget->Get();
+					Texture* pRTTarget = resources.Get(pTarget);
 
 					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pSO);
@@ -136,7 +136,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pRTTarget));
 					context.BindResources(2, {
 						pRTTarget->GetUAV(),
-						pAccumulationTexture->Get()->GetUAV(),
+						resources.GetUAV(pAccumulationTexture),
 						});
 
 					context.DispatchRays(bindingTable, pRTTarget->GetWidth(), pRTTarget->GetHeight());

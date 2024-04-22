@@ -86,13 +86,13 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 		std::unordered_map<const DeviceResource*, std::vector<const RGResource*>> physicalResourceMap;
 		for (const RGResource* pResource : sortedResources)
 		{
-			if (pResource->GetPhysical() == nullptr || pResource->IsImported)
+			if (pResource->GetPhysicalUnsafe() == nullptr || pResource->IsImported)
 				continue;
 
-			if (std::find(physicalResources.begin(), physicalResources.end(), pResource->GetPhysical()) == physicalResources.end())
-				physicalResources.push_back(pResource->GetPhysical());
+			if (std::find(physicalResources.begin(), physicalResources.end(), pResource->GetPhysicalUnsafe()) == physicalResources.end())
+				physicalResources.push_back(pResource->GetPhysicalUnsafe());
 
-			physicalResourceMap[pResource->GetPhysical()].push_back(pResource);
+			physicalResourceMap[pResource->GetPhysicalUnsafe()].push_back(pResource);
 		}
 
 		struct Event

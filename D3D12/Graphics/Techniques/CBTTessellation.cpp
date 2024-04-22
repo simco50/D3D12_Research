@@ -174,13 +174,13 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 		graph.AddPass("CBT Upload", RGPassFlag::Copy)
 			.Write({ pCBTBuffer })
-			.Bind([=](CommandContext& context)
+			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
 					CBT cbt;
 					cbt.InitBare(CBTSettings::CBTDepth, 1);
 					ScratchAllocation alloc = context.AllocateScratch(size);
 					memcpy(alloc.pMappedMemory, cbt.GetData(), size);
-					context.CopyBuffer(alloc.pBackingResource, pCBTBuffer->Get(), alloc.Size, alloc.Offset, 0);
+					context.CopyBuffer(alloc.pBackingResource, resources.Get(pCBTBuffer), alloc.Size, alloc.Offset, 0);
 				});
 	}
 	m_CBTData.pCBT = pCBTBuffer;
@@ -202,7 +202,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 		graph.AddPass("CBT Update", RGPassFlag::Compute)
 			.Write({ pCBTBuffer })
 			.Read({ pIndirectArgs })
-			.Bind([=](CommandContext& context)
+			.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
 
@@ -220,12 +220,12 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				context.BindRootCBV(1, commonArgs);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
+					resources.GetUAV(pCBTBuffer),
 					});
 
 				context.SetPipelineState(m_pCBTUpdatePSO);
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, UpdateDispatchArgs));
-				context.InsertUAVBarrier(pCBTBuffer->Get());
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, UpdateDispatchArgs));
+				context.InsertUAVBarrier(resources.Get(pCBTBuffer));
 			});
 	}
 
@@ -234,7 +234,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 	// Also required by sum reduction pass
 	graph.AddPass("CBT Cache Bitfield", RGPassFlag::Compute)
 		.Write(pCBTBuffer)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
 
@@ -250,22 +250,22 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				context.BindRootCBV(0, reductionArgs);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
+					resources.GetUAV(pCBTBuffer),
 					});
 
 				context.SetPipelineState(m_pCBTCacheBitfieldPSO);
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
-				context.InsertUAVBarrier(pCBTBuffer->Get());
+				context.InsertUAVBarrier(resources.Get(pCBTBuffer));
 			});
 
 	graph.AddPass("CBT Sum Reduction", RGPassFlag::Compute)
 		.Write(pCBTBuffer)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetComputeRootSignature(m_pCBTRS);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
+					resources.GetUAV(pCBTBuffer),
 					});
 
 				struct SumReductionData
@@ -284,13 +284,13 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 					context.SetPipelineState(m_pCBTSumReductionPSO);
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
-					context.InsertUAVBarrier(pCBTBuffer->Get());
+					context.InsertUAVBarrier(resources.Get(pCBTBuffer));
 				}
 			});
 
 	graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
 		.Write({ pCBTBuffer, pIndirectArgs })
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				struct
 				{
@@ -302,12 +302,12 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				context.BindRootCBV(0, params);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
-					pIndirectArgs->Get()->GetUAV(),
+					resources.GetUAV(pCBTBuffer),
+					resources.GetUAV(pIndirectArgs),
 					});
 				context.SetPipelineState(m_pCBTIndirectArgsPSO);
 				context.Dispatch(1);
-				context.InsertUAVBarrier(pCBTBuffer->Get());
+				context.InsertUAVBarrier(resources.Get(pCBTBuffer));
 			});
 
 	// Amplification + Mesh shader variant performs subdivision used for the next frame while rendering with the subdivision state of the previous frame.
@@ -315,7 +315,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 		.Write(pCBTBuffer)
 		.Read(pIndirectArgs)
 		.DepthStencil(sceneTextures.pDepth)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetGraphicsRootSignature(m_pCBTRS);
 				context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
@@ -334,15 +334,15 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 				context.BindRootCBV(0, updateParams);
 				context.BindRootCBV(1, commonArgs);
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pDepth)));
 				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
+					resources.GetUAV(pCBTBuffer),
 					});
 
 				if (CBTSettings::MeshShader)
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, DispatchMeshArgs));
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, DispatchMeshArgs));
 				else
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, DrawArgs));
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, DrawArgs));
 			});
 
 	if (CBTSettings::DebugVisualize)
@@ -360,7 +360,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 			.Read({ pIndirectArgs })
 			.Write({ pCBTBuffer })
 			.RenderTarget(pVisualizeTarget)
-			.Bind([=](CommandContext& context)
+			.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetGraphicsRootSignature(m_pCBTRS);
 				context.SetPipelineState(m_pCBTDebugVisualizePSO);
@@ -375,10 +375,10 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				context.BindRootCBV(0, params);
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, m_CBTData.pDebugVisualizeTexture));
 				context.BindResources(3, {
-					pCBTBuffer->Get()->GetUAV(),
+					resources.GetUAV(pCBTBuffer),
 					});
 
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, pIndirectArgs->Get(), nullptr, offsetof(IndirectDrawArgs, DebugDrawArgs));
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, DebugDrawArgs));
 			});
 	}
 
@@ -398,22 +398,22 @@ void CBTTessellation::Shade(RGGraph& graph, const SceneView* pView, const SceneT
 	commonArgs.NumCBTElements = (uint32)m_CBTData.pCBT->GetDesc().Size / sizeof(uint32);
 
 	graph.AddPass("CBT Shade", RGPassFlag::Raster)
-		.Read({ pFog })
+		.Read({ pFog, sceneTextures.pDepth })
 		.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
 		.RenderTarget(sceneTextures.pColorTarget)
 		.RenderTarget(sceneTextures.pNormals)
 		.RenderTarget(sceneTextures.pRoughness)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetGraphicsRootSignature(m_pCBTRS);
 				context.SetPipelineState(m_pCBTShadePSO);
 				context.SetStencilRef((uint32)StencilBit::Terrain);
 
 				context.BindRootCBV(1, commonArgs);
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, sceneTextures.pColorTarget->Get()));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pColorTarget)));
 				context.BindResources(4, {
-					sceneTextures.pDepth->Get()->GetSRV(),
-					pFog->Get()->GetSRV(),
+					resources.GetSRV(sceneTextures.pDepth),
+					resources.GetSRV(pFog),
 					});
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

@@ -19,6 +19,14 @@ namespace Tweakables
 }
 
 
+AccelerationStructure::AccelerationStructure()
+{
+}
+
+AccelerationStructure::~AccelerationStructure()
+{
+}
+
 void AccelerationStructure::Init(GraphicsDevice* pDevice)
 {
 	m_pCommonRS = new RootSignature(pDevice);

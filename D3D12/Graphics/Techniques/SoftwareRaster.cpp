@@ -25,13 +25,13 @@ void SoftwareRaster::Render(RGGraph& graph, const SceneView* pView, const Raster
 	graph.AddPass("Raster Args", RGPassFlag::Compute)
 		.Read({ rasterContext.pVisibleMeshletsCounter })
 		.Write({ pRasterArgs })
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBuildRasterArgsPSO);
 
-				context.BindResources(2, pRasterArgs->Get()->GetUAV());
-				context.BindResources(3, rasterContext.pVisibleMeshletsCounter->Get()->GetUAV());
+				context.BindResources(2, resources.GetUAV(pRasterArgs));
+				context.BindResources(3, resources.GetUAV(rasterContext.pVisibleMeshletsCounter));
 				context.Dispatch(1);
 			});
 
@@ -39,21 +39,20 @@ void SoftwareRaster::Render(RGGraph& graph, const SceneView* pView, const Raster
 	graph.AddPass("Raster", RGPassFlag::Compute)
 		.Read({ rasterContext.pVisibleMeshlets, pRasterArgs })
 		.Write(pRasterOutput)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.ClearUAVu(pRasterOutput->Get()->GetUAV());
-				context.InsertUAVBarrier();
+				context.ClearUAVu(resources.GetUAV(pRasterOutput));
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterPSO);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pRasterOutput->Get()));
-				context.BindResources(2, pRasterOutput->Get()->GetUAV());
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, resources.Get(pRasterOutput)));
+				context.BindResources(2, resources.GetUAV(pRasterOutput));
 				context.BindResources(3, {
-						rasterContext.pVisibleMeshlets->Get()->GetSRV(),
+						resources.GetSRV(rasterContext.pVisibleMeshlets),
 					});
 
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, pRasterArgs->Get());
+				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pRasterArgs));
 			});
 
 
@@ -61,14 +60,14 @@ void SoftwareRaster::Render(RGGraph& graph, const SceneView* pView, const Raster
 	graph.AddPass("Raster Debug", RGPassFlag::Compute)
 		.Read(pRasterOutput)
 		.Write(pDebug)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterVisualizePSO);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pDebug->Get()));
-				context.BindResources(2, pDebug->Get()->GetUAV());
-				context.BindResources(3, pRasterOutput->Get()->GetSRV());
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, resources.Get(pDebug)));
+				context.BindResources(2, resources.GetUAV(pDebug));
+				context.BindResources(3, resources.GetSRV(pRasterOutput));
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pDebug->GetDesc().Width, 16, pDebug->GetDesc().Height, 16));
 			});

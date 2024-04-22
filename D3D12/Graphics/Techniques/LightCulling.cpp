@@ -75,7 +75,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->LightBuffer.Count, sizeof(PrecomputedLightData)));
 	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
 		.Write(pPrecomputeData)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
@@ -94,19 +94,19 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 						data.IsPoint = light.Type == LightType::Point;
 						data.IsDirectional = light.Type == LightType::Directional;
 					});
-				context.CopyBuffer(allocation.pBackingResource, pPrecomputeData->Get(), precomputedLightDataSize, allocation.Offset, 0);
+				context.CopyBuffer(allocation.pBackingResource, resources.Get(pPrecomputeData), precomputedLightDataSize, allocation.Offset, 0);
 			});
 
 	graph.AddPass("Cull Lights", RGPassFlag::Compute)
 		.Read(pPrecomputeData)
 		.Write({ cullData.pLightGrid })
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPipelineState(m_pClusteredCullPSO);
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
 				// Clear the light grid because we're accumulating the light count in the shader
-				Buffer* pLightGrid = cullData.pLightGrid->Get();
+				Buffer* pLightGrid = resources.Get(cullData.pLightGrid);
 				context.ClearUAVu(pLightGrid->GetUAV());
 
 				struct
@@ -123,10 +123,10 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, {
-					cullData.pLightGrid->Get()->GetUAV(),
+					resources.GetUAV(cullData.pLightGrid),
 					});
 				context.BindResources(3, {
-					pPrecomputeData->Get()->GetSRV()
+					resources.GetSRV(pPrecomputeData)
 					});
 
 				context.Dispatch(
@@ -138,7 +138,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 			});
 }
 
-void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& resources)
+void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& cullResources)
 {
 	RG_GRAPH_SCOPE("Tiled Light Culling", graph);
 
@@ -146,8 +146,8 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 	uint32 tilesY = Math::DivideAndRoundUp((uint32)pView->MainView.Viewport.GetHeight(), gTiledLightingTileSize);
 	uint32 lightListElements = tilesX * tilesY * (gMaxLightsPerTile / 32);
 
-	resources.pLightListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));
-	resources.pLightListTransparent = graph.Create("Light List - Transparant", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));
+	cullResources.pLightListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));
+	cullResources.pLightListTransparent = graph.Create("Light List - Transparant", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));
 
 	struct PrecomputedLightData
 	{
@@ -158,7 +158,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->LightBuffer.Count, sizeof(PrecomputedLightData)));
 	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
 		.Write(pPrecomputeData)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->LightBuffer.Count;
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
@@ -187,15 +187,15 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 							data.SphereViewPosition = Vector3::Transform(transform.Position, viewMatrix) + Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, transform.Rotation), viewMatrix) * light.Range;
 						}
 					});
-				context.CopyBuffer(allocation.pBackingResource, pPrecomputeData->Get(), precomputedLightDataSize, allocation.Offset, 0);
+				context.CopyBuffer(allocation.pBackingResource, resources.Get(pPrecomputeData), precomputedLightDataSize, allocation.Offset, 0);
 			});
 
 	graph.AddPass("2D Light Culling", RGPassFlag::Compute)
 		.Read({ sceneTextures.pDepth, pPrecomputeData })
-		.Write({ resources.pLightListOpaque, resources.pLightListTransparent })
-		.Bind([=](CommandContext& context)
+		.Write({ cullResources.pLightListOpaque, cullResources.pLightListTransparent })
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Texture* pDepth = sceneTextures.pDepth->Get();
+				Texture* pDepth = resources.Get(sceneTextures.pDepth);
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledCullPSO);
@@ -203,12 +203,12 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pDepth));
 
 				context.BindResources(2, {
-					resources.pLightListOpaque->Get()->GetUAV(),
-					resources.pLightListTransparent->Get()->GetUAV(),
+					resources.GetUAV(cullResources.pLightListOpaque),
+					resources.GetUAV(cullResources.pLightListTransparent),
 					});
 				context.BindResources(3, {
 					pDepth->GetSRV(),
-					pPrecomputeData->Get()->GetSRV(),
+					resources.GetSRV(pPrecomputeData),
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(
@@ -225,9 +225,9 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ pSceneDepth, lightCullData.pLightListOpaque })
 		.Write(pVisualizationTarget)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Texture* pTarget = pVisualizationTarget->Get();
+				Texture* pTarget = resources.Get(pVisualizationTarget);
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledVisualizeLightsPSO);
@@ -235,8 +235,8 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					pSceneDepth->Get()->GetSRV(),
-					lightCullData.pLightListOpaque->Get()->GetSRV(),
+					resources.GetSRV(pSceneDepth),
+					resources.GetSRV(lightCullData.pLightListOpaque),
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(
@@ -258,9 +258,9 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ pSceneDepth, pLightGrid })
 		.Write(pVisualizationTarget)
-		.Bind([=](CommandContext& context)
+		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Texture* pTarget = pVisualizationTarget->Get();
+				Texture* pTarget = resources.Get(pVisualizationTarget);
 
 				struct
 				{
@@ -280,8 +280,8 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					pSceneDepth->Get()->GetSRV(),
-					pLightGrid->Get()->GetSRV(),
+					resources.GetSRV(pSceneDepth),
+					resources.GetSRV(pLightGrid),
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(
