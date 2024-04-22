@@ -160,6 +160,43 @@ private:
 
 void DrawProfilerHUD();
 
+
+// Data for a single frame of profiling events. On for each history frame
+class ProfilerEventData
+{
+public:
+	ProfilerEventData()
+		: Allocator(1 << 16)
+	{}
+
+	// Single event
+	struct Event
+	{
+		const char* pName		= nullptr;	// Name of event
+		const char* pFilePath	= nullptr;	// File path of location where event was started
+		uint64		TicksBegin	= 0;		// Begin CPU ticks
+		uint64		TicksEnd	= 0;		// End CPU ticks
+		uint32		LineNumber	: 16;		// Line number of file where event was started
+		uint32		Depth		: 8;		// Stack depth of event
+		uint32		ThreadIndex : 8;		// Index of thread this event is started on
+		uint32		QueueIndex	: 8;		// GPU Queue Index (GPU-specific)
+		uint32					: 24;		// Padding
+	};
+
+	Span<const Event> GetEvents() const { return Span<const Event>(Events.data(), NumEvents); }
+	Span<const Event> GetEvents(uint32 groupIndex) const { return groupIndex < GroupedEvents.size() ? GroupedEvents[groupIndex] : Span<const Event>(); }
+
+private:
+	friend class CPUProfiler;
+	friend class GPUProfiler;
+
+	LinearAllocator					Allocator;			// Scratch allocator for frame
+	std::vector<Span<const Event>>	GroupedEvents;		// Span of events for each group
+	std::vector<Event>				Events;				// Event storage for frame
+	uint32							NumEvents = 0;		// Total number of recorded events
+};
+
+
 //-----------------------------------------------------------------------------
 // [SECTION] GPU Profiler
 //-----------------------------------------------------------------------------
@@ -206,39 +243,6 @@ public:
 
 	void SetPaused(bool paused) { m_PauseQueued = paused; }
 
-	// Data for a single frame of profiling events. On for each history frame
-	class EventData
-	{
-	public:
-		EventData()
-			: Allocator(1 << 16)
-		{}
-
-		struct Event
-		{
-			const char* pName		= nullptr;	// Name of event
-			const char* pFilePath	= nullptr;	// File path of location where event was started
-			uint64		TicksBegin	= 0;		// Begin CPU ticks
-			uint64		TicksEnd	= 0;		// End CPU ticks
-			uint32		LineNumber	: 16;		// Line number of file where event was started
-			uint32		Depth		: 8;		// Stack depth of event
-			uint32		QueueIndex	: 8;		// Index of QueueInfo
-			uint32		padding		: 32;
-		};
-		static_assert(sizeof(Event) == sizeof(uint32) * 10);
-
-		Span<const Event> GetEvents() const { return Span<const Event>(Events.data(), NumEvents); }
-		Span<const Event> GetEvents(uint32 queueIndex) const { return queueIndex < EventsPerQueue.size() ? EventsPerQueue[queueIndex] : Span<const Event>(); }
-
-	private:
-		friend class GPUProfiler;
-
-		LinearAllocator					Allocator;			// Scratch allocator for frame
-		std::vector<Span<const Event>>	EventsPerQueue;		// Span of events for each queue
-		std::vector<Event>				Events;				// Event storage for frame
-		uint32							NumEvents = 0;		// Total number of recorded events
-	};
-
 	// Data of a single GPU queue. Allows converting GPU timestamps to CPU timestamps
 	struct QueueInfo
 	{
@@ -260,7 +264,7 @@ public:
 		return URange(begin, end);
 	}
 
-	const EventData& GetEventData(uint32 frameIndex) const
+	const ProfilerEventData& GetEventData(uint32 frameIndex) const
 	{
 		check(frameIndex >= GetFrameRange().Begin && frameIndex < GetFrameRange().End);
 		return GetSampleFrame(frameIndex);
@@ -285,7 +289,7 @@ private:
 				return {};
 
 			uint32 frameBit = frameIndex % m_FrameLatency;
-			return Span<const uint64>(m_pReadbackData + frameBit * m_MaxNumQueries, m_MaxNumQueries);
+			return m_ReadbackData.Subspan(frameBit * m_MaxNumQueries, m_MaxNumQueries);
 		}
 
 		bool IsFrameComplete(uint64 frameIndex)
@@ -323,16 +327,16 @@ private:
 		ID3D12GraphicsCommandList*				m_pCommandList			= nullptr;	// CommandList to resolve queries
 		ID3D12QueryHeap*						m_pQueryHeap			= nullptr;	// Heap containing MaxNumQueries * FrameLatency queries
 		ID3D12Resource*							m_pReadbackResource		= nullptr;	// Readback resource storing resolved query dara
-		const uint64*							m_pReadbackData			= nullptr;	// Mapped readback resource pointer
+		Span<const uint64>						m_ReadbackData			= {};		// Mapped readback resource pointer
 		ID3D12CommandQueue*						m_pResolveQueue			= nullptr;	// Queue to resolve queries on
 		ID3D12Fence*							m_pResolveFence			= nullptr;	// Fence for tracking when queries are finished resolving
 		HANDLE									m_ResolveWaitHandle		= nullptr;	// Handle to allow waiting for resolve to finish
 		uint64									m_LastCompletedFence	= 0;		// Last finish fence value
 	};
 
-	const EventData& GetSampleFrame(uint32 frameIndex) const { return m_pEventData[frameIndex % m_EventHistorySize]; }
-	EventData& GetSampleFrame(uint32 frameIndex) { return m_pEventData[frameIndex % m_EventHistorySize]; }
-	EventData& GetSampleFrame() { return GetSampleFrame(m_FrameIndex); }
+	const ProfilerEventData& GetSampleFrame(uint32 frameIndex) const { return m_pEventData[frameIndex % m_EventHistorySize]; }
+	ProfilerEventData& GetSampleFrame(uint32 frameIndex) { return m_pEventData[frameIndex % m_EventHistorySize]; }
+	ProfilerEventData& GetSampleFrame() { return GetSampleFrame(m_FrameIndex); }
 
 	// Data for a single frame of GPU queries. One for each frame latency
 	struct QueryData
@@ -415,7 +419,7 @@ private:
 
 	CommandListData				m_CommandListData{};
 
-	EventData*					m_pEventData			= nullptr;		// Data containing all resulting events. 1 per frame history
+	ProfilerEventData*			m_pEventData			= nullptr;		// Data containing all resulting events. 1 per frame history
 	uint32						m_EventHistorySize		= 0;			// Number of frames to keep track of
 	std::atomic<uint32>			m_EventIndex			= 0;			// Current event index
 
@@ -509,41 +513,6 @@ public:
 	// Initialize a thread with an optional name
 	void RegisterThread(const char* pName = nullptr);
 
-	// Struct containing all sampling data of a single frame
-	class EventData
-	{
-	public:
-		static constexpr uint32 ALLOCATOR_SIZE = 1 << 16;
-
-		EventData()
-			: Allocator(ALLOCATOR_SIZE)
-		{}
-
-		// Structure representating a single event
-		struct Event
-		{
-			const char* pName		= "";		// Name of the event
-			const char* pFilePath	= nullptr;	// File path of file in which this event is recorded
-			uint64		TicksBegin	= 0;		// The ticks at the start of this event
-			uint64		TicksEnd	= 0;		// The ticks at the end of this event
-			uint32		LineNumber	: 16;		// Line number of file in which this event is recorded
-			uint32		ThreadIndex	: 11;		// Thread Index of the thread that recorderd this event
-			uint32		Depth		: 5;		// Depth of the event
-			uint32		padding		: 32;
-		};
-		static_assert(sizeof(Event) == 10 * sizeof(uint32));
-
-		const Span<const Event> GetEvents() const { return Span<const Event>(Events.data(), NumEvents); }
-		const Span<const Event> GetEvents(uint32 threadIndex) const { return threadIndex < (uint32)EventsPerThread.size() ? EventsPerThread[threadIndex] : Span<const Event>(); }
-
-	private:
-		friend class CPUProfiler;
-		std::vector<Span<const Event>>	EventsPerThread;	// Span of events for each queue
-		std::vector<Event>				Events;				// All events of the frame
-		LinearAllocator					Allocator;			// Scratch allocator storing all dynamic allocations of the frame
-		uint32							NumEvents = 0;		// The number of events
-	};
-
 	// Thread-local storage to keep track of current depth and event stack
 	struct TLS
 	{
@@ -570,7 +539,7 @@ public:
 		return URange(begin, end);
 	}
 
-	const EventData& GetEventData(uint32 frameIndex) const
+	const ProfilerEventData& GetEventData(uint32 frameIndex) const
 	{
 		check(frameIndex >= GetFrameRange().Begin && frameIndex < GetFrameRange().End);
 		return GetData(frameIndex);
@@ -600,16 +569,16 @@ private:
 	}
 
 	// Return the sample data of the current frame
-	EventData& GetData()								{ return GetData(m_FrameIndex); }
-	EventData& GetData(uint32 frameIndex)				{ return m_pEventData[frameIndex % m_HistorySize]; }
-	const EventData& GetData(uint32 frameIndex)	const	{ return m_pEventData[frameIndex % m_HistorySize]; }
+	ProfilerEventData& GetData()								{ return GetData(m_FrameIndex); }
+	ProfilerEventData& GetData(uint32 frameIndex)				{ return m_pEventData[frameIndex % m_HistorySize]; }
+	const ProfilerEventData& GetData(uint32 frameIndex)	const	{ return m_pEventData[frameIndex % m_HistorySize]; }
 
 	CPUProfilerCallbacks m_EventCallback;
 
 	std::mutex				m_ThreadDataLock;				// Mutex for accesing thread data
 	std::vector<ThreadData> m_ThreadData;					// Data describing each registered thread
 
-	EventData*				m_pEventData		= nullptr;	// Per-frame data
+	ProfilerEventData*		m_pEventData		= nullptr;	// Per-frame data
 	uint32					m_HistorySize		= 0;		// History size
 	uint32					m_FrameIndex		= 0;		// The current frame index
 	std::atomic<uint32>		m_EventIndex		= 0;		// The current event index
