@@ -36,8 +36,20 @@ struct Transform
 	Matrix World		= Matrix::Identity;
 };
 
+struct Identity
+{
+	std::string Name;
+};
+
 struct World
 {
+	entt::entity CreateEntity(const char* pName)
+	{
+		entt::entity e = Registry.create();
+		Registry.emplace<Identity>(e, pName);
+		return e;
+	}
+
 	std::vector<Ref<Texture>> Textures;
 	std::vector<Mesh> Meshes;
 	std::vector<Material> Materials;

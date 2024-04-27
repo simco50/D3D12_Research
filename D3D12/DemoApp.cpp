@@ -171,7 +171,7 @@ void DemoApp::SetupScene(const char* pPath)
 
 
 	{
-		entt::entity entity = m_World.Registry.create();
+		entt::entity entity = m_World.CreateEntity("Sunlight");
 		Transform& transform = m_World.Registry.emplace<Transform>(entity);
 		transform.Position = Vector3::Zero;
 
@@ -203,7 +203,7 @@ void DemoApp::SetupScene(const char* pPath)
 
 		for(Vector3 v : positions)
 		{
-			entt::entity entity = m_World.Registry.create();
+			entt::entity entity = m_World.CreateEntity("Spotlight");
 			Transform& transform = m_World.Registry.emplace<Transform>(entity);
 			transform.Rotation = Quaternion::LookRotation(Vector3::Down, Vector3::Right);
 			transform.Position = v;
@@ -211,7 +211,7 @@ void DemoApp::SetupScene(const char* pPath)
 		}
 	}
 	{
-		entt::entity entity = m_World.Registry.create();
+		entt::entity entity = m_World.CreateEntity("DDGI Volume");
 		Transform& transform = m_World.Registry.emplace<Transform>(entity);
 		transform.Position = Vector3(-0.484151840f, 5.21196413f, 0.309524536f);
 
@@ -1149,6 +1149,64 @@ void DemoApp::UpdateImGui()
 
 	ImGui::End();
 
+	static entt::entity selectedEntity{};
+	if (ImGui::Begin("Outliner"))
+	{
+		auto entity_view = m_World.Registry.view<Identity>();
+		entity_view.each([&](entt::entity entity, Identity& t)
+			{
+				ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+				if (selectedEntity == entity)
+					flags |= ImGuiTreeNodeFlags_Selected;
+				ImGui::TreeNodeEx(Sprintf("%d", (int)entity).c_str(), flags, t.Name.c_str());
+				if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+					selectedEntity = entity;
+			});
+	}
+	ImGui::End();
+
+	
+	if (m_World.Registry.valid(selectedEntity))
+	{
+		if (ImGui::Begin("Entity"))
+		{
+			if (Transform* transform = m_World.Registry.try_get<Transform>(selectedEntity))
+			{
+				if (ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::InputFloat3("Position", &transform->Position.x);
+					ImGui::InputFloat3("Scale", &transform->Scale.x);
+					ImGui::InputFloat4("Rotation", &transform->Rotation.x);
+					ImGui::TreePop();
+				}
+			}
+			if (Light* light = m_World.Registry.try_get<Light>(selectedEntity))
+			{
+				if (ImGui::TreeNodeEx("Light", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::ColorEdit4("Color", &light->Colour.x);
+					ImGui::InputFloat("Intensity", &light->Intensity);
+					ImGui::InputFloat("Range", &light->Range);
+					ImGui::Checkbox("Cast Shadows", &light->CastShadows);
+					ImGui::Checkbox("Volumetric Lighting", &light->VolumetricLighting);
+					ImGui::TreePop();
+				}
+			}
+			if (DDGIVolume* ddgi = m_World.Registry.try_get<DDGIVolume>(selectedEntity))
+			{
+				if (ImGui::TreeNodeEx("DDGI", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::SliderFloat3("Extents", &ddgi->Extents.x, -100, 100);
+					ImGui::SliderInt3("Probe Count", &ddgi->NumProbes.x, 1, 100);
+					ImGui::SliderInt("Max Num Rays", &ddgi->MaxNumRays, 1, 500);
+					ImGui::SliderInt("Num Rays", &ddgi->NumRays, 1, 500);
+					ImGui::TreePop();
+				}
+			}
+		}
+		ImGui::End();
+	}
+
 	if(m_pCaptureTextureSystem)
 		m_pCaptureTextureSystem->RenderUI(m_CaptureTextureContext, viewportOrigin, viewportExtents);
 
@@ -1384,11 +1442,6 @@ void DemoApp::UpdateImGui()
 				ImGui::Checkbox("Raytraced AO", &Tweakables::gRaytracedAO.Get());
 				ImGui::Checkbox("Raytraced Reflections", &Tweakables::gRaytracedReflections.Get());
 				ImGui::Checkbox("DDGI", &Tweakables::gEnableDDGI.Get());
-				auto ddgi_view = m_World.Registry.view<DDGIVolume>();
-				ddgi_view.each([&](DDGIVolume& volume)
-					{
-						ImGui::SliderInt("DDGI RayCount", &volume.NumRays, 1, volume.MaxNumRays);
-					});
 				ImGui::Checkbox("Visualize DDGI", &Tweakables::gVisualizeDDGI.Get());
 				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::gTLASBoundsThreshold.Get(), 0, 40);
 			}

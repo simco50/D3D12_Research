@@ -591,7 +591,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 
 			for (int primitive : meshToPrimitives[node.mesh])
 			{
-				entt::entity entity = world.Registry.create();
+				entt::entity entity = world.CreateEntity(node.name ? node.name : "MeshNode");
 				Transform& transform = world.Registry.emplace<Transform>(entity);
 				Model& model = world.Registry.emplace<Model>(entity);
 
