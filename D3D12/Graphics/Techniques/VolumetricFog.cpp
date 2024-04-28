@@ -39,6 +39,21 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 {
 	RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 
+	std::vector<ShaderInterop::FogVolume> volumes;
+	auto fog_view = pView->pWorld->Registry.view<const Transform, const FogVolume>();
+	fog_view.each([&](const Transform& transform, const FogVolume& fogVolume)
+		{
+			ShaderInterop::FogVolume& v = volumes.emplace_back();
+			v.Location = transform.Position;
+			v.Extents = fogVolume.Extents;
+			v.DensityBase = fogVolume.DensityBase;
+			v.DensityChange = fogVolume.DensityChange;
+			v.Color = fogVolume.Color;
+		});
+
+	if (volumes.empty())
+		return graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
+
 	TextureDesc volumeDesc = TextureDesc::Create3D(
 		Math::DivideAndRoundUp((uint32)pView->GetDimensions().x, gVolumetricFroxelTexelSize),
 		Math::DivideAndRoundUp((uint32)pView->GetDimensions().y, gVolumetricFroxelTexelSize),
@@ -49,8 +64,12 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 	RGTexture* pTargetVolume = graph.Create("Fog Target", volumeDesc);
 	graph.Export(pTargetVolume, &fogData.pFogHistory);
 
+
+	RGBuffer* pFogVolumes = graph.Create("Fog Volumes", BufferDesc::CreateStructured((uint32)volumes.size(), sizeof(ShaderInterop::FogVolume)));
+	RGUtils::DoUpload(graph, pFogVolumes, volumes.data(), volumes.size() * sizeof(ShaderInterop::FogVolume));
+
 	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
-		.Read({ pSourceVolume, lightCullData.pLightGrid })
+		.Read({ pSourceVolume, lightCullData.pLightGrid, pFogVolumes })
 		.Write(pTargetVolume)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
@@ -68,6 +87,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 					Vector2 LightGridParams;
 					Vector2i LightClusterDimensions;
 					float MinBlendFactor;
+					uint32 NumFogVolumes;
 				} params;
 
 				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
@@ -78,11 +98,13 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 				params.LightGridParams = lightCullData.LightGridParams;
 				params.LightClusterDimensions = Vector2i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
 				params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
+				params.NumFogVolumes = pFogVolumes->GetDesc().NumElements();
 
 				context.BindRootCBV(0, params);
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
+					resources.GetSRV(pFogVolumes),
 					resources.GetSRV(lightCullData.pLightGrid),
 					resources.GetSRV(pSourceVolume),
 					});
@@ -96,6 +118,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 			});
 
 	RGTexture* pFinalVolumeFog = graph.Create("Volumetric Fog", volumeDesc);
+
 
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
 		.Read({ pTargetVolume })
@@ -122,7 +145,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 				context.BindResources(2, pFinalFog->GetUAV());
 				context.BindResources(3, {
 					resources.GetSRV(pTargetVolume),
-					}, 1);
+					}, 2);
 
 				context.Dispatch(
 					ComputeUtils::GetNumThreadGroups(

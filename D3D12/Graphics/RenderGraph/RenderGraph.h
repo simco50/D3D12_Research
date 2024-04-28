@@ -301,6 +301,11 @@ public:
 		return m_Allocator.AllocateObject<T>(std::forward<Args&&>(args)...);
 	}
 
+	NO_DISCARD void* Allocate(uint32 size)
+	{
+		return m_Allocator.Allocate(size);
+	}
+
 	RGPass& AddPass(const char* pName, RGPassFlag flags)
 	{
 		RGPass* pPass = Allocate<RGPass>(std::ref(*this), m_Allocator, m_Allocator.AllocateString(pName), flags, RGPassID((uint16)m_Passes.size()));
@@ -439,4 +444,5 @@ namespace RGUtils
 	RGPass&		AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
 	RGBuffer*	CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool doExport);
 	RGTexture*	CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool doExport);
+	void		DoUpload(RGGraph& graph, RGBuffer* pTarget, const void* pSource, uint32 size = 0xFFFFFFFF);
 }

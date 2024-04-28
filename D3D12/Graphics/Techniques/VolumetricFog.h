@@ -12,6 +12,14 @@ struct VolumetricFogData
 	Ref<Texture> pFogHistory;
 };
 
+struct FogVolume
+{
+	Vector3 Extents;
+	Vector3 Color;
+	float DensityChange;
+	float DensityBase;
+};
+
 class VolumetricFog
 {
 public:

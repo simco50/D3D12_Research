@@ -13,6 +13,7 @@ struct InjectParams
 	float2 LightGridParams;
 	uint2 LightClusterDimensions;
 	float MinBlendFactor;
+	uint NumFogVolumes;
 };
 
 struct AccumulateParams
@@ -24,8 +25,9 @@ struct AccumulateParams
 ConstantBuffer<InjectParams> cInjectParams : register(b0);
 ConstantBuffer<InjectParams> cAccumulateParams : register(b0);
 
-Buffer<uint> tLightGrid : register(t0);
-Texture3D<float4> tLightScattering : register(t1);
+StructuredBuffer<FogVolume> tFogVolumes : register(t0);
+Buffer<uint> tLightGrid : register(t1);
+Texture3D<float4> tLightScattering : register(t2);
 
 RWTexture3D<float4> uOutLightScattering : register(u0);
 
@@ -56,15 +58,6 @@ uint GetLightCluster(uint2 fogCellIndex, float depth)
 	return Flatten3D(clusterIndex3D, cInjectParams.LightClusterDimensions);
 }
 
-struct FogVolume
-{
-	float3 Location;
-	float3 Extents;
-	float3 Color;
-	float DensityChange;
-	float DensityBase;
-};
-
 [numthreads(8, 8, 4)]
 void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 {
@@ -86,18 +79,10 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	float3 cellAbsorption = 0.0f;
 	float cellDensity = 0.0f;
 
-	const int numFogVolumes = 1;
-	FogVolume fogVolumes[numFogVolumes];
-	fogVolumes[0].Location = float3(0, 1, 0);
-	fogVolumes[0].Extents = float3(100, 100, 100);
-	fogVolumes[0].Color = float3(1, 1, 1);
-	fogVolumes[0].DensityBase = 0;
-	fogVolumes[0].DensityChange = 0.03f;
-
 	uint i;
-	for(i = 0; i < numFogVolumes; ++i)
+	for(i = 0; i < cInjectParams.NumFogVolumes; ++i)
 	{
-		FogVolume fogVolume = fogVolumes[i];
+		FogVolume fogVolume = tFogVolumes[i];
 
 		float3 posFogLocal = (worldPosition - fogVolume.Location) / fogVolume.Extents;
 		float heightNormalized = posFogLocal.y * 0.5f + 0.5f;

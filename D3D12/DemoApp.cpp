@@ -26,6 +26,7 @@
 #include "Graphics/Techniques/MeshletRasterizer.h"
 #include "Graphics/Techniques/VisualizeTexture.h"
 #include "Graphics/Techniques/LightCulling.h"
+#include "Graphics/Techniques/DDGI.h"
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/TaskQueue.h"
 #include "Core/CommandLine.h"
@@ -220,6 +221,18 @@ void DemoApp::SetupScene(const char* pPath)
 		volume.NumProbes = Vector3i(16, 12, 14);
 		volume.NumRays = 128;
 		volume.MaxNumRays = 512;
+	}
+
+	{
+		entt::entity entity = m_World.CreateEntity("Fog Volume");
+		Transform& transform = m_World.Registry.emplace<Transform>(entity);
+		transform.Position = Vector3(0, 1, 0);
+
+		FogVolume& volume = m_World.Registry.emplace<FogVolume>(entity);
+		volume.Extents = Vector3(100, 100, 100);
+		volume.Color = Vector3(1, 1, 1);
+		volume.DensityBase = 0;
+		volume.DensityChange = 0.03f;
 	}
 
 
@@ -1200,6 +1213,17 @@ void DemoApp::UpdateImGui()
 					ImGui::SliderInt3("Probe Count", &ddgi->NumProbes.x, 1, 100);
 					ImGui::SliderInt("Max Num Rays", &ddgi->MaxNumRays, 1, 500);
 					ImGui::SliderInt("Num Rays", &ddgi->NumRays, 1, 500);
+					ImGui::TreePop();
+				}
+			}
+			if (FogVolume* fog = m_World.Registry.try_get<FogVolume>(selectedEntity))
+			{
+				if (ImGui::TreeNodeEx("Fog Volume", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::SliderFloat3("Extents", &fog->Extents.x, 0, 20);
+					ImGui::SliderFloat("Density Base", &fog->DensityBase, 0, 1);
+					ImGui::SliderFloat("Density Change", &fog->DensityChange, 0, 1);
+					ImGui::ColorEdit3("Color", &fog->Color.x);
 					ImGui::TreePop();
 				}
 			}

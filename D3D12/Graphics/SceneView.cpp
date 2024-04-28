@@ -11,6 +11,7 @@
 #include "Core/ConsoleVariables.h"
 #include "Content/Image.h"
 #include "Core/Profiler.h"
+#include "Graphics/Techniques/DDGI.h"
 
 namespace Tweakables
 {

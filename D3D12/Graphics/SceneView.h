@@ -6,7 +6,6 @@
 #include "AccelerationStructure.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 #include "Techniques/ShaderDebugRenderer.h"
-#include "Techniques/DDGI.h"
 
 #include "External/EnTT/entt.hpp"
 
@@ -132,6 +131,7 @@ struct SceneView
 	SceneBuffer MeshBuffer;
 	SceneBuffer InstanceBuffer;
 	SceneBuffer DDGIVolumesBuffer;
+	SceneBuffer FogVolumesBuffer;
 	SceneBuffer LightMatricesBuffer;
 	Ref<Texture> pSky;
 	AccelerationStructure AccelerationStructure;

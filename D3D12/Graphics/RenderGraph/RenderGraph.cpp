@@ -677,4 +677,19 @@ namespace RGUtils
 		}
 		return pTexture;
 	}
+
+	void DoUpload(RGGraph& graph, RGBuffer* pTarget, const void* pSource, uint32 size)
+	{
+		void* pSrc = graph.Allocate(size);
+		memcpy(pSrc, pSource, size);
+
+		graph.AddPass("Upload", RGPassFlag::Copy)
+			.Write(pTarget)
+			.Bind([=](CommandContext& context, const RGResources& resources)
+				{
+					ScratchAllocation alloc = context.AllocateScratch(size);
+					memcpy(alloc.pMappedMemory, pSrc, size);
+					context.CopyBuffer(alloc.pBackingResource, resources.Get(pTarget), size, alloc.Offset, 0);
+				});
+	}
 }

@@ -116,6 +116,15 @@ struct DDGIVolume
 	PAD;
 };
 
+struct FogVolume
+{
+	float3 Location;
+	float3 Extents;
+	float3 Color;
+	float DensityChange;
+	float DensityBase;
+};
+
 struct ViewUniforms
 {
 	float4 CascadeDepths;
