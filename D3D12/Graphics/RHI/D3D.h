@@ -10,6 +10,7 @@
 #include "RHI.h"
 #include "Core/Paths.h"
 #include "Core/Utils.h"
+#include "Core/Callstack.h"
 
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
@@ -392,6 +393,23 @@ namespace D3D
 				Math::PrettyPrintDataSize(allocationInfo.Alignment));
 		}
 		return "Unknown";
+	}
+
+	static constexpr GUID ResourceCallstackGUID = { 0xe8241f90, 0xff0a, 0x4dd4, { 0xaa, 0xf5, 0xb4, 0x53, 0xe1, 0x91, 0x96, 0x5e } };
+
+	static void SetResourceCallstack(ID3D12Object* pObject)
+	{
+		Callstack<6> callstack;
+		callstack.Trace(1);
+		pObject->SetPrivateData(ResourceCallstackGUID, sizeof(callstack), &callstack);
+	}
+
+	static Callstack<6> GetResourceCallstack(ID3D12Object* pObject)
+	{
+		Callstack<6> callstack;
+		uint32 size = sizeof(callstack);
+		pObject->GetPrivateData(ResourceCallstackGUID, &size, &callstack);
+		return callstack;
 	}
 
 	static Utils::ForceFunctionToBeLinked forceLink(GetResourceDescription);

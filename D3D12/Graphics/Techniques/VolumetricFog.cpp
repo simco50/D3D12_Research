@@ -66,7 +66,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 
 
 	RGBuffer* pFogVolumes = graph.Create("Fog Volumes", BufferDesc::CreateStructured((uint32)volumes.size(), sizeof(ShaderInterop::FogVolume)));
-	RGUtils::DoUpload(graph, pFogVolumes, volumes.data(), volumes.size() * sizeof(ShaderInterop::FogVolume));
+	RGUtils::DoUpload(graph, pFogVolumes, volumes.data(), (uint32)volumes.size() * sizeof(ShaderInterop::FogVolume));
 
 	graph.AddPass("Inject Volume Lights", RGPassFlag::Compute)
 		.Read({ pSourceVolume, lightCullData.pLightGrid, pFogVolumes })
