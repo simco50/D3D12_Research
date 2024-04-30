@@ -266,6 +266,8 @@ void DemoApp::Update()
 			else if (Input::Instance().IsKeyPressed('3'))
 				newRenderPath = RenderPath::Visibility;
 			else if (Input::Instance().IsKeyPressed('4'))
+				newRenderPath = RenderPath::VisibilityDeferred;
+			else if (Input::Instance().IsKeyPressed('5'))
 				newRenderPath = RenderPath::PathTracing;
 		}
 		if (newRenderPath == RenderPath::Visibility && !m_pDevice->GetCapabilities().SupportsMeshShading())
@@ -441,6 +443,9 @@ void DemoApp::Update()
 			sceneTextures.pVelocity			= graph.Create("Velocity",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 			sceneTextures.pPreviousColor	= graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
+			sceneTextures.pGBuffer0			= graph.Create("GBuffer 0", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[0]));
+			sceneTextures.pGBuffer1			= graph.Create("GBuffer 1", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[1]));
+
 			LightCull2DData lightCull2DData;
 			LightCull3DData lightCull3DData;
 			
@@ -517,7 +522,7 @@ void DemoApp::Update()
 				}
 
 				const bool doPrepass = true;
-				const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility;
+				const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred;
 
 				if (doPrepass)
 				{
@@ -644,35 +649,33 @@ void DemoApp::Update()
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pVelocity->GetWidth(), 8, pVelocity->GetHeight(), 8));
 						});
 
-				sceneTextures.pAmbientOcclusion = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::White2D));
+				RGTexture* pAO = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::White2D));
 				if (Tweakables::gRaytracedAO)
-					m_pRTAO->Execute(graph, pView, sceneTextures);
+					pAO = m_pRTAO->Execute(graph, pView, sceneTextures.pDepth, sceneTextures.pVelocity);
 				else
-					sceneTextures.pAmbientOcclusion = m_pSSAO->Execute(graph, pView, sceneTextures);
+					pAO = m_pSSAO->Execute(graph, pView, sceneTextures.pDepth);
 
 				m_pLightCulling->ComputeTiledLightCulling(graph, pView, sceneTextures, lightCull2DData);
 				m_pLightCulling->ComputeClusteredLightCulling(graph, pView, lightCull3DData);
 
 				RGTexture* pFog = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
 				if (Tweakables::gVolumetricFog)
-				{
 					pFog = m_pVolumetricFog->RenderFog(graph, pView, lightCull3DData, m_FogData);
-				}
 
 				if (m_RenderPath == RenderPath::Tiled)
 				{
-					m_pForwardRenderer->RenderForwardTiled(graph, pView, sceneTextures, lightCull2DData, pFog);
+					m_pForwardRenderer->RenderForwardTiled(graph, pView, sceneTextures, lightCull2DData, pFog, pAO);
 				}
 				else if (m_RenderPath == RenderPath::Clustered)
 				{
-					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog);
+					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, pAO);
 				}
 				else if (m_RenderPath == RenderPath::Visibility)
 				{
 					graph.AddPass("Visibility Shading", RGPassFlag::Raster)
 						.Read({ pFog, rasterResult.pVisibleMeshlets })
-						.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor })
-						.Read({ lightCull3DData.pLightGrid, lightCull2DData.pLightListOpaque })
+						.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, pAO, sceneTextures.pPreviousColor })
+						.Read({ lightCull2DData.pLightListOpaque })
 						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
 						.RenderTarget(sceneTextures.pColorTarget)
 						.RenderTarget(sceneTextures.pNormals)
@@ -689,7 +692,7 @@ void DemoApp::Update()
 								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pColorTarget));
 								context.BindResources(3, {
 									resources.GetSRV(rasterResult.pVisibilityBuffer),
-									resources.GetSRV(sceneTextures.pAmbientOcclusion),
+									resources.GetSRV(pAO),
 									resources.GetSRV(sceneTextures.pDepth),
 									resources.GetSRV(sceneTextures.pPreviousColor),
 									resources.GetSRV(pFog),
@@ -698,8 +701,59 @@ void DemoApp::Update()
 									});
 								context.Draw(0, 3);
 							});
-					
-					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, true);
+					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, pAO, true);
+				}
+				else if (m_RenderPath == RenderPath::VisibilityDeferred)
+				{
+					graph.AddPass("Build GBuffer", RGPassFlag::Raster)
+						.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, })
+						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
+						.RenderTarget(sceneTextures.pGBuffer0)
+						.RenderTarget(sceneTextures.pGBuffer1)
+						.Bind([=](CommandContext& context, const RGResources& resources)
+							{
+								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+								context.SetPipelineState(m_pVisibilityGBufferPSO);
+								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
+								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pGBuffer0)));
+								context.BindResources(3, {
+									resources.GetSRV(rasterResult.pVisibilityBuffer),
+									resources.GetSRV(rasterResult.pVisibleMeshlets),
+									});
+								context.Draw(0, 3);
+							});
+
+					graph.AddPass("Deferred Shading", RGPassFlag::Compute)
+						.Read({ pFog })
+						.Read({ sceneTextures.pDepth, pAO, sceneTextures.pPreviousColor })
+						.Read({ lightCull2DData.pLightListOpaque })
+						.Read({ sceneTextures.pGBuffer0, sceneTextures.pGBuffer1 })
+						.Write(sceneTextures.pColorTarget)
+						.Bind([=](CommandContext& context, const RGResources& resources)
+							{
+								Texture* pTarget = resources.Get(sceneTextures.pColorTarget);
+
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+								context.SetPipelineState(m_pDeferredShadePSO);
+
+								context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
+								context.BindResources(2, resources.GetUAV(sceneTextures.pColorTarget));
+								context.BindResources(3, {
+									resources.GetSRV(sceneTextures.pGBuffer0),
+									resources.GetSRV(sceneTextures.pGBuffer1),
+									resources.GetSRV(sceneTextures.pDepth),
+									resources.GetSRV(sceneTextures.pPreviousColor),
+									resources.GetSRV(pFog),
+									resources.GetSRV(lightCull2DData.pLightListOpaque),
+									resources.GetSRV(pAO),
+									});
+
+								context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
+							});
+
+					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, pAO, true);
 				}
 
 				if (Tweakables::gRenderTerrain.GetBool())
@@ -1028,7 +1082,24 @@ void DemoApp::InitializePipelines()
 		psoDesc.SetName("Visibility Shading");
 		m_pVisibilityShadingGraphicsPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
+
 	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
+
+	{
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
+		psoDesc.SetPixelShader("VisibilityGBuffer.hlsl", "ShadePS");
+		psoDesc.SetRenderTargetFormats(GraphicsCommon::DeferredGBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
+		psoDesc.SetDepthWrite(false);
+		psoDesc.SetDepthEnabled(false);
+		psoDesc.SetName("Visibility Shading");
+		m_pVisibilityGBufferPSO = m_pDevice->CreatePipeline(psoDesc);
+
+		m_pDeferredShadePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DeferredShading.hlsl", "ShadeCS");
+	}
 }
 
 void DemoApp::UpdateImGui()
@@ -1336,6 +1407,7 @@ void DemoApp::UpdateImGui()
 				"Clustered",
 				"Path Tracing",
 				"Visibility",
+				"Visibility Deferred",
 			};
 			ImGui::Combo("Render Path", (int*)&m_RenderPath, pPathNames, ARRAYSIZE(pPathNames));
 

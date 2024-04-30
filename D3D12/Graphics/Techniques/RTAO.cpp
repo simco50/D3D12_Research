@@ -29,7 +29,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 	}
 }
 
-RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
+RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture* pVelocity)
 {
 	static float g_AoPower = 1.0f;
 	static float g_AoRadius = 2.0f;
@@ -48,11 +48,11 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 
 	RG_GRAPH_SCOPE("RTAO", graph);
 
-	TextureDesc aoDesc = TextureDesc::Create2D(sceneTextures.pDepth->GetDesc().Width, sceneTextures.pDepth->GetDesc().Height, ResourceFormat::R8_UNORM);
+	TextureDesc aoDesc = TextureDesc::Create2D(pDepth->GetDesc().Width, pDepth->GetDesc().Height, ResourceFormat::R8_UNORM);
 	RGTexture* pRayTraceTarget = graph.Create("Raytrace Target", aoDesc);
 
 	graph.AddPass("Trace Rays", RGPassFlag::Compute)
-		.Read(sceneTextures.pDepth)
+		.Read(pDepth)
 		.Write(pRayTraceTarget)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
@@ -79,7 +79,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					resources.GetSRV(sceneTextures.pDepth),
+					resources.GetSRV(pDepth),
 					});
 
 				context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
@@ -89,7 +89,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 	RGTexture* pAOHistory = graph.TryImport(m_pHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
 	graph.AddPass("Denoise", RGPassFlag::Compute)
-		.Read({ pRayTraceTarget, sceneTextures.pVelocity, sceneTextures.pDepth, pAOHistory })
+		.Read({ pRayTraceTarget, pVelocity, pDepth, pAOHistory })
 		.Write(pDenoiseTarget)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
@@ -101,10 +101,10 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pTarget));
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					resources.GetSRV(sceneTextures.pDepth),
+					resources.GetSRV(pDepth),
 					resources.GetSRV(pAOHistory),
 					resources.GetSRV(pRayTraceTarget),
-					resources.GetSRV(sceneTextures.pVelocity),
+					resources.GetSRV(pVelocity),
 					});
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 			});
@@ -114,7 +114,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 	RGTexture* pBlurTarget1 = graph.Create("Bilateral Blur Target", aoDesc);
 
 	graph.AddPass("Blur AO - Horizontal", RGPassFlag::Compute)
-		.Read({ pDenoiseTarget, sceneTextures.pDepth })
+		.Read({ pDenoiseTarget, pDepth })
 		.Write(pBlurTarget1)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
@@ -134,7 +134,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.BindRootCBV(0, shaderParameters);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					resources.GetSRV(sceneTextures.pDepth),
+					resources.GetSRV(pDepth),
 					resources.GetSRV(pDenoiseTarget)
 					});
 
@@ -144,7 +144,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 	RGTexture* pFinalAOTarget = graph.Create("Ambient Occlusion", aoDesc);
 
 	graph.AddPass("Blur AO - Vertical", RGPassFlag::Compute)
-		.Read({ pRayTraceTarget, sceneTextures.pDepth })
+		.Read({ pRayTraceTarget, pDepth })
 		.Write(pFinalAOTarget)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
@@ -165,7 +165,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& 
 				context.BindRootCBV(0, shaderParameters);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
-					resources.GetSRV(sceneTextures.pDepth),
+					resources.GetSRV(pDepth),
 					resources.GetSRV(pRayTraceTarget)
 					});
 

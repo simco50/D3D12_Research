@@ -85,11 +85,11 @@ ForwardRenderer::~ForwardRenderer()
 {
 }
 
-void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture, bool translucentOnly)
+void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture, RGTexture* pAO, bool translucentOnly)
 {
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
 		.Read({ sceneTextures.pDepth })
-		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
+		.Read({ pAO, sceneTextures.pPreviousColor, pFogTexture, sceneTextures.pDepth })
 		.Read({ lightCullData.pLightGrid })
 		.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
 		.RenderTarget(sceneTextures.pColorTarget)
@@ -115,7 +115,7 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pColorTarget)));
 
 				context.BindResources(3, {
-					resources.GetSRV(sceneTextures.pAmbientOcclusion),
+					resources.GetSRV(pAO),
 					resources.GetSRV(sceneTextures.pDepth),
 					resources.GetSRV(sceneTextures.pPreviousColor),
 					resources.GetSRV(pFogTexture),
@@ -143,11 +143,11 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 			});
 }
 
-void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture)
+void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture, RGTexture* pAO)
 {
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
 		.Read({ sceneTextures.pDepth })
-		.Read({ sceneTextures.pAmbientOcclusion, sceneTextures.pPreviousColor, pFogTexture })
+		.Read({ pAO, sceneTextures.pPreviousColor, pFogTexture })
 		.Read({ lightCullData.pLightListOpaque, lightCullData.pLightListTransparent })
 		.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
 		.RenderTarget(sceneTextures.pColorTarget)
@@ -162,7 +162,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 
 				{
 					context.BindResources(3, {
-						resources.GetSRV(sceneTextures.pAmbientOcclusion),
+						resources.GetSRV(pAO),
 						resources.GetSRV(sceneTextures.pDepth),
 						resources.GetSRV(sceneTextures.pPreviousColor),
 						resources.GetSRV(pFogTexture),
@@ -184,7 +184,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 
 				{
 					context.BindResources(3, {
-						resources.GetSRV(sceneTextures.pAmbientOcclusion),
+						resources.GetSRV(pAO),
 						resources.GetSRV(sceneTextures.pDepth),
 						resources.GetSRV(sceneTextures.pPreviousColor),
 						resources.GetSRV(pFogTexture),

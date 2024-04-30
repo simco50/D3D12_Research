@@ -11,7 +11,7 @@ class RTAO
 public:
 	RTAO(GraphicsDevice* pDevice);
 
-	RGTexture* Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
+	RGTexture* Execute(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture* pVelocity);
 
 private:
 	Ref<Texture> m_pHistory;

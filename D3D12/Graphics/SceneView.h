@@ -163,7 +163,9 @@ struct SceneTextures
 	RGTexture* pDepth				= nullptr;
 	RGTexture* pNormals				= nullptr;
 	RGTexture* pVelocity			= nullptr;
-	RGTexture* pAmbientOcclusion	= nullptr;
+
+	RGTexture* pGBuffer0			= nullptr;
+	RGTexture* pGBuffer1			= nullptr;
 };
 
 namespace Renderer
@@ -204,6 +206,10 @@ namespace GraphicsCommon
 		ResourceFormat::RGBA16_FLOAT,
 		ResourceFormat::RG16_SNORM,
 		ResourceFormat::R8_UNORM
+	};
+	constexpr static ResourceFormat DeferredGBufferFormat[] = {
+			ResourceFormat::RGBA8_UNORM,
+			ResourceFormat::RGB10A2_UNORM,
 	};
 
 	extern Ref<CommandSignature> pIndirectDrawSignature;
