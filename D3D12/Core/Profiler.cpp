@@ -245,7 +245,11 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 	if (m_IsPaused)
 		return;
 
-	uint32 queueIndex = m_QueueIndexMap.at(pQueue);
+	auto it = m_QueueIndexMap.find(pQueue);
+	if (it == m_QueueIndexMap.end())
+		return;
+
+	uint32 queueIndex = it->second;
 	ActiveEventStack& eventStack = m_QueueEventStack[queueIndex];
 	QueryData& queryData = GetQueryData();
 	ProfilerEventData& sampleFrame = GetSampleFrame();

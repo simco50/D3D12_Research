@@ -88,7 +88,7 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 	{
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
+		//pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
 	};
 	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, frameHistory, 3, maxEvents, maxCopyEvents, maxActiveCmdLists);
 

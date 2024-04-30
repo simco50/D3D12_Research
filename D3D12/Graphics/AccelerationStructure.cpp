@@ -148,7 +148,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 
 		{
 			PROFILE_GPU_SCOPE(context.GetCommandList(), "BLAS Compaction");
-			ProcessCompaction(context);
+			//ProcessCompaction(context);
 		}
 
 		if(!blasInstances.empty() || !m_pTLAS)
