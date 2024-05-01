@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Common.hlsli"
+#include "Lighting.hlsli"
+
 // Meshlet which is a candidate for visibility culling
 struct MeshletCandidate
 {
@@ -127,4 +130,40 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 	outVertex.LinearDepth = BaryInterpolate(clipPos0.w, clipPos1.w, clipPos2.w, bary.Barycentrics);
 	outVertex.Barycentrics = bary.Barycentrics;
 	return outVertex;
+}
+
+MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttribute attributes)
+{
+	MaterialProperties properties;
+	float4 baseColor = material.BaseColorFactor * Unpack_RGBA8_UNORM(attributes.Color);
+	if(material.Diffuse != INVALID_HANDLE)
+	{
+		baseColor *= SampleGrad2D(NonUniformResourceIndex(material.Diffuse), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);
+	}
+	properties.BaseColor = baseColor.rgb;
+	properties.Opacity = baseColor.a;
+
+	properties.Metalness = material.MetalnessFactor;
+	properties.Roughness = material.RoughnessFactor;
+	if(material.RoughnessMetalness != INVALID_HANDLE)
+	{
+		float4 roughnessMetalnessSample = SampleGrad2D(NonUniformResourceIndex(material.RoughnessMetalness), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);
+		properties.Metalness *= roughnessMetalnessSample.b;
+		properties.Roughness *= roughnessMetalnessSample.g;
+	}
+	properties.Emissive = material.EmissiveFactor.rgb;
+	if(material.Emissive != INVALID_HANDLE)
+	{
+		properties.Emissive *= SampleGrad2D(NonUniformResourceIndex(material.Emissive), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY).rgb;
+	}
+	properties.Specular = 0.5f;
+
+	properties.Normal = attributes.Normal;
+	if(material.Normal != INVALID_HANDLE)
+	{
+		float3 normalTS = SampleGrad2D(NonUniformResourceIndex(material.Normal), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY).rgb;
+		float3x3 TBN = CreateTangentToWorld(properties.Normal, float4(normalize(attributes.Tangent.xyz), attributes.Tangent.w));
+		properties.Normal = TangentSpaceNormalMapping(normalTS, TBN);
+	}
+	return properties;
 }
