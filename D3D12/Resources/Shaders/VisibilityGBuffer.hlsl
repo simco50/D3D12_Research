@@ -66,8 +66,8 @@ bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, vertex);
 
-	output.GBuffer0 = PackGBuffer0(surface.BaseColor, surface.Roughness);
-	output.GBuffer1 = PackGBuffer1(surface.Normal, surface.Metalness);
+	output.GBuffer0 = PackGBuffer0(surface.BaseColor, surface.Specular);
+	output.GBuffer1 = PackGBuffer1(surface.Normal, surface.Roughness, surface.Metalness);
 
 	return true;
 }

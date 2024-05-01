@@ -56,9 +56,8 @@ void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 	float4 gbuffer1 = tGBuffer1[texel];
 
 	MaterialProperties surface = (MaterialProperties)0;
-	UnpackGBuffer0(gbuffer0, surface.BaseColor, surface.Roughness);
-	UnpackGBuffer1(gbuffer1, surface.Normal, surface.Metalness);
-	surface.Specular = 0.5f;
+	UnpackGBuffer0(gbuffer0, surface.BaseColor, surface.Specular);
+	UnpackGBuffer1(gbuffer1, surface.Normal, surface.Roughness, surface.Metalness);
 
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, uv, 0);
 	float dither = InterleavedGradientNoise(texel);

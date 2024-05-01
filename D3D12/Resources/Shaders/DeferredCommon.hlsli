@@ -2,24 +2,25 @@
 
 #include "Common.hlsli"
 
-void UnpackGBuffer0(float4 data, out float3 baseColor, out float roughness)
+void UnpackGBuffer0(float4 data, out float3 baseColor, out float specular)
 {
 	baseColor = data.xyz;
-	roughness = data.w;
+	specular = data.w;
 }
 
-float4 PackGBuffer0(float3 baseColor, float roughness)
+float4 PackGBuffer0(float3 baseColor, float specular)
 {
-	return float4(baseColor, roughness);
+	return float4(baseColor, specular);
 }
 
-void UnpackGBuffer1(float4 data, out float3 normal, out float metalness)
+void UnpackGBuffer1(float4 data, out float3 normal, out float roughness, out float metalness)
 {
-	normal = data.xyz * 2.0f - 1.0f;
+	normal = DecodeNormalOctahedron(data.xy * 2.0f - 1.0f);
+	roughness = data.z;
 	metalness = data.w;
 }
 
-float4 PackGBuffer1(float3 normal, float metalness)
+float4 PackGBuffer1(float3 normal, float roughness, float metalness)
 {
-	return float4(normal * 0.5f + 0.5f, metalness);
+	return float4(EncodeNormalOctahedron(normal) * 0.5f + 0.5f, roughness, metalness);
 }
