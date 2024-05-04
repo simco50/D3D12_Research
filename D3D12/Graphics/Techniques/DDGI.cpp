@@ -191,15 +191,15 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 	}
 }
 
-void DDGI::RenderVisualization(RGGraph& graph, const SceneView* pView, const World* pWorld, const SceneTextures& sceneTextures)
+void DDGI::RenderVisualization(RGGraph& graph, const SceneView* pView, const World* pWorld, RGTexture* pColorTarget, RGTexture* pDepth)
 {
 	auto ddgi_view = pWorld->Registry.view<const DDGIVolume>();
 	int i = 0;
 	ddgi_view.each([&](const DDGIVolume& volume)
 		{
 			graph.AddPass("DDGI Visualize", RGPassFlag::Raster)
-				.DepthStencil(sceneTextures.pDepth)
-				.RenderTarget(sceneTextures.pColorTarget)
+				.DepthStencil(pDepth)
+				.RenderTarget(pColorTarget)
 				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
 						context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);

@@ -9,7 +9,7 @@ class Clouds
 {
 public:
 	Clouds(GraphicsDevice* pDevice);
-	RGTexture* Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView);
+	RGTexture* Render(RGGraph& graph, const SceneView* pView, RGTexture* pColorTarget, RGTexture* pDepth);
 
 private:
 	Ref<PipelineState> m_pCloudShapeNoisePSO;

@@ -28,7 +28,7 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 	pDevice->GetShaderManager()->OnShaderEditedEvent().AddLambda([this](Shader*) { m_pShapeNoise = nullptr; });
 }
 
-RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const SceneView* pView)
+RGTexture* Clouds::Render(RGGraph& graph, const SceneView* pView, RGTexture* pColorTarget, RGTexture* pDepth)
 {
 	struct CloudParameters
 	{
@@ -175,10 +175,10 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 				});
 	}
 
-	RGTexture* pIntermediateColor = graph.Create("Intermediate Color", sceneTextures.pColorTarget->GetDesc());
+	RGTexture* pIntermediateColor = graph.Create("Intermediate Color", pColorTarget->GetDesc());
 
 	graph.AddPass("Clouds", RGPassFlag::Compute)
-		.Read({ pNoiseTexture, pDetailNoiseTexture, pCloudTypeLUT, sceneTextures.pColorTarget, sceneTextures.pDepth })
+		.Read({ pNoiseTexture, pDetailNoiseTexture, pCloudTypeLUT, pColorTarget, pDepth })
 		.Write(pIntermediateColor)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
@@ -227,8 +227,8 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3,
 					{
-						resources.GetSRV(sceneTextures.pColorTarget),
-						resources.GetSRV(sceneTextures.pDepth),
+						resources.GetSRV(pColorTarget),
+						resources.GetSRV(pDepth),
 						resources.GetSRV(pCloudTypeLUT),
 						resources.GetSRV(pNoiseTexture),
 						resources.GetSRV(pDetailNoiseTexture),
@@ -237,7 +237,5 @@ RGTexture* Clouds::Render(RGGraph& graph, SceneTextures& sceneTextures, const Sc
 					ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 			});
 
-	sceneTextures.pColorTarget = pIntermediateColor;
-
-	return pNoiseTexture;
+	return pIntermediateColor;
 }

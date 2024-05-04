@@ -777,7 +777,7 @@ void DemoApp::Update()
 
 				if (Tweakables::gClouds)
 				{
-					m_pClouds->Render(graph, sceneTextures, pView);
+					sceneTextures.pColorTarget = m_pClouds->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 				}
 
 				TextureDesc colorDesc = sceneTextures.pColorTarget->GetDesc();
@@ -834,7 +834,7 @@ void DemoApp::Update()
 				// Probes contain irradiance data, and need to go through tonemapper.
 				if (Tweakables::gVisualizeDDGI)
 				{
-					m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures);
+					m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures.pColorTarget, sceneTextures.pDepth);
 				}
 			}
 			else
