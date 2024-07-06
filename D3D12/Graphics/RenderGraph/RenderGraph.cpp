@@ -99,7 +99,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 	{
 		PROFILE_CPU_SCOPE("Pass Culling");
 
-		std::vector<RGPassID> cullStack;
+		Array<RGPassID> cullStack;
 		cullStack.reserve(m_Passes.size());
 
 		for (RGPass* pPass : m_Passes)
@@ -284,7 +284,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		PROFILE_CPU_SCOPE("Event Resolving");
 
 		// Move events from passes that are culled
-		std::vector<RGEventID> eventsToStart;
+		Array<RGEventID> eventsToStart;
 		uint32 eventsToEnd = 0;
 		RGPass* pLastActivePass = nullptr;
 		for (RGPass* pPass : m_Passes)
@@ -325,7 +325,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			// Duplicate profile events that cross the border of jobs to retain event hierarchy
 			RGPassID firstPass;
 			uint32 currentGroupSize = 0;
-			std::vector<RGEventID> activeEvents;
+			Array<RGEventID> activeEvents;
 			RGPass* pLastPass = nullptr;
 
 			for (uint32 passIndex = 0; passIndex < (uint32)m_Passes.size(); ++passIndex)
@@ -408,7 +408,7 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 
 	check(m_IsCompiled);
 
-	std::vector<CommandContext*> contexts;
+	Array<CommandContext*> contexts;
 	contexts.reserve(m_PassExecuteGroups.size());
 
 	if (m_PassExecuteGroups.size() > 1)
@@ -539,7 +539,7 @@ RenderPassInfo RGResources::GetRenderPassInfo() const
 		targetInfo.MipLevel = 0;
 		targetInfo.Flags = renderTarget.Flags;
 		targetInfo.Target = (Texture*)renderTarget.pResource->GetPhysicalUnsafe();
-		
+
 		if (renderTarget.pResolveTarget && renderTarget.pResource != renderTarget.pResolveTarget)
 			targetInfo.Flags |= RenderPassColorFlags::Resolve;
 

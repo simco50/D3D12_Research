@@ -81,7 +81,7 @@ private:
 	WindowHandle m_Window;
 	DisplayMode m_DesiredDisplayMode;
 	Ref<Fence> m_pPresentFence;
-	std::vector<Ref<Texture>> m_Backbuffers;
+	Array<Ref<Texture>> m_Backbuffers;
 	Ref<IDXGISwapChain4> m_pSwapchain;
 	ResourceFormat m_Format;
 	uint32 m_CurrentImage;
@@ -207,15 +207,15 @@ private:
 	std::unique_ptr<DRED> m_pDRED;
 
 	Ref<Fence> m_pFrameFence;
-	std::array<uint64, NUM_BUFFERS> m_FrameFenceValues{};
+	StaticArray<uint64, NUM_BUFFERS> m_FrameFenceValues{};
 	uint32 m_FrameIndex = 0;
 
 	Ref<GPUDescriptorHeap> m_pGlobalViewHeap;
 	Ref<GPUDescriptorHeap> m_pGlobalSamplerHeap;
 
-	std::array<Ref<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	std::array<std::vector<Ref<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
-	std::array<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
+	StaticArray<Ref<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	StaticArray<Array<Ref<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
+	StaticArray<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 
 	class DeferredDeleteQueue : public DeviceObject
 	{
@@ -246,7 +246,7 @@ private:
 	Ref<ScratchAllocationManager> m_pScratchAllocationManager;
 	Ref<RingBufferAllocator> m_pRingBufferAllocator;
 
-	std::vector<Ref<DeviceObject>> m_GlobalResources;
+	Array<Ref<DeviceObject>> m_GlobalResources;
 
 	std::mutex m_ContextAllocationMutex;
 };

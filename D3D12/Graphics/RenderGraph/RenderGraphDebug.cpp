@@ -8,9 +8,9 @@
 #include <External/FontAwesome/IconsFontAwesome4.h>
 
 template<typename T>
-std::string BitmaskToString(T mask, const char* (*pValueToString)(T))
+String BitmaskToString(T mask, const char* (*pValueToString)(T))
 {
-	std::string outString;
+	String outString;
 	uint32 value = (uint32)mask;
 
 	if (value == 0)
@@ -40,7 +40,7 @@ std::string BitmaskToString(T mask, const char* (*pValueToString)(T))
 	return outString;
 }
 
-static std::string PassFlagToString(RGPassFlag flags)
+static String PassFlagToString(RGPassFlag flags)
 {
 	return BitmaskToString<RGPassFlag>(flags,
 		[](RGPassFlag flag) -> const char*
@@ -77,13 +77,13 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 	if(ImGui::Begin("Resource usage", &enabled))
 	{
-		std::vector<RGResource*> sortedResources = m_Resources;
+		Array<RGResource*> sortedResources = m_Resources;
 		std::sort(sortedResources.begin(), sortedResources.end(), [](const RGResource* pA, const RGResource* pB) {
 			return pA->FirstAccess.GetIndex() < pB->FirstAccess.GetIndex();
 			});
 
-		std::vector<const DeviceResource*> physicalResources;
-		std::unordered_map<const DeviceResource*, std::vector<const RGResource*>> physicalResourceMap;
+		Array<const DeviceResource*> physicalResources;
+		HashMap<const DeviceResource*, Array<const RGResource*>> physicalResourceMap;
 		for (const RGResource* pResource : sortedResources)
 		{
 			if (pResource->GetPhysicalUnsafe() == nullptr || pResource->IsImported)
@@ -102,8 +102,8 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			RGPassID End;
 			uint16 Depth;
 		};
-		std::vector<Event> events;
-		std::vector<uint16> eventStack;
+		Array<Event> events;
+		Array<uint16> eventStack;
 		int eventDepth = 0;
 
 		for (RGPass* pPass : m_Passes)
@@ -162,7 +162,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			for (const Event& e : events)
 			{
 				RGEvent ev = m_Events[e.ID.GetIndex()];
-				ImRect rect(e.Begin.GetIndex() * colWidth, e.Depth * row_height, (e.End.GetIndex() + 1) * colWidth, (e.Depth + 1)* row_height);
+				ImRect rect(e.Begin.GetIndex() * colWidth, e.Depth * row_height, (e.End.GetIndex() + 1) * colWidth, (e.Depth + 1) * row_height);
 				rect.Expand(-1.0f);
 				rect.Translate(c);
 				if (ImGui::ItemAdd(rect, ImGui::GetID(&ev)))
@@ -211,7 +211,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 					float dilation = 2;
 					rect.Expand(dilation);
 					rect.Translate(c);
-					if(ImGui::ItemAdd(rect, ImGui::GetID("##pass")))
+					if (ImGui::ItemAdd(rect, ImGui::GetID("##pass")))
 					{
 						rect.Expand(-dilation - 1);
 						pDrawList->AddRectFilled(rect.Min, rect.Max, clr);
@@ -236,7 +236,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			for (const DeviceResource* pPhysical : physicalResources)
 			{
 				bool filterMatch = false;
-				const std::vector<const RGResource*>& resources = physicalResourceMap[pPhysical];
+				const Array<const RGResource*>& resources = physicalResourceMap[pPhysical];
 				for (const RGResource* pResource : resources)
 				{
 					if (strstr(pResource->GetName(), resourceFilter))
@@ -303,7 +303,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 						ImGui::SameLine();
 						ImGui::Text("Import:");
 						ImGui::SameLine();
-						ImGui::TextColored(pResource->IsImported ? ImColor(0.0f, 1.0f, 0.0f, 1.0f) : ImColor(1.0f, 0.0f, 0.0f, 1.0f), pResource->IsImported? ICON_FA_CHECK : ICON_FA_TIMES);
+						ImGui::TextColored(pResource->IsImported ? ImColor(0.0f, 1.0f, 0.0f, 1.0f) : ImColor(1.0f, 0.0f, 0.0f, 1.0f), pResource->IsImported ? ICON_FA_CHECK : ICON_FA_TIMES);
 
 						ImGui::EndTooltip();
 					};
@@ -322,13 +322,13 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 						ImRect itemRect(firstPassOffset * colWidth, 0, (lastPassOffset + 1) * colWidth, row_height);
 						itemRect.Expand(-1);
 						itemRect.Translate(c);
-						if(ImGui::ItemAdd(itemRect, ImGui::GetID(pResource)))
+						if (ImGui::ItemAdd(itemRect, ImGui::GetID(pResource)))
 							pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(0.3f, 0.3f, 0.3f, 1.0f));
 
 						bool mainBarHovered = ImGui::IsItemHovered();
 
 						// If there is a hovered pass, limit the highlighed read/writes to the current pass
-						if(pActivePass)
+						if (pActivePass)
 						{
 							firstPassOffset = pActivePass->ID.GetIndex();
 							lastPassOffset = pActivePass->ID.GetIndex();
@@ -345,15 +345,15 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 								ImRect squareRect(i * colWidth, 0, (i + 1) * colWidth, row_height);
 								squareRect.Expand(-1);
 								squareRect.Translate(c);
-								if(ImGui::ItemAdd(squareRect, ImGui::GetID(&*it)))
+								if (ImGui::ItemAdd(squareRect, ImGui::GetID(&*it)))
 									pDraw->AddRectFilled(squareRect.Min, squareRect.Max, rectColor);
 
-								if(ImGui::IsItemHovered())
+								if (ImGui::IsItemHovered())
 									pResourceAccess = &*it;
 							}
 						}
 
-						if(mainBarHovered)
+						if (mainBarHovered)
 						{
 							pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(1.0f, 1.0f, 1.0f, 0.2f));
 							DrawResourceTooltip(pResource, pResourceAccess);
@@ -407,9 +407,9 @@ void RGGraph::DrawPassView(bool& enabled) const
 
 	struct TreeNode
 	{
-		const char*			pName;
+		const char* pName;
 		RGPassID			Pass;
-		std::vector<int>	Children;
+		Array<int>	Children;
 
 		void DrawNode(Span<const TreeNode> nodes, const RGGraph& graph, int depth = 0) const
 		{
@@ -453,7 +453,7 @@ void RGGraph::DrawPassView(bool& enabled) const
 				ImGui::TextDisabled("--");
 				ImGui::TableNextColumn();
 
-				if(open)
+				if (open)
 				{
 					for (int i : Children)
 					{
@@ -465,8 +465,8 @@ void RGGraph::DrawPassView(bool& enabled) const
 		}
 	};
 
-	std::vector<TreeNode> nodes(1);
-	std::vector<int> nodeStack;
+	Array<TreeNode> nodes(1);
+	Array<int> nodeStack;
 	nodeStack.push_back(0);
 
 	for (RGPass* pPass : m_Passes)
@@ -526,14 +526,14 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 	{
 		StringStream& operator<<(const char* pText)
 		{
-			if(String.size() + strlen(pText) > String.capacity())
+			if (String.size() + strlen(pText) > String.capacity())
 				String.reserve(String.capacity() * 2);
 
 			String += pText;
 			return *this;
 		}
 
-		StringStream& operator<<(const std::string& text)
+		StringStream& operator<<(const String& text)
 		{
 			return operator<<(text.c_str());
 		}
@@ -543,14 +543,14 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 			return operator<<(Sprintf("%d", v));
 		}
 
-		std::string String;
+		String String;
 	};
 
-	uint32 neverCullColor			= 0xFF5E00FF;
-	uint32 referencedPassColor		= 0xFFAA00FF;
-	uint32 unreferedPassColor		= 0xFFEEEEFF;
-	uint32 referencedResourceColor	= 0xBBEEFFFF;
-	uint32 importedResourceColor	= 0x99BBDDFF;
+	uint32 neverCullColor = 0xFF5E00FF;
+	uint32 referencedPassColor = 0xFFAA00FF;
+	uint32 unreferedPassColor = 0xFFEEEEFF;
+	uint32 referencedResourceColor = 0xBBEEFFFF;
+	uint32 importedResourceColor = 0x99BBDDFF;
 
 	// Mermaid
 	{
@@ -589,7 +589,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 		const char* readLinkStyle = "stroke:#9c9,stroke-width:2px;";
 		int linkIndex = 0;
 
-		std::unordered_map<RGResource*, uint32> resourceVersions;
+		HashMap<RGResource*, uint32> resourceVersions;
 
 		//Pass declaration
 		int passIndex = 0;
@@ -683,9 +683,9 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 			++passIndex;
 		}
 
-		std::string output = Sprintf(pMermaidTemplate, stream.String.c_str());
+		String output = Sprintf(pMermaidTemplate, stream.String.c_str());
 
-		std::string fullPath = Paths::MakeAbsolute(Sprintf("%s.html", pPath).c_str());
+		String fullPath = Paths::MakeAbsolute(Sprintf("%s.html", pPath).c_str());
 		Paths::CreateDirectoryTree(fullPath);
 
 		FileStream file;
@@ -705,7 +705,7 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 			  });
 			</script>)";
 
-		std::unordered_map<RGResource*, uint32> resourceVersions;
+		HashMap<RGResource*, uint32> resourceVersions;
 
 		StringStream stream;
 
@@ -792,10 +792,10 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 
 		stream << "}\n";
 
-		std::string fullPath = Paths::MakeAbsolute(Sprintf("%s_GraphViz.html", pPath).c_str());
+		String fullPath = Paths::MakeAbsolute(Sprintf("%s_GraphViz.html", pPath).c_str());
 		Paths::CreateDirectoryTree(fullPath);
 
-		std::string output = Sprintf(pGraphVizTemplate, stream.String);
+		String output = Sprintf(pGraphVizTemplate, stream.String);
 		FileStream file;
 		if (file.Open(fullPath.c_str(), FileMode::Write))
 			file.Write(output.c_str(), (uint32)output.length());

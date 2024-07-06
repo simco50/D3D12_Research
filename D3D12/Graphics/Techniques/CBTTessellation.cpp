@@ -568,7 +568,7 @@ void CBTTessellation::CBTDemo()
 		if (maxDepth < 10)
 		{
 		ImVec2 pos = (ImVec2(a.x, a.y) + ImVec2(b.x, b.y) + ImVec2(c.x, c.y)) / 3;
-		std::string text = Sprintf("%d", heapIndex);
+		String text = Sprintf("%d", heapIndex);
 		ImGui::GetWindowDrawList()->AddText(cPos + pos - ImGui::CalcTextSize(text.c_str()) * 0.5f, ImColor(1.0f, 1.0f, 1.0f, 0.3f), text.c_str());
 		}
 	};

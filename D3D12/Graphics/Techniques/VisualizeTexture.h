@@ -14,7 +14,7 @@ struct CaptureTextureContext
 	float				Slice = 0.0f;
 
 	// Private
-	std::string			SourceName;
+	String			SourceName;
 	TextureDesc			SourceDesc;
 	float				Scale = 1.0f;
 	bool				XRay = false;

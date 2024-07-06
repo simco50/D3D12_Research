@@ -35,7 +35,7 @@ SyncPoint CommandQueue::ExecuteCommandLists(Span<CommandContext* const> contexts
 	// new barriers in the previous commandlist before closing it.
 	// The first commandlist will resolve the barriers of the next so the first one will just contain resource barriers.
 
-	std::vector<ID3D12CommandList*> commandLists;
+	Array<ID3D12CommandList*> commandLists;
 	commandLists.reserve(contexts.GetSize() + 1);
 
 	CommandContext* pBarrierCommandlist = GetParent()->AllocateCommandContext(m_Type);

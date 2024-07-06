@@ -70,8 +70,8 @@ private:
 		T Object;
 	};
 
-	std::unordered_map<StringHash, void*> m_DataMap;
-	std::vector<std::unique_ptr<Element>> m_Allocations;
-	std::vector<std::unique_ptr<RGBlackboard>> m_Children;
+	HashMap<StringHash, void*> m_DataMap;
+	Array<std::unique_ptr<Element>> m_Allocations;
+	Array<std::unique_ptr<RGBlackboard>> m_Children;
 	RGBlackboard* m_pParent = nullptr;
 };

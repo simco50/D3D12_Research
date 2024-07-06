@@ -7,7 +7,7 @@ namespace Utils
 		ForceFunctionToBeLinked(const void* p) { SetLastError(PtrToInt(p)); }
 	};
 
-	inline std::string GetTimeString()
+	inline String GetTimeString()
 	{
 		SYSTEMTIME time;
 		GetSystemTime(&time);
@@ -16,9 +16,9 @@ namespace Utils
 			time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
 	}
 
-	inline std::string AddThousandsSeperator(int value)
+	inline String AddThousandsSeperator(int value)
 	{
-		std::string output;
+		String output;
 		int absV = value > 0 ? value : -value;
 		while (absV > 0)
 		{

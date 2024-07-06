@@ -42,7 +42,7 @@ static HANDLE sConsoleHandle = nullptr;
 static std::mutex sLogMutex;
 static LogType sVerbosity;
 static std::deque<Console::LogEntry> sHistory;
-std::array<char, 8192> Console::sConvertBuffer;
+StaticArray<char, 8192> Console::sConvertBuffer;
 
 void Console::Initialize()
 {

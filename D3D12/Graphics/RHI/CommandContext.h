@@ -72,7 +72,7 @@ struct RenderPassInfo
 	}
 
 	uint32 RenderTargetCount = 0;
-	std::array<RenderTargetInfo, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> RenderTargets{};
+	StaticArray<RenderTargetInfo, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> RenderTargets{};
 	DepthTargetInfo DepthStencilTarget{};
 };
 
@@ -202,14 +202,14 @@ private:
 	Ref<ID3D12DescriptorHeap> m_pDSVHeap;
 
 	static constexpr uint32 MaxNumBatchedBarriers = 64;
-	std::array<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers> m_BatchedBarriers{};
+	StaticArray<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers> m_BatchedBarriers{};
 	uint32 m_NumBatchedBarriers = 0;
-	std::vector<PendingBarrier> m_PendingBarriers;
-	std::unordered_map<const DeviceResource*, ResourceState> m_ResourceStates;
+	Array<PendingBarrier> m_PendingBarriers;
+	HashMap<const DeviceResource*, ResourceState> m_ResourceStates;
 
 	D3D12_COMMAND_LIST_TYPE m_Type;
 	CommandListContext m_CurrentCommandContext = CommandListContext::Invalid;
-	std::array<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubResourceParameters{};
+	StaticArray<D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_SUBRESOURCE_PARAMETERS, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> m_ResolveSubResourceParameters{};
 	RenderPassInfo m_CurrentRenderPassInfo;
 	bool m_InRenderPass = false;
 
@@ -236,7 +236,7 @@ public:
 
 private:
 	uint32 m_Stride = 0;
-	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> m_ArgumentDesc;
+	Array<D3D12_INDIRECT_ARGUMENT_DESC> m_ArgumentDesc;
 };
 
 class CommandSignature : public DeviceObject

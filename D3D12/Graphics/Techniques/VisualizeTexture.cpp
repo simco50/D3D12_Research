@@ -172,7 +172,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 				Group group;
 
 				ImGui::BeginDisabled(desc.Mips <= 1);
-				std::vector<std::string> mipTexts(desc.Mips);
+				Array<String> mipTexts(desc.Mips);
 				for (uint32 i = 0; i < desc.Mips; ++i)
 				{
 					mipTexts[i] = Sprintf("%d - %dx%d", i, Math::Max(1u, desc.Width >> i), Math::Max(1u, desc.Height >> i));
@@ -184,7 +184,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 
 				ImGui::Combo("##Mip", &captureContext.MipLevel, [](void* pData, int idx)
 					{
-						std::string* pStrings = (std::string*)pData;
+						String* pStrings = (String*)pData;
 						return pStrings[idx].c_str();
 					}, mipTexts.data(), (int)mipTexts.size());
 				ImGui::EndDisabled();
@@ -440,7 +440,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 
 					const char* componentNames[] = { "R", "G", "B", "A" };
 
-					std::string valueString;
+					String valueString;
 					if (formatInfo.Type == FormatType::Integer)
 					{
 						for (uint32 i = 0; i < formatInfo.NumComponents; ++i)

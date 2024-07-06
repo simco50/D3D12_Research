@@ -50,7 +50,7 @@ inline Stream& operator<<(Stream& stream, uint64 value)	{ stream.Write(&value, s
 inline Stream& operator<<(Stream& stream, int value)	{ stream.Write(&value, sizeof(int));	return stream; }
 inline Stream& operator<<(Stream& stream, char value)	{ stream.Write(&value, sizeof(char));	return stream; }
 inline Stream& operator<<(Stream& stream, float value)	{ stream.Write(&value, sizeof(float));	return stream; }
-inline Stream& operator<<(Stream& stream, const std::string value)
+inline Stream& operator<<(Stream& stream, const String value)
 {
 	stream << (uint32)value.length();
 	stream.Write(&value[0], (uint32)value.length());
@@ -58,7 +58,7 @@ inline Stream& operator<<(Stream& stream, const std::string value)
 }
 
 template<typename T>
-inline Stream& operator<<(Stream& stream, const std::vector<T>& value)
+inline Stream& operator<<(Stream& stream, const Array<T>& value)
 {
 	stream << (uint32)value.size();
 	for (const T& v : value)
@@ -84,7 +84,7 @@ inline Stream& operator>>(Stream& stream, uint64& value) { stream.Read(&value, s
 inline Stream& operator>>(Stream& stream, int& value) { stream.Read(&value, sizeof(int)); return stream; }
 inline Stream& operator>>(Stream& stream, char& value) { stream.Read(&value, sizeof(char)); return stream; }
 inline Stream& operator>>(Stream& stream, float& value) { stream.Read(&value, sizeof(float)); return stream; }
-inline Stream& operator>>(Stream& stream, std::string& value)
+inline Stream& operator>>(Stream& stream, String& value)
 {
 	uint32 len = 0;
 	stream >> len;
@@ -94,7 +94,7 @@ inline Stream& operator>>(Stream& stream, std::string& value)
 }
 
 template<typename T>
-inline Stream& operator>>(Stream& stream, std::vector<T>& value)
+inline Stream& operator>>(Stream& stream, Array<T>& value)
 {
 	uint32 size = 0;
 	stream >> size;

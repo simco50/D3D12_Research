@@ -26,17 +26,17 @@ struct MeshData
 	uint32 MaterialIndex = 0;
 	float ScaleFactor = 1;
 
-	std::vector<Vector3> PositionsStream;
-	std::vector<Vector3> NormalsStream;
-	std::vector<Vector4> TangentsStream;
-	std::vector<Vector2> UVsStream;
-	std::vector<Vector4> ColorsStream;
-	std::vector<uint32> Indices;
+	Array<Vector3> PositionsStream;
+	Array<Vector3> NormalsStream;
+	Array<Vector4> TangentsStream;
+	Array<Vector2> UVsStream;
+	Array<Vector4> ColorsStream;
+	Array<uint32> Indices;
 
-	std::vector<ShaderInterop::Meshlet> Meshlets;
-	std::vector<uint32> MeshletVertices;
-	std::vector<ShaderInterop::Meshlet::Triangle> MeshletTriangles;
-	std::vector<ShaderInterop::Meshlet::Bounds> MeshletBounds;
+	Array<ShaderInterop::Meshlet> Meshlets;
+	Array<uint32> MeshletVertices;
+	Array<ShaderInterop::Meshlet::Triangle> MeshletTriangles;
+	Array<ShaderInterop::Meshlet::Bounds> MeshletBounds;
 };
 
 
@@ -58,7 +58,7 @@ static void BuildMeshData(MeshData& meshData)
 
 	meshopt_optimizeOverdraw(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), &meshData.PositionsStream[0].x, meshData.PositionsStream.size(), sizeof(Vector3), 1.05f);
 
-	std::vector<uint32> remap(meshData.PositionsStream.size());
+	Array<uint32> remap(meshData.PositionsStream.size());
 	meshopt_optimizeVertexFetchRemap(&remap[0], meshData.Indices.data(), meshData.Indices.size(), meshData.PositionsStream.size());
 	meshopt_remapIndexBuffer(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), &remap[0]);
 	meshopt_remapVertexBuffer(meshData.PositionsStream.data(), meshData.PositionsStream.data(), meshData.PositionsStream.size(), sizeof(Vector3), &remap[0]);
@@ -76,8 +76,8 @@ static void BuildMeshData(MeshData& meshData)
 	meshData.Meshlets.resize(maxMeshlets);
 	meshData.MeshletVertices.resize(maxMeshlets * maxVertices);
 
-	std::vector<unsigned char> meshletTriangles(maxMeshlets * maxTriangles * 3);
-	std::vector<meshopt_Meshlet> meshlets(maxMeshlets);
+	Array<unsigned char> meshletTriangles(maxMeshlets * maxTriangles * 3);
+	Array<meshopt_Meshlet> meshlets(maxMeshlets);
 
 	size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshData.MeshletVertices.data(), meshletTriangles.data(),
 		meshData.Indices.data(), meshData.Indices.size(), &meshData.PositionsStream[0].x, meshData.PositionsStream.size(), sizeof(Vector3), maxVertices, maxTriangles, 0);
@@ -321,7 +321,7 @@ static bool LoadLdr(const char* pFilePath, GraphicsDevice* pDevice, World& world
 	};
 
 	// Materials are part of the mesh so instances of the same mesh but different material have to be duplicated :(
-	std::vector<MaterialPartCombination> map;
+	Array<MaterialPartCombination> map;
 
 	for (int i = 0; i < (int)mdl.Instances.size(); ++i)
 	{
@@ -413,7 +413,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 	}
 
 	// Load unique textures;
-	std::unordered_map<const cgltf_image*, Texture*> textureMap;
+	HashMap<const cgltf_image*, Texture*> textureMap;
 
 	uint32 materialOffset = (uint32)world.Materials.size();
 	uint32 meshOffset = (uint32)world.Meshes.size();
@@ -429,7 +429,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 		};
 
 	using Hash = TStringHash<false>;
-	std::vector<Hash> usedExtensions;
+	Array<Hash> usedExtensions;
 	for (uint32 i = 0; i < pGltfData->extensions_used_count; ++i)
 	{
 		usedExtensions.push_back(pGltfData->extensions_used[i]);
@@ -529,12 +529,12 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 			material.Name = gltfMaterial.name;
 	}
 
-	std::unordered_map<const cgltf_mesh*, std::vector<int>> meshToPrimitives;
+	HashMap<const cgltf_mesh*, Array<int>> meshToPrimitives;
 	int primitiveIndex = 0;
 	for (size_t meshIdx = 0; meshIdx < pGltfData->meshes_count; ++meshIdx)
 	{
 		const cgltf_mesh& mesh = pGltfData->meshes[meshIdx];
-		std::vector<int> primitives;
+		Array<int> primitives;
 		for (size_t primIdx = 0; primIdx < mesh.primitives_count; ++primIdx)
 		{
 			const cgltf_primitive& primitive = mesh.primitives[primIdx];
@@ -609,7 +609,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 
 bool SceneLoader::Load(const char* pFilePath, GraphicsDevice* pDevice, World& world, float uniformScale /*= 1.0f*/)
 {
-	std::string extension = Paths::GetFileExtenstion(pFilePath);
+	String extension = Paths::GetFileExtenstion(pFilePath);
 	if (extension == "dat" || extension == "ldr" || extension == "mpd")
 	{
 		LoadLdr(pFilePath, pDevice, world, uniformScale);

@@ -30,7 +30,7 @@ private:
 	struct Glyph
 	{
 		uint32 Letter;
-		std::vector<Line> Lines;
+		Array<Line> Lines;
 		Vector2i OriginOffset;
 		Vector2i Blackbox;
 		uint32 Width;

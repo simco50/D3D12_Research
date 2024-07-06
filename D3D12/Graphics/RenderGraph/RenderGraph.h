@@ -129,7 +129,7 @@ public:
 	uint64 GetCapacity() const { return m_Size; }
 
 private:
-	std::vector<AllocatedObject*> m_NonPODAllocations;
+	Array<AllocatedObject*> m_NonPODAllocations;
 	uint64 m_Size;
 	char* m_pData;
 	char* m_pCurrentOffset;
@@ -234,18 +234,18 @@ private:
 	bool							IsCulled			= true;
 
 	// Profiling
-	std::vector<RGEventID>			EventsToStart;
-	std::vector<RGEventID>			CPUEventsToStart;
+	Array<RGEventID>			EventsToStart;
+	Array<RGEventID>			CPUEventsToStart;
 	uint32							NumEventsToEnd		= 0;
 	uint32							NumCPUEventsToEnd	= 0;
 
-	std::vector<RenderTargetAccess> RenderTargets;
+	Array<RenderTargetAccess> RenderTargets;
 	DepthStencilAccess				DepthStencilTarget{};
 	IRGPassCallback*				pExecuteCallback = nullptr;
 
-	std::vector<ResourceTransition> Transitions;
-	std::vector<ResourceAccess>		Accesses;
-	std::vector<RGPassID>			PassDependencies;
+	Array<ResourceTransition> Transitions;
+	Array<ResourceAccess>		Accesses;
+	Array<RGPassID>			PassDependencies;
 };
 
 class RGResourcePool : public DeviceObject
@@ -268,8 +268,8 @@ private:
 	};
 	using PooledTexture = PooledResource<Texture>;
 	using PooledBuffer = PooledResource<Buffer>;
-	std::vector<PooledTexture> m_TexturePool;
-	std::vector<PooledBuffer> m_BufferPool;
+	Array<PooledTexture> m_TexturePool;
+	Array<PooledBuffer> m_BufferPool;
 	uint32 m_FrameIndex = 0;
 };
 
@@ -380,7 +380,7 @@ public:
 	void DumpDebugGraph(const char* pFilePath) const;
 	void DrawResourceTracker(bool& enabled) const;
 	void DrawPassView(bool& enabled) const;
-	
+
 	void PushEvent(const char* pName, const char* pFilePath = "", uint32 lineNumber = 0);
 	void PopEvent();
 
@@ -398,28 +398,28 @@ private:
 	void DestroyData();
 
 	bool								m_IsCompiled		= false;
-	std::vector<RGEventID>				m_PendingEvents;
-	std::vector<RGEvent>				m_Events;
+	Array<RGEventID>				m_PendingEvents;
+	Array<RGEvent>				m_Events;
 
 	RGGraphAllocator					m_Allocator;
 
-	std::vector<Span<const RGPass*>>	m_PassExecuteGroups;
-	std::vector<RGPass*>				m_Passes;
-	std::vector<RGResource*>			m_Resources;
+	Array<Span<const RGPass*>>	m_PassExecuteGroups;
+	Array<RGPass*>				m_Passes;
+	Array<RGResource*>			m_Resources;
 
 	struct ExportedTexture
 	{
 		RGTexture*		pTexture;
 		Ref<Texture>*	pTarget;
 	};
-	std::vector<ExportedTexture>		m_ExportTextures;
+	Array<ExportedTexture>		m_ExportTextures;
 
 	struct ExportedBuffer
 	{
 		RGBuffer*		pBuffer;
 		Ref<Buffer>*	pTarget;
 	};
-	std::vector<ExportedBuffer>			m_ExportBuffers;
+	Array<ExportedBuffer>			m_ExportBuffers;
 };
 
 class RGGraphScope

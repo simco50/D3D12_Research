@@ -303,7 +303,7 @@ public:
 	}
 
 private:
-	std::vector<uint32> Storage;
+	Array<uint32> Storage;
 };
 
 namespace LEB

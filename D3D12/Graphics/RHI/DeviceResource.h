@@ -55,7 +55,7 @@ public:
 	}
 
 private:
-	std::array<D3D12_RESOURCE_STATES, D3D12_REQ_MIP_LEVELS> m_ResourceStates{};
+	StaticArray<D3D12_RESOURCE_STATES, D3D12_REQ_MIP_LEVELS> m_ResourceStates{};
 	bool m_AllSameState;
 };
 
@@ -79,7 +79,7 @@ public:
 	D3D12_RESOURCE_STATES GetResourceState(uint32 subResource = 0) const { return m_ResourceState.Get(subResource); }
 
 protected:
-	std::string m_Name;
+	String m_Name;
 	bool m_ImmediateDelete = false;
 	ID3D12Resource* m_pResource = nullptr;
 	ResourceState m_ResourceState;

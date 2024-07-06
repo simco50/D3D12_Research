@@ -273,7 +273,7 @@ void DebugRenderer::AddSphere(const Vector3& position, float radius, int slices,
 
 void DebugRenderer::AddFrustrum(const BoundingFrustum& frustrum, const IntColor& color)
 {
-	std::vector<Vector3> corners(BoundingFrustum::CORNER_COUNT);
+	Array<Vector3> corners(BoundingFrustum::CORNER_COUNT);
 	frustrum.GetCorners(corners.data());
 
 	AddLine(corners[0], corners[1], color);

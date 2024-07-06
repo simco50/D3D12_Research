@@ -94,7 +94,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_COMPARISON_FUNC_GREATER);
 	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_COMPARISON_FUNC_GREATER);
 
-	std::array<D3D12_ROOT_PARAMETER1, sMaxNumParameters> rootParameters;
+	StaticArray<D3D12_ROOT_PARAMETER1, sMaxNumParameters> rootParameters;
 	for (size_t i = 0; i < m_NumParameters; ++i)
 	{
 		RootParameter& rootParameter = m_RootParameters[i];

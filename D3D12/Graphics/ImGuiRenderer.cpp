@@ -292,13 +292,13 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 	io.ConfigViewportsNoDefaultParent = true;
-	
+
 	ImGui_ImplWin32_Init(window);
 
 	ViewportImpl::Setup(pDevice);
 
 	Paths::CreateDirectoryTree(Paths::SavedDir());
-	static std::string imguiPath = Paths::SavedDir() + "imgui.ini";
+	static String imguiPath = Paths::SavedDir() + "imgui.ini";
 	io.IniFilename = imguiPath.c_str();
 
 	{

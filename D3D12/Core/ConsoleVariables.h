@@ -21,7 +21,7 @@ public:
 		}
 	}
 private:
-	static const std::vector<IConsoleObject*>& GetObjects();
+	static const Array<IConsoleObject*>& GetObjects();
 };
 
 class IConsoleObject
@@ -39,7 +39,7 @@ public:
 	NODISCARD virtual int GetInt() const = 0;
 	NODISCARD virtual float GetFloat() const = 0;
 	NODISCARD virtual bool GetBool() const = 0;
-	NODISCARD virtual std::string GetString() const = 0;
+	NODISCARD virtual String GetString() const = 0;
 
 	NODISCARD virtual class IConsoleVariable* AsVariable() { return nullptr; }
 	NODISCARD virtual class IConsoleCommand* AsCommand() { return nullptr; }
@@ -108,7 +108,7 @@ public:
 	NODISCARD int GetInt() const override { return 0; }
 	NODISCARD float GetFloat() const override { return 0.0f; }
 	NODISCARD bool GetBool() const override { return false; }
-	NODISCARD std::string GetString() const override { return ""; }
+	NODISCARD String GetString() const override { return ""; }
 
 private:
 	template<size_t... Is>
@@ -235,9 +235,9 @@ public:
 		}
 	}
 
-	NODISCARD std::string GetString() const override
+	NODISCARD String GetString() const override
 	{
-		std::string output;
+		String output;
 		if constexpr (std::is_same_v<T, int>)
 		{
 			CString::ToString(m_Value, &output);
@@ -276,9 +276,9 @@ public:
 private:
 	int InputCallback(ImGuiInputTextCallbackData* pCallbackData);
 
-	std::vector<std::string> m_History;
-	std::vector<const char*> m_Suggestions;
-	std::array<char, 1024> m_Input{};
+	Array<String> m_History;
+	Array<const char*> m_Suggestions;
+	StaticArray<char, 1024> m_Input{};
 	int m_HistoryPos = -1;
 	int m_SuggestionPos = -1;
 

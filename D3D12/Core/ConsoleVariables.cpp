@@ -6,8 +6,8 @@
 
 #include <External/Imgui/imgui_internal.h>
 
-static std::unordered_map<StringHash, IConsoleObject*> gCvarMap;
-static std::vector<IConsoleObject*> gConsoleObjects;
+static HashMap<StringHash, IConsoleObject*> gCvarMap;
+static Array<IConsoleObject*> gConsoleObjects;
 
 void ConsoleManager::Initialize()
 {
@@ -77,7 +77,7 @@ IConsoleObject* ConsoleManager::FindConsoleObject(const char* pName)
 	return it != gCvarMap.end() ? it->second : nullptr;
 }
 
-const std::vector<IConsoleObject*>& ConsoleManager::GetObjects()
+const Array<IConsoleObject*>& ConsoleManager::GetObjects()
 {
 	return gConsoleObjects;
 }

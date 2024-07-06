@@ -63,7 +63,7 @@ private:
 	void MakeScreenshot();
 
 	void CreateShadowViews(SceneView& view, World& world);
-	
+
 	std::unique_ptr<RGResourcePool> m_RenderGraphPool;
 
 	uint32 m_Frame = 0;
@@ -71,8 +71,8 @@ private:
 	Ref<Texture> m_pColorHistory;
 	Ref<Texture> m_pHZB;
 	Ref<Texture> m_pColorOutput;
-	std::vector<Ref<Texture>> m_ShadowMaps;
-	std::vector<Ref<Texture>> m_ShadowHZBs;
+	Array<Ref<Texture>> m_ShadowMaps;
+	Array<Ref<Texture>> m_ShadowHZBs;
 
 	std::unique_ptr<VolumetricFog> m_pVolumetricFog;
 	std::unique_ptr<ForwardRenderer> m_pForwardRenderer;
@@ -125,7 +125,7 @@ private:
 	Ref<PipelineState> m_pPrepareReduceDepthPSO;
 	Ref<PipelineState> m_pPrepareReduceDepthMsaaPSO;
 	Ref<PipelineState> m_pReduceDepthPSO;
-	std::array<Ref<Buffer>, GraphicsDevice::NUM_BUFFERS> m_ReductionReadbackTargets;
+	StaticArray<Ref<Buffer>, GraphicsDevice::NUM_BUFFERS> m_ReductionReadbackTargets;
 
 	//Camera motion
 	Ref<PipelineState> m_pCameraMotionPSO;

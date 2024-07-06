@@ -28,9 +28,9 @@ private:
 	StateObject* m_pStateObject;
 	ShaderRecord m_RayGenRecord;
 	uint32 m_RayGenRecordSize = 0;
-	std::vector<ShaderRecord> m_MissShaderRecords;
+	Array<ShaderRecord> m_MissShaderRecords;
 	uint32 m_MissRecordSize = 0;
-	std::vector<ShaderRecord> m_HitGroupShaderRecords;
+	Array<ShaderRecord> m_HitGroupShaderRecords;
 	uint32 m_HitRecordSize = 0;
-	std::unordered_map<std::string, const void*> m_IdentifierMap;
+	HashMap<String, const void*> m_IdentifierMap;
 };

@@ -29,7 +29,7 @@ Image::Image(uint32 width, uint32 height, uint32 depth, ResourceFormat format, u
 
 bool Image::Load(const char* inputStream)
 {
-	const std::string extension = Paths::GetFileExtenstion(inputStream);
+	const String extension = Paths::GetFileExtenstion(inputStream);
 	bool success = false;
 
 	FileStream stream;
@@ -50,7 +50,7 @@ bool Image::Load(const char* inputStream)
 
 bool Image::Load(Stream& stream, const char* pFormatHint)
 {
-	if (std::string(pFormatHint).find("dds") != std::string::npos)
+	if (String(pFormatHint).find("dds") != String::npos)
 	{
 		return LoadDDS(stream);
 	}
@@ -162,7 +162,7 @@ bool Image::LoadSTB(Stream& stream)
 	int components = 0;
 
 	uint32 size = stream.GetLength();
-	std::vector<uint8> buffer(size);
+	Array<uint8> buffer(size);
 	stream.Read(buffer.data(), size);
 
 	m_IsHdr = stbi_is_hdr_from_memory(buffer.data(), size);
@@ -383,7 +383,7 @@ bool Image::LoadDDS(Stream& stream)
 void Image::Save(const char* pFilePath)
 {
 	const FormatInfo& info = RHI::GetFormatInfo(m_Format);
-	std::string extension = Paths::GetFileExtenstion(pFilePath);
+	String extension = Paths::GetFileExtenstion(pFilePath);
 	if (extension == "png")
 	{
 		int result = stbi_write_png(pFilePath, m_Width, m_Height, info.NumComponents, m_Pixels.data(), m_Width * 4);

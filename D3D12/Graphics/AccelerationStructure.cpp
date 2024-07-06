@@ -61,7 +61,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			uint32 WorldMatrix;
 			uint32 Flags;
 		};
-		std::vector<BLASInstance> blasInstances;
+		Array<BLASInstance> blasInstances;
 		blasInstances.reserve(view.Batches.size());
 
 		for (const Batch& batch : view.Batches)
@@ -176,7 +176,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::UnorderedAccess), "TLAS.BLASInstanceSourceDescs");
 				m_pBLASInstancesTargetBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::UnorderedAccess), "TLAS.BLASInstanceTargetDescs");
 			}
-			
+
 			if (!blasInstances.empty())
 			{
 				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -270,7 +270,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 			m_pPostBuildInfoReadbackBuffer = context.GetParent()->CreateBuffer(BufferDesc::CreateReadback(requiredSize), "BLASCompaction.PostBuildInfoReadback");
 		}
 
-		std::vector<D3D12_GPU_VIRTUAL_ADDRESS> blasAddresses;
+		Array<D3D12_GPU_VIRTUAL_ADDRESS> blasAddresses;
 		blasAddresses.reserve(m_ActiveRequests.size());
 		for (Ref<Buffer>* pSourceBLAS : m_ActiveRequests)
 			blasAddresses.push_back((*pSourceBLAS)->GetGpuHandle());

@@ -23,7 +23,7 @@ public:
 	ScratchAllocationManager(GraphicsDevice* pParent, BufferFlag bufferFlags, uint64 pageSize);
 
 	Ref<Buffer> AllocatePage();
-	void FreePages(const SyncPoint& syncPoint, const std::vector<Ref<Buffer>>& pPages);
+	void FreePages(const SyncPoint& syncPoint, const Array<Ref<Buffer>>& pPages);
 	uint64 GetPageSize() const { return m_PageSize; }
 
 private:
@@ -44,5 +44,5 @@ private:
 
 	Ref<Buffer> m_pCurrentPage;
 	uint64 m_CurrentOffset = 0;
-	std::vector<Ref<Buffer>> m_UsedPages;
+	Array<Ref<Buffer>> m_UsedPages;
 };

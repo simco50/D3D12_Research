@@ -136,7 +136,7 @@ private: \
 #if __cplusplus >= 201703L
 #define NO_DISCARD [[nodiscard]]
 #else
-#define NO_DISCARD		
+#define NO_DISCARD
 #endif
 
 namespace _DelegatesInteral
@@ -1097,7 +1097,7 @@ private:
 		return m_Locks > 0;
 	}
 
-	std::vector<DelegateHandlerPair> m_Events;
+	Array<DelegateHandlerPair> m_Events;
 	unsigned int m_Locks;
 };
 

@@ -287,7 +287,7 @@ void PipelineState::CreateInternal()
 		};
 
 	bool shaderCompileError = false;
-	std::string name = m_Desc.m_Name;
+	String name = m_Desc.m_Name;
 	for (uint32 i = 0; i < (int)ShaderType::MAX; ++i)
 	{
 		Shader* pShader = nullptr;

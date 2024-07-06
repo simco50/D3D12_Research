@@ -190,7 +190,7 @@ void GPUProfiler::Tick()
 
 		// Sort events by queue and make groups per queue for fast per-queue event iteration.
 		// This is _much_ faster than iterating all event multiple times and filtering
-		std::vector<ProfilerEventData::Event>& events = eventData.Events;
+		Array<ProfilerEventData::Event>& events = eventData.Events;
 		std::sort(events.begin(), events.begin() + numEvents, [](const ProfilerEventData::Event& a, const ProfilerEventData::Event& b)
 			{
 				return a.QueueIndex < b.QueueIndex;
@@ -462,7 +462,7 @@ void CPUProfiler::Tick()
 	// Sort events by thread and make groups per thread for fast per-thread event iteration.
 	// This is _much_ faster than iterating all event multiple times and filtering
 	ProfilerEventData& frame = GetData();
-	std::vector<ProfilerEventData::Event>& events = frame.Events;
+	Array<ProfilerEventData::Event>& events = frame.Events;
 	std::sort(events.begin(), events.begin() + frame.NumEvents, [](const ProfilerEventData::Event& a, const ProfilerEventData::Event& b)
 		{
 			return a.ThreadIndex < b.ThreadIndex;

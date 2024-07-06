@@ -12,7 +12,7 @@ static std::condition_variable m_WakeUpCondition;
 static std::mutex m_QueueMutex;
 static std::mutex m_SleepMutex;
 static bool m_Shutdown = false;
-static std::vector<Thread> m_Threads;
+static Array<Thread> m_Threads;
 
 TaskQueue::~TaskQueue()
 {

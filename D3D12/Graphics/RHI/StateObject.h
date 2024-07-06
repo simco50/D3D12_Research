@@ -11,20 +11,20 @@ class StateObjectInitializer
 public:
 	friend class StateObject;
 
-	void AddHitGroup(const std::string& name, const std::string& closestHit = "", const std::string& anyHit = "", const std::string& intersection = "", RootSignature* pRootSignature = nullptr);
+	void AddHitGroup(const String& name, const String& closestHit = "", const String& anyHit = "", const String& intersection = "", RootSignature* pRootSignature = nullptr);
 	void AddLibrary(const char* pShaderPath, Span<const char*> exports = {}, Span<ShaderDefine> defines = {});
 	void AddCollection(StateObject* pOtherObject);
-	void AddMissShader(const std::string& exportName, RootSignature* pRootSignature = nullptr);
+	void AddMissShader(const String& exportName, RootSignature* pRootSignature = nullptr);
 
 	bool CreateStateObjectStream(class StateObjectStream& stateObjectStream, GraphicsDevice* pDevice);
 	void SetMaxPipelineStackSize(StateObject* pStateObject);
 
-	std::string Name;
+	String Name;
 	uint32 MaxRecursion = 1;
 	RootSignature* pGlobalRootSignature = nullptr;
 	uint32 MaxPayloadSize = 0;
 	uint32 MaxAttributeSize = sizeof(float) * 2; // Default size for barycentrics
-	std::string RayGenShader;
+	String RayGenShader;
 	D3D12_STATE_OBJECT_TYPE Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
 	D3D12_RAYTRACING_PIPELINE_FLAGS Flags = D3D12_RAYTRACING_PIPELINE_FLAG_NONE;
 
@@ -32,28 +32,28 @@ private:
 	struct HitGroupDefinition
 	{
 		HitGroupDefinition() = default;
-		std::string Name;
-		std::string ClosestHit;
-		std::string AnyHit;
-		std::string Intersection;
+		String Name;
+		String ClosestHit;
+		String AnyHit;
+		String Intersection;
 		RootSignature* pLocalRootSignature = nullptr;
 	};
 	struct LibraryShaderExport
 	{
-		std::string Name;
+		String Name;
 		RootSignature* pLocalRootSignature = nullptr;
 	};
 	struct LibraryExports
 	{
-		std::string Path;
-		std::vector<ShaderDefine> Defines;
-		std::vector<const char*> Exports;
+		String Path;
+		Array<ShaderDefine> Defines;
+		Array<const char*> Exports;
 	};
-	std::vector<Shader*> m_Shaders;
-	std::vector<LibraryExports> m_Libraries;
-	std::vector<HitGroupDefinition> m_HitGroups;
-	std::vector<LibraryShaderExport> m_MissShaders;
-	std::vector<StateObject*> m_Collections;
+	Array<Shader*> m_Shaders;
+	Array<LibraryExports> m_Libraries;
+	Array<HitGroupDefinition> m_HitGroups;
+	Array<LibraryShaderExport> m_MissShaders;
+	Array<StateObject*> m_Collections;
 };
 
 class StateObject : public DeviceObject

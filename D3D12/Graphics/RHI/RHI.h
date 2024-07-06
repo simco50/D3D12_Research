@@ -150,6 +150,6 @@ public:
 	bool CanAllocate() const { return m_NumAllocations < m_FreeList.size(); }
 
 private:
-	std::vector<uint32> m_FreeList;
+	Array<uint32> m_FreeList;
 	uint32 m_NumAllocations = 0;
 };

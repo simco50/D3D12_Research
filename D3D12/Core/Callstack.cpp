@@ -12,7 +12,7 @@ namespace StackTrace
 	static SymInitializeFn sSymInitialize;
 
 	static std::mutex sResolveLock;
-	static std::unordered_map<uint64, Symbol> sSymbolMap;
+	static HashMap<uint64, Symbol> sSymbolMap;
 
 	uint32 Trace(void** pStackData, uint32 stackSize, uint32 skipDepth)
 	{

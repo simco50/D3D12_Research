@@ -43,8 +43,8 @@ private:
 		CD3DX12_ROOT_PARAMETER1 Data;
 		CD3DX12_DESCRIPTOR_RANGE1 Range;
 	};
-	std::array<RootParameter, sMaxNumParameters> m_RootParameters{};
-	std::vector<D3D12_STATIC_SAMPLER_DESC> m_StaticSamplers;
+	StaticArray<RootParameter, sMaxNumParameters> m_RootParameters{};
+	Array<D3D12_STATIC_SAMPLER_DESC> m_StaticSamplers;
 	Ref<ID3D12RootSignature> m_pRootSignature;
 	uint32 m_NumParameters;
 };

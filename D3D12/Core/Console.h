@@ -21,7 +21,7 @@ public:
 			: Message(pMsg), Type(type)
 		{
 		}
-		std::string Message;
+		String Message;
 		LogType Type;
 	};
 	static void Initialize();
@@ -41,5 +41,5 @@ public:
 
 private:
 	static void FlushLog(const LogEntry& entry);
-	static std::array<char, 8192> sConvertBuffer;
+	static StaticArray<char, 8192> sConvertBuffer;
 };

@@ -25,16 +25,16 @@ namespace ShaderCompiler
 		Ref<IDxcBlobEncoding> pBlob;
 		uint64 Timestamp;
 	};
-	static std::unordered_map<StringHash, CachedFile> IncludeCache;
+	static HashMap<StringHash, CachedFile> IncludeCache;
 	std::mutex ShaderCacheMutex;
 
 	struct CompileJob
 	{
-		std::string FilePath;
-		std::string EntryPoint;
-		std::string Target;
+		String FilePath;
+		String EntryPoint;
+		String Target;
 		Span<ShaderDefine> Defines;
-		std::vector<std::string> IncludeDirs;
+		Array<String> IncludeDirs;
 		uint8 MajVersion;
 		uint8 MinVersion;
 		bool EnableDebugMode;
@@ -44,10 +44,10 @@ namespace ShaderCompiler
 	{
 		static constexpr int Version = 7;
 
-		std::string ErrorMessage;
+		String ErrorMessage;
 		ShaderBlob pBlob;
 		Ref<IUnknown> pReflection;
-		std::vector<std::string> Includes;
+		Array<String> Includes;
 		uint64 ShaderHash[2];
 		bool IsDebug;
 
@@ -81,9 +81,9 @@ namespace ShaderCompiler
 		E_LOG(Info, "Loaded %s", pCompilerPath);
 	}
 
-	static bool ResolveFilePath(const CompileJob& job, std::string& outPath)
+	static bool ResolveFilePath(const CompileJob& job, String& outPath)
 	{
-		for (const std::string& includeDir : job.IncludeDirs)
+		for (const String& includeDir : job.IncludeDirs)
 		{
 			outPath = Paths::Combine(includeDir, job.FilePath);
 			if (Paths::FileExists(outPath.c_str()))
@@ -101,7 +101,7 @@ namespace ShaderCompiler
 		if (!Paths::FileExists(pCachePath))
 			return false;
 
-		std::string shaderFullPath;
+		String shaderFullPath;
 		if (!ResolveFilePath(compileJob, shaderFullPath))
 			return false;
 
@@ -129,7 +129,7 @@ namespace ShaderCompiler
 		fs >> result.Includes;
 
 		// Test if includes sources are not newer than the cached file
-		for (std::string& include : result.Includes)
+		for (String& include : result.Includes)
 		{
 			if (!TestFileTime(include.c_str()))
 			{
@@ -168,9 +168,9 @@ namespace ShaderCompiler
 		return true;
 	}
 
-	static std::string CustomPreprocess(const std::string& input)
+	static String CustomPreprocess(const String& input)
 	{
-		std::string output;
+		String output;
 		output.reserve(input.size());
 
 		size_t index = 0;
@@ -180,13 +180,13 @@ namespace ShaderCompiler
 		while (index < input.length())
 		{
 			size_t foundIndex = input.find(pSearchText, index);
-			if (foundIndex != std::string::npos)
+			if (foundIndex != String::npos)
 			{
 				output += input.substr(index, foundIndex - index);
 
 				// Find the closing parenthesis of the TEXT macro
 				size_t closingQuoteIndex = input.find(')', foundIndex + searchLength);
-				if (closingQuoteIndex != std::string::npos)
+				if (closingQuoteIndex != String::npos)
 				{
 					output += "{'";
 					size_t targetStart = foundIndex + searchLength;
@@ -244,9 +244,9 @@ namespace ShaderCompiler
 		if(stream.Open(pFileName, FileMode::Read))
 		{
 			// +1 null terminator
-			std::vector<char> charBuffer(stream.GetLength() + 1);
+			Array<char> charBuffer(stream.GetLength() + 1);
 			stream.Read(charBuffer.data(), (uint32)charBuffer.size());
-			std::string buffer = CustomPreprocess(charBuffer.data());
+			String buffer = CustomPreprocess(charBuffer.data());
 
 			CachedFile file;
 			file.Timestamp = fileTime;
@@ -266,12 +266,12 @@ namespace ShaderCompiler
 	{
 		CompileResult result;
 
-		std::string defineKey;
+		String defineKey;
 		for (const ShaderDefine& define : compileJob.Defines)
 			defineKey += define.Value;
 		StringHash hash(defineKey.c_str());
 
-		std::string cachePath = Sprintf(
+		String cachePath = Sprintf(
 			"%s%s_%s_%d_%d_%s_%x%s.bin",
 			Paths::ShaderCacheDir().c_str(),
 			Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str(),
@@ -292,7 +292,7 @@ namespace ShaderCompiler
 
 		Utils::TimeScope timer;
 		Ref<IDxcBlobEncoding> pSource;
-		std::string fullPath;
+		String fullPath;
 		if (!ResolveFilePath(compileJob, fullPath))
 		{
 			result.ErrorMessage = Sprintf("Failed to open file '%s'", compileJob.FilePath.c_str());
@@ -342,20 +342,20 @@ namespace ShaderCompiler
 				return m_Arguments.size();
 			}
 
-			std::string ToString() const
+			String ToString() const
 			{
-				std::string str;
+				String str;
 				for (const std::wstring& arg : m_Arguments)
 					str += Sprintf(" %s", UNICODE_TO_MULTIBYTE(arg.c_str()));
 				return str;
 			}
 
 		private:
-			std::vector<const wchar_t*> m_ArgumentArr;
-			std::vector<std::wstring> m_Arguments;
+			Array<const wchar_t*> m_ArgumentArr;
+			Array<std::wstring> m_Arguments;
 		} arguments;
 
-		std::string target = Sprintf("%s_%d_%d", compileJob.Target.c_str(), compileJob.MajVersion, compileJob.MinVersion);
+		String target = Sprintf("%s_%d_%d", compileJob.Target.c_str(), compileJob.MajVersion, compileJob.MinVersion);
 		arguments.AddArgument(Paths::GetFileNameWithoutExtension(compileJob.FilePath).c_str());
 		arguments.AddArgument("-E", compileJob.EntryPoint.c_str());
 		arguments.AddArgument("-T", target.c_str());
@@ -374,7 +374,7 @@ namespace ShaderCompiler
 			arguments.AddArgument(DXC_ARG_SKIP_OPTIMIZATIONS);
 
 		arguments.AddArgument("-I", Paths::GetDirectoryPath(fullPath).c_str());
-		for (const std::string& includeDir : compileJob.IncludeDirs)
+		for (const String& includeDir : compileJob.IncludeDirs)
 			arguments.AddArgument("-I", includeDir.c_str());
 
 		for (const ShaderDefine& define : compileJob.Defines)
@@ -391,10 +391,10 @@ namespace ShaderCompiler
 			HRESULT STDMETHODCALLTYPE LoadSource(_In_ LPCWSTR pFilename, _COM_Outptr_result_maybenull_ IDxcBlob** ppIncludeSource) override
 			{
 				Ref<IDxcBlobEncoding> pEncoding;
-				std::string path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
+				String path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
 				check(Paths::ResolveRelativePaths(path));
 
-				auto existingInclude = std::find_if(IncludedFiles.begin(), IncludedFiles.end(), [&path](const std::string& include) {
+				auto existingInclude = std::find_if(IncludedFiles.begin(), IncludedFiles.end(), [&path](const String& include) {
 					return CString::StrCmp(include.c_str(), path.c_str(), false);
 					});
 
@@ -419,7 +419,7 @@ namespace ShaderCompiler
 			ULONG STDMETHODCALLTYPE AddRef(void) override { return 0; }
 			ULONG STDMETHODCALLTYPE Release(void) override { return 0; }
 
-			std::vector<std::string> IncludedFiles;
+			Array<String> IncludedFiles;
 		};
 
 		if (CommandLine::GetBool("dumpshaders"))
@@ -434,7 +434,7 @@ namespace ShaderCompiler
 				Ref<IDxcBlobUtf8> pHLSL;
 				if (SUCCEEDED(pPreprocessOutput->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(pHLSL.GetAddressOf()), nullptr)))
 				{
-					std::string filePathBase = Paths::GetFileNameWithoutExtension(cachePath);
+					String filePathBase = Paths::GetFileNameWithoutExtension(cachePath);
 					{
 						FileStream stream;
 						if(stream.Open(Sprintf("%s%s.hlsl", Paths::ShaderCacheDir(), filePathBase).c_str(), FileMode::Write))
@@ -444,7 +444,7 @@ namespace ShaderCompiler
 						FileStream stream;
 						if (stream.Open(Sprintf("%s%s.bat", Paths::ShaderCacheDir(), filePathBase).c_str(), FileMode::Write))
 						{
-							std::string txt = Sprintf("dxc.exe %s -Fo %s.shaderbin %s.hlsl", arguments.ToString(), filePathBase, filePathBase);
+							String txt = Sprintf("dxc.exe %s -Fo %s.shaderbin %s.hlsl", arguments.ToString(), filePathBase, filePathBase);
 							stream.Write(txt.c_str(), (uint32)txt.size());
 						}
 					}
@@ -510,7 +510,7 @@ namespace ShaderCompiler
 			{
 				Ref<IDxcBlobUtf8> pDebugDataPathUTF8;
 				pUtils->GetBlobAsUtf8(pDebugDataPath.Get(), pDebugDataPathUTF8.GetAddressOf());
-				std::string symbolsPath = Sprintf("%s%s", Paths::ShaderCacheDir().c_str(), pDebugDataPathUTF8->GetStringPointer());
+				String symbolsPath = Sprintf("%s%s", Paths::ShaderCacheDir().c_str(), pDebugDataPathUTF8->GetStringPointer());
 				FileStream stream;
 				if(stream.Open(symbolsPath.c_str(), FileMode::Write))
 					stream.Write(pSymbolsBlob->GetBufferPointer(), pSymbolsBlob->GetBufferSize());
@@ -532,7 +532,7 @@ namespace ShaderCompiler
 		}
 
 		result.Includes.push_back(fullPath);
-		for (const std::string& includePath : includeHandler.IncludedFiles)
+		for (const String& includePath : includeHandler.IncludedFiles)
 			result.Includes.push_back(includePath);
 
 		check(SaveToCache(cachePath.c_str(), compileJob, result));
@@ -550,14 +550,14 @@ ShaderManager::ShaderStringHash ShaderManager::GetEntryPointHash(const char* pEn
 	return hash;
 }
 
-void ShaderManager::RecompileFromFileChange(const std::string& filePath)
+void ShaderManager::RecompileFromFileChange(const String& filePath)
 {
 	auto it = m_IncludeDependencyMap.find(ShaderStringHash(filePath));
 	if (it != m_IncludeDependencyMap.end())
 	{
 		E_LOG(Info, "Modified \"%s\". Dirtying dependent shaders...", filePath.c_str());
-		const std::unordered_set<std::string>& dependencies = it->second;
-		for (const std::string& dependency : dependencies)
+		const HashSet<String>& dependencies = it->second;
+		for (const String& dependency : dependencies)
 		{
 			auto objectMapIt = m_FilepathToObjectMap.find(ShaderStringHash(dependency));
 			if (objectMapIt != m_FilepathToObjectMap.end())
@@ -608,7 +608,7 @@ void ShaderManager::ConditionallyReloadShaders()
 	}
 }
 
-void ShaderManager::AddIncludeDir(const std::string& includeDir)
+void ShaderManager::AddIncludeDir(const String& includeDir)
 {
 	m_IncludeDirs.push_back(includeDir);
 	if (m_pFileWatcher)
@@ -657,7 +657,7 @@ ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shader
 
 	if (!result.Success())
 	{
-		std::string error = Sprintf("Failed to compile shader %s_%d_%d \"%s:%s\": %s", job.Target, job.MajVersion, job.MinVersion, pShaderPath, pEntryPoint, result.ErrorMessage.c_str());
+		String error = Sprintf("Failed to compile shader %s_%d_%d \"%s:%s\": %s", job.Target, job.MajVersion, job.MinVersion, pShaderPath, pEntryPoint, result.ErrorMessage.c_str());
 		E_LOG(Warning, "%s", error);
 		return { nullptr, error };
 	}
@@ -673,7 +673,7 @@ ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shader
 		pShader->IsDirty = false;
 		memcpy(pShader->Hash, result.ShaderHash, sizeof(uint64) * 2);
 
-		for (const std::string& include : result.Includes)
+		for (const String& include : result.Includes)
 			m_IncludeDependencyMap[ShaderStringHash(include)].insert(pShaderPath);
 		m_FilepathToObjectMap[pathHash].Shaders[hash] = pShader;
 	}

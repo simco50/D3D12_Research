@@ -12,13 +12,13 @@ ScratchAllocationManager::ScratchAllocationManager(GraphicsDevice* pParent, Buff
 Ref<Buffer> ScratchAllocationManager::AllocatePage()
 {
 	auto AllocateNewPage = [this]() {
-		std::string name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * m_PageSize);
+		String name = Sprintf("Dynamic Allocation Buffer (%f KB)", Math::BytesToKiloBytes * m_PageSize);
 		return GetParent()->CreateBuffer(BufferDesc{ .Size = m_PageSize, .Flags = BufferFlag::Upload }, "Page");
 	};
 	return m_PagePool.Allocate(AllocateNewPage);
 }
 
-void ScratchAllocationManager::FreePages(const SyncPoint& syncPoint, const std::vector<Ref<Buffer>>& pPages)
+void ScratchAllocationManager::FreePages(const SyncPoint& syncPoint, const Array<Ref<Buffer>>& pPages)
 {
 	for (auto pPage : pPages)
 	{

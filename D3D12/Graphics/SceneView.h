@@ -37,7 +37,7 @@ struct Transform
 
 struct Identity
 {
-	std::string Name;
+	String Name;
 };
 
 struct World
@@ -49,9 +49,9 @@ struct World
 		return e;
 	}
 
-	std::vector<Ref<Texture>> Textures;
-	std::vector<Mesh> Meshes;
-	std::vector<Material> Materials;
+	Array<Ref<Texture>> Textures;
+	Array<Mesh> Meshes;
+	Array<Material> Materials;
 
 	entt::registry Registry;
 	entt::entity Sunlight;
@@ -118,7 +118,7 @@ struct ShadowView
 struct SceneView
 {
 	const World* pWorld = nullptr;
-	std::vector<Batch> Batches;
+	Array<Batch> Batches;
 
 	struct SceneBuffer
 	{
@@ -142,7 +142,7 @@ struct SceneView
 	ViewTransform MainView;
 	BoundingBox SceneAABB;
 
-	std::vector<ShadowView> ShadowViews;
+	Array<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
 

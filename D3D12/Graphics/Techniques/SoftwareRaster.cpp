@@ -88,8 +88,8 @@ struct Vertex
 
 struct Geometry
 {
-	std::vector<Vertex> Vertices;
-	std::vector<uint32> Indices;
+	Array<Vertex> Vertices;
+	Array<uint32> Indices;
 	Matrix World;
 };
 
@@ -116,7 +116,7 @@ static Geometry GetMesh(const char* pFilePath)
 	for (size_t meshIdx = idx; meshIdx < pGltfData->meshes_count; ++meshIdx)
 	{
 		const cgltf_mesh& mesh = pGltfData->meshes[meshIdx];
-		std::vector<int> primitives;
+		Array<int> primitives;
 		for (size_t primIdx = 0; primIdx < mesh.primitives_count; ++primIdx)
 		{
 			const cgltf_primitive& primitive = mesh.primitives[primIdx];
@@ -333,8 +333,8 @@ void SoftwareRaster::RasterizeTest()
 
 	for (const Geometry& geo : geometries)
 	{
-		const std::vector<uint32>& indices = geo.Indices;
-		const std::vector<Vertex>& vertices = geo.Vertices;
+		const Array<uint32>& indices = geo.Indices;
+		const Array<Vertex>& vertices = geo.Vertices;
 
 		for (int i = 0; i < (int)indices.size(); i += 3)
 		{

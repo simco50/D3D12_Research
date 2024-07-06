@@ -113,12 +113,12 @@ namespace Renderer
 			};
 
 
-		std::vector<Batch> sceneBatches;
+		Array<Batch> sceneBatches;
 		uint32 instanceID = 0;
 
 		// Instances
 		{
-			std::vector<ShaderInterop::InstanceData> meshInstances;
+			Array<ShaderInterop::InstanceData> meshInstances;
 
 			auto view = pWorld->Registry.view<Transform, Model>();
 			view.each([&](const Transform& transform, const Model& model)
@@ -160,7 +160,7 @@ namespace Renderer
 
 		// Meshes
 		{
-			std::vector<ShaderInterop::MeshData> meshes;
+			Array<ShaderInterop::MeshData> meshes;
 			meshes.reserve(pWorld->Meshes.size());
 			for(const Mesh& mesh : pWorld->Meshes)
 			{
@@ -184,7 +184,7 @@ namespace Renderer
 
 		// Materials
 		{
-			std::vector<ShaderInterop::MaterialData> materials;
+			Array<ShaderInterop::MaterialData> materials;
 			materials.reserve(pWorld->Materials.size());
 			for (const Material& material : pWorld->Materials)
 			{
@@ -211,7 +211,7 @@ namespace Renderer
 		// DDGI
 		if (Tweakables::gEnableDDGI)
 		{
-			std::vector<ShaderInterop::DDGIVolume> ddgiVolumes;
+			Array<ShaderInterop::DDGIVolume> ddgiVolumes;
 			auto ddgi_view = pWorld->Registry.view<Transform, DDGIVolume>();
 			ddgi_view.each([&](const Transform& transform, const DDGIVolume& volume)
 				{
@@ -231,7 +231,7 @@ namespace Renderer
 
 		// Lights
 		{
-			std::vector<ShaderInterop::Light> lightData;
+			Array<ShaderInterop::Light> lightData;
 			auto light_view = pWorld->Registry.view<const Transform, const Light>();
 			light_view.each([&](const Transform& transform, const Light& light)
 				{
@@ -257,7 +257,7 @@ namespace Renderer
 			CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->LightBuffer);
 		}
 		{
-			std::vector<Matrix> lightMatrices(pView->ShadowViews.size());
+			Array<Matrix> lightMatrices(pView->ShadowViews.size());
 			for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
 				lightMatrices[i] = pView->ShadowViews[i].View.ViewProjection;
 			CopyBufferData((uint32)lightMatrices.size(), sizeof(Matrix), "Light Matrices", lightMatrices.data(), pView->LightMatricesBuffer);
@@ -291,7 +291,7 @@ namespace Renderer
 
 namespace GraphicsCommon
 {
-	static std::array<Ref<Texture>, (uint32)DefaultTexture::MAX> DefaultTextures;
+	static StaticArray<Ref<Texture>, (uint32)DefaultTexture::MAX> DefaultTextures;
 
 	Ref<CommandSignature> pIndirectDrawSignature;
 	Ref<CommandSignature> pIndirectDispatchSignature;
@@ -402,7 +402,7 @@ namespace GraphicsCommon
 			desc.Height = Math::Max(desc.Height, 4u);
 		}
 
-		std::vector<D3D12_SUBRESOURCE_DATA> subResourceData;
+		Array<D3D12_SUBRESOURCE_DATA> subResourceData;
 		const Image* pImg = &image;
 		while (pImg)
 		{

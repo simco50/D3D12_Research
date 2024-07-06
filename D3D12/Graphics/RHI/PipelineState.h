@@ -60,9 +60,9 @@ public:
 
 	struct ShaderDesc
 	{
-		std::string Path;
-		std::string EntryPoint;
-		std::vector<ShaderDefine> Defines;
+		String Path;
+		String EntryPoint;
+		Array<ShaderDefine> Defines;
 	};
 
 	//Shaders
@@ -114,9 +114,9 @@ private:
 		StreamSubObject<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK, UINT> NodeMask;
 	} m_Stream;
 
-	std::string m_Name;
-	std::vector<D3D12_INPUT_ELEMENT_DESC> m_IlDesc;
-	std::array<ShaderDesc, (int)ShaderType::MAX> m_ShaderDescs{};
+	String m_Name;
+	Array<D3D12_INPUT_ELEMENT_DESC> m_IlDesc;
+	StaticArray<ShaderDesc, (int)ShaderType::MAX> m_ShaderDescs{};
 };
 
 class PipelineState : public DeviceObject
@@ -136,7 +136,7 @@ private:
 	void OnShaderReloaded(Shader* pShader);
 	Ref<ID3D12PipelineState> m_pPipelineState;
 
-	std::array<Shader*, (int)ShaderType::MAX> m_Shaders{};
+	StaticArray<Shader*, (int)ShaderType::MAX> m_Shaders{};
 	PipelineStateInitializer m_Desc;
 	DelegateHandle m_ReloadHandle;
 	std::mutex m_BuildLock;

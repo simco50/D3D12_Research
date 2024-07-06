@@ -10,7 +10,7 @@ struct FileEvent
 		Added,
 	};
 	Type EventType;
-	std::string Path;
+	String Path;
 	LARGE_INTEGER Time;
 };
 
@@ -32,8 +32,8 @@ private:
 		HANDLE FileHandle;
 		OVERLAPPED Overlapped{};
 		std::deque<FileEvent> Changes;
-		std::array<char, 1 << 16> Buffer{};
-		std::string DirectoryPath;
+		StaticArray<char, 1 << 16> Buffer{};
+		String DirectoryPath;
 	};
 
 	int ThreadFunction();
@@ -43,5 +43,5 @@ private:
 	std::mutex m_Mutex;
 	LARGE_INTEGER m_TimeFrequency{};
 	Thread m_Thread;
-	std::vector<std::unique_ptr<DirectoryWatch>> m_Watches;
+	Array<std::unique_ptr<DirectoryWatch>> m_Watches;
 };

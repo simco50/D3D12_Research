@@ -59,7 +59,7 @@ private:
 		AlphaMasked,
 		Count,
 	};
-	using PipelineStateBinSet = std::array<Ref<PipelineState>, (int)PipelineBin::Count>;
+	using PipelineStateBinSet = StaticArray<Ref<PipelineState>, (int)PipelineBin::Count>;
 
 	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
@@ -67,7 +67,7 @@ private:
 	void CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
 
 	GraphicsDevice* m_pDevice;
-	
+
 	Ref<PipelineState> m_pCullInstancesPSO[2];
 	Ref<PipelineState> m_pCullInstancesNoOcclusionPSO;
 	Ref<PipelineState> m_pBuildMeshletCullArgsPSO[2];

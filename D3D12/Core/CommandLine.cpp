@@ -1,8 +1,8 @@
 #include "stdafx.h"
 #include "CommandLine.h"
 
-static std::unordered_map<StringHash, std::string> m_Parameters;
-static std::string m_CommandLine;
+static HashMap<StringHash, String> m_Parameters;
+static String m_CommandLine;
 
 bool CommandLine::Parse(const char* pCommandLine)
 {
@@ -12,7 +12,7 @@ bool CommandLine::Parse(const char* pCommandLine)
 
 	int commandStart = 0;
 	bool hasValue = false;
-	std::string identifier;
+	String identifier;
 
 	for (size_t i = 0; i < m_CommandLine.size(); i++)
 	{
@@ -34,7 +34,7 @@ bool CommandLine::Parse(const char* pCommandLine)
 		{
 			if (hasValue)
 			{
-				std::string value = m_CommandLine.substr(commandStart, i - commandStart);
+				String value = m_CommandLine.substr(commandStart, i - commandStart);
 				if (value.front() == '\"' && value.back() == '\"')
 				{
 					value = value.substr(1, value.length() - 2);
@@ -55,7 +55,7 @@ bool CommandLine::Parse(const char* pCommandLine)
 	{
 		if (hasValue)
 		{
-			std::string value = m_CommandLine.substr(commandStart);
+			String value = m_CommandLine.substr(commandStart);
 			if (value.front() == '\"' && value.back() == '\"')
 			{
 				value = value.substr(1, value.length() - 2);
@@ -99,7 +99,7 @@ bool CommandLine::GetBool(const char* parameter)
 	return m_Parameters.find(parameter) != m_Parameters.end();
 }
 
-const std::string& CommandLine::Get()
+const String& CommandLine::Get()
 {
 	return m_CommandLine;
 }

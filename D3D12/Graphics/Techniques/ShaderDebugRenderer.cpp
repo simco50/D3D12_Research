@@ -162,10 +162,10 @@ void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice)
 		float AdvanceX;
 	};
 
-	std::vector<GlyphData> glyphData;
+	Array<GlyphData> glyphData;
 
 	ImFontAtlas fontAtlas;
-	
+
 	ImFontConfig fontConfig;
 	fontConfig.OversampleH = 2;
 	fontConfig.OversampleV = 2;

@@ -48,9 +48,9 @@ private:
 	std::mutex m_DynamicPageAllocateMutex;
 	uint32 m_DynamicPageSize;
 	uint32 m_NumDynamicDescriptors;
-	std::vector<std::unique_ptr<DescriptorHeapPage>> m_DynamicPages;
+	Array<std::unique_ptr<DescriptorHeapPage>> m_DynamicPages;
 	std::queue<DescriptorHeapPage*> m_ReleasedDynamicPages;
-	std::vector<DescriptorHeapPage*> m_FreeDynamicPages;
+	Array<DescriptorHeapPage*> m_FreeDynamicPages;
 
 	FreeList m_PersistentHandles;
 	uint32 m_NumPersistentDescriptors;
@@ -78,14 +78,14 @@ private:
 	// Structure holding staged descriptors for a table.
 	struct StagedDescriptorTable
 	{
-		std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> Descriptors;
+		Array<D3D12_CPU_DESCRIPTOR_HANDLE> Descriptors;
 		uint32 StartIndex = 0xFFFFFFFF;
 		uint32 Capacity = 0;
 	};
-	std::array<StagedDescriptorTable, RootSignature::sMaxNumParameters> m_StagedDescriptors = {};
+	StaticArray<StagedDescriptorTable, RootSignature::sMaxNumParameters> m_StagedDescriptors = {};
 	BitField<RootSignature::sMaxNumParameters, uint8> m_StaleRootParameters{};
 
 	GPUDescriptorHeap* m_pHeapAllocator;
 	DescriptorHeapPage* m_pCurrentHeapPage = nullptr;
-	std::vector<DescriptorHeapPage*> m_ReleasedPages;
+	Array<DescriptorHeapPage*> m_ReleasedPages;
 };

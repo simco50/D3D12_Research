@@ -14,7 +14,7 @@ enum class MaterialAlphaMode
 
 struct Material
 {
-	std::string Name = "Unnamed Material";
+	String Name = "Unnamed Material";
 	Color BaseColorFactor = Color(1, 1, 1, 1);
 	Color EmissiveFactor = Color(0, 0, 0, 1);
 	float MetalnessFactor = 0.0f;

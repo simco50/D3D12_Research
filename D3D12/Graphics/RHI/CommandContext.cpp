@@ -240,7 +240,7 @@ void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 gro
 		groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
 		groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
 		"Dispatch group size (%d x %d x %d) can not exceed %d", groupCountX, groupCountY, groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
-	
+
 	PrepareDraw();
 	if(groupCountX > 0 && groupCountY > 0 && groupCountZ > 0)
 		m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
@@ -255,7 +255,7 @@ void CommandContext::DispatchMesh(uint32 groupCountX, uint32 groupCountY /*= 1*/
 {
 	check(m_pCurrentPSO);
 	check(m_CurrentCommandContext == CommandListContext::Graphics);
-	
+
 	PrepareDraw();
 	m_pCommandList->DispatchMesh(groupCountX, groupCountY, groupCountZ);
 }
@@ -268,7 +268,7 @@ void CommandContext::DispatchMesh(const Vector3i& groupCounts)
 void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, uint32 maxCount, const Buffer* pIndirectArguments, const Buffer* pCountBuffer, uint32 argumentsOffset /*= 0*/, uint32 countOffset /*= 0*/)
 {
 	check(m_pCurrentPSO || m_pCurrentSO);
-	
+
 	PrepareDraw();
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
@@ -498,7 +498,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		m_pCommandList->ClearDepthStencilView(dsvHandle, clearFlags, clearBinding.DepthStencil.Depth, clearBinding.DepthStencil.Stencil, 0, nullptr);
 	}
 
-	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> rtvs;
+	StaticArray<D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> rtvs;
 	for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 	{
 		const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];

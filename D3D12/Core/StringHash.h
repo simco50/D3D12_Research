@@ -48,7 +48,7 @@ public:
 	{
 	}
 
-	explicit TStringHash(const std::string& text)
+	explicit TStringHash(const String& text)
 		: m_Hash(Hash_Internal(text.c_str(), val_const))
 	{
 	}

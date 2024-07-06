@@ -125,7 +125,7 @@ GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 			{
 				E_LOG(Warning, "[DRED] Last tracked GPU operations:");
 
-				std::unordered_map<int32, const wchar_t*> contextStrings;
+				HashMap<int32, const wchar_t*> contextStrings;
 
 				const D3D12_AUTO_BREADCRUMB_NODE1* pNode = pDredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
 				while (pNode && pNode->pLastBreadcrumbValue)
@@ -150,7 +150,7 @@ GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 						{
 							D3D12_AUTO_BREADCRUMB_OP breadcrumbOp = pNode->pCommandHistory[op];
 
-							std::string contextString;
+							String contextString;
 							auto it = contextStrings.find(op);
 							if (it != contextStrings.end())
 							{
@@ -401,7 +401,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	m_pGlobalSamplerHeap										= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
 
 	m_pCPUResourceViewHeap										= new CPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 8196);
-	
+
 	uint8 smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
 	E_LOG(Info, "Shader Model %d.%d", smMaj, smMin);
@@ -925,7 +925,7 @@ Ref<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, const Textu
 		return format;
 	};
 
-	
+
 	auto SRVFormatFromDepth = [](ResourceFormat format)
 	{
 		switch (format)
@@ -1181,7 +1181,7 @@ bool GraphicsCapabilities::CheckUAVSupport(DXGI_FORMAT format) const
 	case DXGI_FORMAT_B5G6R5_UNORM:
 	case DXGI_FORMAT_B5G5R5A1_UNORM:
 	case DXGI_FORMAT_B4G4R4A4_UNORM:
-		
+
 		// Conditionally supported by specific pDevices.
 		if (m_FeatureSupport.TypedUAVLoadAdditionalFormats())
 		{

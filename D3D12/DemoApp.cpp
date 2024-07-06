@@ -102,7 +102,7 @@ namespace Tweakables
 	bool gScreenshotNextFrame = false;
 	ConsoleCommand<> gScreenshot("Screenshot", []() { gScreenshotNextFrame = true; });
 
-	std::string VisualizeTextureName = "";
+	String VisualizeTextureName = "";
 	ConsoleCommand<const char*> gVisualizeTexture("vis", [](const char* pName) { VisualizeTextureName = pName; });
 
 	// Lighting
@@ -373,7 +373,7 @@ void DemoApp::Update()
 			}
 
 			// In Visibility Buffer mode, culling is done on the GPU.
-			if (m_RenderPath != RenderPath::Visibility)
+			if (m_RenderPath != RenderPath::Visibility && m_RenderPath != RenderPath::VisibilityDeferred)
 			{
 				TaskQueue::Execute([&](int)
 					{
@@ -448,7 +448,7 @@ void DemoApp::Update()
 
 			LightCull2DData lightCull2DData;
 			LightCull3DData lightCull3DData;
-			
+
 			RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
 			if (Tweakables::gSky)
 			{
@@ -902,11 +902,11 @@ void DemoApp::Update()
 				{
 					if (m_RenderPath == RenderPath::Clustered)
 						sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull3DData);
-					else if (m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility)
+					else if (m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred)
 						sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull2DData);
 				}
 
-				if (m_RenderPath == RenderPath::Visibility && Tweakables::gVisibilityDebugMode > 0)
+				if ((m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred) && Tweakables::gVisibilityDebugMode > 0)
 				{
 					graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
 						.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, rasterResult.pDebugData })
@@ -967,7 +967,7 @@ void DemoApp::Update()
 
 		// Execute
 		graph.Execute(m_pDevice);
-		
+
 	}
 
 	{
@@ -1249,7 +1249,7 @@ void DemoApp::UpdateImGui()
 	}
 	ImGui::End();
 
-	
+
 	if (m_World.Registry.valid(selectedEntity))
 	{
 		if (ImGui::Begin("Entity"))
@@ -1411,7 +1411,7 @@ void DemoApp::UpdateImGui()
 			};
 			ImGui::Combo("Render Path", (int*)&m_RenderPath, pPathNames, ARRAYSIZE(pPathNames));
 
-			if (m_RenderPath == RenderPath::Visibility)
+			if (m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred)
 			{
 				ImGui::Checkbox("Occlusion Culling", &Tweakables::gOcclusionCulling.Get());
 				static constexpr const char* pDebugViewNames[] =
@@ -1840,7 +1840,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 	float maxZ = nearPlane + maxPoint * clipPlaneRange;
 
 	constexpr uint32 MAX_CASCADES = 4;
-	std::array<float, MAX_CASCADES> cascadeSplits{};
+	StaticArray<float, MAX_CASCADES> cascadeSplits{};
 
 	for (uint32 i = 0; i < numCascades; ++i)
 	{

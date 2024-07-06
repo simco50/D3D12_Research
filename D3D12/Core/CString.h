@@ -61,16 +61,16 @@ decltype(auto) GetFormatArgument(const T& arg)
 	return arg;
 }
 
-inline const char* GetFormatArgument(const std::string& arg)
+inline const char* GetFormatArgument(const String& arg)
 {
 	return arg.c_str();
 }
 
 template<typename... Args>
-std::string Sprintf(const char* pFormat, Args&&... args)
+String Sprintf(const char* pFormat, Args&&... args)
 {
 	int length = FormatString(nullptr, 0, pFormat, GetFormatArgument(std::forward<Args&&>(args))...);
-	std::string str;
+	String str;
 	str.resize(length);
 	FormatString(str.data(), length + 1, pFormat, GetFormatArgument(std::forward<Args&&>(args))...);
 	return str;
@@ -188,13 +188,13 @@ namespace CString
 		return true;
 	}
 
-	inline void ToString(char val, std::string* pOut) { *pOut = Sprintf("%c", val); }
-	inline void ToString(int val, std::string* pOut) { *pOut = Sprintf("%d", val); }
-	inline void ToString(uint32 val, std::string* pOut) { *pOut = Sprintf("%u", val); }
-	inline void ToString(float val, std::string* pOut) { *pOut = Sprintf("%.3f", val); }
-	inline void ToString(double val, std::string* pOut) { *pOut = Sprintf("%.3f", val); }
-	inline void ToString(const char* val, std::string* pOut) { *pOut = val; }
-	inline void ToString(bool val, std::string* pOut) { *pOut = Sprintf("%d", val ? "True" : "False"); }
+	inline void ToString(char val, String* pOut) { *pOut = Sprintf("%c", val); }
+	inline void ToString(int val, String* pOut) { *pOut = Sprintf("%d", val); }
+	inline void ToString(uint32 val, String* pOut) { *pOut = Sprintf("%u", val); }
+	inline void ToString(float val, String* pOut) { *pOut = Sprintf("%.3f", val); }
+	inline void ToString(double val, String* pOut) { *pOut = Sprintf("%.3f", val); }
+	inline void ToString(const char* val, String* pOut) { *pOut = val; }
+	inline void ToString(bool val, String* pOut) { *pOut = Sprintf("%d", val ? "True" : "False"); }
 
 	/// /////////////////////////////////////////////////////////////////////////
 

@@ -1,19 +1,5 @@
 #pragma once
 
-//STL
-#include <assert.h>
-//Containers
-#include <string>
-#include <queue>
-#include <vector>
-#include <memory>
-#include <array>
-#include <unordered_map>
-#include <unordered_set>
-//Misc
-#include <mutex>
-#include <numeric>
-
 #include "Core/MinWindows.h"
 #include "d3d12.h"
 #include <dxgi1_6.h>

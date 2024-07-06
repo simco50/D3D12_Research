@@ -8,7 +8,7 @@ namespace Paths
 		return c == '\\' || c == '/';
 	}
 
-	std::string GetFileName(const std::string& filePath)
+	String GetFileName(const String& filePath)
 	{
 		auto it = std::find_if(filePath.rbegin(), filePath.rend(), [](const char c)
 			{
@@ -22,41 +22,41 @@ namespace Paths
 		return filePath.substr(it.base() - filePath.begin());
 	}
 
-	std::string GetFileNameWithoutExtension(const std::string& filePath)
+	String GetFileNameWithoutExtension(const String& filePath)
 	{
-		std::string fileName = GetFileName(filePath);
+		String fileName = GetFileName(filePath);
 		size_t dotPos = fileName.find('.');
-		if (dotPos == std::string::npos)
+		if (dotPos == String::npos)
 		{
 			return fileName;
 		}
 		return fileName.substr(0, dotPos);
 	}
 
-	std::string GetFileExtenstion(const std::string& filePath)
+	String GetFileExtenstion(const String& filePath)
 	{
 		size_t dotPos = filePath.rfind('.');
-		if (dotPos == std::string::npos)
+		if (dotPos == String::npos)
 		{
 			return "";
 		}
 		return filePath.substr(dotPos + 1);
 	}
 
-	std::string GetDirectoryPath(const std::string& filePath)
+	String GetDirectoryPath(const String& filePath)
 	{
-		std::string fileName = GetFileName(filePath);
+		String fileName = GetFileName(filePath);
 		return filePath.substr(0, filePath.length() - fileName.length());
 	}
 
-	std::string Normalize(const std::string& filePath)
+	String Normalize(const String& filePath)
 	{
-		std::string output = std::string(filePath.begin(), filePath.end());
+		String output = String(filePath.begin(), filePath.end());
 		NormalizeInline(output);
 		return output;
 	}
 
-	void NormalizeInline(std::string& filePath)
+	void NormalizeInline(String& filePath)
 	{
 		for (char& c : filePath)
 		{
@@ -67,31 +67,31 @@ namespace Paths
 		}
 		if (filePath.find("./") == 0)
 		{
-			filePath = std::string(filePath.begin() + 2, filePath.end());
+			filePath = String(filePath.begin() + 2, filePath.end());
 		}
 	}
 
-	bool ResolveRelativePaths(std::string& path)
+	bool ResolveRelativePaths(String& path)
 	{
 		for (;;)
 		{
 			size_t index = path.rfind("../");
-			if (index == std::string::npos)
+			if (index == String::npos)
 				break;
 			size_t idx0 = path.rfind('/', index);
-			if (idx0 == std::string::npos)
+			if (idx0 == String::npos)
 				return false;
 			idx0 = path.rfind('/', idx0 - 1);
-			if (idx0 != std::string::npos)
+			if (idx0 != String::npos)
 				path = path.substr(0, idx0 + 1) + path.substr(index + 3);
 		}
 		return true;
 	}
 
-	std::string ChangeExtension(const std::string& filePath, const std::string& newExtension)
+	String ChangeExtension(const String& filePath, const String& newExtension)
 	{
 		size_t extensionStart = filePath.rfind('.');
-		if (extensionStart == std::string::npos)
+		if (extensionStart == String::npos)
 		{
 			return filePath;
 		}
@@ -103,7 +103,7 @@ namespace Paths
 		return filePath.substr(0, extensionStart + 1) + newExtension;
 	}
 
-	std::string MakeAbsolute(const char* pFilePath)
+	String MakeAbsolute(const char* pFilePath)
 	{
 		char fullPath[MAX_PATH];
 		GetFullPathNameA(pFilePath, MAX_PATH, fullPath, nullptr);
@@ -111,7 +111,7 @@ namespace Paths
 	}
 
 
-	std::string MakeRelativePath(const std::string& basePath, const std::string& filePath)
+	String MakeRelativePath(const String& basePath, const String& filePath)
 	{
 		size_t matchLength = 0;
 		for (size_t i = 0; i < basePath.size(); i++)
@@ -125,7 +125,7 @@ namespace Paths
 		return filePath.substr(matchLength);
 	}
 
-	void CombineInner(const char** pElements, uint32 numElements, std::string& output)
+	void CombineInner(const char** pElements, uint32 numElements, String& output)
 	{
 		size_t stringLength = 0;
 		for (size_t i = 0; i < numElements; i++)
@@ -158,67 +158,67 @@ namespace Paths
 		return (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY));
 	}
 
-	std::string GameDir()
+	String GameDir()
 	{
 		return "./";
 	}
 
-	std::string SavedDir()
+	String SavedDir()
 	{
 		return GameDir() + "Saved/";
 	}
 
-	std::string ScreenshotDir()
+	String ScreenshotDir()
 	{
 		return SavedDir() + "Screenshots/";
 	}
 
-	std::string LogsDir()
+	String LogsDir()
 	{
 		return SavedDir() + "Logs/";
 	}
 
-	std::string ProfilingDir()
+	String ProfilingDir()
 	{
 		return SavedDir() + "Profiling/";
 	}
 
-	std::string PakFilesDir()
+	String PakFilesDir()
 	{
 		return GameDir();
 	}
 
-	std::string ResourcesDir()
+	String ResourcesDir()
 	{
 		return GameDir() + "Resources/";
 	}
 
-	std::string ConfigDir()
+	String ConfigDir()
 	{
 		return SavedDir() + "Config/";
 	}
 
-	std::string ShaderCacheDir()
+	String ShaderCacheDir()
 	{
 		return SavedDir() + "ShaderCache/";
 	}
 
-	std::string ShadersDir()
+	String ShadersDir()
 	{
 		return ResourcesDir() + "Shaders/";
 	}
 
-	std::string GameIniFile()
+	String GameIniFile()
 	{
 		return ConfigDir() + "Game.ini";
 	}
 
-	std::string EngineIniFile()
+	String EngineIniFile()
 	{
 		return ConfigDir() + "Engine.ini";
 	}
 
-	std::string WorkingDirectory()
+	String WorkingDirectory()
 	{
 		char path[256];
 		GetModuleFileNameA(nullptr, path, 256);
@@ -236,14 +236,14 @@ namespace Paths
 		CloseHandle(file);
 	}
 
-	bool CreateDirectoryTree(const std::string& path)
+	bool CreateDirectoryTree(const String& path)
 	{
 		size_t slash = path.find('/', 0);
-		while (slash != std::string::npos)
+		while (slash != String::npos)
 		{
 			if (slash > 1)
 			{
-				std::string dirToCreate = path.substr(0, slash);
+				String dirToCreate = path.substr(0, slash);
 				const BOOL success = CreateDirectoryA(dirToCreate.c_str(), nullptr);
 				DWORD error = GetLastError();
 				if (success != TRUE && error == ERROR_PATH_NOT_FOUND)

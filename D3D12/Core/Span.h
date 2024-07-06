@@ -12,12 +12,12 @@ public:
 		m_pValue(list.begin()), m_Count((uint32)list.size())
 	{}
 
-	Span(const std::vector<std::remove_cv_t<T>>& v) :
+	Span(const Array<std::remove_cv_t<T>>& v) :
 		m_pValue(v.data()), m_Count((uint32)v.size())
 	{}
 
 	template<size_t N>
-	Span(const std::array<std::remove_cv_t<T>, N>& v) :
+	Span(const StaticArray<std::remove_cv_t<T>, N>& v) :
 		m_pValue(v.data()), m_Count((uint32)v.size())
 	{}
 
@@ -42,9 +42,9 @@ public:
 		return Span(m_pValue + from, num);
 	}
 
-	std::vector<T> Copy() const
+	Array<T> Copy() const
 	{
-		std::vector<T> result(GetSize());
+		Array<T> result(GetSize());
 		for (uint32 i = 0; i < GetSize(); ++i)
 		{
 			result[i] = m_pValue[i];

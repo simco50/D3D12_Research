@@ -17,7 +17,7 @@
 
 namespace D3D
 {
-	inline std::string ResourceStateToString(D3D12_RESOURCE_STATES state)
+	inline String ResourceStateToString(D3D12_RESOURCE_STATES state)
 	{
 		if (state == 0)
 			return "COMMON";
@@ -93,7 +93,7 @@ namespace D3D
 			SYSTEMTIME time;
 			GetSystemTime(&time);
 			Paths::CreateDirectoryTree(Paths::SavedDir());
-			std::string filePath = Sprintf("%ssGPU_Capture_%s.wpix", Paths::SavedDir().c_str(), Utils::GetTimeString().c_str());
+			String filePath = Sprintf("%ssGPU_Capture_%s.wpix", Paths::SavedDir().c_str(), Utils::GetTimeString().c_str());
 			if (SUCCEEDED(PIXGpuCaptureNextFrames(MULTIBYTE_TO_UNICODE(filePath.c_str()), numFrames)))
 			{
 				E_LOG(Info, "Captured %d frames to '%s'", numFrames, filePath.c_str());
@@ -102,9 +102,9 @@ namespace D3D
 #endif
 	}
 
-	inline std::string GetErrorString(HRESULT errorCode, ID3D12Device* pDevice)
+	inline String GetErrorString(HRESULT errorCode, ID3D12Device* pDevice)
 	{
-		std::string str;
+		String str;
 		char* errorMsg;
 		if (FormatMessageA(
 			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
@@ -227,9 +227,9 @@ namespace D3D
 			VERIFY_HR_EX(pObject->SetPrivateData(WKPDID_D3DDebugObjectName, (uint32)strlen(pName) + 1, pName), nullptr);
 	}
 
-	inline std::string GetObjectName(ID3D12Object* pObject)
+	inline String GetObjectName(ID3D12Object* pObject)
 	{
-		std::string out;
+		String out;
 		if (pObject)
 		{
 			uint32 size = 0;
@@ -242,7 +242,7 @@ namespace D3D
 		return out;
 	}
 
-	inline std::string BarrierToString(const D3D12_RESOURCE_BARRIER& barrier)
+	inline String BarrierToString(const D3D12_RESOURCE_BARRIER& barrier)
 	{
 		if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
 		{
@@ -340,7 +340,7 @@ namespace D3D
 		return gDXGIFormatMap[(uint32)format];
 	}
 
-	static std::string GetResourceDescription(ID3D12Resource* pResource)
+	static String GetResourceDescription(ID3D12Resource* pResource)
 	{
 		if (!pResource)
 			return "nullptr";
@@ -378,7 +378,7 @@ namespace D3D
 				{
 					format = (ResourceFormat)i;
 					break;
-				} 
+				}
 			}
 			const FormatInfo& info = RHI::GetFormatInfo(format);
 

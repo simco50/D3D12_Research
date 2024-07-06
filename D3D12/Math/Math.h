@@ -38,7 +38,7 @@ namespace Math
 	constexpr uint32 MegaBytesToBytes = 1 << 20;
 	constexpr uint32 GigaBytesToBytes = 1 << 30;
 
-	inline std::string PrettyPrintDataSize(uint64 sizeInBytes)
+	inline String PrettyPrintDataSize(uint64 sizeInBytes)
 	{
 		if (sizeInBytes > 1 << 30)
 		{
@@ -121,12 +121,12 @@ namespace Math
 
 	Quaternion LookRotation(const Vector3& direction, const Vector3& up = Vector3::Up);
 
-	std::string ToBase(unsigned int number, unsigned int base, bool addPrefix = true);
-	inline std::string ToBinary(uint32 number, bool addPrefix = true)
+	String ToBase(unsigned int number, unsigned int base, bool addPrefix = true);
+	inline String ToBinary(uint32 number, bool addPrefix = true)
 	{
 		return ToBase(number, 2, addPrefix);
 	}
-	inline std::string ToHex(uint32 number, bool addPrefix = true)
+	inline String ToHex(uint32 number, bool addPrefix = true)
 	{
 		return ToBase(number, 16, addPrefix);
 	}
@@ -334,7 +334,7 @@ namespace Math
 	template<uint32 SIZE, uint32 BASE>
 	struct HaltonSequence
 	{
-		constexpr HaltonSequence() 
+		constexpr HaltonSequence()
 			: Sequence{}
 		{
 			Halton generator;

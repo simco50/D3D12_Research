@@ -5,32 +5,32 @@ namespace Paths
 	namespace Private
 	{
 		inline const char* GetCharPtr(const char* pStr) { return pStr; }
-		inline const char* GetCharPtr(const std::string& str) { return str.c_str(); }
+		inline const char* GetCharPtr(const String& str) { return str.c_str(); }
 	}
 
 	bool IsSlash(const char c);
 
-	std::string GetFileName(const std::string& filePath);
-	std::string GetFileNameWithoutExtension(const std::string& filePath);
-	std::string GetFileExtenstion(const std::string& filePath);
-	std::string GetDirectoryPath(const std::string& filePath);
+	String GetFileName(const String& filePath);
+	String GetFileNameWithoutExtension(const String& filePath);
+	String GetFileExtenstion(const String& filePath);
+	String GetDirectoryPath(const String& filePath);
 
-	std::string Normalize(const std::string& filePath);
-	void NormalizeInline(std::string& filePath);
-	bool ResolveRelativePaths(std::string& path);
+	String Normalize(const String& filePath);
+	void NormalizeInline(String& filePath);
+	bool ResolveRelativePaths(String& path);
 
-	std::string ChangeExtension(const std::string& filePath, const std::string& newExtension);
+	String ChangeExtension(const String& filePath, const String& newExtension);
 
-	std::string MakeAbsolute(const char* pFilePath);
-	std::string MakeRelativePath(const std::string& basePath, const std::string& filePath);
+	String MakeAbsolute(const char* pFilePath);
+	String MakeRelativePath(const String& basePath, const String& filePath);
 
-	void CombineInner(const char** pElements, uint32 numElements, std::string& output);
+	void CombineInner(const char** pElements, uint32 numElements, String& output);
 
 	template<typename ...Args>
-	std::string Combine(Args&&... args)
+	String Combine(Args&&... args)
 	{
 		const char* paths[] = { Private::GetCharPtr(std::forward<Args>(args))... };
-		std::string result;
+		String result;
 		CombineInner(paths, ARRAYSIZE(paths), result);
 		return result;
 	}
@@ -38,25 +38,25 @@ namespace Paths
 	bool FileExists(const char* pFilePath);
 	bool DirectoryExists(const char* pFilePath);
 
-	std::string GameDir();
+	String GameDir();
 
-	std::string SavedDir();
+	String SavedDir();
 
-	std::string ScreenshotDir();
-	std::string LogsDir();
-	std::string ProfilingDir();
-	std::string PakFilesDir();
-	std::string ResourcesDir();
-	std::string ConfigDir();
-	std::string ShaderCacheDir();
-	std::string ShadersDir();
+	String ScreenshotDir();
+	String LogsDir();
+	String ProfilingDir();
+	String PakFilesDir();
+	String ResourcesDir();
+	String ConfigDir();
+	String ShaderCacheDir();
+	String ShadersDir();
 
-	std::string GameIniFile();
-	std::string EngineIniFile();
+	String GameIniFile();
+	String EngineIniFile();
 
-	std::string WorkingDirectory();
+	String WorkingDirectory();
 
 	void GetFileTime(const char* pFilePath, uint64& creationTime, uint64& lastAccessTime, uint64& modificationTime);
 
-	bool CreateDirectoryTree(const std::string& path);
+	bool CreateDirectoryTree(const String& path);
 };

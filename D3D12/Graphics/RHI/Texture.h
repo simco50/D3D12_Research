@@ -200,7 +200,7 @@ public:
 
 private:
 	TextureDesc m_Desc;
-	
+
 	Ref<ShaderResourceView> m_pSRV;
-	std::vector<Ref<UnorderedAccessView>> m_UAVs;
+	Array<Ref<UnorderedAccessView>> m_UAVs;
 };

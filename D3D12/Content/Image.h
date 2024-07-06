@@ -48,6 +48,6 @@ private:
 	bool m_IsCubemap = false;
 	std::unique_ptr<Image> m_pNextImage;
 	ResourceFormat m_Format = ResourceFormat::Unknown;
-	std::array<uint64, D3D12_REQ_MIP_LEVELS> m_MipLevelDataOffsets{};
-	std::vector<uint8> m_Pixels;
+	StaticArray<uint64, D3D12_REQ_MIP_LEVELS> m_MipLevelDataOffsets{};
+	Array<uint8> m_Pixels;
 };

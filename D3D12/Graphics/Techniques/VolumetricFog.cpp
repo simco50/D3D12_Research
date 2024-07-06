@@ -39,7 +39,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 {
 	RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 
-	std::vector<ShaderInterop::FogVolume> volumes;
+	Array<ShaderInterop::FogVolume> volumes;
 	auto fog_view = pView->pWorld->Registry.view<const Transform, const FogVolume>();
 	fog_view.each([&](const Transform& transform, const FogVolume& fogVolume)
 		{

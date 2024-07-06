@@ -191,8 +191,8 @@ private:
 	friend class GPUProfiler;
 
 	LinearAllocator					Allocator;			// Scratch allocator for frame
-	std::vector<Span<const Event>>	GroupedEvents;		// Span of events for each group
-	std::vector<Event>				Events;				// Event storage for frame
+	Array<Span<const Event>>	GroupedEvents;		// Span of events for each group
+	Array<Event>				Events;				// Event storage for frame
 	uint32							NumEvents = 0;		// Total number of recorded events
 };
 
@@ -320,7 +320,7 @@ private:
 		ID3D12QueryHeap* GetHeap() const	{ return m_pQueryHeap; }
 
 	private:
-		std::vector<ID3D12CommandAllocator*>	m_CommandAllocators;				// CommandAlloctors to resolve queries. 1 per frame
+		Array<ID3D12CommandAllocator*>	m_CommandAllocators;				// CommandAlloctors to resolve queries. 1 per frame
 		uint32									m_MaxNumQueries			= 0;		// Max number of event queries
 		uint32									m_FrameLatency			= 0;		// Number of GPU frame latency
 		std::atomic<uint32>						m_QueryIndex			= 0;		// Current index of queries
@@ -347,7 +347,7 @@ private:
 			uint32 QueryIndexEnd	: 16;
 		};
 		static_assert(sizeof(QueryRange) == sizeof(uint32));
-		std::vector<QueryRange>	Ranges;
+		Array<QueryRange>	Ranges;
 	};
 	QueryData& GetQueryData(uint32 frameIndex) { return m_pQueryData[frameIndex % m_FrameLatency]; }
 	QueryData& GetQueryData() { return GetQueryData(m_FrameIndex); }
@@ -365,7 +365,7 @@ private:
 				uint32 IsBegin		: 1;
 			};
 			static_assert(sizeof(Query) == sizeof(uint32));
-			std::vector<Query> Queries;
+			Array<Query> Queries;
 		};
 
 		void Setup(uint32 maxCommandLists)
@@ -405,8 +405,8 @@ private:
 
 	private:
 		SRWLOCK											m_CommandListMapLock{};
-		std::unordered_map<ID3D12CommandList*, uint32>	m_CommandListMap;
-		std::vector<Data>								m_CommandListData;
+		HashMap<ID3D12CommandList*, uint32>	m_CommandListMap;
+		Array<Data>								m_CommandListData;
 	};
 
 	uint64 ConvertToCPUTicks(const QueueInfo& queue, uint64 gpuTicks) const
@@ -419,25 +419,25 @@ private:
 
 	CommandListData				m_CommandListData{};
 
-	ProfilerEventData*			m_pEventData			= nullptr;		// Data containing all resulting events. 1 per frame history
-	uint32						m_EventHistorySize		= 0;			// Number of frames to keep track of
-	std::atomic<uint32>			m_EventIndex			= 0;			// Current event index
+	ProfilerEventData* m_pEventData = nullptr;		// Data containing all resulting events. 1 per frame history
+	uint32						m_EventHistorySize = 0;			// Number of frames to keep track of
+	std::atomic<uint32>			m_EventIndex = 0;			// Current event index
 
-	QueryData*					m_pQueryData			= nullptr;		// Data containing all intermediate query event data. 1 per frame latency
-	uint32						m_FrameLatency			= 0;			// Max number of in-flight GPU frames
+	QueryData* m_pQueryData = nullptr;		// Data containing all intermediate query event data. 1 per frame latency
+	uint32						m_FrameLatency = 0;			// Max number of in-flight GPU frames
 
-	uint32						m_FrameToReadback		= 0;			// Next frame to readback from
-	uint32						m_FrameIndex			= 0;			// Current frame index
+	uint32						m_FrameToReadback = 0;			// Next frame to readback from
+	uint32						m_FrameIndex = 0;			// Current frame index
 
 	QueryHeap					m_MainHeap;
 	QueryHeap					m_CopyHeap;
-	uint64						m_CPUTickFrequency		= 0;
+	uint64						m_CPUTickFrequency = 0;
 
 	static constexpr uint32 MAX_EVENT_DEPTH = 32;
 	using ActiveEventStack = FixedStack<uint32, MAX_EVENT_DEPTH>;
-	std::vector<ActiveEventStack>						m_QueueEventStack;	// Stack of active events for each command queue
-	std::vector<QueueInfo>								m_Queues;			// All registered queues
-	std::unordered_map<ID3D12CommandQueue*, uint32>		m_QueueIndexMap;	// Map from command queue to index
+	Array<ActiveEventStack>						m_QueueEventStack;	// Stack of active events for each command queue
+	Array<QueueInfo>								m_Queues;			// All registered queues
+	HashMap<ID3D12CommandQueue*, uint32>		m_QueueIndexMap;	// Map from command queue to index
 	GPUProfilerCallbacks								m_EventCallback;
 
 	bool						m_IsInitialized			= false;
@@ -576,7 +576,7 @@ private:
 	CPUProfilerCallbacks m_EventCallback;
 
 	std::mutex				m_ThreadDataLock;				// Mutex for accesing thread data
-	std::vector<ThreadData> m_ThreadData;					// Data describing each registered thread
+	Array<ThreadData> m_ThreadData;					// Data describing each registered thread
 
 	ProfilerEventData*		m_pEventData		= nullptr;	// Per-frame data
 	uint32					m_HistorySize		= 0;		// History size

@@ -329,7 +329,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 							}
 						}
 					}
-					
+
 					if (hovered)
 					{
 						if (ImGui::BeginTooltip())
@@ -546,7 +546,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		ImGui::SameLine();
 		if ((uint32)context.SelectedEventHash != 0)
 		{
-			std::vector<float> eventTimes;
+			Array<float> eventTimes;
 			const char* pName = "";
 			float eventTime = 0;
 			if (context.IsSelectedCPUEvent)
@@ -625,7 +625,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 				ImGui::EndGroup();
 			}
 		}
-	
+
 
 		// Horizontal scroll bar
 		ImS64 scrollH = -(ImS64)context.TimelineOffset.x;
@@ -659,7 +659,7 @@ void DrawProfilerHUD()
 
 	ImGui::Dummy(ImVec2(30, 0));
 	ImGui::SameLine();
-	
+
 	ImGui::Text("Filter");
 	ImGui::SetNextItemWidth(150);
 	ImGui::SameLine();

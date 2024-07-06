@@ -36,10 +36,10 @@ public:
 		return m_Symbols;
 	}
 
-	std::string ToString()
+	String ToString()
 	{
 		Resolve();
-		std::string output;
+		String output;
 		for (uint32 i = 0; i < m_NumFrames; i++)
 		{
 			const Symbol& s = m_Symbols[i];

@@ -2,6 +2,20 @@
 
 #include <stdint.h>
 
+//STL
+#include <assert.h>
+//Containers
+#include <string>
+#include <queue>
+#include <vector>
+#include <memory>
+#include <array>
+//Misc
+#include <mutex>
+#include <numeric>
+
+#include "External/ankerl/unordered_dense.h"
+
 using int8 = int8_t;
 using int16 = int16_t;
 using int32 = int32_t;
@@ -41,3 +55,18 @@ constexpr inline bool EnumHasAnyFlags(Enum Flags, Enum Contains)
 {
 	return (((__underlying_type(Enum))Flags) & (__underlying_type(Enum))Contains) != 0;
 }
+
+
+template<typename Key, typename Value, typename Hash = ankerl::unordered_dense::hash<Key>>
+using HashMap = ankerl::unordered_dense::map<Key, Value, Hash>;
+
+template<typename Key, typename Hash = ankerl::unordered_dense::hash<Key>>
+using HashSet = ankerl::unordered_dense::set<Key, Hash>;
+
+using String = std::string;
+
+template<typename T, typename Allocator = std::allocator<T>>
+using Array = std::vector<T, Allocator>;
+
+template<typename T, size_t Size>
+using StaticArray = std::array<T, Size>;

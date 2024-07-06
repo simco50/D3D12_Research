@@ -26,10 +26,10 @@ private:
 		size_t Size() const { return m_Offset; }
 	private:
 		size_t m_Offset = 0;
-		std::array<char, SIZE> m_Data{};
+		StaticArray<char, SIZE> m_Data{};
 	};
 
-	wchar_t* GetUnicode(const std::string& text)
+	wchar_t* GetUnicode(const String& text)
 	{
 		size_t len = text.length();
 		wchar_t* pData = ContentData.Allocate<wchar_t>((int)len + 1);
@@ -97,7 +97,7 @@ void StateObject::OnLibraryReloaded(Shader* pLibrary)
 	}
 }
 
-void StateObjectInitializer::AddHitGroup(const std::string& name, const std::string& closestHit /*= ""*/, const std::string& anyHit /*= ""*/, const std::string& intersection /*= ""*/, RootSignature* pRootSignature /*= nullptr*/)
+void StateObjectInitializer::AddHitGroup(const String& name, const String& closestHit /*= ""*/, const String& anyHit /*= ""*/, const String& intersection /*= ""*/, RootSignature* pRootSignature /*= nullptr*/)
 {
 	HitGroupDefinition definition;
 	definition.Name = name;
@@ -122,7 +122,7 @@ void StateObjectInitializer::AddCollection(StateObject* pOtherObject)
 	m_Collections.push_back(pOtherObject);
 }
 
-void StateObjectInitializer::AddMissShader(const std::string& exportName, RootSignature* pRootSignature /*= nullptr*/)
+void StateObjectInitializer::AddMissShader(const String& exportName, RootSignature* pRootSignature /*= nullptr*/)
 {
 	LibraryShaderExport shader;
 	shader.Name = exportName;
@@ -143,7 +143,7 @@ bool StateObjectInitializer::CreateStateObjectStream(StateObjectStream& stateObj
 		return pState;
 	};
 
-	std::vector<Shader*> shaders;
+	Array<Shader*> shaders;
 	for (const LibraryExports& library : m_Libraries)
 	{
 		D3D12_DXIL_LIBRARY_DESC* pDesc = stateObjectStream.ContentData.Allocate<D3D12_DXIL_LIBRARY_DESC>();

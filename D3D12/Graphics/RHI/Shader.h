@@ -19,9 +19,9 @@ struct ShaderDefine
 	ShaderDefine() = default;
 	ShaderDefine(const char* pDefine, const char* pValue) : Value(Sprintf("%s=%s", pDefine, pValue)) {}
 	ShaderDefine(const char* pDefine, const uint32 value) : Value(Sprintf("%s=%d", pDefine, value)) {}
-	ShaderDefine(const std::string& define) : Value(define) { }
+	ShaderDefine(const String& define) : Value(define) { }
 	ShaderDefine(const char* pDefine) : Value(pDefine) { }
-	std::string Value;
+	String Value;
 };
 
 class ShaderDefineHelper
@@ -49,16 +49,16 @@ public:
 		Get(pName).Value = value ? "1" : "0";
 	}
 
-	std::vector<ShaderDefine> operator*() const
+	Array<ShaderDefine> operator*() const
 	{
-		std::vector<ShaderDefine> defines;
+		Array<ShaderDefine> defines;
 		defines.reserve(Defines.size());
 		Resolve(defines);
 		return defines;
 	}
 
 private:
-	void Resolve(std::vector<ShaderDefine>& outDefines) const
+	void Resolve(Array<ShaderDefine>& outDefines) const
 	{
 		if (pParent)
 			pParent->Resolve(outDefines);
@@ -73,7 +73,7 @@ private:
 	{
 		StringHash Hash;
 		const char* Name;
-		std::string Value;
+		String Value;
 	};
 
 	DefineData& Get(const char* pName)
@@ -90,23 +90,23 @@ private:
 	}
 
 	const ShaderDefineHelper* pParent = nullptr;
-	std::vector<DefineData> Defines;
+	Array<DefineData> Defines;
 };
 
 struct Shader
 {
 	uint64 Hash[2];
 	ShaderBlob pByteCode;
-	std::vector<ShaderDefine> Defines;
+	Array<ShaderDefine> Defines;
 	ShaderType Type;
-	std::string EntryPoint;
+	String EntryPoint;
 	bool IsDirty = false;
 };
 
 struct ShaderResult
 {
 	Shader* pShader;
-	std::string Error;
+	String Error;
 
 	operator Shader* () const { return pShader; }
 };
@@ -118,7 +118,7 @@ public:
 	~ShaderManager();
 
 	void ConditionallyReloadShaders();
-	void AddIncludeDir(const std::string& includeDir);
+	void AddIncludeDir(const String& includeDir);
 
 	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* pEntryPoint, Span<ShaderDefine> defines = {});
 
@@ -130,21 +130,21 @@ private:
 
 	ShaderStringHash GetEntryPointHash(const char* pEntryPoint, Span<ShaderDefine> defines);
 
-	void RecompileFromFileChange(const std::string& filePath);
+	void RecompileFromFileChange(const String& filePath);
 
-	std::vector<std::string> m_IncludeDirs;
+	Array<String> m_IncludeDirs;
 
 	std::unique_ptr<FileWatcher> m_pFileWatcher;
 
-	std::vector<Shader*> m_Shaders;
+	Array<Shader*> m_Shaders;
 
-	std::unordered_map<ShaderStringHash, std::unordered_set<std::string>> m_IncludeDependencyMap;
+	HashMap<ShaderStringHash, HashSet<String>> m_IncludeDependencyMap;
 
 	struct ShadersInFileMap
 	{
-		std::unordered_map<ShaderStringHash, Shader*> Shaders;
+		HashMap<ShaderStringHash, Shader*> Shaders;
 	};
-	std::unordered_map<ShaderStringHash, ShadersInFileMap> m_FilepathToObjectMap;
+	HashMap<ShaderStringHash, ShadersInFileMap> m_FilepathToObjectMap;
 
 	uint8 m_ShaderModelMajor;
 	uint8 m_ShaderModelMinor;

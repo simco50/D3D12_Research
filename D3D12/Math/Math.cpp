@@ -114,7 +114,7 @@ namespace Math
 		Vector3 x = up.Cross(z);
 		x.Normalize();
 		Vector3 y = z.Cross(x);
-		
+
 		Vector3 p(
 			x.Dot(-position),
 			y.Dot(-position),
@@ -168,7 +168,7 @@ namespace Math
 		return Quaternion::CreateFromRotationMatrix(m);
 	}
 
-	std::string ToBase(unsigned int number, unsigned int base, bool addPrefix /*= true*/)
+	String ToBase(unsigned int number, unsigned int base, bool addPrefix /*= true*/)
 	{
 		char buffer[16];
 		memset(buffer, 0, 16);
@@ -211,7 +211,7 @@ namespace Math
 				*pCurrent = '0';
 			}
 		}
-		std::string out = buffer;
+		String out = buffer;
 		std::reverse(out.begin(), out.end());
 		return out;
 	}
