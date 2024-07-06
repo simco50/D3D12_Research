@@ -5,8 +5,8 @@
 #if WITH_PROFILING
 
 #include "Core/Paths.h"
-#include <External/FontAwesome/IconsFontAwesome4.h>
-#include <External/Imgui/imgui_internal.h>
+#include <IconsFontAwesome4.h>
+#include <imgui_internal.h>
 
 struct StyleOptions
 {

@@ -4,8 +4,8 @@
 #include "Graphics/ImGuiRenderer.h"
 #include "Core/Profiler.h"
 
-#include <External/Imgui/imgui_internal.h>
-#include <External/FontAwesome/IconsFontAwesome4.h>
+#include <imgui_internal.h>
+#include <IconsFontAwesome4.h>
 
 template<typename T>
 String BitmaskToString(T mask, const char* (*pValueToString)(T))

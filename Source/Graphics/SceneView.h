@@ -7,7 +7,7 @@
 #include "RenderGraph/RenderGraphDefinitions.h"
 #include "Techniques/ShaderDebugRenderer.h"
 
-#include "External/EnTT/entt.hpp"
+#include "entt.hpp"
 
 class LoadedScene;
 struct Mesh;

@@ -4,7 +4,7 @@
 #include "Paths.h"
 #include "Stream.h"
 
-#include <External/Imgui/imgui_internal.h>
+#include <imgui_internal.h>
 
 static HashMap<StringHash, IConsoleObject*> gCvarMap;
 static Array<IConsoleObject*> gConsoleObjects;

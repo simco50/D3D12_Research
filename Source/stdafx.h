@@ -6,7 +6,7 @@
 #define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "d3dx12/d3dx12.h"
 
-#include <External/Imgui/imgui.h>
+#include <imgui.h>
 
 #include "Core/Defines.h"
 #include "Core/CoreTypes.h"

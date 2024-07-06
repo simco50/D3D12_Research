@@ -2,11 +2,22 @@ require "vstudio"
 
 ENGINE_NAME = "D3D12"
 ROOT = "../"
-SOURCE_DIR = ROOT .. ENGINE_NAME .. "/"
+SOURCE_DIR = ROOT .. "Source/"
 WIN_SDK = "latest"
 
 function runtimeDependency(source, destination)
-	postbuildcommands { ("{COPY} \"$(SolutionDir)Libraries/" .. source .. "\" \"$(OutDir)" .. destination .. "/\"") }
+	postbuildcommands { ("{COPY} \"$(SolutionDir)ThirdParty/" .. source .. "\" \"$(OutDir)" .. destination .. "/\"") }
+end
+
+function compileThirdPartyLibrary(name)
+	includedirs ("$(SolutionDir)ThirdParty/" .. name)
+	files {
+		(ROOT .. "ThirdParty/".. name .. "/*.cpp"),
+		(ROOT .. "ThirdParty/" .. name .. "/*.h"),
+		(ROOT .. "ThirdParty/" .. name .. "/*.hpp"),
+		(ROOT .. "ThirdParty/" .. name .. "/*.inl"),
+		(ROOT .. "ThirdParty/" .. name .. "/*.natvis"),
+	}
 end
 
 workspace (ENGINE_NAME)
@@ -60,13 +71,13 @@ workspace (ENGINE_NAME)
 	filter {}
 
 	project (ENGINE_NAME)
-		location (ROOT .. ENGINE_NAME)
+		location (ROOT)
 		pchheader ("stdafx.h")
-		pchsource (ROOT .. ENGINE_NAME .. "/stdafx.cpp")
+		pchsource (SOURCE_DIR .. "stdafx.cpp")
 		systemversion (WIN_SDK)
 		kind "WindowedApp"
 
-		includedirs { "$(ProjectDir)" }
+		includedirs { SOURCE_DIR }
 
 		files
 		{ 
@@ -79,34 +90,34 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.editorconfig"),
 		}
 
-		filter ("files:" .. SOURCE_DIR .. "External/**")
+		filter ("files:" .. ROOT .. "ThirdParty/**")
 			flags { "NoPCH" }
 			removeflags "FatalWarnings"
 			warnings "Default"
 		filter {}
 
-		includedirs "$(ProjectDir)Resources/Shaders/Interop"
+		includedirs "$(SolutionDir)Resources/Shaders/Interop"
 
 		-- D3D12
-		includedirs "$(SolutionDir)Libraries/D3D12/include"
+		includedirs "$(SolutionDir)ThirdParty/D3D12/include"
 		runtimeDependency("D3D12/bin/D3D12Core.dll", "D3D12")
 		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll", "D3D12")
 		runtimeDependency("D3D12/bin/d3d10warp.dll", "")
 		links {	"d3d12.lib", "dxgi", "dxguid" }
 
 		-- Pix
-		includedirs "$(SolutionDir)Libraries/Pix/include"
-		libdirs "$(SolutionDir)Libraries/Pix/lib"
+		includedirs "$(SolutionDir)ThirdParty/Pix/include"
+		libdirs "$(SolutionDir)ThirdParty/Pix/lib"
 		runtimeDependency("Pix/bin/WinPixEventRuntime.dll", "")
 		links { "WinPixEventRuntime" }
 
 		-- DXC
-		includedirs "$(SolutionDir)Libraries/Dxc/include"
+		includedirs "$(SolutionDir)ThirdParty/Dxc/include"
 		runtimeDependency ("Dxc/bin/dxcompiler.dll", "")
 		runtimeDependency ("Dxc/bin/dxil.dll", "")
 
 		-- DirectXMath
-		includedirs "$(SolutionDir)Libraries/DirectXMath/include"
+		includedirs "$(SolutionDir)ThirdParty/DirectXMath/include"
 
 		-- Live++
 		live_pp_path = "LivePP/API/x64/LPP_API_Version_x64_CPP.h"
@@ -117,6 +128,16 @@ workspace (ENGINE_NAME)
 			linkoptions { "/FUNCTIONPADMIN" }
 			editandcontinue "Off"
 		end
+
+		compileThirdPartyLibrary("ankerl")
+		compileThirdPartyLibrary("cgltf")
+		compileThirdPartyLibrary("EnTT")
+		compileThirdPartyLibrary("FontAwesome")
+		compileThirdPartyLibrary("ImGui")
+		compileThirdPartyLibrary("Ldr")
+		compileThirdPartyLibrary("MeshOptimizer")
+		compileThirdPartyLibrary("SimpleMath")
+		compileThirdPartyLibrary("Stb")
 
 newaction {
 	trigger     = "clean",

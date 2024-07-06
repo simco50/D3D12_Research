@@ -1,6 +1,6 @@
  #pragma once
 
-#include <External/SimpleMath/SimpleMath.h>
+#include <SimpleMath.h>
 using BoundingBox = DirectX::BoundingBox;
 using OrientedBoundingBox = DirectX::BoundingOrientedBox;
 using BoundingFrustum = DirectX::BoundingFrustum;

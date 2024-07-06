@@ -9,8 +9,8 @@
 #include "Core/Paths.h"
 #include "Core/Stream.h"
 
-#include <External/Stb/stb_image.h>
-#include <External/Stb/stb_image_write.h>
+#include <stb_image.h>
+#include <stb_image_write.h>
 
 Image::Image(ResourceFormat format)
 	: m_Format(format)

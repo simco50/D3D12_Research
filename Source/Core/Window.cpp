@@ -1,11 +1,11 @@
 #include "stdafx.h"
 #include "Window.h"
 
-#include <External/Imgui/imgui_impl_win32.h>
+#include <imgui_impl_win32.h>
 
 Window::Window()
 {
-	
+
 }
 
 Window::~Window()

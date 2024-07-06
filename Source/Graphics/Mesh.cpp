@@ -15,11 +15,11 @@
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS
 #define CGLTF_IMPLEMENTATION
-#include <External/cgltf/cgltf.h>
+#include <cgltf.h>
 #pragma warning(pop)
 
-#include <External/meshoptimizer/meshoptimizer.h>
-#include <External/Ldr/LDraw.h>
+#include <meshoptimizer.h>
+#include <LDraw.h>
 
 struct MeshData
 {

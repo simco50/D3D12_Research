@@ -14,7 +14,7 @@
 #include <mutex>
 #include <numeric>
 
-#include "External/ankerl/unordered_dense.h"
+#include "unordered_dense.h"
 
 using int8 = int8_t;
 using int16 = int16_t;

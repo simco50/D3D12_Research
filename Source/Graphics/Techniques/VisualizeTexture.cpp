@@ -9,8 +9,8 @@
 #include "Graphics/SceneView.h"
 #include "Content/Image.h"
 
-#include <External/Imgui/imgui_internal.h>
-#include <External/FontAwesome/IconsFontAwesome4.h>
+#include <imgui_internal.h>
+#include <IconsFontAwesome4.h>
 
 struct PickingData
 {

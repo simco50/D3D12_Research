@@ -9,9 +9,9 @@
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
 
-#include <External/FontAwesome/IconsFontAwesome4.h>
-#include <External/ImGui/imgui_impl_win32.h>
-#include <External/ImGui/imgui_internal.h>
+#include <IconsFontAwesome4.h>
+#include <imgui_impl_win32.h>
+#include <imgui_internal.h>
 
 namespace ImGui
 {
