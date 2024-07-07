@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
-#include "Graphics/RHI/Device.h"
-#include "Graphics/RHI/CommandContext.h"
+#include "RHI/Device.h"
+#include "RHI/CommandContext.h"
 #include "Core/Profiler.h"
 #include "Core/TaskQueue.h"
 

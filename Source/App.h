@@ -1,6 +1,6 @@
 #pragma once
 #include "Core/Window.h"
-#include "Graphics/RHI/RHI.h"
+#include "RHI/RHI.h"
 
 class SwapChain;
 

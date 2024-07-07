@@ -1,7 +1,7 @@
 #pragma once
 #include "RenderGraphDefinitions.h"
-#include "Graphics/RHI/Fence.h"
-#include "Graphics/RHI/CommandContext.h"
+#include "RHI/Fence.h"
+#include "RHI/CommandContext.h"
 #include "Blackboard.h"
 
 #define RG_GRAPH_SCOPE(name, graph) RGGraphScope MACRO_CONCAT(rgScope_,__COUNTER__)(name, graph, __FILE__, __LINE__)

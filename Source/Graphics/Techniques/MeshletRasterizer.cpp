@@ -1,10 +1,10 @@
 #include "stdafx.h"
 #include "MeshletRasterizer.h"
 #include "Core/ConsoleVariables.h"
-#include "Graphics/RHI/Device.h"
-#include "Graphics/RHI/PipelineState.h"
-#include "Graphics/RHI/StateObject.h"
-#include "Graphics/RHI/RootSignature.h"
+#include "RHI/Device.h"
+#include "RHI/PipelineState.h"
+#include "RHI/StateObject.h"
+#include "RHI/RootSignature.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Core/Profiler.h"
 #include "Graphics/Mesh.h"
@@ -156,7 +156,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	m_pMeshletAllocateBinRanges =	pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletBinning.hlsl", "AllocateBinRangesCS");
 	m_pMeshletClassify =			pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletBinning.hlsl", "ClassifyMeshletsCS", *defines);
 	m_pMeshletWriteBins =			pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletBinning.hlsl", "WriteBinsCS", *defines);
-	
+
 	// HZB PSOs
 	m_pHZBInitializePSO =			pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "HZB.hlsl", "HZBInitCS");
 	m_pHZBCreatePSO =				pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "HZB.hlsl", "HZBCreateCS");
@@ -604,7 +604,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					"Alpha Masked"
 				};
 				static_assert(ARRAYSIZE(PipelineBinToString) == (int)PipelineBin::Count);
-				
+
 				for (uint32 binIndex = 0; binIndex < numBins; ++binIndex)
 				{
 					PROFILE_GPU_SCOPE(context.GetCommandList(), Sprintf("Raster Bin - %s", PipelineBinToString[binIndex]).c_str());
@@ -651,7 +651,7 @@ void MeshletRasterizer::Render(RGGraph& graph, const SceneView* pView, const Vie
 	Vector2u dimensions = rasterContext.pDepth->GetDesc().Size2D();
 	outResult.pHZB = nullptr;
 	outResult.pVisibilityBuffer = nullptr;
-	if (rasterContext.Mode == RasterMode::VisibilityBuffer)		
+	if (rasterContext.Mode == RasterMode::VisibilityBuffer)
 		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
 
 	if (rasterContext.EnableOcclusionCulling)

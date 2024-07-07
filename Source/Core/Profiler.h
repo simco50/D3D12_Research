@@ -1,5 +1,5 @@
 #pragma once
-#include "Graphics/RHI/D3D.h"
+#include "RHI/D3D.h"
 
 #ifndef WITH_PROFILING
 #define WITH_PROFILING 1

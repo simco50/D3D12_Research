@@ -1,11 +1,11 @@
 #include "stdafx.h"
 #include "DDGI.h"
 
-#include "Graphics/RHI/Device.h"
-#include "Graphics/RHI/StateObject.h"
-#include "Graphics/RHI/RootSignature.h"
-#include "Graphics/RHI/PipelineState.h"
-#include "Graphics/RHI/ShaderBindingTable.h"
+#include "RHI/Device.h"
+#include "RHI/StateObject.h"
+#include "RHI/RootSignature.h"
+#include "RHI/PipelineState.h"
+#include "RHI/ShaderBindingTable.h"
 #include "Graphics/RenderGraph/RenderGraph.h"
 #include "Graphics/SceneView.h"
 

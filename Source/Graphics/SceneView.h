@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/RHI/RHI.h"
+#include "RHI/RHI.h"
 #include "Core/BitField.h"
 #include "ShaderInterop.h"
 #include "AccelerationStructure.h"

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Graphics/RHI/Texture.h"
-#include "Graphics/RHI/Buffer.h"
+#include "RHI/Texture.h"
+#include "RHI/Buffer.h"
 
 class RGGraph;
 class RGPass;
@@ -38,7 +38,7 @@ public:
 	explicit RGHandle(BackingType id)
 		: mID(id)
 	{}
-	
+
 	uint16 GetIndex() const { return mID; }
 	bool IsValid() const { return mID != Invalid; }
 

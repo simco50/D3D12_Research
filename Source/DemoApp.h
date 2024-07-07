@@ -1,9 +1,9 @@
 #pragma once
-#include "Graphics/RHI/RHI.h"
-#include "Graphics/RHI/Device.h"
+#include "RHI/RHI.h"
+#include "RHI/Device.h"
 #include "Graphics/Light.h"
 #include "Graphics/SceneView.h"
-#include "Graphics/RHI/CommandQueue.h"
+#include "RHI/CommandQueue.h"
 #include "Graphics/Techniques/VolumetricFog.h"
 #include "Graphics/Techniques/VisualizeTexture.h"
 #include "App.h"

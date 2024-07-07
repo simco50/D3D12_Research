@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/RHI/RHI.h"
+#include "RHI/RHI.h"
 #include "RHI/Fence.h"
 
 struct SceneView;

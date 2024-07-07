@@ -7,9 +7,9 @@
 #include "Core/ConsoleVariables.h"
 #include "Core/Window.h"
 #include "Core/Profiler.h"
-#include "Graphics/RHI/Device.h"
-#include "Graphics/RHI/CommandQueue.h"
-#include "Graphics/RHI/CommandContext.h"
+#include "RHI/Device.h"
+#include "RHI/CommandQueue.h"
+#include "RHI/CommandContext.h"
 #include "Graphics/SceneView.h"
 #include "Graphics/ImGuiRenderer.h"
 
@@ -74,7 +74,7 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 	const uint32 maxEvents = 2048;
 	const uint32 maxCopyEvents = 2048;
 	const uint32 maxActiveCmdLists = 64;
-	
+
 	gCPUProfiler.Initialize(frameHistory, maxEvents);
 
 #if ENABLE_PIX

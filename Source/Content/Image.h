@@ -1,5 +1,5 @@
 #pragma once
-#include "Graphics/RHI/RHI.h"
+#include "RHI/RHI.h"
 
 class Stream;
 

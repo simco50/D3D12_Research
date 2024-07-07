@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Graphics/RenderGraph/RenderGraphDefinitions.h"
-#include "Graphics/RHI/RHI.h"
+#include "RHI/RHI.h"
 
 class RGGraph;
 struct World;
