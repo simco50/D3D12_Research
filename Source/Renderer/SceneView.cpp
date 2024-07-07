@@ -9,7 +9,7 @@
 #include "Mesh.h"
 #include "Light.h"
 #include "Core/ConsoleVariables.h"
-#include "Content/Image.h"
+#include "Core/Image.h"
 #include "Core/Profiler.h"
 #include "Renderer/Techniques/DDGI.h"
 

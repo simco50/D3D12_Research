@@ -5,7 +5,7 @@
 #include "RHI/Texture.h"
 #include "RHI/Buffer.h"
 #include "Core/Paths.h"
-#include "Content/Image.h"
+#include "Core/Image.h"
 #include "Core/Utils.h"
 #include "ShaderInterop.h"
 #include "Renderer/SceneView.h"

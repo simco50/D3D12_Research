@@ -7,7 +7,7 @@
 #include "RenderGraph/RenderGraph.h"
 #include "Renderer/Techniques/ImGuiRenderer.h"
 #include "Renderer/SceneView.h"
-#include "Content/Image.h"
+#include "Core/Image.h"
 
 #include <imgui_internal.h>
 #include <IconsFontAwesome4.h>

@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "DemoApp.h"
 #include "Scene/Camera.h"
-#include "Content/Image.h"
+#include "Core/Image.h"
 #include "Renderer/Mesh.h"
 #include "RHI/Device.h"
 #include "RHI/Texture.h"

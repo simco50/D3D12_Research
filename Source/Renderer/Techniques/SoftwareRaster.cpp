@@ -8,7 +8,7 @@
 #include "RHI/Device.h"
 #include "RenderGraph/RenderGraph.h"
 #include "Renderer/SceneView.h"
-#include "Content/Image.h"
+#include "Core/Image.h"
 
 SoftwareRaster::SoftwareRaster(GraphicsDevice* pDevice)
 {

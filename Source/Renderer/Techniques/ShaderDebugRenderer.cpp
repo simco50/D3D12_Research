@@ -4,7 +4,7 @@
 #include "RHI/Device.h"
 #include "RHI/PipelineState.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Content/Image.h"
+#include "Core/Image.h"
 #include "Renderer/SceneView.h"
 
 ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
