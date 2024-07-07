@@ -4,8 +4,8 @@
 #include "RHI/RHI.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
-#include "Renderer/ImGuiRenderer.h"
+#include "RenderGraph/RenderGraph.h"
+#include "Renderer/Techniques/ImGuiRenderer.h"
 #include "Renderer/SceneView.h"
 #include "Content/Image.h"
 

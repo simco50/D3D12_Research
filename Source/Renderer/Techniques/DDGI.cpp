@@ -6,7 +6,7 @@
 #include "RHI/RootSignature.h"
 #include "RHI/PipelineState.h"
 #include "RHI/ShaderBindingTable.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraph.h"
 #include "Renderer/SceneView.h"
 
 DDGI::DDGI(GraphicsDevice* pDevice)

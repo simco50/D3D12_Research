@@ -8,7 +8,7 @@
 #include "RHI/DeviceResource.h"
 #include "RHI/Texture.h"
 #include "RHI/ResourceViews.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraph.h"
 #include "Renderer/SceneView.h"
 
 static bool g_Enabled = false;

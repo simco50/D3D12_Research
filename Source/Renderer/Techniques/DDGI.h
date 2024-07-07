@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer/RenderGraph/RenderGraphDefinitions.h"
+#include "RenderGraph/RenderGraphDefinitions.h"
 #include "RHI/RHI.h"
 
 class RGGraph;

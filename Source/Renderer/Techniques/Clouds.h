@@ -1,6 +1,6 @@
 #pragma once
 #include "RHI/RHI.h"
-#include "Renderer/RenderGraph/RenderGraphDefinitions.h"
+#include "RenderGraph/RenderGraphDefinitions.h"
 
 struct SceneTextures;
 struct SceneView;

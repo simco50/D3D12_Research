@@ -5,7 +5,7 @@
 #include "RHI/Device.h"
 #include "RHI/CommandContext.h"
 #include "RHI/Texture.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraph.h"
 #include "Renderer/SceneView.h"
 
 SSAO::SSAO(GraphicsDevice* pDevice)

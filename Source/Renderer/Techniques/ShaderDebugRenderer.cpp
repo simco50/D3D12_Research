@@ -3,7 +3,7 @@
 #include "RHI/CommandContext.h"
 #include "RHI/Device.h"
 #include "RHI/PipelineState.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraph.h"
 #include "Content/Image.h"
 #include "Renderer/SceneView.h"
 

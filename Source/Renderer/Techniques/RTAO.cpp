@@ -7,7 +7,7 @@
 #include "RHI/ShaderBindingTable.h"
 #include "RHI/StateObject.h"
 #include "RHI/PipelineState.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraph.h"
 #include "Renderer/SceneView.h"
 
 RTAO::RTAO(GraphicsDevice* pDevice)

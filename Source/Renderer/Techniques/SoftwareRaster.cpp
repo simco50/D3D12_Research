@@ -6,7 +6,7 @@
 #include "RHI/ResourceViews.h"
 #include "RHI/PipelineState.h"
 #include "RHI/Device.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraph.h"
 #include "Renderer/SceneView.h"
 #include "Content/Image.h"
 

@@ -11,7 +11,7 @@
 #include "RHI/CommandQueue.h"
 #include "RHI/CommandContext.h"
 #include "Renderer/SceneView.h"
-#include "Renderer/ImGuiRenderer.h"
+#include "Renderer/Techniques/ImGuiRenderer.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC

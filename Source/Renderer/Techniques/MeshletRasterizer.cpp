@@ -5,7 +5,7 @@
 #include "RHI/PipelineState.h"
 #include "RHI/StateObject.h"
 #include "RHI/RootSignature.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraph.h"
 #include "Core/Profiler.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/SceneView.h"

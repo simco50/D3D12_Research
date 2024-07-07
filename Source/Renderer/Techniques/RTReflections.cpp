@@ -7,7 +7,7 @@
 #include "RHI/ShaderBindingTable.h"
 #include "RHI/ResourceViews.h"
 #include "RHI/StateObject.h"
-#include "Renderer/RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraph.h"
 #include "Renderer/SceneView.h"
 
 RTReflections::RTReflections(GraphicsDevice* pDevice)
