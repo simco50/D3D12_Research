@@ -1,11 +1,11 @@
 #pragma once
 #include "RHI/RHI.h"
 #include "RHI/Device.h"
-#include "Graphics/Light.h"
-#include "Graphics/SceneView.h"
+#include "Renderer/Light.h"
+#include "Renderer/SceneView.h"
 #include "RHI/CommandQueue.h"
-#include "Graphics/Techniques/VolumetricFog.h"
-#include "Graphics/Techniques/VisualizeTexture.h"
+#include "Renderer/Techniques/VolumetricFog.h"
+#include "Renderer/Techniques/VisualizeTexture.h"
 #include "App.h"
 
 class Camera;

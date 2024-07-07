@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/SceneView.h"
+#include "Renderer/SceneView.h"
 
 class Camera
 {

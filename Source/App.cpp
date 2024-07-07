@@ -10,8 +10,8 @@
 #include "RHI/Device.h"
 #include "RHI/CommandQueue.h"
 #include "RHI/CommandContext.h"
-#include "Graphics/SceneView.h"
-#include "Graphics/ImGuiRenderer.h"
+#include "Renderer/SceneView.h"
+#include "Renderer/ImGuiRenderer.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
