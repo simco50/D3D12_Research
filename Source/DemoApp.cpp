@@ -104,12 +104,6 @@ namespace Tweakables
 
 	String VisualizeTextureName = "";
 	ConsoleCommand<const char*> gVisualizeTexture("vis", [](const char* pName) { VisualizeTextureName = pName; });
-
-	// Lighting
-	float gSunInclination = 0.79f;
-	float gSunOrientation = -0.15f;
-	float gSunTemperature = 5900.0f;
-	float gSunIntensity = 5.0f;
 }
 
 
@@ -175,12 +169,14 @@ void DemoApp::SetupScene(const char* pPath)
 		entt::entity entity = m_World.CreateEntity("Sunlight");
 		Transform& transform = m_World.Registry.emplace<Transform>(entity);
 		transform.Position = Vector3::Zero;
+		transform.Rotation = Quaternion::CreateFromYawPitchRoll(Math::PI / 3, Math::PI_DIV_4, 0);
 
 		Light& sunLight = m_World.Registry.emplace<Light>(entity);
-		sunLight.Intensity = 10;
+		sunLight.Intensity = 5;
 		sunLight.CastShadows = true;
 		sunLight.VolumetricLighting = true;
 		sunLight.Type = LightType::Directional;
+		sunLight.Colour = Math::MakeFromColorTemperature(5900);
 		m_World.Sunlight = entity;
 	}
 
@@ -287,12 +283,6 @@ void DemoApp::Update()
 				DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 5, 5, Color(0.2f, 0.6f, 0.2f, 1.0f));
 			}
 		}
-
-		Light& sunLight = m_World.Registry.get<Light>(m_World.Sunlight);
-		Transform& sunTransform = m_World.Registry.get<Transform>(m_World.Sunlight);
-		sunTransform.Rotation = Quaternion::CreateFromYawPitchRoll(-Tweakables::gSunOrientation, Tweakables::gSunInclination * Math::PI_DIV_2, 0);
-		sunLight.Colour = Math::MakeFromColorTemperature(Tweakables::gSunTemperature);
-		sunLight.Intensity = Tweakables::gSunIntensity;
 
 		if (Tweakables::gVisualizeLights)
 		{
@@ -1474,10 +1464,19 @@ void DemoApp::UpdateImGui()
 
 		if (ImGui::CollapsingHeader("Atmosphere"))
 		{
-			ImGui::SliderFloat("Sun Orientation", &Tweakables::gSunOrientation, -Math::PI, Math::PI);
-			ImGui::SliderFloat("Sun Inclination", &Tweakables::gSunInclination, 0, 1);
-			ImGui::SliderFloat("Sun Temperature", &Tweakables::gSunTemperature, 1000, 15000);
-			ImGui::SliderFloat("Sun Intensity", &Tweakables::gSunIntensity, 0, 30);
+			if (m_World.Registry.valid(m_World.Sunlight))
+			{
+				Light& sunLight = m_World.Registry.get<Light>(m_World.Sunlight);
+				Transform& sunTransform = m_World.Registry.get<Transform>(m_World.Sunlight);
+				Vector3 euler = sunTransform.Rotation.ToEuler();
+
+				if (ImGui::SliderFloat("Sun Orientation", &euler.y, -Math::PI, Math::PI))
+					sunTransform.Rotation = Quaternion::CreateFromYawPitchRoll(euler);
+				if (ImGui::SliderFloat("Sun Inclination", &euler.x, 0, Math::PI / 2))
+					sunTransform.Rotation = Quaternion::CreateFromYawPitchRoll(euler);
+				ImGui::SliderFloat("Sun Intensity", &sunLight.Intensity, 0, 30);
+			}
+
 			ImGui::Checkbox("Sky", &Tweakables::gSky.Get());
 			ImGui::Checkbox("Volumetric Fog", &Tweakables::gVolumetricFog.Get());
 			ImGui::Checkbox("Clouds", &Tweakables::gClouds.Get());

@@ -144,11 +144,10 @@ newaction {
 	description = "Remove all binaries and generated files",
 
 	execute = function()
-		os.rmdir("../Build")
-		os.rmdir("../ipch")
-		os.rmdir("../.vs")
-		os.remove("../*.sln")
-		os.remove(SOURCE_DIR .. "*.vcxproj.*")
+		os.rmdir(ROOT .. "Build")
+		os.rmdir(ROOT .. ".vs")
+		os.remove(ROOT .. "*.sln")
+		os.remove(ROOT .. "*.vcxproj.*")
 	end
 }
 			
