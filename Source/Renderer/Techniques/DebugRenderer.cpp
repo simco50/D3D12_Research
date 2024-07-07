@@ -4,8 +4,8 @@
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/CommandContext.h"
-#include "Light.h"
-#include "RenderGraph/RenderGraph.h"
+#include "Renderer/Light.h"
+#include "Renderer/RenderGraph/RenderGraph.h"
 #include "Renderer/SceneView.h"
 
 struct DebugSphere

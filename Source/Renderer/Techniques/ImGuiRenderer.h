@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RHI/RHI.h"
-#include "RenderGraph/RenderGraphDefinitions.h"
+#include "Renderer/RenderGraph/RenderGraphDefinitions.h"
 
 using WindowHandle = HWND;
 

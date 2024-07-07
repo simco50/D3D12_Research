@@ -5,7 +5,7 @@
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Texture.h"
-#include "SceneView.h"
+#include "Renderer/SceneView.h"
 #include "Core/Paths.h"
 #include "Core/Profiler.h"
 
