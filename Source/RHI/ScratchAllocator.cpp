@@ -26,9 +26,9 @@ void ScratchAllocationManager::FreePages(const SyncPoint& syncPoint, const Array
 	}
 }
 
-ScratchAllocator::ScratchAllocator(ScratchAllocationManager* pPageManager)
-	: m_pPageManager(pPageManager)
+void ScratchAllocator::Init(ScratchAllocationManager* pPageManager)
 {
+	m_pPageManager = pPageManager;
 }
 
 ScratchAllocation ScratchAllocator::Allocate(uint64 size, int alignment)

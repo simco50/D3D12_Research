@@ -722,7 +722,7 @@ void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, cons
 				params.NumBins = pBins0->GetDesc().NumElements();
 
 				context.BindRootCBV(0, params);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 				context.BindResources(3, {
 					resources.GetSRV(rasterContext.pCandidateMeshletsCounter),
 					resources.GetSRV(rasterContext.pOccludedInstancesCounter),

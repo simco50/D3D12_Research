@@ -6,6 +6,7 @@
 #include "ResourceViews.h"
 #include "D3D.h"
 #include "Fence.h"
+#include "ScratchAllocator.h"
 
 class ScratchAllocationManager;
 class ShaderManager;
@@ -157,6 +158,7 @@ public:
 	Ref<Buffer> CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData = nullptr);
 	Ref<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
 	void DeferReleaseObject(ID3D12Object* pObject);
+	ScratchAllocation AllocateUploadScratch(uint32 inSize, uint32 inAlignment = 1);
 
 	Ref<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
 	Ref<PipelineState> CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
@@ -210,6 +212,7 @@ private:
 	StaticArray<uint64, NUM_BUFFERS> m_FrameFenceValues{};
 	uint32 m_FrameIndex = 0;
 
+	ScratchAllocator m_FrameScratchAllocator;
 	Ref<GPUDescriptorHeap> m_pGlobalViewHeap;
 	Ref<GPUDescriptorHeap> m_pGlobalSamplerHeap;
 

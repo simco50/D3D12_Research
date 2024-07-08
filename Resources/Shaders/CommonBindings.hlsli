@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Constants.hlsli"
-#include "Interop/InteropMain.h"
+#include "Interop/ShaderInterop.h"
 #include "Packing.hlsli"
 
 //CBVs

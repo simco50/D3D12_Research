@@ -393,6 +393,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 	const uint64 scratchAllocatorPageSize						= 256 * Math::KilobytesToBytes;
 	m_pScratchAllocationManager									= new ScratchAllocationManager(this, BufferFlag::Upload, scratchAllocatorPageSize);
+	m_FrameScratchAllocator.Init(m_pScratchAllocationManager);
 
 	const uint64 uploadRingBufferSize							= 128 * Math::MegaBytesToBytes;
 	m_pRingBufferAllocator										= new RingBufferAllocator(this, uploadRingBufferSize);
@@ -469,6 +470,8 @@ void GraphicsDevice::TickFrame()
 {
 	m_DeleteQueue.Clean();
 	uint64 fenceValue = m_pFrameFence->Signal(GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT));
+	
+	m_FrameScratchAllocator.Free(SyncPoint(m_pFrameFence, fenceValue));
 
 	m_FrameFenceValues[m_FrameIndex % NUM_BUFFERS] = fenceValue;
 	++m_FrameIndex;
@@ -797,6 +800,11 @@ void GraphicsDevice::DeferReleaseObject(ID3D12Object* pObject)
 	{
 		m_DeleteQueue.EnqueueResource(pObject, GetFrameFence());
 	}
+}
+
+ScratchAllocation GraphicsDevice::AllocateUploadScratch(uint32 inSize, uint32 inAlignment)
+{
+	return m_FrameScratchAllocator.Allocate(inSize, inAlignment);
 }
 
 Ref<PipelineState> GraphicsDevice::CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint, Span<ShaderDefine> defines)

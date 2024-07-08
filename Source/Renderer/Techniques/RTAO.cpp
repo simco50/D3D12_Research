@@ -76,7 +76,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, RGTexture* pDep
 				bindingTable.BindMissShader("OcclusionMS", {});
 
 				context.BindRootCBV(0, parameters);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					resources.GetSRV(pDepth),
@@ -98,7 +98,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, RGTexture* pDep
 				context.SetPipelineState(m_pDenoisePSO);
 
 				//context.BindRootCBV(0, parameters);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					resources.GetSRV(pDepth),

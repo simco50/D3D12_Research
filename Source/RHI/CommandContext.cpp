@@ -15,9 +15,10 @@
 CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pScratchAllocationManager)
 	: DeviceObject(pParent),
 	m_ShaderResourceDescriptorAllocator(pDescriptorHeap),
-	m_ScratchAllocator(pScratchAllocationManager),
 	m_Type(type)
 {
+	m_ScratchAllocator.Init(pScratchAllocationManager);
+
 	check(pCommandList.As(&m_pCommandList));
 
 	ID3D12Device* pDevice = pParent->GetDevice();
@@ -370,12 +371,21 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 		ScratchAllocation allocation = AllocateScratch(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 		memcpy(allocation.pMappedMemory, pData, dataSize);
 
-		if (m_CurrentCommandContext == CommandListContext::Graphics)
-			m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
-		else
-			m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
+		BindRootCBV(rootIndex, allocation);
 	}
 }
+
+
+void CommandContext::BindRootCBV(uint32 rootIndex, const ScratchAllocation& allocation)
+{
+	bool isRootConstants = m_pCurrentRS->IsRootConstant(rootIndex);
+	check(!isRootConstants);
+	if (m_CurrentCommandContext == CommandListContext::Graphics)
+		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
+	else
+		m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
+}
+
 
 void CommandContext::BindResources(uint32 rootIndex, Span<const ResourceView*> pViews, uint32 offset)
 {
@@ -391,6 +401,7 @@ void CommandContext::SetShadingRateImage(Texture* pTexture)
 {
 	m_pCommandList->RSSetShadingRateImage(pTexture->GetResource());
 }
+
 
 ScratchAllocation CommandContext::AllocateScratch(uint64 size, uint32 alignment /*= 16*/)
 {

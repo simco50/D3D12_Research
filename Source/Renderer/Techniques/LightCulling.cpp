@@ -121,7 +121,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 
 				context.BindRootCBV(0, constantBuffer);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 				context.BindResources(2, {
 					resources.GetUAV(cullData.pLightGrid),
 					});
@@ -200,7 +200,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledCullPSO);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 
 				context.BindResources(2, {
 					resources.GetUAV(cullResources.pLightListOpaque),
@@ -232,7 +232,7 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledVisualizeLightsPSO);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					resources.GetSRV(pSceneDepth),
@@ -277,7 +277,7 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* 
 				context.SetPipelineState(m_pClusteredVisualizeLightsPSO);
 
 				context.BindRootCBV(0, constantBuffer);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					resources.GetSRV(pSceneDepth),

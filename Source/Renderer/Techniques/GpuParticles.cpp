@@ -175,7 +175,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 					parameters.Origin = Vector3(1, 1, 0);
 
 					context.BindRootCBV(0, parameters);
-					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(1, pView->ViewCBV);
 					context.BindResources(2, {
 						resources.GetUAV(pCountersBuffer),
 						nullptr,
@@ -209,7 +209,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 					parameters.ParticleLifeTime = g_LifeTime;
 
 					context.BindRootCBV(0, parameters);
-					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(1, pView->ViewCBV);
 					context.BindResources(2, {
 						resources.GetUAV(pCountersBuffer),
 						resources.GetUAV(pDeadList),
@@ -236,7 +236,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSimulateEndPS);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 				context.BindResources(2, {
 					resources.GetUAV(pIndirectArgs),
 					}, 5);
@@ -273,7 +273,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 				context.BindResources(3, {
 					resources.GetSRV(pData->pParticlesBuffer),
 					resources.GetSRV(pData->pAliveList)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RHI/RHI.h"
+#include "RHI/ScratchAllocator.h"
 #include "Core/BitField.h"
 #include "ShaderInterop.h"
 #include "AccelerationStructure.h"
@@ -113,6 +114,7 @@ struct ShadowView
 	ViewTransform View;
 	VisibilityMask Visibility;
 	Texture* pDepthTexture = nullptr;
+	ScratchAllocation ViewCBV;
 };
 
 struct SceneView
@@ -145,6 +147,7 @@ struct SceneView
 	Array<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
+	ScratchAllocation ViewCBV;
 
 	int FrameIndex = 0;
 	bool CameraCut = false;
@@ -172,8 +175,12 @@ namespace Renderer
 {
 	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes);
 	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes);
-	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform);
-	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView);
+	void GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform, ShaderInterop::ViewUniforms& outUniforms);
+
+	inline void GetViewUniforms(const SceneView* pView, ShaderInterop::ViewUniforms& outUniforms)						{ GetViewUniforms(pView, &pView->MainView, outUniforms); }
+	inline ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform)		{ ShaderInterop::ViewUniforms uniforms; GetViewUniforms(pView, pViewTransform, uniforms); return uniforms; }
+	inline ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView)											{ ShaderInterop::ViewUniforms uniforms; GetViewUniforms(pView, uniforms); return uniforms; }
+
 	void UploadSceneData(CommandContext& context, SceneView* pView, const World* pWorld);
 }
 

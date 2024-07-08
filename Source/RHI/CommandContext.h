@@ -165,6 +165,7 @@ public:
 		static_assert(!std::is_pointer_v<T>, "Provided type is a pointer. This is probably unintentional.");
 		BindRootCBV(rootIndex, &data, sizeof(T));
 	}
+	void BindRootCBV(uint32 rootIndex, const ScratchAllocation& allocation);
 
 	ScratchAllocation AllocateScratch(uint64 size, uint32 alignment = 16u);
 

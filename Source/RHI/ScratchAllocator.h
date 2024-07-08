@@ -35,7 +35,7 @@ private:
 class ScratchAllocator
 {
 public:
-	ScratchAllocator(ScratchAllocationManager* pPageManager);
+	void Init(ScratchAllocationManager* pPageManager);
 	ScratchAllocation Allocate(uint64 size, int alignment);
 	void Free(const SyncPoint& syncPoint);
 
