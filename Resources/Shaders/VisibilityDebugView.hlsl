@@ -19,11 +19,11 @@ ConstantBuffer<DebugRenderData> cDebugRenderData : register(b0);
 void DebugRenderCS(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint2 texel = dispatchThreadId.xy;
-	if(any(texel >= cView.TargetDimensions))
+	if(any(texel >= cView.ViewportDimensions))
 		return;
 
 	float3 color = 0;
-	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.TargetDimensionsInv;
+	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.ViewportDimensionsInv;
 
 	uint candidateIndex, primitiveID;
 	if(UnpackVisBuffer(tVisibilityTexture[texel], candidateIndex, primitiveID))

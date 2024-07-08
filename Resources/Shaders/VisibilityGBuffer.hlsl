@@ -21,7 +21,7 @@ bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 	MeshletCandidate candidate = tVisibleMeshlets[candidateIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
 
-	float2 uv = (texel + 0.5f) * cView.TargetDimensionsInv;
+	float2 uv = (texel + 0.5f) * cView.ViewportDimensionsInv;
 
 	// Vertex Shader
 	VisBufferVertexAttribute vertex = GetVertexAttributes(uv, instance, candidate.MeshletIndex, primitiveID);

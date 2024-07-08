@@ -18,7 +18,7 @@ RWTexture2D<float4> uOutput 				: register(u0);
 LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	uint2 tileIndex = uint2(floor(pixel / TILED_LIGHTING_TILE_SIZE));
-	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
+	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.ViewportDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
 	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
 
 	LightResult totalResult = (LightResult)0;
@@ -43,10 +43,10 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 {
 	uint2 texel = threadId.xy;
-	if(any(texel >= cView.TargetDimensions))
+	if(any(texel >= cView.ViewportDimensions))
 		return;
 
-	float2 uv = (texel + 0.5f) * cView.TargetDimensionsInv;
+	float2 uv = (texel + 0.5f) * cView.ViewportDimensionsInv;
 	float depth = tDepth[texel];
 	float3 viewPos = ViewPositionFromDepth(uv, depth, cView.ProjectionInverse);
 	float3 worldPos = mul(float4(viewPos, 1), cView.ViewInverse).xyz;

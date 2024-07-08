@@ -53,7 +53,7 @@ uint GetLightCount(uint2 threadId, out uint2 tileLocation, out uint2 tileSize)
 {
 #if TILED_FORWARD
 	uint2 tileIndex = uint2(floor(threadId.xy / TILED_LIGHTING_TILE_SIZE));
-	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
+	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.ViewportDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
 	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
 	uint lightCount = 0;
 	for(uint i = 0; i < TILED_LIGHTING_NUM_BUCKETS; ++i)
@@ -83,7 +83,7 @@ uint GetLightCount(uint2 threadId, out uint2 tileLocation, out uint2 tileSize)
 [numthreads(16, 16, 1)]
 void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 {
-	if(any(threadId.xy >= cView.TargetDimensions))
+	if(any(threadId.xy >= cView.ViewportDimensions))
 		return;
 
 	uint2 tileLocation;

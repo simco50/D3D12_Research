@@ -273,7 +273,7 @@ void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures&
 				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pColorTarget)));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
 					resources.GetSRV(pData->pParticlesBuffer),
 					resources.GetSRV(pData->pAliveList)

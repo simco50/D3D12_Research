@@ -5,6 +5,13 @@
 
 RWTexture2DArray<float4> uSky : register(u0);
 
+struct PassParams
+{
+	float2 DimensionsInv;
+};
+
+ConstantBuffer<PassParams> cPass : register(b0);
+
 struct InterpolantsVSToPS
 {
 	float4 Position : SV_Position;
@@ -40,7 +47,7 @@ void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 		float3x3(-1,0,0, 0,-1,0, 0,0,1),    // front
 	};
 
-	float2 uv = (threadId.xy + 0.5f) * cView.TargetDimensionsInv;
+	float2 uv = (threadId.xy + 0.5f) * cPass.DimensionsInv;
 	float3 dir = normalize(mul(CUBEMAP_ROTATIONS[threadId.z], float3(uv * 2 - 1, -1)));
 
 	float3 rayStart = cView.ViewLocation;

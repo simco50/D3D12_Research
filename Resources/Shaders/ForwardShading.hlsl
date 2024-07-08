@@ -50,7 +50,7 @@ uint GetSliceFromDepth(float depth)
 LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	uint2 tileIndex = uint2(floor(pixel / TILED_LIGHTING_TILE_SIZE));
-	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.TargetDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
+	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.ViewportDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
 	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
 
 	LightResult totalResult = (LightResult)0;
@@ -255,7 +255,7 @@ struct PSOut
 
 void ShadePS(InterpolantsVSToPS input, out PSOut output)
 {
-	float2 screenUV = (float2)input.Position.xy * cView.TargetDimensionsInv;
+	float2 screenUV = (float2)input.Position.xy * cView.ViewportDimensionsInv;
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0);
 	float linearDepth = input.Position.w;
 	float dither = InterleavedGradientNoise(input.Position.xy);

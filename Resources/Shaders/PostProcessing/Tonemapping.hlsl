@@ -80,10 +80,10 @@ T Uncharted2(T x)
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-	if(any(dispatchThreadId.xy >= cView.TargetDimensions))
+	if(any(dispatchThreadId.xy >= cView.ViewportDimensions))
 		return;
 
-	float2 uv = (0.5f + dispatchThreadId.xy) * cView.TargetDimensionsInv;
+	float2 uv = (0.5f + dispatchThreadId.xy) * cView.ViewportDimensionsInv;
 
 	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
 

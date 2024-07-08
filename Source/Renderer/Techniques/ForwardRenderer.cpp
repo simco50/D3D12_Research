@@ -112,7 +112,7 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 				frameData.LightGridParams = lightCullData.LightGridParams;
 
 				context.BindRootCBV(1, frameData);
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pColorTarget)));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 
 				context.BindResources(3, {
 					resources.GetSRV(pAO),
@@ -158,7 +158,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView,
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(m_pForwardRS);
 
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pColorTarget)));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 
 				{
 					context.BindResources(3, {

@@ -186,7 +186,7 @@ float4 RenderClouds(uint2 pixel, float3 rayOrigin, float3 rayDirection, float ma
 [numthreads(16, 16, 1)]
 void CSMain(uint3 threadId : SV_DispatchThreadID)
 {
-	if(any(threadId.xy >= cView.TargetDimensions))
+	if(any(threadId.xy >= cView.ViewportDimensions))
 		return;
 
 #define DEBUG_CLOUDS 0
@@ -202,7 +202,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	}
 #endif
 
-	float2 texCoord = (threadId.xy + 0.5f) * cView.TargetDimensionsInv;
+	float2 texCoord = (threadId.xy + 0.5f) * cView.ViewportDimensionsInv;
 	float4 color = tSceneTexture.SampleLevel(sPointClamp, texCoord, 0);
 	float sceneDepth = tDepthTexture.SampleLevel(sPointClamp, texCoord, 0).r;
 	float3 viewRay = normalize(ViewPositionFromDepth(texCoord, sceneDepth, cView.ProjectionInverse));

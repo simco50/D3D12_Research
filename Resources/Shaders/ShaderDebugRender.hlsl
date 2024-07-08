@@ -103,7 +103,7 @@ float4 RenderLinePS(
 	) : SV_TARGET
 {
 	uint2 pixel = position.xy;
-	float2 uv = pixel.xy * cView.TargetDimensionsInv;
+	float2 uv = pixel.xy * cView.ViewportDimensionsInv;
 	float depth = tDepth.SampleLevel(sPointClamp, uv, 0);
 
 	bool occluded = depth > position.z;

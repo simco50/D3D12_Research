@@ -21,7 +21,7 @@ namespace Tweakables
 
 namespace Renderer
 {
-	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform, Texture* pTarget)
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform)
 	{
 		ShaderInterop::ViewUniforms parameters;
 
@@ -61,11 +61,6 @@ namespace Renderer
 		parameters.FarZ = pViewTransform->FarPlane;
 		parameters.FoV = pViewTransform->FoV;
 
-		if (pTarget)
-		{
-			parameters.TargetDimensions = Vector2((float)pTarget->GetWidth(), (float)pTarget->GetHeight());
-			parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
-		}
 		parameters.FrameIndex = pView->FrameIndex;
 		parameters.NumInstances = (uint32)pView->Batches.size();
 		parameters.SsrSamples = Tweakables::gSSRSamples.Get();
@@ -90,9 +85,9 @@ namespace Renderer
 		return parameters;
 	}
 
-	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, Texture* pTarget)
+	ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView)
 	{
-		return GetViewUniforms(pView, &pView->MainView, pTarget);
+		return GetViewUniforms(pView, &pView->MainView);
 	}
 
 	void UploadSceneData(CommandContext& context, SceneView* pView, const World* pWorld)

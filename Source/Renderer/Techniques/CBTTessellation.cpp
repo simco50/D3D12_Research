@@ -334,7 +334,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 
 				context.BindRootCBV(0, updateParams);
 				context.BindRootCBV(1, commonArgs);
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pDepth)));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
 					resources.GetUAV(pCBTBuffer),
 					});
@@ -373,7 +373,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 				params.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
 
 				context.BindRootCBV(0, params);
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, m_CBTData.pDebugVisualizeTexture));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 				context.BindResources(3, {
 					resources.GetUAV(pCBTBuffer),
 					});
@@ -410,7 +410,7 @@ void CBTTessellation::Shade(RGGraph& graph, const SceneView* pView, const SceneT
 				context.SetStencilRef((uint32)StencilBit::Terrain);
 
 				context.BindRootCBV(1, commonArgs);
-				context.BindRootCBV(2, Renderer::GetViewUniforms(pView, resources.Get(sceneTextures.pColorTarget)));
+				context.BindRootCBV(2, Renderer::GetViewUniforms(pView));
 				context.BindResources(4, {
 					resources.GetSRV(sceneTextures.pDepth),
 					resources.GetSRV(pFog),

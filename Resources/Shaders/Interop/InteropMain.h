@@ -145,8 +145,6 @@ struct ViewUniforms
 	PAD;
 	float3 ViewLocationPrev;
 	PAD;
-	float2 TargetDimensions;
-	float2 TargetDimensionsInv;
 	float2 ViewportDimensions;
 	float2 ViewportDimensionsInv;
 	float2 ViewJitter;
