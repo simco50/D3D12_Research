@@ -18,10 +18,10 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
 	m_pForwardRS = new RootSignature(pDevice);
-	m_pForwardRS->AddRootConstants(0, 6);
-	m_pForwardRS->AddRootCBV(1);
-	m_pForwardRS->AddRootCBV(100);
-	m_pForwardRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+	m_pForwardRS->AddRootConstants(0, 6, ShaderBindingSpace::Default);
+	m_pForwardRS->AddRootCBV(1, ShaderBindingSpace::Default);
+	m_pForwardRS->AddRootCBV(0, ShaderBindingSpace::View);
+	m_pForwardRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
 	m_pForwardRS->Finalize("Forward");
 
 	// Clustered

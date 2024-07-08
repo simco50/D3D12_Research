@@ -200,6 +200,12 @@ enum class DefaultTexture
 	MAX,
 };
 
+struct ShaderBindingSpace
+{
+	static constexpr uint32 Default = 0;
+	static constexpr uint32 View = 1;
+};
+
 namespace GraphicsCommon
 {
 	void Create(GraphicsDevice* pDevice);

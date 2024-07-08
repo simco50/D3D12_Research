@@ -41,8 +41,8 @@ DebugRenderer* DebugRenderer::Get()
 void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
 	m_pRS = new RootSignature(pDevice);
-	m_pRS->AddRootSRV(0);
-	m_pRS->AddRootCBV(100);
+	m_pRS->AddRootSRV(0, ShaderBindingSpace::Default);
+	m_pRS->AddRootCBV(0, ShaderBindingSpace::View);
 	m_pRS->Finalize("Primitive Debug Render");
 
 	PipelineStateInitializer psoDesc;

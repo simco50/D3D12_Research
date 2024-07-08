@@ -54,11 +54,11 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 	defines.Set("AMPLIFICATION_SHADER_SUBD_LEVEL", Math::Max(CBTSettings::SubD * 2 - 6, 0));
 
 	m_pCBTRS = new RootSignature(pDevice);
-	m_pCBTRS->AddRootConstants(0, 6);
-	m_pCBTRS->AddRootCBV(1);
-	m_pCBTRS->AddRootCBV(100);
-	m_pCBTRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	m_pCBTRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+	m_pCBTRS->AddRootConstants(0, 6, ShaderBindingSpace::Default);
+	m_pCBTRS->AddRootCBV(1, ShaderBindingSpace::Default);
+	m_pCBTRS->AddRootCBV(0, ShaderBindingSpace::View);
+	m_pCBTRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ShaderBindingSpace::Default);
+	m_pCBTRS->AddDescriptorTable(0, 6, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
 	m_pCBTRS->Finalize("CBT");
 
 	{

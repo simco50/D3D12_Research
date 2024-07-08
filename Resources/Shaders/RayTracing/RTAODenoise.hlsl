@@ -9,7 +9,7 @@ Texture2D<float2> tVelocity : register(t3);
 [numthreads(8, 8, 1)]
 void DenoiseCS(uint3 threadID : SV_DispatchThreadID)
 {
-	if(any(threadId.xy >= cView.ViewportDimensions))
+	if(any(threadID.xy >= cView.ViewportDimensions))
 		return;
 
 	float ao = tAO[threadID.xy];

@@ -350,10 +350,10 @@ namespace GraphicsCommon
 
 		// Common Root Signature - Make it 12 DWORDs as is often recommended by IHVs
 		pCommonRS = new RootSignature(pDevice);
-		pCommonRS->AddRootConstants(0, 8);
-		pCommonRS->AddRootCBV(100);
-		pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-		pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+		pCommonRS->AddRootConstants(0, 8, ShaderBindingSpace::Default);
+		pCommonRS->AddRootCBV(0, ShaderBindingSpace::View);
+		pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ShaderBindingSpace::Default);
+		pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
 		pCommonRS->Finalize("Common");
 	}
 

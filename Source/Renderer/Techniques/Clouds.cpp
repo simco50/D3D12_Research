@@ -13,10 +13,10 @@
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
 	m_pCloudsRS = new RootSignature(pDevice);
-	m_pCloudsRS->AddRootCBV(0);
-	m_pCloudsRS->AddRootCBV(100);
-	m_pCloudsRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	m_pCloudsRS->AddDescriptorTable(0, 5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+	m_pCloudsRS->AddRootCBV(0, ShaderBindingSpace::Default);
+	m_pCloudsRS->AddRootCBV(0, ShaderBindingSpace::View);
+	m_pCloudsRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ShaderBindingSpace::Default);
+	m_pCloudsRS->AddDescriptorTable(0, 5, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
 	m_pCloudsRS->Finalize("Clouds RS");
 
 	const char* pCloudShapesShader = "CloudsShapes.hlsl";

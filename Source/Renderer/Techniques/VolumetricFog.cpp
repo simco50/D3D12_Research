@@ -21,10 +21,10 @@ VolumetricFog::VolumetricFog(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
 	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddRootCBV(0);
-	m_pCommonRS->AddRootCBV(100);
-	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
-	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV);
+	m_pCommonRS->AddRootCBV(0, ShaderBindingSpace::Default);
+	m_pCommonRS->AddRootCBV(0, ShaderBindingSpace::View);
+	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ShaderBindingSpace::Default);
+	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
 	m_pCommonRS->Finalize("Light Density Visualization");
 
 	m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VolumetricFog.hlsl", "InjectFogLightingCS");

@@ -30,10 +30,10 @@ AccelerationStructure::~AccelerationStructure()
 void AccelerationStructure::Init(GraphicsDevice* pDevice)
 {
 	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddRootConstants(0, 1);
-	m_pCommonRS->AddRootCBV(100);
-	m_pCommonRS->AddRootUAV(0);
-	m_pCommonRS->AddRootSRV(0);
+	m_pCommonRS->AddRootConstants(0, 1, ShaderBindingSpace::Default);
+	m_pCommonRS->AddRootCBV(0, ShaderBindingSpace::View);
+	m_pCommonRS->AddRootUAV(0, ShaderBindingSpace::Default);
+	m_pCommonRS->AddRootSRV(0, ShaderBindingSpace::Default);
 	m_pCommonRS->Finalize("Update TLAS");
 
 	m_pUpdateTLASPSO = pDevice->CreateComputePipeline(m_pCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");

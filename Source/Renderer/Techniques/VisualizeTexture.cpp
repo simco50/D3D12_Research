@@ -21,8 +21,8 @@ struct PickingData
 CaptureTextureSystem::CaptureTextureSystem(GraphicsDevice* pDevice)
 {
 	m_pVisualizeRS = new RootSignature(pDevice);
-	m_pVisualizeRS->AddRootCBV(0);
-	m_pVisualizeRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV);
+	m_pVisualizeRS->AddRootCBV(0, ShaderBindingSpace::Default);
+	m_pVisualizeRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ShaderBindingSpace::Default);
 	m_pVisualizeRS->Finalize("Common");
 	m_pVisualizePSO = pDevice->CreateComputePipeline(m_pVisualizeRS, "ImageVisualize.hlsl", "CSMain");
 }
