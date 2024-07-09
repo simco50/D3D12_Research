@@ -3,7 +3,7 @@
 #include "RenderGraph/RenderGraphDefinitions.h"
 #include "Renderer/SceneView.h"
 
-struct SceneView;
+struct RenderView;
 struct SceneTextures;
 
 struct LightCull3DData
@@ -30,11 +30,11 @@ public:
 	LightCulling(GraphicsDevice* pDevice);
 	~LightCulling();
 
-	void ComputeClusteredLightCulling(RGGraph& graph, const SceneView* pView, LightCull3DData& resources);
-	void ComputeTiledLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& resources);
+	void ComputeClusteredLightCulling(RGGraph& graph, const RenderView* pView, LightCull3DData& resources);
+	void ComputeTiledLightCulling(RGGraph& graph, const RenderView* pView, SceneTextures& sceneTextures, LightCull2DData& resources);
 
-	RGTexture* VisualizeLightDensity(RGGraph& graph, const SceneView* pView, RGTexture* pSceneDepth, const LightCull3DData& lightCullData);
-	RGTexture* VisualizeLightDensity(RGGraph& graph, const SceneView* pView, RGTexture* pSceneDepth, const LightCull2DData& lightCullData);
+	RGTexture* VisualizeLightDensity(RGGraph& graph, const RenderView* pView, RGTexture* pSceneDepth, const LightCull3DData& lightCullData);
+	RGTexture* VisualizeLightDensity(RGGraph& graph, const RenderView* pView, RGTexture* pSceneDepth, const LightCull2DData& lightCullData);
 
 private:
 	GraphicsDevice* m_pDevice;

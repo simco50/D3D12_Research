@@ -21,17 +21,17 @@ namespace Tweakables
 
 namespace Renderer
 {
-	void GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform, ShaderInterop::ViewUniforms& outUniforms)
+	void GetViewUniforms(const RenderView* pView, ShaderInterop::ViewUniforms& outUniforms)
 	{
 		ShaderInterop::ViewUniforms parameters;
 
-		parameters.View = pViewTransform->View;
-		parameters.ViewInverse = pViewTransform->ViewInverse;
-		parameters.Projection = pViewTransform->Projection;
-		parameters.ProjectionInverse = pViewTransform->ProjectionInverse;
-		parameters.ViewProjection = pViewTransform->ViewProjection;
-		parameters.ViewProjectionPrev = pViewTransform->ViewProjectionPrev;
-		parameters.ViewProjectionInverse = pViewTransform->ProjectionInverse * pViewTransform->ViewInverse;
+		parameters.View = pView->View.View;
+		parameters.ViewInverse = pView->View.ViewInverse;
+		parameters.Projection = pView->View.Projection;
+		parameters.ProjectionInverse = pView->View.ProjectionInverse;
+		parameters.ViewProjection = pView->View.ViewProjection;
+		parameters.ViewProjectionPrev = pView->View.ViewProjectionPrev;
+		parameters.ViewProjectionInverse = pView->View.ProjectionInverse * pView->View.ViewInverse;
 
 		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * parameters.ViewProjectionPrev;
 		// Transform from uv to clip space: texcoord * 2 - 1
@@ -50,50 +50,53 @@ namespace Renderer
 		};
 		parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
 
-		parameters.ViewLocation = pViewTransform->Position;
-		parameters.ViewLocationPrev = pViewTransform->PositionPrev;
+		parameters.ViewLocation = pView->View.Position;
+		parameters.ViewLocationPrev = pView->View.PositionPrev;
 
-		parameters.ViewportDimensions = Vector2(pViewTransform->Viewport.GetWidth(), pViewTransform->Viewport.GetHeight());
-		parameters.ViewportDimensionsInv = Vector2(1.0f / pViewTransform->Viewport.GetWidth(), 1.0f / pViewTransform->Viewport.GetHeight());
-		parameters.ViewJitter = pViewTransform->Jitter;
-		parameters.ViewJitterPrev = pViewTransform->JitterPrev;
-		parameters.NearZ = pViewTransform->NearPlane;
-		parameters.FarZ = pViewTransform->FarPlane;
-		parameters.FoV = pViewTransform->FoV;
+		parameters.ViewportDimensions = Vector2(pView->View.Viewport.GetWidth(), pView->View.Viewport.GetHeight());
+		parameters.ViewportDimensionsInv = Vector2(1.0f / pView->View.Viewport.GetWidth(), 1.0f / pView->View.Viewport.GetHeight());
+		parameters.ViewJitter = pView->View.Jitter;
+		parameters.ViewJitterPrev = pView->View.JitterPrev;
+		parameters.NearZ = pView->View.NearPlane;
+		parameters.FarZ = pView->View.FarPlane;
+		parameters.FoV = pView->View.FoV;
 
-		parameters.FrameIndex = pView->FrameIndex;
+		const RenderWorld* pWorld = pView->pRenderWorld;
+		parameters.FrameIndex = pWorld->FrameIndex;
 		parameters.DeltaTime = Time::DeltaTime();
 
-		parameters.NumInstances = (uint32)pView->Batches.size();
+		parameters.NumInstances = (uint32)pWorld->Batches.size();
 		parameters.SsrSamples = Tweakables::gSSRSamples.Get();
-		parameters.LightCount = pView->LightBuffer.Count;
-		parameters.CascadeDepths = pView->ShadowCascadeDepths;
-		parameters.NumCascades = pView->NumShadowCascades;
+		parameters.LightCount = pWorld->LightBuffer.Count;
+		parameters.CascadeDepths = pWorld->ShadowCascadeDepths;
+		parameters.NumCascades = pWorld->NumShadowCascades;
 
-		parameters.TLASIndex = pView->AccelerationStructure.GetSRV() ? pView->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.MeshesIndex = pView->MeshBuffer.pBuffer->GetSRVIndex();
-		parameters.MaterialsIndex = pView->MaterialBuffer.pBuffer->GetSRVIndex();
-		parameters.InstancesIndex = pView->InstanceBuffer.pBuffer->GetSRVIndex();
-		parameters.LightsIndex = pView->LightBuffer.pBuffer->GetSRVIndex();
-		parameters.LightMatricesIndex = pView->LightMatricesBuffer.pBuffer->GetSRVIndex();
-		parameters.SkyIndex = pView->pSky ? pView->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.DDGIVolumesIndex = pView->DDGIVolumesBuffer.pBuffer->GetSRVIndex();
-		parameters.NumDDGIVolumes = pView->DDGIVolumesBuffer.Count;
+		parameters.TLASIndex = pWorld->AccelerationStructure.GetSRV() ? pWorld->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.MeshesIndex = pWorld->MeshBuffer.pBuffer->GetSRVIndex();
+		parameters.MaterialsIndex = pWorld->MaterialBuffer.pBuffer->GetSRVIndex();
+		parameters.InstancesIndex = pWorld->InstanceBuffer.pBuffer->GetSRVIndex();
+		parameters.LightsIndex = pWorld->LightBuffer.pBuffer->GetSRVIndex();
+		parameters.LightMatricesIndex = pWorld->LightMatricesBuffer.pBuffer->GetSRVIndex();
+		parameters.SkyIndex = pWorld->pSky ? pWorld->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.DDGIVolumesIndex = pWorld->DDGIVolumesBuffer.pBuffer->GetSRVIndex();
+		parameters.NumDDGIVolumes = pWorld->DDGIVolumesBuffer.Count;
 
-		parameters.FontDataIndex = pView->DebugRenderData.FontDataSRV;
-		parameters.DebugRenderDataIndex = pView->DebugRenderData.RenderDataUAV;
-		parameters.FontSize = pView->DebugRenderData.FontSize;
+		parameters.FontDataIndex = pWorld->DebugRenderData.FontDataSRV;
+		parameters.DebugRenderDataIndex = pWorld->DebugRenderData.RenderDataUAV;
+		parameters.FontSize = pWorld->DebugRenderData.FontSize;
 
 		outUniforms = parameters;
 	}
 
-	void UploadSceneData(CommandContext& context, SceneView* pView, const World* pWorld)
+	void UploadSceneData(CommandContext& context, RenderWorld* pRenderWorld)
 	{
 		PROFILE_CPU_SCOPE();
 		PROFILE_GPU_SCOPE(context.GetCommandList());
 
+		const World* pWorld = pRenderWorld->pWorld;
+
 		GraphicsDevice* pDevice = context.GetParent();
-		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, SceneView::SceneBuffer& target)
+		auto CopyBufferData = [&](uint32 numElements, uint32 stride, const char* pName, const void* pSource, RenderWorld::SceneBuffer& target)
 			{
 				uint32 desiredElements = Math::AlignUp(Math::Max(1u, numElements), 8u);
 				if (!target.pBuffer || desiredElements > target.pBuffer->GetNumElements())
@@ -147,7 +150,7 @@ namespace Renderer
 
 					++instanceID;
 				});
-			CopyBufferData((uint32)meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Instances", meshInstances.data(), pView->InstanceBuffer);
+			CopyBufferData((uint32)meshInstances.size(), sizeof(ShaderInterop::InstanceData), "Instances", meshInstances.data(), pRenderWorld->InstanceBuffer);
 		}
 
 		// Meshes
@@ -171,7 +174,7 @@ namespace Renderer
 				meshData.MeshletBoundsOffset	= mesh.MeshletBoundsLocation;
 				meshData.MeshletCount			= mesh.NumMeshlets;
 			}
-			CopyBufferData((uint32)meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pView->MeshBuffer);
+			CopyBufferData((uint32)meshes.size(), sizeof(ShaderInterop::MeshData), "Meshes", meshes.data(), pRenderWorld->MeshBuffer);
 		}
 
 		// Materials
@@ -197,7 +200,7 @@ namespace Renderer
 				case MaterialAlphaMode::Masked: materialData.RasterBin = 1;				break;
 				}
 			}
-			CopyBufferData((uint32)materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pView->MaterialBuffer);
+			CopyBufferData((uint32)materials.size(), sizeof(ShaderInterop::MaterialData), "Materials", materials.data(), pRenderWorld->MaterialBuffer);
 		}
 
 		// DDGI
@@ -218,7 +221,7 @@ namespace Renderer
 					ddgi.NumRaysPerProbe		= volume.NumRays;
 					ddgi.MaxRaysPerProbe		= volume.MaxNumRays;
 				});
-			CopyBufferData((uint32)ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pView->DDGIVolumesBuffer);
+			CopyBufferData((uint32)ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pRenderWorld->DDGIVolumesBuffer);
 		}
 
 		// Lights
@@ -246,21 +249,21 @@ namespace Renderer
 					data.IsSpot				= light.Type == LightType::Spot;
 					data.IsDirectional		= light.Type == LightType::Directional;
 				});
-			CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pView->LightBuffer);
+			CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pRenderWorld->LightBuffer);
 		}
 		{
-			Array<Matrix> lightMatrices(pView->ShadowViews.size());
-			for (uint32 i = 0; i < pView->ShadowViews.size(); ++i)
-				lightMatrices[i] = pView->ShadowViews[i].View.ViewProjection;
-			CopyBufferData((uint32)lightMatrices.size(), sizeof(Matrix), "Light Matrices", lightMatrices.data(), pView->LightMatricesBuffer);
+			Array<Matrix> lightMatrices(pRenderWorld->ShadowViews.size());
+			for (uint32 i = 0; i < pRenderWorld->ShadowViews.size(); ++i)
+				lightMatrices[i] = pRenderWorld->ShadowViews[i].View.ViewProjection;
+			CopyBufferData((uint32)lightMatrices.size(), sizeof(Matrix), "Light Matrices", lightMatrices.data(), pRenderWorld->LightMatricesBuffer);
 		}
 
-		sceneBatches.swap(pView->Batches);
+		sceneBatches.swap(pRenderWorld->Batches);
 	}
 
-	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes)
+	void DrawScene(CommandContext& context, const RenderView* pView, Batch::Blending blendModes)
 	{
-		DrawScene(context, pView->Batches, pView->VisibilityMask, blendModes);
+		DrawScene(context, pView->pRenderWorld->Batches, pView->VisibilityMask, blendModes);
 	}
 
 	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes)

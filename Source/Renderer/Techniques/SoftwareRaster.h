@@ -4,7 +4,7 @@
 #include "RenderGraph/RenderGraphDefinitions.h"
 
 class RGGraph;
-struct SceneView;
+struct RenderView;
 struct RasterContext;
 
 class SoftwareRaster
@@ -12,7 +12,7 @@ class SoftwareRaster
 public:
 	SoftwareRaster(GraphicsDevice* pDevice);
 
-	void Render(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext);
+	void Render(RGGraph& graph, const RenderView* pView, const RasterContext& rasterContext);
 
 	static void RasterizeTest();
 

@@ -68,7 +68,7 @@ void DebugRenderer::Shutdown()
 	m_pRS.Reset();
 }
 
-void DebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
+void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTarget, RGTexture* pDepth)
 {
 	if (m_NumLines == 0 && m_NumTriangles == 0)
 		return;

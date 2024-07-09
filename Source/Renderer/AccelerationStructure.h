@@ -3,7 +3,7 @@
 #include "RHI/RHI.h"
 #include "RHI/Fence.h"
 
-struct SceneView;
+struct RenderWorld;
 struct SubMesh;
 
 class AccelerationStructure
@@ -13,7 +13,7 @@ public:
 	~AccelerationStructure();
 
 	void Init(GraphicsDevice* pDevice);
-	void Build(CommandContext& context, const SceneView& view);
+	void Build(CommandContext& context, const RenderWorld& world);
 	ShaderResourceView* GetSRV() const;
 
 private:

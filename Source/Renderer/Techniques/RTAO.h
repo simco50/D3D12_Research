@@ -3,7 +3,7 @@
 #include "RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 
-struct SceneView;
+struct RenderView;
 struct SceneTextures;
 
 class RTAO
@@ -11,7 +11,7 @@ class RTAO
 public:
 	RTAO(GraphicsDevice* pDevice);
 
-	RGTexture* Execute(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture* pVelocity);
+	RGTexture* Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDepth, RGTexture* pVelocity);
 
 private:
 	Ref<Texture> m_pHistory;

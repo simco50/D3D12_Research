@@ -2,7 +2,7 @@
 #include "RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 
-struct SceneView;
+struct RenderView;
 struct SceneTextures;
 
 class GpuParticles
@@ -11,8 +11,8 @@ public:
 	GpuParticles(GraphicsDevice* pDevice);
 	~GpuParticles() = default;
 
-	void Simulate(RGGraph& graph, const SceneView* pView, RGTexture* pDepth);
-	void Render(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures);
+	void Simulate(RGGraph& graph, const RenderView* pView, RGTexture* pDepth);
+	void Render(RGGraph& graph, const RenderView* pView, SceneTextures& sceneTextures);
 private:
 
 	Ref<Buffer> m_pAliveList;

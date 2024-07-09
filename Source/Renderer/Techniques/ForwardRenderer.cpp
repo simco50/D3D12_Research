@@ -85,7 +85,7 @@ ForwardRenderer::~ForwardRenderer()
 {
 }
 
-void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture, RGTexture* pAO, bool translucentOnly)
+void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const RenderView* pView, SceneTextures& sceneTextures, const LightCull3DData& lightCullData, RGTexture* pFogTexture, RGTexture* pAO, bool translucentOnly)
 {
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
 		.Read({ sceneTextures.pDepth })
@@ -143,7 +143,7 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const SceneView* pV
 			});
 }
 
-void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture, RGTexture* pAO)
+void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView, SceneTextures& sceneTextures, const LightCull2DData& lightCullData, RGTexture* pFogTexture, RGTexture* pAO)
 {
 	graph.AddPass("Forward Shading", RGPassFlag::Raster)
 		.Read({ sceneTextures.pDepth })

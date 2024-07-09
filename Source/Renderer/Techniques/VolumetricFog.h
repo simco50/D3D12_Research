@@ -3,7 +3,7 @@
 #include "RenderGraph/RenderGraphDefinitions.h"
 #include "Renderer/SceneView.h"
 
-struct SceneView;
+struct RenderView;
 struct SceneTextures;
 struct LightCull3DData;
 
@@ -26,7 +26,7 @@ public:
 	VolumetricFog(GraphicsDevice* pDevice);
 	~VolumetricFog();
 
-	RGTexture* RenderFog(RGGraph& graph, const SceneView* pView, const LightCull3DData& cullData, VolumetricFogData& fogData);
+	RGTexture* RenderFog(RGGraph& graph, const RenderView* pView, const LightCull3DData& cullData, VolumetricFogData& fogData);
 
 private:
 	GraphicsDevice* m_pDevice;

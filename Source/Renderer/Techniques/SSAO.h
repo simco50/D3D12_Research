@@ -3,7 +3,7 @@
 #include "RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 
-struct SceneView;
+struct RenderView;
 struct SceneTextures;
 
 class SSAO
@@ -11,7 +11,7 @@ class SSAO
 public:
 	SSAO(GraphicsDevice* pDevice);
 
-	RGTexture* Execute(RGGraph& graph, const SceneView* pView, RGTexture* pDepth);
+	RGTexture* Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDepth);
 
 private:
 	Ref<PipelineState> m_pSSAOPSO;

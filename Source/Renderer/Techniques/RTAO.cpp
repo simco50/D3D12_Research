@@ -29,7 +29,7 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 	}
 }
 
-RGTexture* RTAO::Execute(RGGraph& graph, const SceneView* pView, RGTexture* pDepth, RGTexture* pVelocity)
+RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDepth, RGTexture* pVelocity)
 {
 	static float g_AoPower = 1.0f;
 	static float g_AoRadius = 2.0f;

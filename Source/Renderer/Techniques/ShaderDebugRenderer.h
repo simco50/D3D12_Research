@@ -3,7 +3,7 @@
 #include "RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 
-struct SceneView;
+struct RenderView;
 
 struct GPUDebugRenderData
 {
@@ -17,7 +17,7 @@ class ShaderDebugRenderer
 public:
 	ShaderDebugRenderer(GraphicsDevice* pDevice);
 
-	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth);
+	void Render(RGGraph& graph, const RenderView* pView, RGTexture* pTarget, RGTexture* pDepth);
 
 	void GetGPUData(GPUDebugRenderData* pData) const;
 

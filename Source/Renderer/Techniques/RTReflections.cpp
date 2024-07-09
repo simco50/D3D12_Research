@@ -30,7 +30,7 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 	}
 }
 
-void RTReflections::Execute(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
+void RTReflections::Execute(RGGraph& graph, const RenderView* pView, SceneTextures& sceneTextures)
 {
 	RGTexture* pReflectionsTarget = graph.Create("Scene Color", sceneTextures.pColorTarget->GetDesc());
 
@@ -49,7 +49,7 @@ void RTReflections::Execute(RGGraph& graph, const SceneView* pView, SceneTexture
 					float ViewPixelSpreadAngle;
 				} parameters;
 
-				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(pView->MainView.FoV / 2) / (float)pTarget->GetHeight());
+				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(pView->View.FoV / 2) / (float)pTarget->GetHeight());
 
 				ShaderBindingTable bindingTable(m_pRtSO);
 				bindingTable.BindRayGenShader("RayGen");

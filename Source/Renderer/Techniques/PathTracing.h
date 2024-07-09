@@ -2,13 +2,13 @@
 #include "RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 
-struct SceneView;
+struct RenderView;
 
 class PathTracing
 {
 public:
 	PathTracing(GraphicsDevice* pDevice);
-	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget);
+	void Render(RGGraph& graph, const RenderView* pView, RGTexture* pTarget);
 	void Reset();
 	bool IsSupported();
 

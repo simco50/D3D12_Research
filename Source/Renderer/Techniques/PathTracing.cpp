@@ -36,7 +36,7 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	m_OnShaderCompiledHandle = pDevice->GetShaderManager()->OnShaderEditedEvent().AddLambda([this](Shader*) { Reset(); });
 }
 
-void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget)
+void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTarget)
 {
 	if (!IsSupported())
 	{
@@ -72,7 +72,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 	}
 	ImGui::End();
 
-	if (pView->MainView.UnjtteredViewProjection != m_LastViewProjection)
+	if (pView->View.UnjtteredViewProjection != m_LastViewProjection)
 		doReset = true;
 
 	if (doReset)
@@ -105,7 +105,7 @@ void PathTracing::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTar
 	}
 	else
 	{
-		m_LastViewProjection = pView->MainView.UnjtteredViewProjection;
+		m_LastViewProjection = pView->View.UnjtteredViewProjection;
 		m_NumAccumulatedFrames++;
 
 		graph.AddPass("Path Tracing", RGPassFlag::Compute)

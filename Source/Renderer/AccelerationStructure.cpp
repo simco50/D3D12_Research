@@ -39,7 +39,7 @@ void AccelerationStructure::Init(GraphicsDevice* pDevice)
 	m_pUpdateTLASPSO = pDevice->CreateComputePipeline(m_pCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
 }
 
-void AccelerationStructure::Build(CommandContext& context, const SceneView& view)
+void AccelerationStructure::Build(CommandContext& context, const RenderWorld& world)
 {
 	PROFILE_CPU_SCOPE();
 
@@ -62,9 +62,9 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 			uint32 Flags;
 		};
 		Array<BLASInstance> blasInstances;
-		blasInstances.reserve(view.Batches.size());
+		blasInstances.reserve(world.Batches.size());
 
-		for (const Batch& batch : view.Batches)
+		for (const Batch& batch : world.Batches)
 		{
 			Mesh* pMesh = const_cast<Mesh*>(batch.pMesh);
 
@@ -73,7 +73,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				numBLASBuiltVertices += pMesh->PositionStreamLocation.Elements;
 				++numBuiltBLAS;
 
-				const Material& material = view.pWorld->Materials[pMesh->MaterialId];
+				const Material& material = world.pWorld->Materials[pMesh->MaterialId];
 				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 				geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
@@ -119,17 +119,6 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 
 			if (pMesh->pBLAS)
 			{
-				//if (m_RenderPath != RenderPath::PathTracing)
-				{
-					// Cull object that are small to the viewer - Deligiannis2019
-					Vector3 cameraVec = (batch.Bounds.Center - view.MainView.Position);
-					float angle = tanf(batch.Radius / cameraVec.Length());
-					if (angle < Tweakables::gTLASBoundsThreshold && cameraVec.Length() > batch.Radius)
-					{
-						continue;
-					}
-				}
-
 				BLASInstance& blasInstance = blasInstances.emplace_back();
 				blasInstance.GPUAddress = pMesh->pBLAS->GetGpuHandle();
 				blasInstance.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
@@ -191,7 +180,7 @@ void AccelerationStructure::Build(CommandContext& context, const SceneView& view
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pUpdateTLASPSO);
 				context.BindRootCBV(0, (uint32)blasInstances.size());
-				context.BindRootCBV(1, view.ViewCBV);
+				context.BindRootCBV(1, world.pMainView->ViewCBV);
 				context.BindRootUAV(2, m_pBLASInstancesTargetBuffer->GetGpuHandle());
 				context.BindRootSRV(3, m_pBLASInstancesSourceBuffer->GetGpuHandle());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));

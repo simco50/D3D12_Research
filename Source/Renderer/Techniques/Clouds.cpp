@@ -28,7 +28,7 @@ Clouds::Clouds(GraphicsDevice* pDevice)
 	pDevice->GetShaderManager()->OnShaderEditedEvent().AddLambda([this](Shader*) { m_pShapeNoise = nullptr; });
 }
 
-RGTexture* Clouds::Render(RGGraph& graph, const SceneView* pView, RGTexture* pColorTarget, RGTexture* pDepth)
+RGTexture* Clouds::Render(RGGraph& graph, const RenderView* pView, RGTexture* pColorTarget, RGTexture* pDepth)
 {
 	struct CloudParameters
 	{

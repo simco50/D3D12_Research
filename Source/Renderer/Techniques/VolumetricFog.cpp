@@ -35,7 +35,7 @@ VolumetricFog::~VolumetricFog()
 {
 }
 
-RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, const LightCull3DData& lightCullData, VolumetricFogData& fogData)
+RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, const LightCull3DData& lightCullData, VolumetricFogData& fogData)
 {
 	RG_GRAPH_SCOPE("Volumetric Lighting", graph);
 
@@ -93,7 +93,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
 				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
 				constexpr Math::HaltonSequence<32, 2> halton;
-				params.Jitter = halton[pView->FrameIndex & 31];
+				params.Jitter = halton[pView->pRenderWorld->FrameIndex & 31];
 				params.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / lightCullData.ClusterSize;
 				params.LightGridParams = lightCullData.LightGridParams;
 				params.LightClusterDimensions = Vector2i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
@@ -118,7 +118,6 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const SceneView* pView, cons
 			});
 
 	RGTexture* pFinalVolumeFog = graph.Create("Volumetric Fog", volumeDesc);
-
 
 	graph.AddPass("Accumulate Volume Fog", RGPassFlag::Compute)
 		.Read({ pTargetVolume })

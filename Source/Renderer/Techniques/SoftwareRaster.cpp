@@ -17,7 +17,7 @@ SoftwareRaster::SoftwareRaster(GraphicsDevice* pDevice)
 	m_pBuildRasterArgsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RasterCompute.hlsl", "BuildRasterArgsCS");
 }
 
-void SoftwareRaster::Render(RGGraph& graph, const SceneView* pView, const RasterContext& rasterContext)
+void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const RasterContext& rasterContext)
 {
 	const Vector2u viewDimensions = pView->GetDimensions();
 

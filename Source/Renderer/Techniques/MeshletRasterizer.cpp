@@ -226,7 +226,7 @@ RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode,
 	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter",		BufferDesc::CreateStructured(2, sizeof(uint32)));
 }
 
-void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, RasterContext& rasterContext, RasterResult& outResult)
+void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView, RasterPhase rasterPhase, RasterContext& rasterContext, RasterResult& outResult)
 {
 	RGBuffer* pInstanceCullArgs = nullptr;
 
@@ -315,7 +315,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(0, params);
-					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
@@ -334,7 +334,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					pCullWorkGraphSO->GetStateObject()->QueryInterface(pProps.GetAddressOf());
 
 					const char* pEntryPoint = rasterPhase == RasterPhase::Phase1 ? "CullInstancesCS" : "KickPhase2NodesCS";
-					uint32 gridSize = rasterPhase == RasterPhase::Phase1 ? Math::DivideAndRoundUp((uint32)pView->Batches.size(), Tweakables::CullInstanceThreadGroupSize) : 1;
+					uint32 gridSize = rasterPhase == RasterPhase::Phase1 ? Math::DivideAndRoundUp((uint32)pView->pRenderWorld->Batches.size(), Tweakables::CullInstanceThreadGroupSize) : 1;
 
 					D3D12_DISPATCH_GRAPH_DESC graphDesc{
 						.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT,
@@ -393,7 +393,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(0, params);
-					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
@@ -405,7 +405,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						context.BindResources(3, resources.GetSRV(pSourceHZB), 2);
 
 					if (rasterPhase == RasterPhase::Phase1)
-						context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->Batches.size(), Tweakables::CullInstanceThreadGroupSize));
+						context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->pRenderWorld->Batches.size(), Tweakables::CullInstanceThreadGroupSize));
 					else
 						context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pInstanceCullArgs));
 				});
@@ -448,7 +448,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(0, params);
-					context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
+					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 					context.BindResources(2, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
@@ -524,7 +524,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						context.SetPipelineState(m_pMeshletClassify);
 
 						context.BindRootCBV(0, classifyParams);
-						context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
+						context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 						context.BindResources(2, resources.GetUAV(pMeshletCounts));
 						context.BindResources(3, {
 							resources.GetSRV(rasterContext.pVisibleMeshlets),
@@ -564,7 +564,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 						context.SetPipelineState(m_pMeshletWriteBins);
 
 						context.BindRootCBV(0, classifyParams);
-						context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
+						context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 						context.BindResources(2, {
 							resources.GetUAV(pMeshletOffsetAndCounts),
 							resources.GetUAV(pBinnedMeshlets),
@@ -590,7 +590,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 				context.SetStencilRef((uint32)StencilBit::VisibilityBuffer);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView, pViewTransform));
+				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
 				if (outResult.pDebugData)
 					context.BindResources(2, resources.GetUAV(outResult.pDebugData));
 				context.BindResources(3, {
@@ -633,18 +633,19 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const SceneView* pView,
 		BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
 
-void MeshletRasterizer::Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterContext& rasterContext, RasterResult& outResult)
+void MeshletRasterizer::Render(RGGraph& graph, const RenderView* pView, RasterContext& rasterContext, RasterResult& outResult)
 {
 	check(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB");
 
 	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
 
 #if _DEBUG
+	const RenderWorld* pWorld = pView->pRenderWorld;
 	// Validate that we don't have more meshlets/instances than allowed.
 	uint32 numMeshlets = 0;
-	for (const Batch& b : pView->Batches)
+	for (const Batch& b : pWorld->Batches)
 		numMeshlets += b.pMesh->NumMeshlets;
-	check(pView->Batches.size() <= Tweakables::MaxNumInstances);
+	check(pWorld->Batches.size() <= Tweakables::MaxNumInstances);
 	check(numMeshlets <= Tweakables::MaxNumMeshlets);
 #endif
 
@@ -687,20 +688,20 @@ void MeshletRasterizer::Render(RGGraph& graph, const SceneView* pView, const Vie
 
 	{
 		RG_GRAPH_SCOPE("Phase 1", graph);
-		CullAndRasterize(graph, pView, pViewTransform, RasterPhase::Phase1, rasterContext, outResult);
+		CullAndRasterize(graph, pView, RasterPhase::Phase1, rasterContext, outResult);
 	}
 
 	// If occlusion culling is disabled, phase 1 will already have rendered everything and phase 2 in no longer required.
 	if (rasterContext.EnableOcclusionCulling)
 	{
 		RG_GRAPH_SCOPE("Phase 2", graph);
-		CullAndRasterize(graph, pView, pViewTransform, RasterPhase::Phase2, rasterContext, outResult);
+		CullAndRasterize(graph, pView, RasterPhase::Phase2, rasterContext, outResult);
 	}
 
 	outResult.pVisibleMeshlets = rasterContext.pVisibleMeshlets;
 }
 
-void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, const SceneView* pView, const RasterContext& rasterContext)
+void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, const RenderView* pView, const RasterContext& rasterContext)
 {
 	RGBuffer* pDummy = graph.Create("Dummy", BufferDesc::CreateTyped(10, ResourceFormat::RGBA8_UINT));
 	RGBuffer* pBins0 = rasterContext.pBinnedMeshletOffsetAndCounts[0] ? rasterContext.pBinnedMeshletOffsetAndCounts[0] : pDummy;

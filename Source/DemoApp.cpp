@@ -123,7 +123,7 @@ void DemoApp::Init()
 	DebugRenderer::Get()->Initialize(m_pDevice);
 
 	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice);
-	m_pShaderDebugRenderer->GetGPUData(&m_SceneData.DebugRenderData);
+	m_pShaderDebugRenderer->GetGPUData(&m_RenderWorld.DebugRenderData);
 
 	m_pMeshletRasterizer	= std::make_unique<MeshletRasterizer>(m_pDevice);
 	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
@@ -141,7 +141,11 @@ void DemoApp::Init()
 
 	InitializePipelines();
 
-	m_SceneData.AccelerationStructure.Init(m_pDevice);
+	m_RenderWorld.pWorld = &m_World;
+	m_RenderWorld.pMainView = &m_MainView;
+	m_MainView.pRenderWorld = &m_RenderWorld;
+	m_MainView.pWorld = &m_World;
+	m_RenderWorld.AccelerationStructure.Init(m_pDevice);
 
 	SetupScene("Resources/Scenes/Sponza/Sponza.gltf");
 }
@@ -277,7 +281,7 @@ void DemoApp::Update()
 
 		if (Tweakables::gRenderObjectBounds)
 		{
-			for (const Batch& b : m_SceneData.Batches)
+			for (const Batch& b : m_RenderWorld.Batches)
 			{
 				DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(0.2f, 0.2f, 0.9f, 1.0f));
 				DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 5, 5, Color(0.2f, 0.6f, 0.2f, 1.0f));
@@ -296,8 +300,8 @@ void DemoApp::Update()
 		auto ddgi_view = m_World.Registry.view<Transform, DDGIVolume>();
 		ddgi_view.each([&](Transform& transform, DDGIVolume& volume)
 			{
-				transform.Position = m_SceneData.SceneAABB.Center;
-				volume.Extents = 1.1f * Vector3(m_SceneData.SceneAABB.Extents);
+				transform.Position = m_RenderWorld.SceneAABB.Center;
+				volume.Extents = 1.1f * Vector3(m_RenderWorld.SceneAABB.Extents);
 			});
 
 		m_pCamera->SetJitter(Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing);
@@ -308,10 +312,10 @@ void DemoApp::Update()
 			return (int)a.Type < (int)b.Type;
 			});
 
-		CreateShadowViews(m_SceneData, m_World);
-		m_SceneData.MainView = m_pCamera->GetViewTransform();
-		m_SceneData.FrameIndex = m_Frame;
-		m_SceneData.pWorld = &m_World;
+		CreateShadowViews(m_MainView, m_World, m_RenderWorld);
+		m_MainView.View = m_pCamera->GetViewTransform();
+
+		m_RenderWorld.FrameIndex = m_Frame;
 	}
 	{
 		if (Tweakables::gScreenshotNextFrame)
@@ -320,9 +324,8 @@ void DemoApp::Update()
 			MakeScreenshot();
 		}
 
-		const SceneView* pView = &m_SceneData;
-		//const World* pWorld = &m_World;
-		SceneView* pViewMut = &m_SceneData;
+		const RenderView* pView = &m_MainView;
+		RenderWorld* pRenderWorld = &m_RenderWorld;
 		World* pWorldMut = &m_World;
 
 		auto view = pWorldMut->Registry.view<Transform>();
@@ -340,7 +343,7 @@ void DemoApp::Update()
 		}
 		{
 			CommandContext* pContext = m_pDevice->AllocateCommandContext();
-			Renderer::UploadSceneData(*pContext, pViewMut, pWorldMut);
+			Renderer::UploadSceneData(*pContext, pRenderWorld);
 			pContext->Execute();
 		}
 
@@ -353,13 +356,13 @@ void DemoApp::Update()
 				// Sort
 				auto CompareSort = [this](const Batch& a, const Batch& b)
 					{
-						float aDist = Vector3::DistanceSquared(a.Bounds.Center, m_SceneData.MainView.Position);
-						float bDist = Vector3::DistanceSquared(b.Bounds.Center, m_SceneData.MainView.Position);
+						float aDist = Vector3::DistanceSquared(a.Bounds.Center, m_MainView.View.Position);
+						float bDist = Vector3::DistanceSquared(b.Bounds.Center, m_MainView.View.Position);
 						if (a.BlendMode != b.BlendMode)
 							return (int)a.BlendMode < (int)b.BlendMode;
 						return EnumHasAnyFlags(a.BlendMode, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
 					};
-				std::sort(m_SceneData.Batches.begin(), m_SceneData.Batches.end(), CompareSort);
+				std::sort(m_RenderWorld.Batches.begin(), m_RenderWorld.Batches.end(), CompareSort);
 			}
 
 			// In Visibility Buffer mode, culling is done on the GPU.
@@ -368,11 +371,11 @@ void DemoApp::Update()
 				TaskQueue::Execute([&](int)
 					{
 						PROFILE_CPU_SCOPE("Frustum Cull Main");
-						m_SceneData.VisibilityMask.SetAll();
+						m_MainView.VisibilityMask.SetAll();
 						BoundingFrustum frustum = m_pCamera->GetViewTransform().PerspectiveFrustum;
-						for (const Batch& b : m_SceneData.Batches)
+						for (const Batch& b : m_RenderWorld.Batches)
 						{
-							m_SceneData.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
+							m_MainView.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
 						}
 					}, taskContext);
 			}
@@ -381,28 +384,28 @@ void DemoApp::Update()
 				TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
 					{
 						PROFILE_CPU_SCOPE("Frustum Cull Shadows");
-						ShadowView& shadowView = m_SceneData.ShadowViews[args.JobIndex];
-						shadowView.Visibility.SetAll();
-						for (const Batch& b : m_SceneData.Batches)
+						RenderView& shadowView = m_RenderWorld.ShadowViews[args.JobIndex];
+						shadowView.VisibilityMask.SetAll();
+						for (const Batch& b : m_RenderWorld.Batches)
 						{
-							shadowView.Visibility.AssignBit(b.InstanceID, shadowView.View.IsInFrustum(b.Bounds));
+							shadowView.VisibilityMask.AssignBit(b.InstanceID, shadowView.View.IsInFrustum(b.Bounds));
 						}
-					}, taskContext, (uint32)m_SceneData.ShadowViews.size(), 1);
+					}, taskContext, (uint32)m_RenderWorld.ShadowViews.size(), 1);
 			}
 
 			TaskQueue::Execute([&](int)
 				{
 					PROFILE_CPU_SCOPE("Compute Bounds");
 					bool boundsSet = false;
-					for (const Batch& b : m_SceneData.Batches)
+					for (const Batch& b : m_RenderWorld.Batches)
 					{
 						if (boundsSet)
 						{
-							BoundingBox::CreateMerged(m_SceneData.SceneAABB, m_SceneData.SceneAABB, b.Bounds);
+							BoundingBox::CreateMerged(m_RenderWorld.SceneAABB, m_RenderWorld.SceneAABB, b.Bounds);
 						}
 						else
 						{
-							m_SceneData.SceneAABB = b.Bounds;
+							m_RenderWorld.SceneAABB = b.Bounds;
 							boundsSet = true;
 						}
 					}
@@ -413,8 +416,8 @@ void DemoApp::Update()
 
 		{
 			PROFILE_CPU_SCOPE("Upload View Constants");
-			m_SceneData.ViewCBV = m_pDevice->AllocateUploadScratch(sizeof(ShaderInterop::ViewUniforms), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-			Renderer::GetViewUniforms(pView, *(ShaderInterop::ViewUniforms*)m_SceneData.ViewCBV.pMappedMemory);
+			m_MainView.ViewCBV = m_pDevice->AllocateUploadScratch(sizeof(ShaderInterop::ViewUniforms), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+			Renderer::GetViewUniforms(&m_MainView, *(ShaderInterop::ViewUniforms*)m_MainView.ViewCBV.pMappedMemory);
 		}
 
 		RGGraph graph;
@@ -426,21 +429,21 @@ void DemoApp::Update()
 			graph.AddPass("Build Acceleration Structures", RGPassFlag::Compute | RGPassFlag::NeverCull)
 				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
-						pViewMut->AccelerationStructure.Build(context, *pView);
+						pRenderWorld->AccelerationStructure.Build(context, *pRenderWorld);
 					});
 
-			const Vector2u viewDimensions = m_SceneData.GetDimensions();
+			const Vector2u viewDimensions = pView->GetDimensions();
 
 			SceneTextures sceneTextures;
-			sceneTextures.pDepth			= graph.Create("Depth Stencil",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
-			sceneTextures.pColorTarget		= graph.Create("Color Target",		TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[0]));
-			sceneTextures.pNormals			= graph.Create("Normals",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[1]));
-			sceneTextures.pRoughness		= graph.Create("Roughness",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[2]));
-			sceneTextures.pVelocity			= graph.Create("Velocity",			TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-			sceneTextures.pPreviousColor	= graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
+			sceneTextures.pDepth = graph.Create("Depth Stencil", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
+			sceneTextures.pColorTarget = graph.Create("Color Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[0]));
+			sceneTextures.pNormals = graph.Create("Normals", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[1]));
+			sceneTextures.pRoughness = graph.Create("Roughness", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[2]));
+			sceneTextures.pVelocity = graph.Create("Velocity", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
+			sceneTextures.pPreviousColor = graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
-			sceneTextures.pGBuffer0			= graph.Create("GBuffer 0", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[0]));
-			sceneTextures.pGBuffer1			= graph.Create("GBuffer 1", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[1]));
+			sceneTextures.pGBuffer0 = graph.Create("GBuffer 0", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[0]));
+			sceneTextures.pGBuffer1 = graph.Create("GBuffer 1", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[1]));
 
 			LightCull2DData lightCull2DData;
 			LightCull3DData lightCull3DData;
@@ -475,25 +478,25 @@ void DemoApp::Update()
 			}
 
 			// Export makes sure the target texture is filled in during pass execution.
-			graph.Export(pSky, &pViewMut->pSky, TextureFlag::ShaderResource);
+			graph.Export(pSky, &pRenderWorld->pSky, TextureFlag::ShaderResource);
 
 			RasterResult rasterResult;
 			if (m_RenderPath != RenderPath::PathTracing)
 			{
 				{
 					RG_GRAPH_SCOPE("Shadow Depths", graph);
-					for (uint32 i = 0; i < (uint32)pView->ShadowViews.size(); ++i)
+					for (uint32 i = 0; i < (uint32)pRenderWorld->ShadowViews.size(); ++i)
 					{
-						const ShadowView& shadowView = pView->ShadowViews[i];
+						const RenderView& shadowView = pRenderWorld->ShadowViews[i];
 						RG_GRAPH_SCOPE(Sprintf("View %d (%s - Cascade %d)", i, gLightTypeStr[(int)shadowView.pLight->Type], shadowView.ViewIndex).c_str(), graph);
 
-						RGTexture* pShadowmap = graph.Import(pView->ShadowViews[i].pDepthTexture);
+						RGTexture* pShadowmap = graph.Import(pRenderWorld->ShadowViews[i].pDepthTexture);
 						if (Tweakables::gShadowsGPUCull)
 						{
 							RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
 							context.EnableOcclusionCulling = Tweakables::gShadowsOcclusionCulling;
 							RasterResult result;
-							m_pMeshletRasterizer->Render(graph, pView, &shadowView.View, context, result);
+							m_pMeshletRasterizer->Render(graph, &shadowView, context, result);
 							if (Tweakables::gCullShadowsDebugStats == (int)i)
 								m_pMeshletRasterizer->PrintStats(graph, Vector2(400, 20), pView, context);
 						}
@@ -506,18 +509,18 @@ void DemoApp::Update()
 										context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-										const ShadowView& view = pView->ShadowViews[i];
-										context.BindRootCBV(1, Renderer::GetViewUniforms(pView, &view.View));
+										const RenderView& view = pRenderWorld->ShadowViews[i];
+										context.BindRootCBV(1, Renderer::GetViewUniforms(&view));
 
 										{
 											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 											context.SetPipelineState(m_pShadowsOpaquePSO);
-											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::Opaque);
+											Renderer::DrawScene(context, pRenderWorld->Batches, view.VisibilityMask, Batch::Blending::Opaque);
 										}
 										{
 											PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
 											context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-											Renderer::DrawScene(context, pView->Batches, view.Visibility, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
+											Renderer::DrawScene(context, pRenderWorld->Batches, view.VisibilityMask, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 										}
 									});
 						}
@@ -535,7 +538,7 @@ void DemoApp::Update()
 						rasterContext.EnableDebug = Tweakables::gVisibilityDebugMode > 0;
 						rasterContext.EnableOcclusionCulling = Tweakables::gOcclusionCulling;
 						rasterContext.WorkGraph = Tweakables::gWorkGraph;
-						m_pMeshletRasterizer->Render(graph, pView, &pView->MainView, rasterContext, rasterResult);
+						m_pMeshletRasterizer->Render(graph, pView, rasterContext, rasterResult);
 						if (Tweakables::gCullDebugStats)
 							m_pMeshletRasterizer->PrintStats(graph, Vector2(20, 20), pView, rasterContext);
 					}
@@ -632,7 +635,7 @@ void DemoApp::Update()
 
 				if (Tweakables::gEnableDDGI)
 				{
-					m_pDDGI->Execute(graph, pView, pWorldMut);
+					m_pDDGI->Execute(graph, pView);
 				}
 
 				graph.AddPass("Camera Motion", RGPassFlag::Compute)
@@ -835,7 +838,7 @@ void DemoApp::Update()
 				// Probes contain irradiance data, and need to go through tonemapper.
 				if (Tweakables::gVisualizeDDGI)
 				{
-					m_pDDGI->RenderVisualization(graph, pView, pWorldMut, sceneTextures.pColorTarget, sceneTextures.pDepth);
+					m_pDDGI->RenderVisualization(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 				}
 			}
 			else
@@ -947,11 +950,11 @@ void DemoApp::Update()
 		}
 
 		RGGraphOptions graphOptions;
-		graphOptions.Jobify					= Tweakables::gRenderGraphJobify;
-		graphOptions.PassCulling			= Tweakables::gRenderGraphPassCulling;
-		graphOptions.ResourceAliasing		= Tweakables::gRenderGraphResourceAliasing;
-		graphOptions.StateTracking			= Tweakables::gRenderGraphStateTracking;
-		graphOptions.CommandlistGroupSize	= Tweakables::gRenderGraphPassGroupSize;
+		graphOptions.Jobify = Tweakables::gRenderGraphJobify;
+		graphOptions.PassCulling = Tweakables::gRenderGraphPassCulling;
+		graphOptions.ResourceAliasing = Tweakables::gRenderGraphResourceAliasing;
+		graphOptions.StateTracking = Tweakables::gRenderGraphStateTracking;
+		graphOptions.CommandlistGroupSize = Tweakables::gRenderGraphPassGroupSize;
 
 		// Compile graph
 		graph.Compile(*m_RenderGraphPool, graphOptions);
@@ -973,7 +976,7 @@ void DemoApp::Update()
 
 	{
 		++m_Frame;
-		m_SceneData.CameraCut = false;
+		m_MainView.CameraCut = false;
 	}
 }
 
@@ -984,9 +987,9 @@ void DemoApp::OnWindowResized(uint32 width, uint32 height)
 void DemoApp::OnResizeViewport(uint32 width, uint32 height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
-	if(m_pCamera)
+	if (m_pCamera)
 		m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
-	m_SceneData.CameraCut = true;
+	m_MainView.CameraCut = true;
 }
 
 void DemoApp::InitializePipelines()
@@ -1035,18 +1038,18 @@ void DemoApp::InitializePipelines()
 
 	ShaderDefineHelper tonemapperDefines;
 	tonemapperDefines.Set("NUM_HISTOGRAM_BINS", 256);
-	m_pLuminanceHistogramPSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
-	m_pDrawHistogramPSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
-	m_pAverageLuminancePSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
-	m_pToneMapPSO					= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
-	m_pDownsampleColorPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/DownsampleColor.hlsl", "CSMain");
+	m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
+	m_pDrawHistogramPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
+	m_pAverageLuminancePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
+	m_pToneMapPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
+	m_pDownsampleColorPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/DownsampleColor.hlsl", "CSMain");
 
-	m_pPrepareReduceDepthPSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
-	m_pPrepareReduceDepthMsaaPSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
-	m_pReduceDepthPSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
+	m_pPrepareReduceDepthPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
+	m_pPrepareReduceDepthMsaaPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
+	m_pReduceDepthPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
 
-	m_pCameraMotionPSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
-	m_pTemporalResolvePSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
+	m_pCameraMotionPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
+	m_pTemporalResolvePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
 
 
 	//Sky
@@ -1065,9 +1068,9 @@ void DemoApp::InitializePipelines()
 	}
 
 	//Bloom
-	m_pBloomDownsamplePSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
-	m_pBloomDownsampleKarisAveragePSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", {"KARIS_AVERAGE=1"});
-	m_pBloomUpsamplePSO					= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
+	m_pBloomDownsamplePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
+	m_pBloomDownsampleKarisAveragePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", { "KARIS_AVERAGE=1" });
+	m_pBloomUpsamplePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
 
 	//Visibility Shading
 	{
@@ -1084,7 +1087,7 @@ void DemoApp::InitializePipelines()
 		m_pVisibilityShadingGraphicsPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
-	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
+	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
 
 	{
 		PipelineStateInitializer psoDesc;
@@ -1213,7 +1216,7 @@ void DemoApp::UpdateImGui()
 		ImGui::EndMainMenuBar();
 	}
 
-	if(showToolMetrics)
+	if (showToolMetrics)
 		ImGui::ShowMetricsWindow(&showToolMetrics);
 
 	ImGui::Begin(ICON_FA_DESKTOP " Viewport", 0, ImGuiWindowFlags_NoScrollbar);
@@ -1303,7 +1306,7 @@ void DemoApp::UpdateImGui()
 		ImGui::End();
 	}
 
-	if(m_pCaptureTextureSystem)
+	if (m_pCaptureTextureSystem)
 		m_pCaptureTextureSystem->RenderUI(m_CaptureTextureContext, viewportOrigin, viewportExtents);
 
 	console.Update();
@@ -1333,11 +1336,11 @@ void DemoApp::UpdateImGui()
 		{
 			if (i < sunLight.ShadowMaps.size())
 			{
-				ShadowView& shadowView = m_SceneData.ShadowViews[sunLight.MatrixIndex + i];
+				const RenderView& shadowView = m_RenderWorld.ShadowViews[sunLight.MatrixIndex + i];
 				const Matrix& lightViewProj = shadowView.View.ViewProjection;
 
 				const ViewTransform& viewTransform = m_pCamera->GetViewTransform();
-				BoundingFrustum frustum = Math::CreateBoundingFrustum(Math::CreatePerspectiveMatrix(viewTransform.FoV, viewTransform.Viewport.GetAspect(), viewTransform.FarPlane, (&m_SceneData.ShadowCascadeDepths.x)[i]), viewTransform.View);
+				BoundingFrustum frustum = Math::CreateBoundingFrustum(Math::CreatePerspectiveMatrix(viewTransform.FoV, viewTransform.Viewport.GetAspect(), viewTransform.FarPlane, (&m_RenderWorld.ShadowCascadeDepths.x)[i]), viewTransform.View);
 				DirectX::XMFLOAT3 frustumCorners[8];
 				frustum.GetCorners(frustumCorners);
 
@@ -1503,7 +1506,7 @@ void DemoApp::UpdateImGui()
 			if (Tweakables::gShadowsGPUCull)
 			{
 				ImGui::Checkbox("GPU Occlusion Cull", &Tweakables::gShadowsOcclusionCulling.Get());
-				ImGui::SliderInt("GPU Cull Stats", &Tweakables::gCullShadowsDebugStats.Get(), -1, (int)m_SceneData.ShadowViews.size() - 1);
+				ImGui::SliderInt("GPU Cull Stats", &Tweakables::gCullShadowsDebugStats.Get(), -1, (int)m_RenderWorld.ShadowViews.size() - 1);
 			}
 		}
 		if (ImGui::CollapsingHeader("Bloom"))
@@ -1556,7 +1559,7 @@ void DemoApp::UpdateImGui()
 	ImGui::End();
 }
 
-RGTexture* DemoApp::ComputeBloom(RGGraph& graph, const SceneView* pView, RGTexture* pColor)
+RGTexture* DemoApp::ComputeBloom(RGGraph& graph, const RenderView* pView, RGTexture* pColor)
 {
 	RG_GRAPH_SCOPE("Bloom", graph);
 
@@ -1641,7 +1644,7 @@ RGTexture* DemoApp::ComputeBloom(RGGraph& graph, const SceneView* pView, RGTextu
 	return pUpscaleTarget;
 }
 
-RGBuffer* DemoApp::ComputeExposure(RGGraph& graph, const SceneView* pView, RGTexture* pColor)
+RGBuffer* DemoApp::ComputeExposure(RGGraph& graph, const RenderView* pView, RGTexture* pColor)
 {
 	RG_GRAPH_SCOPE("Auto Exposure", graph);
 	RGBuffer* pAverageLuminance = RGUtils::CreatePersistent(graph, "Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)), &m_pAverageLuminance, true);
@@ -1817,7 +1820,7 @@ void DemoApp::MakeScreenshot()
 }
 
 
-void DemoApp::CreateShadowViews(SceneView& view, World& world)
+void DemoApp::CreateShadowViews(const RenderView& mainView, World& world, RenderWorld& renderWorld)
 {
 	PROFILE_CPU_SCOPE("Shadow Setup");
 
@@ -1826,7 +1829,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 
 	const uint32 numCascades = Tweakables::gShadowCascades;
 	const float pssmLambda = Tweakables::gPSSMFactor;
-	view.NumShadowCascades = numCascades;
+	renderWorld.NumShadowCascades = numCascades;
 
 	if (Tweakables::gSDSM)
 	{
@@ -1839,7 +1842,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		}
 	}
 
-	const ViewTransform& viewTransform = m_pCamera->GetViewTransform();
+	const ViewTransform& viewTransform = mainView.View;
 	float n = viewTransform.NearPlane;
 	float f = viewTransform.FarPlane;
 	float nearPlane = Math::Min(n, f);
@@ -1862,8 +1865,8 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 	}
 
 	int32 shadowIndex = 0;
-	view.ShadowViews.clear();
-	auto AddShadowView = [&](Light& light, ShadowView shadowView, uint32 resolution, uint32 shadowMapLightIndex)
+	renderWorld.ShadowViews.clear();
+	auto AddShadowView = [&](Light& light, RenderView shadowView, uint32 resolution, uint32 shadowMapLightIndex)
 	{
 		if (shadowMapLightIndex == 0)
 			light.MatrixIndex = shadowIndex;
@@ -1878,11 +1881,13 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 		shadowView.pLight = &light;
 		shadowView.ViewIndex = shadowMapLightIndex;
 		shadowView.View.Viewport = FloatRect(0, 0, (float)resolution, (float)resolution);
-		view.ShadowViews.push_back(shadowView);
+		shadowView.pWorld = renderWorld.pWorld;
+		shadowView.pRenderWorld = &renderWorld;
+		renderWorld.ShadowViews.push_back(shadowView);
 		shadowIndex++;
 	};
 
-	auto light_view = m_World.Registry.view<const Transform, Light>();
+	auto light_view = world.Registry.view<const Transform, Light>();
 	light_view.each([&](const Transform& transform, Light& light)
 	{
 		light.ShadowMaps.clear();
@@ -1953,7 +1958,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 
 				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z, minExtents.z);
 
-				ShadowView shadowView;
+				RenderView shadowView;
 				ViewTransform& shadowViewTransform = shadowView.View;
 				shadowViewTransform.IsPerspective = false;
 				shadowViewTransform.ViewProjection = lightView * projectionMatrix;
@@ -1962,7 +1967,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 				shadowViewTransform.OrthographicFrustum.Extents = maxExtents - minExtents;
 				shadowViewTransform.OrthographicFrustum.Extents.z *= 10;
 				shadowViewTransform.OrthographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
-				(&view.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
+				(&renderWorld.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
 				AddShadowView(light, shadowView, 2048, i);
 			}
 		}
@@ -1975,7 +1980,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 			const Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.01f);
 			const Matrix lightView = transform.World.Invert();
 
-			ShadowView shadowView;
+			RenderView shadowView;
 			ViewTransform& shadowViewTransform = shadowView.View;
 			shadowViewTransform.IsPerspective = true;
 			shadowViewTransform.ViewProjection = lightView * projection;
@@ -2001,7 +2006,7 @@ void DemoApp::CreateShadowViews(SceneView& view, World& world)
 
 			for (int i = 0; i < ARRAYSIZE(viewMatrices); ++i)
 			{
-				ShadowView shadowView;
+				RenderView shadowView;
 				ViewTransform& shadowViewTransform = shadowView.View;
 				shadowViewTransform.IsPerspective = true;
 				shadowViewTransform.ViewProjection = viewMatrices[i] * projection;

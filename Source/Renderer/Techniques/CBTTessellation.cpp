@@ -128,7 +128,7 @@ struct IndirectDrawArgs
 	D3D12_DRAW_ARGUMENTS DebugDrawArgs;
 };
 
-void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures)
+void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const SceneTextures& sceneTextures)
 {
 	if (ImGui::Begin("Parameters"))
 	{
@@ -385,7 +385,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const SceneView* pView, const S
 	m_CBTData.SplitMode = 1 - m_CBTData.SplitMode;
 }
 
-void CBTTessellation::Shade(RGGraph& graph, const SceneView* pView, const SceneTextures& sceneTextures, RGTexture* pFog)
+void CBTTessellation::Shade(RGGraph& graph, const RenderView* pView, const SceneTextures& sceneTextures, RGTexture* pFog)
 {
 	struct
 	{

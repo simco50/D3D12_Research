@@ -40,15 +40,17 @@ LightCulling::~LightCulling()
 {
 }
 
-void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView* pView, LightCull3DData& cullData)
+void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView* pView, LightCull3DData& cullData)
 {
 	RG_GRAPH_SCOPE("Clustered Light Culling", graph);
+
+	const RenderWorld* pWorld = pView->pRenderWorld;
 
 	cullData.ClusterCount.x = Math::DivideAndRoundUp(pView->GetDimensions().x, gLightClusterTexelSize);
 	cullData.ClusterCount.y = Math::DivideAndRoundUp(pView->GetDimensions().y, gLightClusterTexelSize);
 	cullData.ClusterCount.z = gLightClustersNumZ;
-	float nearZ = pView->MainView.NearPlane;
-	float farZ = pView->MainView.FarPlane;
+	float nearZ = pView->View.NearPlane;
+	float farZ = pView->View.FarPlane;
 	float n = Math::Min(nearZ, farZ);
 	float f = Math::Max(nearZ, farZ);
 	cullData.LightGridParams.x = (float)gLightClustersNumZ / log(f / n);
@@ -70,9 +72,9 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 		uint32 IsPoint : 1;
 		uint32 IsDirectional : 1;
 	};
-	uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->LightBuffer.Count;
+	uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pWorld->LightBuffer.Count;
 
-	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->LightBuffer.Count, sizeof(PrecomputedLightData)));
+	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pWorld->LightBuffer.Count, sizeof(PrecomputedLightData)));
 	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
 		.Write(pPrecomputeData)
 		.Bind([=](CommandContext& context, const RGResources& resources)
@@ -80,7 +82,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
-				const Matrix& viewMatrix = pView->MainView.View;
+				const Matrix& viewMatrix = pView->View.View;
 				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();
 				light_view.each([&](const Transform& transform, const Light& light)
 					{
@@ -138,12 +140,12 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const SceneView*
 			});
 }
 
-void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures, LightCull2DData& cullResources)
+void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pView, SceneTextures& sceneTextures, LightCull2DData& cullResources)
 {
 	RG_GRAPH_SCOPE("Tiled Light Culling", graph);
 
-	uint32 tilesX = Math::DivideAndRoundUp((uint32)pView->MainView.Viewport.GetWidth(), gTiledLightingTileSize);
-	uint32 tilesY = Math::DivideAndRoundUp((uint32)pView->MainView.Viewport.GetHeight(), gTiledLightingTileSize);
+	uint32 tilesX = Math::DivideAndRoundUp((uint32)pView->View.Viewport.GetWidth(), gTiledLightingTileSize);
+	uint32 tilesY = Math::DivideAndRoundUp((uint32)pView->View.Viewport.GetHeight(), gTiledLightingTileSize);
 	uint32 lightListElements = tilesX * tilesY * (gMaxLightsPerTile / 32);
 
 	cullResources.pLightListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));
@@ -155,16 +157,18 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 		float SphereRadius;
 	};
 
-	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pView->LightBuffer.Count, sizeof(PrecomputedLightData)));
+	const RenderWorld* pWorld = pView->pRenderWorld;
+
+	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pWorld->LightBuffer.Count, sizeof(PrecomputedLightData)));
 	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
 		.Write(pPrecomputeData)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pView->LightBuffer.Count;
+				uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pWorld->LightBuffer.Count;
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
-				const Matrix& viewMatrix = pView->MainView.View;
+				const Matrix& viewMatrix = pView->View.View;
 				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();
 				light_view.each([&](const Transform& transform, const Light& light)
 					{
@@ -218,7 +222,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const SceneView* pVi
 			});
 }
 
-RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, RGTexture* pSceneDepth, const LightCull2DData& lightCullData)
+RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView* pView, RGTexture* pSceneDepth, const LightCull2DData& lightCullData)
 {
 	RGTexture* pVisualizationTarget = graph.Create("Light Density Visualization", TextureDesc::Create2D(pSceneDepth->GetDesc().Width, pSceneDepth->GetDesc().Height, ResourceFormat::RGBA8_UNORM, 1));
 
@@ -247,7 +251,7 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* 
 	return pVisualizationTarget;
 }
 
-RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const SceneView* pView, RGTexture* pSceneDepth, const LightCull3DData& lightCullData)
+RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView* pView, RGTexture* pSceneDepth, const LightCull3DData& lightCullData)
 {
 	RGTexture* pVisualizationTarget = graph.Create("Light Density Visualization", TextureDesc::Create2D(pSceneDepth->GetDesc().Width, pSceneDepth->GetDesc().Height, ResourceFormat::RGBA8_UNORM, 1));
 

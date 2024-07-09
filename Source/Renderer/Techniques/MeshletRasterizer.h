@@ -2,8 +2,7 @@
 #include "RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
 
-struct SceneView;
-struct ViewTransform;
+struct RenderView;
 
 enum class RasterMode
 {
@@ -43,8 +42,8 @@ class MeshletRasterizer
 {
 public:
 	MeshletRasterizer(GraphicsDevice* pDevice);
-	void Render(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterContext& context, RasterResult& outResult);
-	void PrintStats(RGGraph& graph, const Vector2& position, const SceneView* pView, const RasterContext& rasterContext);
+	void Render(RGGraph& graph, const RenderView* pView, RasterContext& context, RasterResult& outResult);
+	void PrintStats(RGGraph& graph, const Vector2& position, const RenderView* pView, const RasterContext& rasterContext);
 
 private:
 	enum class RasterPhase
@@ -64,7 +63,7 @@ private:
 	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
-	void CullAndRasterize(RGGraph& graph, const SceneView* pView, const ViewTransform* pViewTransform, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
+	void CullAndRasterize(RGGraph& graph, const RenderView* pView, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
 
 	GraphicsDevice* m_pDevice;
 

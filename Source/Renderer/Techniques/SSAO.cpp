@@ -14,7 +14,7 @@ SSAO::SSAO(GraphicsDevice* pDevice)
 	m_pSSAOBlurPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/SSAOBlur.hlsl", "CSMain");
 }
 
-RGTexture* SSAO::Execute(RGGraph& graph, const SceneView* pView, RGTexture* pDepth)
+RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDepth)
 {
 	static float g_AoPower = 1.2f;
 	static float g_AoThreshold = 0.0025f;

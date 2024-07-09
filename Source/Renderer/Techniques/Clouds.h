@@ -3,13 +3,13 @@
 #include "RenderGraph/RenderGraphDefinitions.h"
 
 struct SceneTextures;
-struct SceneView;
+struct RenderView;
 
 class Clouds
 {
 public:
 	Clouds(GraphicsDevice* pDevice);
-	RGTexture* Render(RGGraph& graph, const SceneView* pView, RGTexture* pColorTarget, RGTexture* pDepth);
+	RGTexture* Render(RGGraph& graph, const RenderView* pView, RGTexture* pColorTarget, RGTexture* pDepth);
 
 private:
 	Ref<PipelineState> m_pCloudShapeNoisePSO;

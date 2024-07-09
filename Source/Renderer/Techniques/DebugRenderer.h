@@ -3,7 +3,7 @@
 #include "RenderGraph/RenderGraphDefinitions.h"
 
 struct Light;
-struct SceneView;
+struct RenderView;
 struct Transform;
 
 struct IntColor
@@ -50,7 +50,7 @@ public:
 
 	void Initialize(GraphicsDevice* pDevice);
 	void Shutdown();
-	void Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth);
+	void Render(RGGraph& graph, const RenderView* pView, RGTexture* pTarget, RGTexture* pDepth);
 
 	void AddLine(const Vector3& start, const Vector3& end, const IntColor& color);
 	void AddRay(const Vector3& start, const Vector3& direction, const IntColor& color);

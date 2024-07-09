@@ -65,7 +65,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 	BuildFontAtlas(pDevice);
 }
 
-void ShaderDebugRenderer::Render(RGGraph& graph, const SceneView* pView, RGTexture* pTarget, RGTexture* pDepth)
+void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTarget, RGTexture* pDepth)
 {
 	RG_GRAPH_SCOPE("GPU Debug Render", graph);
 

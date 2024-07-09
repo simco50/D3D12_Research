@@ -47,12 +47,12 @@ DDGI::~DDGI()
 {
 }
 
-void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
+void DDGI::Execute(RGGraph& graph, const RenderView* pView)
 {
 	if (m_pDDGITraceRaysSO)
 	{
 		RG_GRAPH_SCOPE("DDGI", graph);
-		auto ddgi_view = pWorld->Registry.view<DDGIVolume>();
+		auto ddgi_view = pView->pWorld->Registry.view<DDGIVolume>();
 
 		uint32 i = 0;
 		uint32 randomIndex = Math::RandomRange(0, (int)ddgi_view.size() - 1);
@@ -191,9 +191,9 @@ void DDGI::Execute(RGGraph& graph, const SceneView* pView, World* pWorld)
 	}
 }
 
-void DDGI::RenderVisualization(RGGraph& graph, const SceneView* pView, const World* pWorld, RGTexture* pColorTarget, RGTexture* pDepth)
+void DDGI::RenderVisualization(RGGraph& graph, const RenderView* pView, RGTexture* pColorTarget, RGTexture* pDepth)
 {
-	auto ddgi_view = pWorld->Registry.view<const DDGIVolume>();
+	auto ddgi_view = pView->pWorld->Registry.view<const DDGIVolume>();
 	int i = 0;
 	ddgi_view.each([&](const DDGIVolume& volume)
 		{

@@ -58,6 +58,24 @@ struct World
 	entt::entity Sunlight;
 };
 
+struct Batch
+{
+	enum class Blending
+	{
+		Opaque = 1,
+		AlphaMask = 2,
+		AlphaBlend = 4,
+	};
+	uint32 InstanceID;
+	Blending BlendMode = Blending::Opaque;
+	const Mesh* pMesh;
+	Matrix WorldMatrix;
+	BoundingBox Bounds;
+	float Radius;
+};
+DECLARE_BITMASK_TYPE(Batch::Blending)
+
+
 struct ViewTransform
 {
 	Matrix Projection;
@@ -88,38 +106,35 @@ struct ViewTransform
 	}
 };
 
-struct Batch
-{
-	enum class Blending
-	{
-		Opaque = 1,
-		AlphaMask = 2,
-		AlphaBlend = 4,
-	};
-	uint32 InstanceID;
-	Blending BlendMode = Blending::Opaque;
-	const Mesh* pMesh;
-	Matrix WorldMatrix;
-	BoundingBox Bounds;
-	float Radius;
-};
-DECLARE_BITMASK_TYPE(Batch::Blending)
-
 using VisibilityMask = BitField<8192>;
 
-struct ShadowView
+
+struct RenderView
 {
+	RenderWorld* pRenderWorld = nullptr;
+	World* pWorld = nullptr;
 	const Light* pLight = nullptr;
 	uint32 ViewIndex = 0;
-	ViewTransform View;
-	VisibilityMask Visibility;
 	Texture* pDepthTexture = nullptr;
+
+	ViewTransform View;
+
+	VisibilityMask VisibilityMask;
+
 	ScratchAllocation ViewCBV;
+	bool CameraCut = false;
+
+	Vector2u GetDimensions() const
+	{
+		return Vector2u((uint32)View.Viewport.GetWidth(), (uint32)View.Viewport.GetHeight());
+	}
 };
 
-struct SceneView
+
+struct RenderWorld
 {
-	const World* pWorld = nullptr;
+	World* pWorld = nullptr;
+	RenderView* pMainView = nullptr;
 	Array<Batch> Batches;
 
 	struct SceneBuffer
@@ -138,25 +153,16 @@ struct SceneView
 	Ref<Texture> pSky;
 	AccelerationStructure AccelerationStructure;
 	GPUDebugRenderData DebugRenderData;
-	Vector2u HZBDimensions;
 
-	VisibilityMask VisibilityMask;
-	ViewTransform MainView;
 	BoundingBox SceneAABB;
 
-	Array<ShadowView> ShadowViews;
+	Array<RenderView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
-	ScratchAllocation ViewCBV;
 
 	int FrameIndex = 0;
-	bool CameraCut = false;
-
-	Vector2u GetDimensions() const
-	{
-		return Vector2u((uint32)MainView.Viewport.GetWidth(), (uint32)MainView.Viewport.GetHeight());
-	}
 };
+
 
 struct SceneTextures
 {
@@ -173,15 +179,13 @@ struct SceneTextures
 
 namespace Renderer
 {
+	void DrawScene(CommandContext& context, const RenderView* pView, Batch::Blending blendModes);
 	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes);
-	void DrawScene(CommandContext& context, const SceneView* pView, Batch::Blending blendModes);
-	void GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform, ShaderInterop::ViewUniforms& outUniforms);
+	void GetViewUniforms(const RenderView* pView, ShaderInterop::ViewUniforms& outUniforms);
 
-	inline void GetViewUniforms(const SceneView* pView, ShaderInterop::ViewUniforms& outUniforms)						{ GetViewUniforms(pView, &pView->MainView, outUniforms); }
-	inline ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView, const ViewTransform* pViewTransform)		{ ShaderInterop::ViewUniforms uniforms; GetViewUniforms(pView, pViewTransform, uniforms); return uniforms; }
-	inline ShaderInterop::ViewUniforms GetViewUniforms(const SceneView* pView)											{ ShaderInterop::ViewUniforms uniforms; GetViewUniforms(pView, uniforms); return uniforms; }
+	inline ShaderInterop::ViewUniforms GetViewUniforms(const RenderView* pView)		{ ShaderInterop::ViewUniforms uniforms; GetViewUniforms(pView, uniforms); return uniforms; }
 
-	void UploadSceneData(CommandContext& context, SceneView* pView, const World* pWorld);
+	void UploadSceneData(CommandContext& context, RenderWorld* pWorld);
 }
 
 enum class DefaultTexture

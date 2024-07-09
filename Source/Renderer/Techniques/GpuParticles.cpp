@@ -66,7 +66,7 @@ struct IndirectArgs
 	D3D12_DRAW_ARGUMENTS DrawArgs;
 };
 
-void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* pDepth)
+void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* pDepth)
 {
 	if (ImGui::Begin("Parameters"))
 	{
@@ -249,7 +249,7 @@ void GpuParticles::Simulate(RGGraph& graph, const SceneView* pView, RGTexture* p
 			});
 }
 
-void GpuParticles::Render(RGGraph& graph, const SceneView* pView, SceneTextures& sceneTextures)
+void GpuParticles::Render(RGGraph& graph, const RenderView* pView, SceneTextures& sceneTextures)
 {
 	if (!g_Enabled)
 	{

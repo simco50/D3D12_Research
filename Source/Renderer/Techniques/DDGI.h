@@ -5,7 +5,7 @@
 
 class RGGraph;
 struct World;
-struct SceneView;
+struct RenderView;
 struct SceneTextures;
 
 struct DDGIVolume
@@ -26,8 +26,8 @@ public:
 	DDGI(GraphicsDevice* pDevice);
 	~DDGI();
 
-	void Execute(RGGraph& graph, const SceneView* pView, World* pWorld);
-	void RenderVisualization(RGGraph& graph, const SceneView* pView, const World* pWorld, RGTexture* pColorTarget, RGTexture* pDepth);
+	void Execute(RGGraph& graph, const RenderView* pView);
+	void RenderVisualization(RGGraph& graph, const RenderView* pView, RGTexture* pColorTarget, RGTexture* pDepth);
 
 private:
 	Ref<StateObject> m_pDDGITraceRaysSO;
