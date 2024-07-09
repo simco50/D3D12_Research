@@ -49,8 +49,8 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 	cullData.ClusterCount.x = Math::DivideAndRoundUp(pView->GetDimensions().x, gLightClusterTexelSize);
 	cullData.ClusterCount.y = Math::DivideAndRoundUp(pView->GetDimensions().y, gLightClusterTexelSize);
 	cullData.ClusterCount.z = gLightClustersNumZ;
-	float nearZ = pView->View.NearPlane;
-	float farZ = pView->View.FarPlane;
+	float nearZ = pView->NearPlane;
+	float farZ = pView->FarPlane;
 	float n = Math::Min(nearZ, farZ);
 	float f = Math::Max(nearZ, farZ);
 	cullData.LightGridParams.x = (float)gLightClustersNumZ / log(f / n);
@@ -82,7 +82,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
-				const Matrix& viewMatrix = pView->View.View;
+				const Matrix& viewMatrix = pView->View;
 				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();
 				light_view.each([&](const Transform& transform, const Light& light)
 					{
@@ -144,8 +144,8 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 {
 	RG_GRAPH_SCOPE("Tiled Light Culling", graph);
 
-	uint32 tilesX = Math::DivideAndRoundUp((uint32)pView->View.Viewport.GetWidth(), gTiledLightingTileSize);
-	uint32 tilesY = Math::DivideAndRoundUp((uint32)pView->View.Viewport.GetHeight(), gTiledLightingTileSize);
+	uint32 tilesX = Math::DivideAndRoundUp((uint32)pView->Viewport.GetWidth(), gTiledLightingTileSize);
+	uint32 tilesY = Math::DivideAndRoundUp((uint32)pView->Viewport.GetHeight(), gTiledLightingTileSize);
 	uint32 lightListElements = tilesX * tilesY * (gMaxLightsPerTile / 32);
 
 	cullResources.pLightListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));
@@ -168,7 +168,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
-				const Matrix& viewMatrix = pView->View.View;
+				const Matrix& viewMatrix = pView->View;
 				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();
 				light_view.each([&](const Transform& transform, const Light& light)
 					{

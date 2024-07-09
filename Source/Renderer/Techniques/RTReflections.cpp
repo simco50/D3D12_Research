@@ -49,7 +49,7 @@ void RTReflections::Execute(RGGraph& graph, const RenderView* pView, SceneTextur
 					float ViewPixelSpreadAngle;
 				} parameters;
 
-				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(pView->View.FoV / 2) / (float)pTarget->GetHeight());
+				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(pView->FoV / 2) / (float)pTarget->GetHeight());
 
 				ShaderBindingTable bindingTable(m_pRtSO);
 				bindingTable.BindRayGenShader("RayGen");

@@ -2,40 +2,40 @@
 #include "Camera.h"
 #include "Core/Input.h"
 
-void Camera::Update()
+void Camera::ApplyViewTransform(ViewTransform& transform, bool jitter) const
 {
 	// Update previous data
-	m_Transform.PositionPrev = m_Transform.Position;
-	m_Transform.ViewProjectionPrev = m_Transform.ViewProjection;
-	m_Transform.JitterPrev = m_Transform.Jitter;
-	++m_Transform.JitterIndex;
+	transform.PositionPrev = transform.Position;
+	transform.ViewProjectionPrev = transform.ViewProjection;
+	transform.JitterPrev = transform.Jitter;
 
 	// Update current data
-	m_Transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
-	m_Transform.ViewInverse.Invert(m_Transform.View);
-	float aspect = m_Transform.Viewport.GetWidth() / m_Transform.Viewport.GetHeight();
-	m_Transform.Projection = Math::CreatePerspectiveMatrix(m_Transform.FoV, aspect, m_Transform.NearPlane, m_Transform.FarPlane);
-	m_Transform.UnjtteredViewProjection = m_Transform.View * m_Transform.Projection;
+	transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
+	transform.ViewInverse.Invert(transform.View);
+	float aspect = transform.Viewport.GetWidth() / transform.Viewport.GetHeight();
+	transform.Projection = Math::CreatePerspectiveMatrix(transform.FoV, aspect, transform.NearPlane, transform.FarPlane);
+	transform.UnjtteredViewProjection = transform.View * transform.Projection;
 
-	if (m_Jitter)
+	if (jitter)
 	{
 		constexpr Math::HaltonSequence<16, 2> x;
 		constexpr Math::HaltonSequence<16, 3> y;
 
-		m_Transform.Jitter.x = (x[m_Transform.JitterIndex] * 2.0f - 1.0f) / m_Transform.Viewport.GetWidth();
-		m_Transform.Jitter.y = (y[m_Transform.JitterIndex] * 2.0f - 1.0f) / m_Transform.Viewport.GetHeight();
-		m_Transform.Projection.m[2][0] += m_Transform.Jitter.x;
-		m_Transform.Projection.m[2][1] += m_Transform.Jitter.y;
+		transform.Jitter.x = (x[transform.JitterIndex] * 2.0f - 1.0f) / transform.Viewport.GetWidth();
+		transform.Jitter.y = (y[transform.JitterIndex] * 2.0f - 1.0f) / transform.Viewport.GetHeight();
+		transform.Projection.m[2][0] += transform.Jitter.x;
+		transform.Projection.m[2][1] += transform.Jitter.y;
+		++transform.JitterIndex;
 	}
 	else
 	{
-		m_Transform.Jitter = Vector2::Zero;
+		transform.Jitter = Vector2::Zero;
 	}
 
-	m_Transform.Projection.Invert(m_Transform.ProjectionInverse);
-	m_Transform.ViewProjection = m_Transform.View * m_Transform.Projection;
-	m_Transform.PerspectiveFrustum = Math::CreateBoundingFrustum(m_Transform.Projection, m_Transform.View);
-	m_Transform.Position = m_Position;
+	transform.Projection.Invert(transform.ProjectionInverse);
+	transform.ViewProjection = transform.View * transform.Projection;
+	transform.PerspectiveFrustum = Math::CreateBoundingFrustum(transform.Projection, transform.View);
+	transform.Position = m_Position;
 }
 
 void FreeCamera::Update()
@@ -66,18 +66,21 @@ void FreeCamera::Update()
 	Camera::Update();
 }
 
-Ray Camera::GetMouseRay() const
+Ray Camera::GetMouseRay(const FloatRect& viewport) const
 {
 	Ray ray;
 	Vector2 mousePos = Input::Instance().GetMousePosition();
 	Vector2 ndc;
-	float hw = (float)m_Transform.Viewport.GetWidth() / 2.0f;
-	float hh = (float)m_Transform.Viewport.GetHeight() / 2.0f;
+	float hw = (float)viewport.GetWidth() / 2.0f;
+	float hh = (float)viewport.GetHeight() / 2.0f;
 	ndc.x = (mousePos.x - hw) / hw;
 	ndc.y = (hh - mousePos.y) / hh;
 
+	ViewTransform transform;
+	ApplyViewTransform(transform, false);
+
 	Matrix viewProjInverse;
-	m_Transform.ViewProjection.Invert(viewProjInverse);
+	transform.ViewProjection.Invert(viewProjInverse);
 	Vector3 nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
 	Vector3 farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
 	ray.position = Vector3(nearPoint.x, nearPoint.y, nearPoint.z);

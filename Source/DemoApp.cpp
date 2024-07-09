@@ -160,10 +160,9 @@ void DemoApp::SetupScene(const char* pPath)
 	m_World = {};
 
 	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetNearPlane(80.0f);
-	m_pCamera->SetFarPlane(0.1f);
 	m_pCamera->SetPosition(Vector3(-1.3f, 12.4f, -1.5f));
 	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
+
 	OnResizeViewport(16, 16);
 
 	SceneLoader::Load(pPath, m_pDevice, m_World, 1.0f);
@@ -304,8 +303,10 @@ void DemoApp::Update()
 				volume.Extents = 1.1f * Vector3(m_RenderWorld.SceneAABB.Extents);
 			});
 
-		m_pCamera->SetJitter(Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing);
 		m_pCamera->Update();
+
+		bool jitter = Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing;
+		m_pCamera->ApplyViewTransform(m_MainView, jitter);
 
 		// Directional light is expected to be at index 0
 		m_World.Registry.sort<Light>([](const Light& a, const Light& b) {
@@ -313,7 +314,6 @@ void DemoApp::Update()
 			});
 
 		CreateShadowViews(m_MainView, m_World, m_RenderWorld);
-		m_MainView.View = m_pCamera->GetViewTransform();
 
 		m_RenderWorld.FrameIndex = m_Frame;
 	}
@@ -356,8 +356,8 @@ void DemoApp::Update()
 				// Sort
 				auto CompareSort = [this](const Batch& a, const Batch& b)
 					{
-						float aDist = Vector3::DistanceSquared(a.Bounds.Center, m_MainView.View.Position);
-						float bDist = Vector3::DistanceSquared(b.Bounds.Center, m_MainView.View.Position);
+						float aDist = Vector3::DistanceSquared(a.Bounds.Center, m_MainView.Position);
+						float bDist = Vector3::DistanceSquared(b.Bounds.Center, m_MainView.Position);
 						if (a.BlendMode != b.BlendMode)
 							return (int)a.BlendMode < (int)b.BlendMode;
 						return EnumHasAnyFlags(a.BlendMode, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
@@ -372,7 +372,7 @@ void DemoApp::Update()
 					{
 						PROFILE_CPU_SCOPE("Frustum Cull Main");
 						m_MainView.VisibilityMask.SetAll();
-						BoundingFrustum frustum = m_pCamera->GetViewTransform().PerspectiveFrustum;
+						BoundingFrustum frustum = pView->PerspectiveFrustum;
 						for (const Batch& b : m_RenderWorld.Batches)
 						{
 							m_MainView.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
@@ -388,7 +388,7 @@ void DemoApp::Update()
 						shadowView.VisibilityMask.SetAll();
 						for (const Batch& b : m_RenderWorld.Batches)
 						{
-							shadowView.VisibilityMask.AssignBit(b.InstanceID, shadowView.View.IsInFrustum(b.Bounds));
+							shadowView.VisibilityMask.AssignBit(b.InstanceID, shadowView.IsInFrustum(b.Bounds));
 						}
 					}, taskContext, (uint32)m_RenderWorld.ShadowViews.size(), 1);
 			}
@@ -487,7 +487,7 @@ void DemoApp::Update()
 					RG_GRAPH_SCOPE("Shadow Depths", graph);
 					for (uint32 i = 0; i < (uint32)pRenderWorld->ShadowViews.size(); ++i)
 					{
-						const RenderView& shadowView = pRenderWorld->ShadowViews[i];
+						const ShadowView& shadowView = pRenderWorld->ShadowViews[i];
 						RG_GRAPH_SCOPE(Sprintf("View %d (%s - Cascade %d)", i, gLightTypeStr[(int)shadowView.pLight->Type], shadowView.ViewIndex).c_str(), graph);
 
 						RGTexture* pShadowmap = graph.Import(pRenderWorld->ShadowViews[i].pDepthTexture);
@@ -509,7 +509,7 @@ void DemoApp::Update()
 										context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-										const RenderView& view = pRenderWorld->ShadowViews[i];
+										const ShadowView& view = pRenderWorld->ShadowViews[i];
 										context.BindRootCBV(1, Renderer::GetViewUniforms(&view));
 
 										{
@@ -987,8 +987,7 @@ void DemoApp::OnWindowResized(uint32 width, uint32 height)
 void DemoApp::OnResizeViewport(uint32 width, uint32 height)
 {
 	E_LOG(Info, "Viewport resized: %dx%d", width, height);
-	if (m_pCamera)
-		m_pCamera->SetViewport(FloatRect(0, 0, (float)width, (float)height));
+	m_MainView.Viewport = FloatRect(0, 0, (float)width, (float)height);
 	m_MainView.CameraCut = true;
 }
 
@@ -1337,9 +1336,9 @@ void DemoApp::UpdateImGui()
 			if (i < sunLight.ShadowMaps.size())
 			{
 				const RenderView& shadowView = m_RenderWorld.ShadowViews[sunLight.MatrixIndex + i];
-				const Matrix& lightViewProj = shadowView.View.ViewProjection;
+				const Matrix& lightViewProj = shadowView.ViewProjection;
 
-				const ViewTransform& viewTransform = m_pCamera->GetViewTransform();
+				const ViewTransform& viewTransform = m_MainView;
 				BoundingFrustum frustum = Math::CreateBoundingFrustum(Math::CreatePerspectiveMatrix(viewTransform.FoV, viewTransform.Viewport.GetAspect(), viewTransform.FarPlane, (&m_RenderWorld.ShadowCascadeDepths.x)[i]), viewTransform.View);
 				DirectX::XMFLOAT3 frustumCorners[8];
 				frustum.GetCorners(frustumCorners);
@@ -1434,19 +1433,19 @@ void DemoApp::UpdateImGui()
 
 			if (m_pCamera)
 			{
-				const ViewTransform& view = m_pCamera->GetViewTransform();
+				ViewTransform& view = m_MainView;
 				ImGui::Text("Camera");
 				ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
 				float fov = view.FoV;
 				if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
 				{
-					m_pCamera->SetFoV(fov);
+					m_pCamera->SetFOV(fov);
 				}
 				Vector2 farNear(view.FarPlane, view.NearPlane);
 				if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
 				{
-					m_pCamera->SetFarPlane(farNear.x);
-					m_pCamera->SetNearPlane(farNear.y);
+					view.FarPlane = farNear.x;
+					view.NearPlane = farNear.y;
 				}
 			}
 		}
@@ -1842,7 +1841,7 @@ void DemoApp::CreateShadowViews(const RenderView& mainView, World& world, Render
 		}
 	}
 
-	const ViewTransform& viewTransform = mainView.View;
+	const ViewTransform& viewTransform = mainView;
 	float n = viewTransform.NearPlane;
 	float f = viewTransform.FarPlane;
 	float nearPlane = Math::Min(n, f);
@@ -1866,7 +1865,7 @@ void DemoApp::CreateShadowViews(const RenderView& mainView, World& world, Render
 
 	int32 shadowIndex = 0;
 	renderWorld.ShadowViews.clear();
-	auto AddShadowView = [&](Light& light, RenderView shadowView, uint32 resolution, uint32 shadowMapLightIndex)
+	auto AddShadowView = [&](Light& light, ShadowView shadowView, uint32 resolution, uint32 shadowMapLightIndex)
 	{
 		if (shadowMapLightIndex == 0)
 			light.MatrixIndex = shadowIndex;
@@ -1880,7 +1879,7 @@ void DemoApp::CreateShadowViews(const RenderView& mainView, World& world, Render
 		shadowView.pDepthTexture = pTarget;
 		shadowView.pLight = &light;
 		shadowView.ViewIndex = shadowMapLightIndex;
-		shadowView.View.Viewport = FloatRect(0, 0, (float)resolution, (float)resolution);
+		shadowView.Viewport = FloatRect(0, 0, (float)resolution, (float)resolution);
 		shadowView.pWorld = renderWorld.pWorld;
 		shadowView.pRenderWorld = &renderWorld;
 		renderWorld.ShadowViews.push_back(shadowView);
@@ -1958,15 +1957,14 @@ void DemoApp::CreateShadowViews(const RenderView& mainView, World& world, Render
 
 				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z, minExtents.z);
 
-				RenderView shadowView;
-				ViewTransform& shadowViewTransform = shadowView.View;
-				shadowViewTransform.IsPerspective = false;
-				shadowViewTransform.ViewProjection = lightView * projectionMatrix;
-				shadowViewTransform.ViewProjectionPrev = shadowViewTransform.ViewProjection;
-				shadowViewTransform.OrthographicFrustum.Center = center;
-				shadowViewTransform.OrthographicFrustum.Extents = maxExtents - minExtents;
-				shadowViewTransform.OrthographicFrustum.Extents.z *= 10;
-				shadowViewTransform.OrthographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
+				ShadowView shadowView;
+				shadowView.IsPerspective = false;
+				shadowView.ViewProjection = lightView * projectionMatrix;
+				shadowView.ViewProjectionPrev = shadowView.ViewProjection;
+				shadowView.OrthographicFrustum.Center = center;
+				shadowView.OrthographicFrustum.Extents = maxExtents - minExtents;
+				shadowView.OrthographicFrustum.Extents.z *= 10;
+				shadowView.OrthographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
 				(&renderWorld.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
 				AddShadowView(light, shadowView, 2048, i);
 			}
@@ -1980,12 +1978,11 @@ void DemoApp::CreateShadowViews(const RenderView& mainView, World& world, Render
 			const Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.01f);
 			const Matrix lightView = transform.World.Invert();
 
-			RenderView shadowView;
-			ViewTransform& shadowViewTransform = shadowView.View;
-			shadowViewTransform.IsPerspective = true;
-			shadowViewTransform.ViewProjection = lightView * projection;
-			shadowViewTransform.ViewProjectionPrev = shadowViewTransform.ViewProjection;
-			shadowViewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, lightView);
+			ShadowView shadowView;
+			shadowView.IsPerspective = true;
+			shadowView.ViewProjection = lightView * projection;
+			shadowView.ViewProjectionPrev = shadowView.ViewProjection;
+			shadowView.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, lightView);
 			AddShadowView(light, shadowView, 512, 0);
 		}
 		else if (light.Type == LightType::Point)
@@ -2006,12 +2003,11 @@ void DemoApp::CreateShadowViews(const RenderView& mainView, World& world, Render
 
 			for (int i = 0; i < ARRAYSIZE(viewMatrices); ++i)
 			{
-				RenderView shadowView;
-				ViewTransform& shadowViewTransform = shadowView.View;
-				shadowViewTransform.IsPerspective = true;
-				shadowViewTransform.ViewProjection = viewMatrices[i] * projection;
-				shadowViewTransform.ViewProjectionPrev = shadowViewTransform.ViewProjection;
-				shadowViewTransform.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, viewMatrices[i]);
+				ShadowView shadowView;
+				shadowView.IsPerspective = true;
+				shadowView.ViewProjection = viewMatrices[i] * projection;
+				shadowView.ViewProjectionPrev = shadowView.ViewProjection;
+				shadowView.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, viewMatrices[i]);
 				AddShadowView(light, shadowView, 512, i);
 			}
 		}

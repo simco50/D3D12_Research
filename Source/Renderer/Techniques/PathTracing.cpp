@@ -72,7 +72,7 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 	}
 	ImGui::End();
 
-	if (pView->View.UnjtteredViewProjection != m_LastViewProjection)
+	if (pView->UnjtteredViewProjection != m_LastViewProjection)
 		doReset = true;
 
 	if (doReset)
@@ -105,7 +105,7 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 	}
 	else
 	{
-		m_LastViewProjection = pView->View.UnjtteredViewProjection;
+		m_LastViewProjection = pView->UnjtteredViewProjection;
 		m_NumAccumulatedFrames++;
 
 		graph.AddPass("Path Tracing", RGPassFlag::Compute)

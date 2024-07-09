@@ -25,13 +25,13 @@ namespace Renderer
 	{
 		ShaderInterop::ViewUniforms parameters;
 
-		parameters.View = pView->View.View;
-		parameters.ViewInverse = pView->View.ViewInverse;
-		parameters.Projection = pView->View.Projection;
-		parameters.ProjectionInverse = pView->View.ProjectionInverse;
-		parameters.ViewProjection = pView->View.ViewProjection;
-		parameters.ViewProjectionPrev = pView->View.ViewProjectionPrev;
-		parameters.ViewProjectionInverse = pView->View.ProjectionInverse * pView->View.ViewInverse;
+		parameters.View = pView->View;
+		parameters.ViewInverse = pView->ViewInverse;
+		parameters.Projection = pView->Projection;
+		parameters.ProjectionInverse = pView->ProjectionInverse;
+		parameters.ViewProjection = pView->ViewProjection;
+		parameters.ViewProjectionPrev = pView->ViewProjectionPrev;
+		parameters.ViewProjectionInverse = pView->ProjectionInverse * pView->ViewInverse;
 
 		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * parameters.ViewProjectionPrev;
 		// Transform from uv to clip space: texcoord * 2 - 1
@@ -50,16 +50,16 @@ namespace Renderer
 		};
 		parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
 
-		parameters.ViewLocation = pView->View.Position;
-		parameters.ViewLocationPrev = pView->View.PositionPrev;
+		parameters.ViewLocation = pView->Position;
+		parameters.ViewLocationPrev = pView->PositionPrev;
 
-		parameters.ViewportDimensions = Vector2(pView->View.Viewport.GetWidth(), pView->View.Viewport.GetHeight());
-		parameters.ViewportDimensionsInv = Vector2(1.0f / pView->View.Viewport.GetWidth(), 1.0f / pView->View.Viewport.GetHeight());
-		parameters.ViewJitter = pView->View.Jitter;
-		parameters.ViewJitterPrev = pView->View.JitterPrev;
-		parameters.NearZ = pView->View.NearPlane;
-		parameters.FarZ = pView->View.FarPlane;
-		parameters.FoV = pView->View.FoV;
+		parameters.ViewportDimensions = Vector2(pView->Viewport.GetWidth(), pView->Viewport.GetHeight());
+		parameters.ViewportDimensionsInv = Vector2(1.0f / pView->Viewport.GetWidth(), 1.0f / pView->Viewport.GetHeight());
+		parameters.ViewJitter = pView->Jitter;
+		parameters.ViewJitterPrev = pView->JitterPrev;
+		parameters.NearZ = pView->NearPlane;
+		parameters.FarZ = pView->FarPlane;
+		parameters.FoV = pView->FoV;
 
 		const RenderWorld* pWorld = pView->pRenderWorld;
 		parameters.FrameIndex = pWorld->FrameIndex;
@@ -254,7 +254,7 @@ namespace Renderer
 		{
 			Array<Matrix> lightMatrices(pRenderWorld->ShadowViews.size());
 			for (uint32 i = 0; i < pRenderWorld->ShadowViews.size(); ++i)
-				lightMatrices[i] = pRenderWorld->ShadowViews[i].View.ViewProjection;
+				lightMatrices[i] = pRenderWorld->ShadowViews[i].ViewProjection;
 			CopyBufferData((uint32)lightMatrices.size(), sizeof(Matrix), "Light Matrices", lightMatrices.data(), pRenderWorld->LightMatricesBuffer);
 		}
 

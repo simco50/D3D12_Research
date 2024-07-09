@@ -58,6 +58,65 @@ struct World
 	entt::entity Sunlight;
 };
 
+
+struct ViewTransform
+{
+	Matrix Projection;
+	Matrix View;
+	Matrix ViewProjection;
+	Matrix ViewProjectionPrev;
+	Matrix ViewInverse;
+	Matrix ProjectionInverse;
+	Matrix UnjtteredViewProjection;
+	Vector3 Position;
+	Vector3 PositionPrev;
+
+	FloatRect Viewport;
+	float FoV = 60.0f * Math::PI / 180;
+	float NearPlane = 100.0f;
+	float FarPlane = 0.1f;
+	int JitterIndex = 0;
+	Vector2 Jitter;
+	Vector2 JitterPrev;
+
+	bool IsPerspective = true;
+	BoundingFrustum PerspectiveFrustum;
+	OrientedBoundingBox OrthographicFrustum;
+
+	bool IsInFrustum(const BoundingBox& bb) const
+	{
+		return IsPerspective ? PerspectiveFrustum.Contains(bb) : OrthographicFrustum.Contains(bb);
+	}
+
+	Vector2u GetDimensions() const
+	{
+		return Vector2u((uint32)Viewport.GetWidth(), (uint32)Viewport.GetHeight());
+	}
+};
+
+using VisibilityMask = BitField<8192>;
+
+
+struct RenderView : ViewTransform
+{
+	RenderWorld* pRenderWorld = nullptr;
+	World* pWorld = nullptr;
+
+	VisibilityMask VisibilityMask;
+
+	ScratchAllocation ViewCBV;
+	bool CameraCut = false;
+};
+
+
+struct ShadowView : RenderView
+{
+	const Light* pLight = nullptr;
+	uint32 ViewIndex = 0;
+	Texture* pDepthTexture = nullptr;
+};
+
+
 struct Batch
 {
 	enum class Blending
@@ -74,61 +133,6 @@ struct Batch
 	float Radius;
 };
 DECLARE_BITMASK_TYPE(Batch::Blending)
-
-
-struct ViewTransform
-{
-	Matrix Projection;
-	Matrix View;
-	Matrix ViewProjection;
-	Matrix ViewProjectionPrev;
-	Matrix ViewInverse;
-	Matrix ProjectionInverse;
-	Matrix UnjtteredViewProjection;
-	Vector3 Position;
-	Vector3 PositionPrev;
-
-	FloatRect Viewport;
-	float FoV = 60.0f * Math::PI / 180;
-	float NearPlane = 1.0f;
-	float FarPlane = 500.0f;
-	int JitterIndex = 0;
-	Vector2 Jitter;
-	Vector2 JitterPrev;
-
-	bool IsPerspective = true;
-	BoundingFrustum PerspectiveFrustum;
-	OrientedBoundingBox OrthographicFrustum;
-
-	bool IsInFrustum(const BoundingBox& bb) const
-	{
-		return IsPerspective ? PerspectiveFrustum.Contains(bb) : OrthographicFrustum.Contains(bb);
-	}
-};
-
-using VisibilityMask = BitField<8192>;
-
-
-struct RenderView
-{
-	RenderWorld* pRenderWorld = nullptr;
-	World* pWorld = nullptr;
-	const Light* pLight = nullptr;
-	uint32 ViewIndex = 0;
-	Texture* pDepthTexture = nullptr;
-
-	ViewTransform View;
-
-	VisibilityMask VisibilityMask;
-
-	ScratchAllocation ViewCBV;
-	bool CameraCut = false;
-
-	Vector2u GetDimensions() const
-	{
-		return Vector2u((uint32)View.Viewport.GetWidth(), (uint32)View.Viewport.GetHeight());
-	}
-};
 
 
 struct RenderWorld
@@ -156,7 +160,7 @@ struct RenderWorld
 
 	BoundingBox SceneAABB;
 
-	Array<RenderView> ShadowViews;
+	Array<ShadowView> ShadowViews;
 	Vector4 ShadowCascadeDepths;
 	uint32 NumShadowCascades;
 
