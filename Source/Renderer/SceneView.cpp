@@ -61,29 +61,29 @@ namespace Renderer
 		parameters.FarZ = pView->FarPlane;
 		parameters.FoV = pView->FoV;
 
-		const RenderWorld* pWorld = pView->pRenderWorld;
-		parameters.FrameIndex = pWorld->FrameIndex;
-		parameters.DeltaTime = Time::DeltaTime();
+		const RenderWorld& world = *pView->pRenderWorld;
+		parameters.FrameIndex	= world.FrameIndex;
+		parameters.DeltaTime	= Time::DeltaTime();
 
-		parameters.NumInstances = (uint32)pWorld->Batches.size();
-		parameters.SsrSamples = Tweakables::gSSRSamples.Get();
-		parameters.LightCount = pWorld->LightBuffer.Count;
-		parameters.CascadeDepths = pWorld->ShadowCascadeDepths;
-		parameters.NumCascades = pWorld->NumShadowCascades;
+		parameters.NumInstances				= (uint32)world.Batches.size();
+		parameters.SsrSamples				= Tweakables::gSSRSamples.Get();
+		parameters.LightCount				= world.LightBuffer.Count;
+		parameters.CascadeDepths			= world.ShadowCascadeDepths;
+		parameters.NumCascades				= world.NumShadowCascades;
 
-		parameters.TLASIndex = pWorld->AccelerationStructure.GetSRV() ? pWorld->AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.MeshesIndex = pWorld->MeshBuffer.pBuffer->GetSRVIndex();
-		parameters.MaterialsIndex = pWorld->MaterialBuffer.pBuffer->GetSRVIndex();
-		parameters.InstancesIndex = pWorld->InstanceBuffer.pBuffer->GetSRVIndex();
-		parameters.LightsIndex = pWorld->LightBuffer.pBuffer->GetSRVIndex();
-		parameters.LightMatricesIndex = pWorld->LightMatricesBuffer.pBuffer->GetSRVIndex();
-		parameters.SkyIndex = pWorld->pSky ? pWorld->pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-		parameters.DDGIVolumesIndex = pWorld->DDGIVolumesBuffer.pBuffer->GetSRVIndex();
-		parameters.NumDDGIVolumes = pWorld->DDGIVolumesBuffer.Count;
+		parameters.TLASIndex				= world.AccelerationStructure.GetSRV() ? world.AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.MeshesIndex				= world.MeshBuffer.pBuffer->GetSRVIndex();
+		parameters.MaterialsIndex			= world.MaterialBuffer.pBuffer->GetSRVIndex();
+		parameters.InstancesIndex			= world.InstanceBuffer.pBuffer->GetSRVIndex();
+		parameters.LightsIndex				= world.LightBuffer.pBuffer->GetSRVIndex();
+		parameters.LightMatricesIndex		= world.LightMatricesBuffer.pBuffer->GetSRVIndex();
+		parameters.SkyIndex					= world.pSky ? world.pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+		parameters.DDGIVolumesIndex			= world.DDGIVolumesBuffer.pBuffer->GetSRVIndex();
+		parameters.NumDDGIVolumes			= world.DDGIVolumesBuffer.Count;
 
-		parameters.FontDataIndex = pWorld->DebugRenderData.FontDataSRV;
-		parameters.DebugRenderDataIndex = pWorld->DebugRenderData.RenderDataUAV;
-		parameters.FontSize = pWorld->DebugRenderData.FontSize;
+		parameters.FontDataIndex			= world.DebugRenderData.FontDataSRV;
+		parameters.DebugRenderDataIndex		= world.DebugRenderData.RenderDataUAV;
+		parameters.FontSize					= world.DebugRenderData.FontSize;
 
 		outUniforms = parameters;
 	}

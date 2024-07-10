@@ -146,14 +146,8 @@ void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* 
 					m_ParticlesToSpawn -= parameters.EmitCount;
 
 					context.BindRootCBV(0, parameters);
-					context.BindResources(2, {
-						resources.GetUAV(pCountersBuffer),
-						nullptr,
-						nullptr,
-						nullptr,
-						nullptr,
-						resources.GetUAV(pIndirectArgs),
-						}, 0);
+					context.BindResources(2, resources.GetUAV(pCountersBuffer), 0);
+					context.BindResources(2, resources.GetUAV(pIndirectArgs), 5);
 
 					context.Dispatch(1);
 					context.InsertUAVBarrier();
@@ -176,17 +170,10 @@ void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* 
 
 					context.BindRootCBV(0, parameters);
 					context.BindRootCBV(1, pView->ViewCBV);
-					context.BindResources(2, {
-						resources.GetUAV(pCountersBuffer),
-						nullptr,
-						resources.GetUAV(pCurrentAliveList),
-						nullptr,
-						resources.GetUAV(pParticlesBuffer),
-						});
-					context.BindResources(3, {
-						nullptr,
-						resources.GetSRV(pDeadList),
-						});
+					context.BindResources(2, resources.GetUAV(pCountersBuffer), 0);
+					context.BindResources(2, resources.GetUAV(pCurrentAliveList), 2);
+					context.BindResources(2, resources.GetUAV(pParticlesBuffer), 4);
+					context.BindResources(3, resources.GetSRV(pDeadList), 1);
 
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectArgs, EmitArgs));
 					context.InsertUAVBarrier();
@@ -202,27 +189,25 @@ void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* 
 
 					struct
 					{
-						float DeltaTime;
 						float ParticleLifeTime;
 					} parameters;
-					parameters.DeltaTime = Time::DeltaTime();
 					parameters.ParticleLifeTime = g_LifeTime;
 
 					context.BindRootCBV(0, parameters);
 					context.BindRootCBV(1, pView->ViewCBV);
 					context.BindResources(2, {
 						resources.GetUAV(pCountersBuffer),
-						resources.GetUAV(pDeadList),
-						nullptr,
+						resources.GetUAV(pDeadList)
+						}, 0);
+					context.BindResources(2, {
 						resources.GetUAV(pNewAliveList),
 						resources.GetUAV(pParticlesBuffer),
-						});
+						}, 3);
+
 					context.BindResources(3, {
-						nullptr,
-						nullptr,
 						resources.GetSRV(pCurrentAliveList),
 						resources.GetSRV(pDepth),
-						});
+						}, 2);
 
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectArgs, SimulateArgs));
 				});

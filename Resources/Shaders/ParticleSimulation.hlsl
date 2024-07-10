@@ -34,7 +34,6 @@ struct EmitParameters
 
 struct SimulateParameters
 {
-	float DeltaTime;
 	float ParticleLifeTime;
 };
 
@@ -140,11 +139,11 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 		{
 			uint seed = SeedThread(particleIndex * 3 + cView.FrameIndex * 5);
 
-			p.Velocity += float3(0, -9.81f * cSimulateParams.DeltaTime, 0);
+			p.Velocity += float3(0, -9.81f * cView.DeltaTime, 0);
 
 #define RAYTRACE_COLLISION 0
 #if RAYTRACE_COLLISION
-			float3 direction = p.Velocity * cSimulateParams.DeltaTime;
+			float3 direction = p.Velocity * cView.DeltaTime;
 			float len = length(direction);
 
 			RayDesc ray;
@@ -187,8 +186,8 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 			}
 #endif
 
-			p.Position += p.Velocity * cSimulateParams.DeltaTime;
-			p.LifeTime += cSimulateParams.DeltaTime;
+			p.Position += p.Velocity * cView.DeltaTime;
+			p.LifeTime += cView.DeltaTime;
 
 			uParticleData[particleIndex] = p;
 
