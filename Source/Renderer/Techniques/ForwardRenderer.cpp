@@ -127,18 +127,18 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const RenderView* p
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 						context.SetPipelineState(m_pClusteredForwardPSO);
-						Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
+						Renderer::DrawScene(context, *pView, Batch::Blending::Opaque);
 					}
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque - Masked");
 						context.SetPipelineState(m_pClusteredForwardMaskedPSO);
-						Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
+						Renderer::DrawScene(context, *pView, Batch::Blending::AlphaMask);
 					}
 				}
 				{
 					PROFILE_GPU_SCOPE(context.GetCommandList(), "Transparant");
 					context.SetPipelineState(m_pClusteredForwardAlphaBlendPSO);
-					Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
+					Renderer::DrawScene(context, *pView, Batch::Blending::AlphaBlend);
 				}
 			});
 }
@@ -172,13 +172,13 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 						context.SetPipelineState(m_pTiledForwardPSO);
-						Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
+						Renderer::DrawScene(context, *pView, Batch::Blending::Opaque);
 					}
 
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque Masked");
 						context.SetPipelineState(m_pTiledForwardMaskedPSO);
-						Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
+						Renderer::DrawScene(context, *pView, Batch::Blending::AlphaMask);
 					}
 				}
 
@@ -194,7 +194,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Transparant");
 						context.SetPipelineState(m_pTiledForwardAlphaBlendPSO);
-						Renderer::DrawScene(context, pView, Batch::Blending::AlphaBlend);
+						Renderer::DrawScene(context, *pView, Batch::Blending::AlphaBlend);
 					}
 				}
 			});

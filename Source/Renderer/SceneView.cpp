@@ -21,17 +21,17 @@ namespace Tweakables
 
 namespace Renderer
 {
-	void GetViewUniforms(const RenderView* pView, ShaderInterop::ViewUniforms& outUniforms)
+	void GetViewUniforms(const RenderView& view, ShaderInterop::ViewUniforms& outUniforms)
 	{
 		ShaderInterop::ViewUniforms parameters;
 
-		parameters.View = pView->View;
-		parameters.ViewInverse = pView->ViewInverse;
-		parameters.Projection = pView->Projection;
-		parameters.ProjectionInverse = pView->ProjectionInverse;
-		parameters.ViewProjection = pView->ViewProjection;
-		parameters.ViewProjectionPrev = pView->ViewProjectionPrev;
-		parameters.ViewProjectionInverse = pView->ProjectionInverse * pView->ViewInverse;
+		parameters.View						= view.View;
+		parameters.ViewInverse				= view.ViewInverse;
+		parameters.Projection				= view.Projection;
+		parameters.ProjectionInverse		= view.ProjectionInverse;
+		parameters.ViewProjection			= view.ViewProjection;
+		parameters.ViewProjectionPrev		= view.ViewProjectionPrev;
+		parameters.ViewProjectionInverse	= view.ProjectionInverse * view.ViewInverse;
 
 		Matrix reprojectionMatrix = parameters.ViewProjectionInverse * parameters.ViewProjectionPrev;
 		// Transform from uv to clip space: texcoord * 2 - 1
@@ -48,22 +48,21 @@ namespace Renderer
 			0, 0, 1, 0,
 			0.5f, 0.5f, 0, 1
 		};
-		parameters.ReprojectionMatrix = premult * reprojectionMatrix * postmult;
+		parameters.ReprojectionMatrix		= premult * reprojectionMatrix * postmult;
+		parameters.ViewLocation				= view.Position;
+		parameters.ViewLocationPrev			= view.PositionPrev;
 
-		parameters.ViewLocation = pView->Position;
-		parameters.ViewLocationPrev = pView->PositionPrev;
+		parameters.ViewportDimensions		= Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
+		parameters.ViewportDimensionsInv	= Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
+		parameters.ViewJitter				= view.Jitter;
+		parameters.ViewJitterPrev			= view.JitterPrev;
+		parameters.NearZ					= view.NearPlane;
+		parameters.FarZ						= view.FarPlane;
+		parameters.FoV						= view.FoV;
 
-		parameters.ViewportDimensions = Vector2(pView->Viewport.GetWidth(), pView->Viewport.GetHeight());
-		parameters.ViewportDimensionsInv = Vector2(1.0f / pView->Viewport.GetWidth(), 1.0f / pView->Viewport.GetHeight());
-		parameters.ViewJitter = pView->Jitter;
-		parameters.ViewJitterPrev = pView->JitterPrev;
-		parameters.NearZ = pView->NearPlane;
-		parameters.FarZ = pView->FarPlane;
-		parameters.FoV = pView->FoV;
-
-		const RenderWorld& world = *pView->pRenderWorld;
-		parameters.FrameIndex	= world.FrameIndex;
-		parameters.DeltaTime	= Time::DeltaTime();
+		const RenderWorld& world			= *view.pRenderWorld;
+		parameters.FrameIndex				= world.FrameIndex;
+		parameters.DeltaTime				= Time::DeltaTime();
 
 		parameters.NumInstances				= (uint32)world.Batches.size();
 		parameters.SsrSamples				= Tweakables::gSSRSamples.Get();
@@ -261,9 +260,9 @@ namespace Renderer
 		sceneBatches.swap(pRenderWorld->Batches);
 	}
 
-	void DrawScene(CommandContext& context, const RenderView* pView, Batch::Blending blendModes)
+	void DrawScene(CommandContext& context, const RenderView& view, Batch::Blending blendModes)
 	{
-		DrawScene(context, pView->pRenderWorld->Batches, pView->VisibilityMask, blendModes);
+		DrawScene(context, view.pRenderWorld->Batches, view.VisibilityMask, blendModes);
 	}
 
 	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes)

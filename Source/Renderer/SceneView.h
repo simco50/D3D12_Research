@@ -183,11 +183,11 @@ struct SceneTextures
 
 namespace Renderer
 {
-	void DrawScene(CommandContext& context, const RenderView* pView, Batch::Blending blendModes);
+	void DrawScene(CommandContext& context, const RenderView& view, Batch::Blending blendModes);
 	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes);
-	void GetViewUniforms(const RenderView* pView, ShaderInterop::ViewUniforms& outUniforms);
+	void GetViewUniforms(const RenderView& view, ShaderInterop::ViewUniforms& outUniforms);
 
-	inline ShaderInterop::ViewUniforms GetViewUniforms(const RenderView* pView)		{ ShaderInterop::ViewUniforms uniforms; GetViewUniforms(pView, uniforms); return uniforms; }
+	inline ShaderInterop::ViewUniforms GetViewUniforms(const RenderView& view)		{ ShaderInterop::ViewUniforms uniforms; GetViewUniforms(view, uniforms); return uniforms; }
 
 	void UploadSceneData(CommandContext& context, RenderWorld* pWorld);
 }

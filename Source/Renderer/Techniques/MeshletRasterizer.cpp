@@ -315,7 +315,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(0, params);
-					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(1, pView->ViewCBV);
 					context.BindResources(2, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
@@ -339,16 +339,16 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					D3D12_DISPATCH_GRAPH_DESC graphDesc{
 						.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT,
 						.NodeCPUInput {
-							.EntrypointIndex		= pProps->GetEntrypointIndex(0, { MULTIBYTE_TO_UNICODE(pEntryPoint), 0 }),
-							.NumRecords				= 1,
-							.pRecords				= &gridSize,
-							.RecordStrideInBytes	= sizeof(uint32),
+							.EntrypointIndex = pProps->GetEntrypointIndex(0, { MULTIBYTE_TO_UNICODE(pEntryPoint), 0 }),
+							.NumRecords = 1,
+							.pRecords = &gridSize,
+							.RecordStrideInBytes = sizeof(uint32),
 						},
 					};
 
 					context.DispatchGraph(graphDesc);
 					context.InsertUAVBarrier();
-				});
+						});
 
 		if (rasterContext.EnableOcclusionCulling)
 			wgPass.Read(pSourceHZB);
@@ -393,7 +393,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(0, params);
-					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(1, pView->ViewCBV);
 					context.BindResources(2, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
@@ -408,7 +408,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 						context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->pRenderWorld->Batches.size(), Tweakables::CullInstanceThreadGroupSize));
 					else
 						context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pInstanceCullArgs));
-				});
+						});
 		// In Phase 2, use the indirect arguments built before.
 		if (rasterPhase == RasterPhase::Phase2)
 			cullInstancePass.Read(pInstanceCullArgs);
@@ -448,7 +448,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(0, params);
-					context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+					context.BindRootCBV(1, pView->ViewCBV);
 					context.BindResources(2, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
@@ -524,14 +524,14 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 						context.SetPipelineState(m_pMeshletClassify);
 
 						context.BindRootCBV(0, classifyParams);
-						context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+						context.BindRootCBV(1, pView->ViewCBV);
 						context.BindResources(2, resources.GetUAV(pMeshletCounts));
 						context.BindResources(3, {
 							resources.GetSRV(rasterContext.pVisibleMeshlets),
 							resources.GetSRV(rasterContext.pVisibleMeshletsCounter),
 							});
 						context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pClassifyArgs));
-					});
+							});
 
 			// Perform a prefix sum on the bin counts to retrieve the first index of each bin.
 			graph.AddPass("Compute Bin Offsets", RGPassFlag::Compute)
@@ -564,7 +564,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 						context.SetPipelineState(m_pMeshletWriteBins);
 
 						context.BindRootCBV(0, classifyParams);
-						context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+						context.BindRootCBV(1, pView->ViewCBV);
 						context.BindResources(2, {
 							resources.GetUAV(pMeshletOffsetAndCounts),
 							resources.GetUAV(pBinnedMeshlets),
@@ -574,7 +574,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 							resources.GetSRV(rasterContext.pVisibleMeshletsCounter),
 							});
 						context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pClassifyArgs));
-					});
+							});
 		}
 	}
 
@@ -590,7 +590,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 				context.SetStencilRef((uint32)StencilBit::VisibilityBuffer);
 
-				context.BindRootCBV(1, Renderer::GetViewUniforms(pView));
+				context.BindRootCBV(1, pView->ViewCBV);
 				if (outResult.pDebugData)
 					context.BindResources(2, resources.GetUAV(outResult.pDebugData));
 				context.BindResources(3, {

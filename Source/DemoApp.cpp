@@ -417,7 +417,7 @@ void DemoApp::Update()
 		{
 			PROFILE_CPU_SCOPE("Upload View Constants");
 			m_MainView.ViewCBV = m_pDevice->AllocateUploadScratch(sizeof(ShaderInterop::ViewUniforms), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-			Renderer::GetViewUniforms(&m_MainView, *(ShaderInterop::ViewUniforms*)m_MainView.ViewCBV.pMappedMemory);
+			Renderer::GetViewUniforms(m_MainView, *(ShaderInterop::ViewUniforms*)m_MainView.ViewCBV.pMappedMemory);
 		}
 
 		RGGraph graph;
@@ -510,7 +510,7 @@ void DemoApp::Update()
 										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 										const ShadowView& view = pRenderWorld->ShadowViews[i];
-										context.BindRootCBV(1, Renderer::GetViewUniforms(&view));
+										context.BindRootCBV(1, Renderer::GetViewUniforms(view));
 
 										{
 											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
@@ -555,12 +555,12 @@ void DemoApp::Update()
 									{
 										PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 										context.SetPipelineState(m_pDepthPrepassOpaquePSO);
-										Renderer::DrawScene(context, pView, Batch::Blending::Opaque);
+										Renderer::DrawScene(context, *pView, Batch::Blending::Opaque);
 									}
 									{
 										PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
 										context.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
-										Renderer::DrawScene(context, pView, Batch::Blending::AlphaMask);
+										Renderer::DrawScene(context, *pView, Batch::Blending::AlphaMask);
 									}
 								});
 					}
