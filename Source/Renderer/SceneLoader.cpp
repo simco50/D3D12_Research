@@ -1,15 +1,16 @@
 #include "stdafx.h"
-#include "Mesh.h"
+#include "SceneLoader.h"
 #include "RHI/CommandContext.h"
 #include "RHI/Device.h"
 #include "RHI/Texture.h"
 #include "RHI/Buffer.h"
+#include "RHI/RingBufferAllocator.h"
 #include "Core/Paths.h"
 #include "Core/Image.h"
 #include "Core/Utils.h"
 #include "ShaderInterop.h"
 #include "Renderer/SceneView.h"
-#include "RHI/RingBufferAllocator.h"
+#include "Renderer/Mesh.h"
 #include "Core/Stream.h"
 
 #pragma warning(push)

@@ -1,9 +1,6 @@
 #pragma once
 
 #include "RHI/RHI.h"
-#include "RHI/Buffer.h"
-
-struct World;
 
 enum class MaterialAlphaMode
 {
@@ -53,10 +50,4 @@ struct Mesh
 struct Model
 {
 	int MeshIndex;
-};
-
-class SceneLoader
-{
-public:
-	static bool Load(const char* pFilePath, GraphicsDevice* pDevice, World& world, float scale = 1.0f);
 };
