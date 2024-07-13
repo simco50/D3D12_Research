@@ -226,3 +226,10 @@ private:
 
 	std::atomic<uint32> m_RefCount = 0;
 };
+
+
+template<typename T>
+struct IsRef { static constexpr bool Value = false; };
+
+template<typename T>
+struct IsRef<Ref<T>> { static constexpr bool Value = true; };

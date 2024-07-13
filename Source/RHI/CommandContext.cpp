@@ -371,18 +371,22 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 		ScratchAllocation allocation = AllocateScratch(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 		memcpy(allocation.pMappedMemory, pData, dataSize);
 
-		BindRootCBV(rootIndex, allocation);
+		gAssert(!m_pCurrentRS->IsRootConstant(rootIndex));
+		if (m_CurrentCommandContext == CommandListContext::Graphics)
+			m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
+		else
+			m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
 	}
 }
 
 
-void CommandContext::BindRootCBV(uint32 rootIndex, const ScratchAllocation& allocation)
+void CommandContext::BindRootCBV(uint32 rootIndex, const Buffer* pBuffer)
 {
 	gAssert(!m_pCurrentRS->IsRootConstant(rootIndex));
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
-		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
+		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, pBuffer->GetGpuHandle());
 	else
-		m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
+		m_pCommandList->SetComputeRootConstantBufferView(rootIndex, pBuffer->GetGpuHandle());
 }
 
 

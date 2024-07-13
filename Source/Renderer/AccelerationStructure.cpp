@@ -180,7 +180,7 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pUpdateTLASPSO);
 				context.BindRootCBV(0, (uint32)blasInstances.size());
-				context.BindRootCBV(1, world.pMainView->ViewCBV);
+				context.BindRootCBV(1, world.pMainView->ViewCB);
 				context.BindRootUAV(2, m_pBLASInstancesTargetBuffer->GetGpuHandle());
 				context.BindRootSRV(3, m_pBLASInstancesSourceBuffer->GetGpuHandle());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));

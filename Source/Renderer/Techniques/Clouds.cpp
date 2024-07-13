@@ -223,7 +223,7 @@ RGTexture* Clouds::Render(RGGraph& graph, const RenderView* pView, RGTexture* pC
 				constants.TopSkew = parameters.CloudTopSkew;
 
 				context.BindRootCBV(0, constants);
-				context.BindRootCBV(1, pView->ViewCBV);
+				context.BindRootCBV(1, pView->ViewCB);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3,
 					{

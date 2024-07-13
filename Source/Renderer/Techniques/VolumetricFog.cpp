@@ -101,7 +101,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 				params.NumFogVolumes = pFogVolumes->GetDesc().NumElements();
 
 				context.BindRootCBV(0, params);
-				context.BindRootCBV(1, pView->ViewCBV);
+				context.BindRootCBV(1, pView->ViewCB);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, {
 					resources.GetSRV(pFogVolumes),
@@ -140,7 +140,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
 
 				context.BindRootCBV(0, params);
-				context.BindRootCBV(1, pView->ViewCBV);
+				context.BindRootCBV(1, pView->ViewCB);
 				context.BindResources(2, pFinalFog->GetUAV());
 				context.BindResources(3, {
 					resources.GetSRV(pTargetVolume),

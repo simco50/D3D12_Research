@@ -344,11 +344,6 @@ void DemoApp::Update()
 			PROFILE_CPU_SCOPE("Flush GPU uploads");
 			m_pDevice->GetRingBuffer()->Sync();
 		}
-		{
-			CommandContext* pContext = m_pDevice->AllocateCommandContext();
-			Renderer::UploadSceneData(*pContext, pRenderWorld);
-			pContext->Execute();
-		}
 
 		{
 			TaskContext taskContext;
@@ -418,10 +413,9 @@ void DemoApp::Update()
 		}
 
 		{
-			PROFILE_CPU_SCOPE("Upload View Constants");
-			Renderer::CreateViewUniforms(m_pDevice, m_MainView);
-			for(RenderView& view : m_RenderWorld.ShadowViews)
-				Renderer::CreateViewUniforms(m_pDevice, view);
+			CommandContext* pContext = m_pDevice->AllocateCommandContext();
+			Renderer::UploadSceneData(*pContext, pRenderWorld);
+			pContext->Execute();
 		}
 
 		RGGraph graph;
@@ -471,7 +465,7 @@ void DemoApp::Update()
 							params.DimensionsInv = Vector2(1.0f / pSkyTexture->GetWidth(), 1.0f / pSkyTexture->GetHeight());
 
 							context.BindRootCBV(0, params);
-							context.BindRootCBV(1, pView->ViewCBV);
+							context.BindRootCBV(1, pView->ViewCB);
 							context.BindResources(2, pSkyTexture->GetUAV());
 
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pSkyTexture->GetWidth(), 16, pSkyTexture->GetHeight(), 16, 6));
@@ -514,7 +508,7 @@ void DemoApp::Update()
 										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 										const ShadowView& view = pRenderWorld->ShadowViews[i];
-										context.BindRootCBV(1, view.ViewCBV);
+										context.BindRootCBV(1, view.ViewCB);
 
 										{
 											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
@@ -555,7 +549,7 @@ void DemoApp::Update()
 									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 									context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
-									context.BindRootCBV(1, pView->ViewCBV);
+									context.BindRootCBV(1, pView->ViewCB);
 									{
 										PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 										context.SetPipelineState(m_pDepthPrepassOpaquePSO);
@@ -593,7 +587,7 @@ void DemoApp::Update()
 								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(pSource->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
 
-								context.BindRootCBV(1, pView->ViewCBV);
+								context.BindRootCBV(1, pView->ViewCB);
 								context.BindResources(2, pTarget->GetUAV());
 								context.BindResources(3, pSource->GetSRV());
 
@@ -652,7 +646,7 @@ void DemoApp::Update()
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pCameraMotionPSO);
 
-							context.BindRootCBV(1, pView->ViewCBV);
+							context.BindRootCBV(1, pView->ViewCB);
 							context.BindResources(2, pVelocity->GetUAV());
 							context.BindResources(3, resources.GetSRV(sceneTextures.pDepth));
 
@@ -697,7 +691,7 @@ void DemoApp::Update()
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-								context.BindRootCBV(1, pView->ViewCBV);
+								context.BindRootCBV(1, pView->ViewCB);
 								context.BindResources(3, {
 									resources.GetSRV(rasterResult.pVisibilityBuffer),
 									resources.GetSRV(pAO),
@@ -725,7 +719,7 @@ void DemoApp::Update()
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-								context.BindRootCBV(1, pView->ViewCBV);
+								context.BindRootCBV(1, pView->ViewCB);
 								context.BindResources(3, {
 									resources.GetSRV(rasterResult.pVisibilityBuffer),
 									resources.GetSRV(rasterResult.pVisibleMeshlets),
@@ -746,7 +740,7 @@ void DemoApp::Update()
 								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pDeferredShadePSO);
 
-								context.BindRootCBV(1, pView->ViewCBV);
+								context.BindRootCBV(1, pView->ViewCB);
 								context.BindResources(2, resources.GetUAV(sceneTextures.pColorTarget));
 								context.BindResources(3, {
 									resources.GetSRV(sceneTextures.pGBuffer0),
@@ -779,7 +773,7 @@ void DemoApp::Update()
 							context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pSkyboxPSO);
 
-							context.BindRootCBV(1, pView->ViewCBV);
+							context.BindRootCBV(1, pView->ViewCB);
 							context.Draw(0, 36);
 						});
 
@@ -822,7 +816,7 @@ void DemoApp::Update()
 								params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
 
 								context.BindRootCBV(0, params);
-								context.BindRootCBV(1, pView->ViewCBV);
+								context.BindRootCBV(1, pView->ViewCB);
 								context.BindResources(2, pTarget->GetUAV());
 								context.BindResources(3,
 									{
@@ -887,7 +881,7 @@ void DemoApp::Update()
 						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
 						context.BindRootCBV(0, parameters);
-						context.BindRootCBV(1, pView->ViewCBV);
+						context.BindRootCBV(1, pView->ViewCB);
 						context.BindResources(2, pTarget->GetUAV());
 						context.BindResources(3, {
 							resources.GetSRV(sceneTextures.pColorTarget),
@@ -928,7 +922,7 @@ void DemoApp::Update()
 
 								uint32 mode = Tweakables::gVisibilityDebugMode;
 								context.BindRootCBV(0, mode);
-								context.BindRootCBV(1, pView->ViewCBV);
+								context.BindRootCBV(1, pView->ViewCB);
 								context.BindResources(2, pColorTarget->GetUAV());
 								context.BindResources(3, {
 									resources.GetSRV(rasterResult.pVisibilityBuffer),

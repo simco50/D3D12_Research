@@ -159,13 +159,14 @@ public:
 	void BindRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void BindRootUAV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 	void BindRootCBV(uint32 rootIndex, const void* pData, uint32 dataSize);
-	template<typename T>
+
+	template<typename T, typename = std::enable_if_t<IsRef<T>::Value == false>>
 	void BindRootCBV(uint32 rootIndex, const T& data)
 	{
 		static_assert(!std::is_pointer_v<T>, "Provided type is a pointer. This is probably unintentional.");
 		BindRootCBV(rootIndex, &data, sizeof(T));
 	}
-	void BindRootCBV(uint32 rootIndex, const ScratchAllocation& allocation);
+	void BindRootCBV(uint32 rootIndex, const Buffer* allocation);
 
 	ScratchAllocation AllocateScratch(uint64 size, uint32 alignment = 16u);
 

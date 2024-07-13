@@ -21,10 +21,14 @@ namespace Tweakables
 
 namespace Renderer
 {
-	void CreateViewUniforms(GraphicsDevice* pDevice, RenderView& view)
+	static void UploadViewUniforms(CommandContext& context, RenderView& view)
 	{
-		ScratchAllocation allocation = pDevice->AllocateUploadScratch(sizeof(ShaderInterop::ViewUniforms), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-		ShaderInterop::ViewUniforms& parameters = *static_cast<ShaderInterop::ViewUniforms*>(allocation.pMappedMemory);
+		ScratchAllocation alloc = context.AllocateScratch(sizeof(ShaderInterop::ViewUniforms));
+
+		if (!view.ViewCB)
+			view.ViewCB = context.GetParent()->CreateBuffer(BufferDesc{ .Size = sizeof(ShaderInterop::ViewUniforms), .ElementSize = sizeof(ShaderInterop::ViewUniforms) }, "ViewUniforms");
+
+		ShaderInterop::ViewUniforms& parameters = *static_cast<ShaderInterop::ViewUniforms*>(alloc.pMappedMemory);
 
 		parameters.View						= view.View;
 		parameters.ViewInverse				= view.ViewInverse;
@@ -85,7 +89,7 @@ namespace Renderer
 		parameters.DebugRenderDataIndex		= world.DebugRenderData.RenderDataUAV;
 		parameters.FontSize					= world.DebugRenderData.FontSize;
 
-		view.ViewCBV = allocation;
+		context.CopyBuffer(alloc.pBackingResource, view.ViewCB, alloc.Size, alloc.Offset, 0);
 	}
 
 	void UploadSceneData(CommandContext& context, RenderWorld* pRenderWorld)
@@ -106,7 +110,6 @@ namespace Renderer
 				context.CopyBuffer(alloc.pBackingResource, target.pBuffer, alloc.Size, alloc.Offset, 0);
 				target.Count = numElements;
 			};
-
 
 		Array<Batch> sceneBatches;
 		uint32 instanceID = 0;
@@ -251,6 +254,8 @@ namespace Renderer
 				});
 			CopyBufferData((uint32)lightData.size(), sizeof(ShaderInterop::Light), "Lights", lightData.data(), pRenderWorld->LightBuffer);
 		}
+
+		// Shadow Matrices
 		{
 			Array<Matrix> lightMatrices(pRenderWorld->ShadowViews.size());
 			for (uint32 i = 0; i < pRenderWorld->ShadowViews.size(); ++i)
@@ -259,6 +264,13 @@ namespace Renderer
 		}
 
 		sceneBatches.swap(pRenderWorld->Batches);
+
+		// View Uniform Buffers
+		{
+			Renderer::UploadViewUniforms(context, *pRenderWorld->pMainView);
+			for (RenderView& view : pRenderWorld->ShadowViews)
+				Renderer::UploadViewUniforms(context, view);
+		}
 	}
 
 	void DrawScene(CommandContext& context, const RenderView& view, Batch::Blending blendModes)

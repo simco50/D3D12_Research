@@ -133,7 +133,7 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 					bindingTable.BindHitGroup("MaterialHG", 0);
 
 					context.BindRootCBV(0, parameters);
-					context.BindRootCBV(1, pView->ViewCBV);
+					context.BindRootCBV(1, pView->ViewCB);
 					context.BindResources(2, {
 						pRTTarget->GetUAV(),
 						resources.GetUAV(pAccumulationTexture),

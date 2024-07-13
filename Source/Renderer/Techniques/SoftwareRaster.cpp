@@ -46,7 +46,7 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterPSO);
 
-				context.BindRootCBV(1, pView->ViewCBV);
+				context.BindRootCBV(1, pView->ViewCB);
 				context.BindResources(2, resources.GetUAV(pRasterOutput));
 				context.BindResources(3, {
 						resources.GetSRV(rasterContext.pVisibleMeshlets),
@@ -65,7 +65,7 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterVisualizePSO);
 
-				context.BindRootCBV(1, pView->ViewCBV);
+				context.BindRootCBV(1, pView->ViewCB);
 				context.BindResources(2, resources.GetUAV(pDebug));
 				context.BindResources(3, resources.GetSRV(pRasterOutput));
 
@@ -143,17 +143,17 @@ static Geometry GetMesh(const char* pFilePath)
 				if (strcmp(pName, "POSITION") == 0)
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
-						gVerify(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].Position.x, 3), == true);
+						gVerify(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].Position.x, 3), == 1);
 				}
 				else if (strcmp(pName, "NORMAL") == 0)
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
-						gVerify(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].Normal.x, 3), == true);
+						gVerify(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].Normal.x, 3), == 1);
 				}
 				else if (strcmp(pName, "TEXCOORD_0") == 0)
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
-						gVerify(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].UV.x, 2), == true);
+						gVerify(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].UV.x, 2), == 1);
 				}
 			}
 		}

@@ -84,7 +84,7 @@ void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* p
 			{
 				context.SetGraphicsRootSignature(m_pRS);
 
-				context.BindRootCBV(1, pView->ViewCBV);
+				context.BindRootCBV(1, pView->ViewCB);
 
 				if (numLines != 0)
 				{

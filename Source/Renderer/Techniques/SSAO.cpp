@@ -62,7 +62,7 @@ RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				shaderParameters.Samples = g_AoSamples;
 
 				context.BindRootCBV(0, shaderParameters);
-				context.BindRootCBV(1, pView->ViewCBV);
+				context.BindRootCBV(1, pView->ViewCB);
 				context.BindResources(2, pTarget->GetUAV());
 				context.BindResources(3, resources.GetSRV(pDepth));
 

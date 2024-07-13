@@ -104,7 +104,7 @@ struct RenderView : ViewTransform
 
 	VisibilityMask VisibilityMask;
 
-	ScratchAllocation ViewCBV;
+	Ref<Buffer> ViewCB;
 	bool CameraCut = false;
 };
 
@@ -185,8 +185,6 @@ namespace Renderer
 {
 	void DrawScene(CommandContext& context, const RenderView& view, Batch::Blending blendModes);
 	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes);
-
-	void CreateViewUniforms(GraphicsDevice* pDevice, RenderView& view);
 
 	void UploadSceneData(CommandContext& context, RenderWorld* pWorld);
 }
