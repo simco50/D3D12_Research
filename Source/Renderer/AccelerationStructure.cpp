@@ -229,7 +229,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 		const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC* pPostCompactSizes = static_cast<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC*>(m_pPostBuildInfoReadbackBuffer->GetMappedData());
 		for (Ref<Buffer>* pSourceBLAS: m_ActiveRequests)
 		{
-			check(pPostCompactSizes->CompactedSizeInBytes > 0);
+			gAssert(pPostCompactSizes->CompactedSizeInBytes > 0);
 			Ref<Buffer> pTargetBLAS = context.GetParent()->CreateBuffer(BufferDesc::CreateBLAS(pPostCompactSizes->CompactedSizeInBytes), "BLAS.Compacted");
 			context.GetCommandList()->CopyRaytracingAccelerationStructure(pTargetBLAS->GetGpuHandle(), (*pSourceBLAS)->GetGpuHandle(), D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
 			*pSourceBLAS = pTargetBLAS;

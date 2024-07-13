@@ -68,7 +68,7 @@ static ImU32 ColorFromString(const char* pName)
 
 void RGGraph::DrawResourceTracker(bool& enabled) const
 {
-	check(m_IsCompiled);
+	gAssert(m_IsCompiled);
 
 	if (!enabled)
 		return;
@@ -494,7 +494,7 @@ void RGGraph::DrawPassView(bool& enabled) const
 		}
 	}
 
-	check(nodeStack.size() == 1);
+	gAssert(nodeStack.size() == 1);
 
 	Span<int> rootNodes = nodes[0].Children;
 
@@ -520,7 +520,7 @@ void RGGraph::DrawPassView(bool& enabled) const
 
 void RGGraph::DumpDebugGraph(const char* pPath) const
 {
-	check(m_IsCompiled);
+	gAssert(m_IsCompiled);
 
 	struct StringStream
 	{

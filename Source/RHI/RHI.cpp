@@ -85,7 +85,7 @@ namespace RHI
 	const FormatInfo& GetFormatInfo(ResourceFormat format)
 	{
 		const FormatInfo& info = sFormatInfo[(uint32)format];
-		check(info.Format == format);
+		gAssert(info.Format == format);
 		return info;
 	}
 

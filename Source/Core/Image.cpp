@@ -74,7 +74,7 @@ bool Image::SetData(const void* pPixels)
 
 bool Image::SetData(const void* pData, uint32 offsetInBytes, uint32 sizeInBytes)
 {
-	check(offsetInBytes + sizeInBytes <= m_Pixels.size());
+	gAssert(offsetInBytes + sizeInBytes <= m_Pixels.size());
 	memcpy(m_Pixels.data() + offsetInBytes, pData, sizeInBytes);
 	return true;
 }
@@ -82,7 +82,7 @@ bool Image::SetData(const void* pData, uint32 offsetInBytes, uint32 sizeInBytes)
 bool Image::SetPixel(uint32 x, uint32 y, const Color& color)
 {
 	const FormatInfo& info = RHI::GetFormatInfo(m_Format);
-	check(!info.IsBC, "Can't get pixel data from block compressed texture");
+	gAssert(!info.IsBC, "Can't get pixel data from block compressed texture");
 	if (x + y * m_Width >= (uint32)m_Pixels.size())
 	{
 		return false;
@@ -98,7 +98,7 @@ bool Image::SetPixel(uint32 x, uint32 y, const Color& color)
 bool Image::SetPixelInt(uint32 x, uint32 y, unsigned int color)
 {
 	const FormatInfo& info = RHI::GetFormatInfo(m_Format);
-	check(!info.IsBC, "Can't get pixel data from block compressed texture");
+	gAssert(!info.IsBC, "Can't get pixel data from block compressed texture");
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
 		return false;
@@ -114,7 +114,7 @@ bool Image::SetPixelInt(uint32 x, uint32 y, unsigned int color)
 Color Image::GetPixel(uint32 x, uint32 y) const
 {
 	const FormatInfo& info = RHI::GetFormatInfo(m_Format);
-	check(!info.IsBC, "Can't get pixel data from block compressed texture");
+	gAssert(!info.IsBC, "Can't get pixel data from block compressed texture");
 	Color c = {};
 	if (x + y * m_Width >= (int)m_Pixels.size())
 	{
@@ -131,7 +131,7 @@ Color Image::GetPixel(uint32 x, uint32 y) const
 uint32 Image::GetPixelInt(uint32 x, uint32 y) const
 {
 	const FormatInfo& info = RHI::GetFormatInfo(m_Format);
-	check(!info.IsBC, "Can't get pixel data from block compressed texture");
+	gAssert(!info.IsBC, "Can't get pixel data from block compressed texture");
 	uint32 c = 0;
 	if (x + y * m_Width >= (uint32)m_Pixels.size())
 	{
@@ -386,12 +386,10 @@ void Image::Save(const char* pFilePath)
 	String extension = Paths::GetFileExtenstion(pFilePath);
 	if (extension == "png")
 	{
-		int result = stbi_write_png(pFilePath, m_Width, m_Height, info.NumComponents, m_Pixels.data(), m_Width * 4);
-		check(result);
+		gVerify(stbi_write_png(pFilePath, m_Width, m_Height, info.NumComponents, m_Pixels.data(), m_Width * 4), == 1);
 	}
 	else if (extension == "jpg")
 	{
-		int result = stbi_write_jpg(pFilePath, m_Width, m_Height, info.NumComponents, m_Pixels.data(), 70);
-		check(result);
+		gVerify(stbi_write_jpg(pFilePath, m_Width, m_Height, info.NumComponents, m_Pixels.data(), 70), == 1);
 	}
 }

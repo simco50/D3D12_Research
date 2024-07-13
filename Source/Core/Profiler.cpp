@@ -21,7 +21,7 @@ void GPUProfiler::Initialize(
 	uint32						maxNumActiveCommandLists)
 {
 	// Event indices are 15 bit, so max 2^15 events
-	check(maxNumEvents + maxNumCopyEvents < (1 << 15));
+	gAssert(maxNumEvents + maxNumCopyEvents < (1 << 15));
 
 	m_FrameLatency = frameLatency;
 	m_EventHistorySize = sampleHistory;
@@ -106,7 +106,7 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 
 	// Allocate a query range. This stores a begin/end query index pair. (Also event index)
 	uint32 eventIndex = m_EventIndex.fetch_add(1);
-	check(eventIndex < eventData.Events.size());
+	gAssert(eventIndex < eventData.Events.size());
 
 	// Record a timestamp query
 	uint32 queryIndex = GetHeap(pCmd->GetType()).RecordQuery(pCmd);
@@ -153,10 +153,12 @@ void GPUProfiler::Tick()
 	if (!m_IsInitialized)
 		return;
 
+#if ENABLE_ASSERTS
 	for (ActiveEventStack& stack : m_QueueEventStack)
 	{
-		check(stack.GetSize() == 0, "Forgot to End %d Events", stack.GetSize());
+		gAssert(stack.GetSize() == 0, "Forgot to End %d Events", stack.GetSize());
 	}
+#endif
 
 	// If the next frame is not finished resolving, wait for it here so the data can be read from before it's being reset
 	m_CopyHeap.WaitFrame(m_FrameIndex);
@@ -269,8 +271,8 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 				}
 				else
 				{
-					check(eventStack.GetSize() > 0, "Event Begin/End mismatch");
-					check(query.RangeIndex == 0x7FFF);
+					gAssert(eventStack.GetSize() > 0, "Event Begin/End mismatch");
+					gAssert(query.RangeIndex == 0x7FFF);
 					uint32 queryRangeIndex = eventStack.Pop();
 
 					QueryData::QueryRange& queryRange		= queryData.Ranges[queryRangeIndex];
@@ -278,7 +280,7 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 
 					queryRange.QueryIndexEnd	= query.QueryIndex;
 					sampleEvent.Depth			= eventStack.GetSize();
-					check(sampleEvent.QueueIndex == queueIndex, "Begin/EndEvent must be recorded on the same queue");
+					gAssert(sampleEvent.QueueIndex == queueIndex, "Begin/EndEvent must be recorded on the same queue");
 				}
 			}
 			pEventData->Queries.clear();
@@ -374,7 +376,7 @@ void GPUProfiler::QueryHeap::Reset(uint32 frameIndex)
 void CPUProfiler::Initialize(uint32 historySize, uint32 maxEvents)
 {
 	// Event indices are 16 bit, so max 2^16 events
-	check(maxEvents < (1 << 16));
+	gAssert(maxEvents < (1 << 16));
 
 	m_pEventData = new ProfilerEventData[historySize];
 	m_HistorySize = historySize;
@@ -405,7 +407,7 @@ void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint32 li
 
 	ProfilerEventData& data = GetData();
 	uint32 newIndex = m_EventIndex.fetch_add(1);
-	check(newIndex < data.Events.size());
+	gAssert(newIndex < data.Events.size());
 
 	TLS& tls = GetTLS();
 
@@ -451,8 +453,10 @@ void CPUProfiler::Tick()
 		EndEvent();
 
 	// Check if all threads have ended all open sample events
+#if ENABLE_ASSERTS
 	for (auto& threadData : m_ThreadData)
-		check(threadData.pTLS->EventStack.GetSize() == 0);
+		gAssert(threadData.pTLS->EventStack.GetSize() == 0);
+#endif
 
 	ProfilerEventData& data = GetData();
 	data.NumEvents = m_EventIndex;
@@ -495,7 +499,7 @@ void CPUProfiler::Tick()
 void CPUProfiler::RegisterThread(const char* pName)
 {
 	TLS& tls = GetTLSUnsafe();
-	check(!tls.IsInitialized);
+	gAssert(!tls.IsInitialized);
 	tls.IsInitialized = true;
 	std::scoped_lock lock(m_ThreadDataLock);
 	tls.ThreadIndex = (uint32)m_ThreadData.size();
@@ -511,7 +515,7 @@ void CPUProfiler::RegisterThread(const char* pName)
 		PWSTR pDescription = nullptr;
 		VERIFY_HR(::GetThreadDescription(GetCurrentThread(), &pDescription));
 		size_t converted = 0;
-		check(wcstombs_s(&converted, data.Name, ARRAYSIZE(data.Name), pDescription, ARRAYSIZE(data.Name)) == 0);
+		gVerify(wcstombs_s(&converted, data.Name, ARRAYSIZE(data.Name), pDescription, ARRAYSIZE(data.Name)), == 0);
 	}
 	data.ThreadID = GetCurrentThreadId();
 	data.pTLS = &tls;

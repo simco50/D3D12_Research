@@ -186,7 +186,7 @@ public:
 		else if constexpr (std::is_same_v<T, const char*>)
 		{
 			int outValue;
-			check(CString::FromString(m_Value, outValue));
+			gVerify(CString::FromString(m_Value, outValue), == true);
 			return outValue;
 		}
 	}
@@ -208,7 +208,7 @@ public:
 		else if constexpr (std::is_same_v<T, const char*>)
 		{
 			int outValue;
-			check(CString::FromString(m_Value, outValue));
+			gVerify(CString::FromString(m_Value, outValue), == true);
 			return outValue;
 		}
 	}
@@ -230,7 +230,7 @@ public:
 		else if constexpr (std::is_same_v<T, const char*>)
 		{
 			int outValue;
-			check(CString::FromString(m_Value, outValue));
+			gVerify(CString::FromString(m_Value, outValue), == true);
 			return outValue;
 		}
 	}

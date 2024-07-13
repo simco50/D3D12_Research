@@ -115,7 +115,7 @@ void DebugRenderer::AddLine(const Vector3& start, const Vector3& end, const IntC
 	if (m_NumLines < MaxLines)
 		m_Lines[m_NumLines++] = DebugLine(start, end, color);
 	else
-		validateOnce(false);
+		gAssertOnce(false);
 }
 
 void DebugRenderer::AddRay(const Vector3& start, const Vector3& direction, const IntColor& color)
@@ -130,7 +130,7 @@ void DebugRenderer::AddTriangle(const Vector3& a, const Vector3& b, const Vector
 		if (m_NumTriangles < MaxTriangles)
 			m_Triangles[m_NumTriangles++] = DebugTriangle(a, b, c, color);
 		else
-			validateOnce(false);
+			gAssertOnce(false);
 	}
 	else
 	{

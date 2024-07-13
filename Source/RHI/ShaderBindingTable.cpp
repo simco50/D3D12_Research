@@ -116,7 +116,7 @@ ShaderBindingTable::ShaderRecord ShaderBindingTable::CreateRecord(const char* pN
 			m_IdentifierMap[pName] = m_pStateObject->GetStateObjectProperties()->GetShaderIdentifier(MULTIBYTE_TO_UNICODE(pName));
 		}
 		entry.pIdentifier = m_IdentifierMap[pName];
-		check(entry.pIdentifier);
+		gAssert(entry.pIdentifier);
 		entry.pData = std::make_unique<char[]>(dataSize);
 		entry.Size = dataSize;
 		memcpy(entry.pData.get(), pData, dataSize);

@@ -213,7 +213,7 @@ public:
 	uint32 Release()
 	{
 		uint32 count_prev = m_RefCount.fetch_sub(1);
-		check(count_prev >= 1);
+		gAssert(count_prev >= 1);
 		if (count_prev == 1)
 			Destroy();
 		return count_prev;

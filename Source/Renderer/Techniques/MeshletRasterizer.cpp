@@ -635,7 +635,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 
 void MeshletRasterizer::Render(RGGraph& graph, const RenderView* pView, RasterContext& rasterContext, RasterResult& outResult)
 {
-	check(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB");
+	gAssert(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB");
 
 	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
 
@@ -645,8 +645,8 @@ void MeshletRasterizer::Render(RGGraph& graph, const RenderView* pView, RasterCo
 	uint32 numMeshlets = 0;
 	for (const Batch& b : pWorld->Batches)
 		numMeshlets += b.pMesh->NumMeshlets;
-	check(pWorld->Batches.size() <= Tweakables::MaxNumInstances);
-	check(numMeshlets <= Tweakables::MaxNumMeshlets);
+	gAssert(pWorld->Batches.size() <= Tweakables::MaxNumInstances);
+	gAssert(numMeshlets <= Tweakables::MaxNumMeshlets);
 #endif
 
 	Vector2u dimensions = rasterContext.pDepth->GetDesc().Size2D();

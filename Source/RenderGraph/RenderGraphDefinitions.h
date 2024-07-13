@@ -82,7 +82,7 @@ public:
 protected:
 	void SetResource(DeviceResource* resource)
 	{
-		check(!pPhysicalResource);
+		gAssert(!pPhysicalResource);
 		pPhysicalResource = resource;
 		pPhysicalResource->AddRef();
 		Allocated = true;
@@ -90,10 +90,9 @@ protected:
 
 	void Release()
 	{
-		check(pPhysicalResource);
-		check(Allocated);
-		uint32 prev = pPhysicalResource->Release();
-		check(prev > 1); // This reference should never be the last one
+		gAssert(pPhysicalResource);
+		gAssert(Allocated);
+		gVerify(pPhysicalResource->Release(), > 1, "This reference should never be the last one");
 		Allocated = false;
 	}
 

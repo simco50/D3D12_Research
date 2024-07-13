@@ -31,7 +31,7 @@ public:
 		if (subResource != D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
 		{
 			D3D12_RESOURCE_STATES current_state = m_ResourceStates[0];
-			check(subResource < m_ResourceStates.size());
+			gAssert(subResource < m_ResourceStates.size());
 			if (m_AllSameState)
 			{
 				for (D3D12_RESOURCE_STATES& s : m_ResourceStates)
@@ -48,7 +48,7 @@ public:
 	}
 	D3D12_RESOURCE_STATES Get(uint32 subResource) const
 	{
-		check(m_AllSameState || subResource < (uint32)m_ResourceStates.size());
+		gAssert(m_AllSameState || subResource < (uint32)m_ResourceStates.size());
 		if (m_AllSameState)
 			return m_ResourceStates[0];
 		return m_ResourceStates[subResource];

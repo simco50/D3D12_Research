@@ -13,7 +13,7 @@ Texture::~Texture()
 
 UnorderedAccessView* Texture::GetUAV(uint32 subresourceIndex) const
 {
-	check(subresourceIndex < m_UAVs.size());
+	gAssert(subresourceIndex < m_UAVs.size());
 	return m_UAVs[subresourceIndex];
 }
 

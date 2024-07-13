@@ -95,8 +95,8 @@ struct TextureDesc
 
 	static TextureDesc CreateCube(uint32 width, uint32 height, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
-		check(width);
-		check(height);
+		gAssert(width);
+		gAssert(height);
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;
@@ -112,8 +112,8 @@ struct TextureDesc
 
 	static TextureDesc Create2D(uint32 width, uint32 height, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
-		check(width);
-		check(height);
+		gAssert(width);
+		gAssert(height);
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;
@@ -129,8 +129,8 @@ struct TextureDesc
 
 	static TextureDesc Create3D(uint32 width, uint32 height, uint32 depth, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
-		check(width);
-		check(height);
+		gAssert(width);
+		gAssert(height);
 		TextureDesc desc;
 		desc.Width = width;
 		desc.Height = height;

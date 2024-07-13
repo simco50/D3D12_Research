@@ -182,7 +182,7 @@ private:
 	D3D12_RESOURCE_STATES GetLocalResourceState(const DeviceResource* pResource, uint32 subResource) const
 	{
 		auto it = m_ResourceStates.find(pResource);
-		check(it != m_ResourceStates.end());
+		gAssert(it != m_ResourceStates.end());
 		return it->second.Get(subResource);
 	}
 	struct PendingBarrier

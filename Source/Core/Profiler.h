@@ -82,7 +82,7 @@ struct FixedStack
 public:
 	T& Pop()
 	{
-		check(Depth > 0);
+		gAssert(Depth > 0);
 		--Depth;
 		return StackData[Depth];
 	}
@@ -90,13 +90,13 @@ public:
 	T& Push()
 	{
 		Depth++;
-		check(Depth < ARRAYSIZE(StackData));
+		gAssert(Depth < ARRAYSIZE(StackData));
 		return StackData[Depth - 1];
 	}
 
 	T& Top()
 	{
-		check(Depth > 0);
+		gAssert(Depth > 0);
 		return StackData[Depth - 1];
 	}
 
@@ -140,7 +140,7 @@ public:
 	void* Allocate(uint32 size)
 	{
 		uint32 offset = m_Offset.fetch_add(size);
-		check(offset + size <= m_Size);
+		gAssert(offset + size <= m_Size);
 		return m_pData + offset;
 	}
 
@@ -266,7 +266,7 @@ public:
 
 	const ProfilerEventData& GetEventData(uint32 frameIndex) const
 	{
-		check(frameIndex >= GetFrameRange().Begin && frameIndex < GetFrameRange().End);
+		gBoundCheck(frameIndex, GetFrameRange().Begin, frameIndex < GetFrameRange().End);
 		return GetSampleFrame(frameIndex);
 	}
 
@@ -392,14 +392,16 @@ private:
 			}
 			if (index == InvalidIndex)
 				return nullptr;
-			check(index < m_CommandListData.size());
+			gAssert(index < m_CommandListData.size());
 			return &m_CommandListData[index];
 		}
 
 		void Reset()
 		{
+#if ENABLE_ASSERTS
 			for (Data& data : m_CommandListData)
-				check(data.Queries.empty(), "The Queries inside the commandlist is not empty. This is because ExecuteCommandLists was not called with this commandlist.");
+				gAssert(data.Queries.empty(), "The Queries inside the commandlist is not empty. This is because ExecuteCommandLists was not called with this commandlist.");
+#endif
 			m_CommandListMap.clear();
 		}
 
@@ -411,7 +413,7 @@ private:
 
 	uint64 ConvertToCPUTicks(const QueueInfo& queue, uint64 gpuTicks) const
 	{
-		check(gpuTicks >= queue.GPUCalibrationTicks);
+		gAssert(gpuTicks >= queue.GPUCalibrationTicks);
 		return queue.CPUCalibrationTicks + (gpuTicks - queue.GPUCalibrationTicks) * m_CPUTickFrequency / queue.GPUFrequency;
 	}
 
@@ -541,7 +543,7 @@ public:
 
 	const ProfilerEventData& GetEventData(uint32 frameIndex) const
 	{
-		check(frameIndex >= GetFrameRange().Begin && frameIndex < GetFrameRange().End);
+		gBoundCheck(frameIndex, GetFrameRange().Begin, frameIndex < GetFrameRange().End);
 		return GetData(frameIndex);
 	}
 

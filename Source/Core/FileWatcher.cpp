@@ -46,7 +46,7 @@ bool FileWatcher::StartWatching(const char* pPath, const bool recursiveWatch /*=
 	pWatch->FileHandle = fileHandle;
 	pWatch->DirectoryPath = pPath;
 	m_IOCP = CreateIoCompletionPort(fileHandle, m_IOCP, (ULONG_PTR)pWatch.get(), 0);
-	check(m_IOCP);
+	gAssert(m_IOCP);
 
 	m_Watches.push_back(std::move(pWatch));
 	
@@ -59,7 +59,7 @@ bool FileWatcher::StartWatching(const char* pPath, const bool recursiveWatch /*=
 			}, this);
 	}
 
-	check(PostQueuedCompletionStatus(m_IOCP, 0, (ULONG_PTR)this, 0) == TRUE);
+	gVerify(PostQueuedCompletionStatus(m_IOCP, 0, (ULONG_PTR)this, 0), == TRUE);
 	return true;
 }
 

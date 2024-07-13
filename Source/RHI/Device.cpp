@@ -202,7 +202,7 @@ GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 	m_pFence = new Fence(pDevice, "Device Removed Fence");
 	m_WaitHandle = CreateEventA(nullptr, false, false, nullptr);
 	m_pFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_WaitHandle);
-	check(RegisterWaitForSingleObject(&m_WaitHandle, m_WaitHandle, OnDeviceRemovedCallback, pDevice->GetDevice(), INFINITE, 0));
+	gVerify(RegisterWaitForSingleObject(&m_WaitHandle, m_WaitHandle, OnDeviceRemovedCallback, pDevice->GetDevice(), INFINITE, 0), == TRUE);
 }
 
 GraphicsDevice::DRED::~DRED()
@@ -210,7 +210,7 @@ GraphicsDevice::DRED::~DRED()
 	if (m_pFence)
 	{
 		m_pFence->Signal(UINT64_MAX);
-		check(UnregisterWaitEx(m_WaitHandle, INVALID_HANDLE_VALUE));
+		gVerify(UnregisterWaitEx(m_WaitHandle, INVALID_HANDLE_VALUE), == TRUE);
 	}
 }
 
@@ -225,7 +225,7 @@ GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
 
 		VERIFY_HR(pDXGIDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_IGNORE_INTERNAL | DXGI_DEBUG_RLO_DETAIL)));
 
-		check(pInfoQueue->GetNumStoredMessages(DXGI_DEBUG_ALL) == 0);
+		gAssert(pInfoQueue->GetNumStoredMessages(DXGI_DEBUG_ALL) == 0);
 	}
 }
 
@@ -538,7 +538,7 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 			desc = CD3DX12_RESOURCE_DESC::Tex3D(format, width, height, (uint16)textureDesc.DepthOrArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
 			break;
 		default:
-			noEntry();
+			gUnreachable();
 			break;
 		}
 
@@ -563,8 +563,7 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 	};
 
 	D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
-	TextureFlag depthAndRt = TextureFlag::RenderTarget | TextureFlag::DepthStencil;
-	check(EnumHasAllFlags(desc.Flags, depthAndRt) == false);
+	gAssert(EnumHasAllFlags(desc.Flags, TextureFlag::RenderTarget | TextureFlag::DepthStencil) == false);
 
 	D3D12_CLEAR_VALUE* pClearValue = nullptr;
 	D3D12_CLEAR_VALUE clearValue = {};
@@ -572,14 +571,14 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 
 	if (EnumHasAnyFlags(desc.Flags, TextureFlag::RenderTarget))
 	{
-		check(desc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::Color);
+		gAssert(desc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::Color);
 		memcpy(&clearValue.Color, &desc.ClearBindingValue.Color, sizeof(Color));
 		resourceState = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		pClearValue = &clearValue;
 	}
 	if (EnumHasAnyFlags(desc.Flags, TextureFlag::DepthStencil))
 	{
-		check(desc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
+		gAssert(desc.ClearBindingValue.BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 		clearValue.DepthStencil.Depth = desc.ClearBindingValue.DepthStencil.Depth;
 		clearValue.DepthStencil.Stencil = desc.ClearBindingValue.DepthStencil.Stencil;
 		resourceState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
@@ -606,7 +605,7 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 
 	if (initData.GetSize() > 0)
 	{
-		check(initData.GetSize() == desc.DepthOrArraySize * desc.Mips);
+		gAssert(initData.GetSize() == desc.DepthOrArraySize * desc.Mips);
 
 		uint64 requiredSize = 0;
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layouts[16];
@@ -713,19 +712,19 @@ Ref<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHe
 
 	if (EnumHasAnyFlags(desc.Flags, BufferFlag::Readback))
 	{
-		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
+		gAssert(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
 		initialState = D3D12_RESOURCE_STATE_COPY_DEST;
 		heapType = D3D12_HEAP_TYPE_READBACK;
 	}
 	if (EnumHasAnyFlags(desc.Flags, BufferFlag::Upload))
 	{
-		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
+		gAssert(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
 		initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
 		heapType = D3D12_HEAP_TYPE_UPLOAD;
 	}
 	if (EnumHasAnyFlags(desc.Flags, BufferFlag::AccelerationStructure))
 	{
-		check(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
+		gAssert(initialState == D3D12_RESOURCE_STATE_UNKNOWN);
 		initialState = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
 	}
 
@@ -831,7 +830,7 @@ Ref<StateObject> GraphicsDevice::CreateStateObject(const StateObjectInitializer&
 
 Ref<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)
 {
-	check(pBuffer);
+	gAssert(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
 	D3D12_CPU_DESCRIPTOR_HANDLE descriptor = AllocateCPUDescriptor();
@@ -877,7 +876,7 @@ Ref<ShaderResourceView> GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferS
 
 Ref<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc)
 {
-	check(pBuffer);
+	gAssert(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
@@ -910,7 +909,7 @@ Ref<UnorderedAccessView> GraphicsDevice::CreateUAV(Buffer* pBuffer, const Buffer
 
 Ref<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& desc)
 {
-	check(pTexture);
+	gAssert(pTexture);
 	const TextureDesc& textureDesc = pTexture->GetDesc();
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -1012,7 +1011,7 @@ Ref<ShaderResourceView> GraphicsDevice::CreateSRV(Texture* pTexture, const Textu
 
 Ref<UnorderedAccessView> GraphicsDevice::CreateUAV(Texture* pTexture, const TextureUAVDesc& desc)
 {
-	check(pTexture);
+	gAssert(pTexture);
 	const TextureDesc& textureDesc = pTexture->GetDesc();
 
 	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
@@ -1090,7 +1089,7 @@ GraphicsDevice::DeferredDeleteQueue::~DeferredDeleteQueue()
 {
 	GetParent()->IdleGPU();
 	Clean();
-	check(m_DeletionQueue.empty());
+	gAssert(m_DeletionQueue.empty());
 }
 
 void GraphicsDevice::DeferredDeleteQueue::EnqueueResource(ID3D12Object* pResource, Fence* pFence)
@@ -1113,7 +1112,7 @@ void GraphicsDevice::DeferredDeleteQueue::Clean()
 		{
 			break;
 		}
-		check(p.pResource->Release() == 0);
+		gVerify(p.pResource->Release(), == 0);
 		m_DeletionQueue.pop();
 	}
 }
@@ -1123,9 +1122,9 @@ void GraphicsCapabilities::Initialize(GraphicsDevice* pDevice)
 	m_pDevice = pDevice;
 
 	VERIFY_HR(m_FeatureSupport.Init(pDevice->GetDevice()));
-	check(m_FeatureSupport.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
-	check(m_FeatureSupport.HighestShaderModel() >= D3D_SHADER_MODEL_6_6, "Device does not support SM 6.6 which is required for dynamic indexing");
-	check(m_FeatureSupport.WaveOps(), "Device does not support wave ops which is required.");
+	gAssert(m_FeatureSupport.ResourceBindingTier() >= D3D12_RESOURCE_BINDING_TIER_3, "Device does not support Resource Binding Tier 3 or higher. Tier 2 and under is not supported.");
+	gAssert(m_FeatureSupport.HighestShaderModel() >= D3D_SHADER_MODEL_6_6, "Device does not support SM 6.6 which is required for dynamic indexing");
+	gAssert(m_FeatureSupport.WaveOps(), "Device does not support wave ops which is required.");
 
 	RenderPassTier = m_FeatureSupport.RenderPassesTier();
 	RayTracingTier = m_FeatureSupport.RaytracingTier();

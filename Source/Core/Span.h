@@ -37,8 +37,8 @@ public:
 	Span Subspan(uint32 from, uint32 count = 0xFFFFFFFF) const
 	{
 		uint32 num = count == 0xFFFFFFFF ? m_Count - from : count;
-		check(from <= m_Count);
-		check(from + count <= m_Count);
+		gAssert(from <= m_Count);
+		gAssert(from + count <= m_Count);
 		return Span(m_pValue + from, num);
 	}
 
@@ -54,7 +54,7 @@ public:
 
 	const T& operator[](uint32 idx) const
 	{
-		check(idx < m_Count);
+		gAssert(idx < m_Count);
 		return m_pValue[idx];
 	}
 
@@ -63,7 +63,7 @@ public:
 
 	uint32 IndexOf(const T* pValue) const
 	{
-		check(pValue >= m_pValue && pValue < m_pValue + m_Count);
+		gAssert(pValue >= m_pValue && pValue < m_pValue + m_Count);
 		return uint32(pValue - m_pValue);
 	}
 	const T* GetData() const { return m_pValue; }

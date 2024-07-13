@@ -52,7 +52,7 @@ static void BuildMeshData(MeshData& meshData)
 	for (Vector3& position : meshData.PositionsStream)
 	{
 		position /= meshData.ScaleFactor;
-		check(fabs(position.x) <= 1.0f && fabs(position.y) <= 1.0f && fabs(position.z) <= 1.0f);
+		gAssert(fabs(position.x) <= 1.0f && fabs(position.y) <= 1.0f && fabs(position.z) <= 1.0f);
 	}
 
 	meshopt_optimizeVertexCache(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), meshData.PositionsStream.size());
@@ -154,7 +154,7 @@ static Mesh CreateMesh(GraphicsDevice* pDevice, MeshData& meshData)
 	bufferSize += Math::AlignUp<uint64>(meshData.MeshletTriangles.size() * sizeof(ShaderInterop::Meshlet::Triangle), bufferAlignment);
 	bufferSize += Math::AlignUp<uint64>(meshData.MeshletBounds.size() * sizeof(ShaderInterop::Meshlet::Bounds), bufferAlignment);
 
-	check(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
+	gAssert(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
 	Ref<Buffer> pGeometryData = pDevice->CreateBuffer(BufferDesc{ .Size = bufferSize, .Flags = BufferFlag::ShaderResource | BufferFlag::ByteAddress }, "Geometry Buffer");
 
 	RingBufferAllocation allocation;
@@ -565,7 +565,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 							stream.resize(attribute.data->count);
 							for (size_t i = 0; i < attribute.data->count; ++i)
 							{
-								check(cgltf_accessor_read_float(attribute.data, i, &stream[i].x, numComponents));
+								gVerify(cgltf_accessor_read_float(attribute.data, i, &stream[i].x, numComponents), == true);
 							}
 						}
 					};

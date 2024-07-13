@@ -108,7 +108,7 @@ public:
 
 	NO_DISCARD void* Allocate(uint64 size)
 	{
-		check(m_pCurrentOffset - m_pData + size < m_Size);
+		gAssert(m_pCurrentOffset - m_pData + size < m_Size);
 		void* pData = m_pCurrentOffset;
 		m_pCurrentOffset += size;
 
@@ -197,7 +197,7 @@ public:
 	RGPass& Bind(ExecuteFn&& callback)
 	{
 		static_assert(sizeof(ExecuteFn) < 1024, "The Execute callback exceeds the maximum size");
-		check(!pExecuteCallback, "Pass is already bound! This may be unintentional");
+		gAssert(!pExecuteCallback, "Pass is already bound! This may be unintentional");
 		pExecuteCallback = Allocator.AllocateObject<RGPassCallback<ExecuteFn>>(std::forward<ExecuteFn&&>(callback));
 		return *this;
 	}
@@ -334,7 +334,7 @@ public:
 
 	NO_DISCARD RGTexture* Import(Texture* pTexture)
 	{
-		check(pTexture);
+		gAssert(pTexture);
 		RGTexture* pResource = Allocate<RGTexture>(m_Allocator.AllocateString(pTexture->GetName()), RGResourceID((uint16)m_Resources.size()), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
 		return pResource;
@@ -349,7 +349,7 @@ public:
 
 	NO_DISCARD RGBuffer* Import(Buffer* pBuffer)
 	{
-		check(pBuffer);
+		gAssert(pBuffer);
 		RGBuffer* pResource = Allocate<RGBuffer>(m_Allocator.AllocateString(pBuffer->GetName()), RGResourceID((uint16)m_Resources.size()), pBuffer->GetDesc(), pBuffer);
 		m_Resources.push_back(pResource);
 		return pResource;

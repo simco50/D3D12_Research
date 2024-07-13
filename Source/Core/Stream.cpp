@@ -55,19 +55,19 @@ void MemoryStream::Seek(int offset, StreamSeekMode mode)
 {
 	if (mode == StreamSeekMode::Absolute)
 	{
-		check((uint32)offset < GetLength());
+		gAssert((uint32)offset < GetLength());
 		m_pData = m_pDataBase + offset;
 	}
 	else if (mode == StreamSeekMode::Relative)
 	{
-		check(GetCursor() + offset <= GetLength());
+		gAssert(GetCursor() + offset <= GetLength());
 		m_pData += offset;
 	}
 }
 
 bool MemoryStream::Read(void* pData, uint32 size, uint32* pRead)
 {
-	check(GetCursor() + size <= GetLength());
+	gAssert(GetCursor() + size <= GetLength());
 
 	memcpy(pData, m_pData, size);
 	m_pData += size;
@@ -171,18 +171,18 @@ bool FileStream::Close()
 
 bool FileStream::Flush()
 {
-	check(IsOpen());
+	gAssert(IsOpen());
 
 	if ((m_Mode & FileMode::Write) != FileMode::Write)
 		return false;
-	check(IsOpen());
+	gAssert(IsOpen());
 	return ::FlushFileBuffers(m_pFile) == TRUE;
 }
 
 bool FileStream::Write(const void* pData, uint32 size)
 {
-	check(IsOpen());
-	check(m_Mode & FileMode::Write);
+	gAssert(IsOpen());
+	gAssert(m_Mode & FileMode::Write);
 
 	DWORD written = 0;
 	BOOL result = ::WriteFile(m_pFile, pData, size, &written, nullptr);
@@ -192,8 +192,8 @@ bool FileStream::Write(const void* pData, uint32 size)
 
 bool FileStream::Read(void* pData, uint32 size, uint32* pRead)
 {
-	check(IsOpen());
-	check(m_Mode & FileMode::Read);
+	gAssert(IsOpen());
+	gAssert(m_Mode & FileMode::Read);
 
 	DWORD read = 0;
 	BOOL result = ::ReadFile(m_pFile, pData, size, &read, nullptr);
@@ -205,7 +205,7 @@ bool FileStream::Read(void* pData, uint32 size, uint32* pRead)
 
 void FileStream::Seek(int offset, StreamSeekMode mode)
 {
-	check(IsOpen());
+	gAssert(IsOpen());
 	if (mode == StreamSeekMode::Absolute)
 	{
 		::SetFilePointer(m_pFile, offset, nullptr, FILE_BEGIN);

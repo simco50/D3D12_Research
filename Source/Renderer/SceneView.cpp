@@ -269,7 +269,7 @@ namespace Renderer
 	{
 		PROFILE_CPU_SCOPE();
 		PROFILE_GPU_SCOPE(context.GetCommandList());
-		check(batches.GetSize() <= visibility.Size());
+		gAssert(batches.GetSize() <= visibility.Size());
 		for (const Batch& b : batches)
 		{
 			if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))

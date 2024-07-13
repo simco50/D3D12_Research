@@ -109,7 +109,7 @@ inline Stream& operator>>(Stream& stream, T(&value)[N])
 {
 	uint32 size = 0;
 	stream >> size;
-	check(size <= N);
+	gAssert(size <= N);
 	for (uint32 i = 0; i < size; ++i)
 		stream >> value[i];
 	return stream;

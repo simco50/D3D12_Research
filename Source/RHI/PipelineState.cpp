@@ -280,7 +280,7 @@ void PipelineState::CreateInternal()
 		case ShaderType::Compute:		return m_Desc.m_Stream.CS;
 		case ShaderType::MAX:
 		default:
-			noEntry();
+			gUnreachable();
 			static D3D12_SHADER_BYTECODE dummy;
 			return dummy;
 		}
@@ -330,7 +330,7 @@ void PipelineState::CreateInternal()
 		E_LOG(Warning, "Failed to compile PipelineState '%s'", m_Desc.m_Name);
 	}
 
-	check(m_pPipelineState);
+	gAssert(m_pPipelineState);
 	E_LOG(Info, "Compiled Pipeline: %s", m_Desc.m_Name.c_str());
 	m_NeedsReload = false;
 }

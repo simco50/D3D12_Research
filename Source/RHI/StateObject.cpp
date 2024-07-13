@@ -48,7 +48,7 @@ StateObject::StateObject(GraphicsDevice* pParent, const StateObjectInitializer& 
 
 uint64 StateObject::GetWorkgraphBufferSize() const
 {
-	check(m_Desc.Type == D3D12_STATE_OBJECT_TYPE_EXECUTABLE);
+	gAssert(m_Desc.Type == D3D12_STATE_OBJECT_TYPE_EXECUTABLE);
 
 	Ref<ID3D12WorkGraphProperties> pProps;
 	m_pStateObject->QueryInterface(pProps.GetAddressOf());
@@ -73,7 +73,7 @@ void StateObject::CreateInternal()
 		E_LOG(Warning, "Failed to compile StateObject '%s'", m_Desc.Name);
 	}
 	E_LOG(Info, "Compiled State Object: %s", m_Desc.Name.c_str());
-	check(m_pStateObject);
+	gAssert(m_pStateObject);
 }
 
 void StateObject::ConditionallyReload()

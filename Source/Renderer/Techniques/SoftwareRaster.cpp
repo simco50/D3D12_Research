@@ -143,17 +143,17 @@ static Geometry GetMesh(const char* pFilePath)
 				if (strcmp(pName, "POSITION") == 0)
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
-						check(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].Position.x, 3));
+						gVerify(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].Position.x, 3), == true);
 				}
 				else if (strcmp(pName, "NORMAL") == 0)
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
-						check(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].Normal.x, 3));
+						gVerify(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].Normal.x, 3), == true);
 				}
 				else if (strcmp(pName, "TEXCOORD_0") == 0)
 				{
 					for (size_t i = 0; i < attribute.data->count; ++i)
-						check(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].UV.x, 2));
+						gVerify(cgltf_accessor_read_float(attribute.data, i, &geo.Vertices[vertexOffset + i].UV.x, 2), == true);
 				}
 			}
 		}

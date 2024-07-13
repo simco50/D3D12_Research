@@ -2,8 +2,6 @@
 
 #include <stdint.h>
 
-//STL
-#include <assert.h>
 //Containers
 #include <string>
 #include <queue>

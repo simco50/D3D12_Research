@@ -108,7 +108,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 		case D3D12_SHADER_VISIBILITY_MESH:			visibilityFlags = visibilityFlags & ~D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS;			break;
 		case D3D12_SHADER_VISIBILITY_AMPLIFICATION:	visibilityFlags = visibilityFlags & ~D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;	break;
 		case D3D12_SHADER_VISIBILITY_ALL:			visibilityFlags = D3D12_ROOT_SIGNATURE_FLAG_NONE;														break;
-		default:									noEntry();																								break;
+		default:									gUnreachable();																								break;
 		}
 
 		rootParameters[i] = rootParameter.Data;
@@ -144,7 +144,7 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 
 uint32 RootSignature::GetDescriptorTableSize(uint32 rootIndex) const
 {
-	check(rootIndex < m_NumParameters);
+	gAssert(rootIndex < m_NumParameters);
 	const RootParameter& parameter = m_RootParameters[rootIndex];
 	if (parameter.Data.ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE)
 		return parameter.Range.NumDescriptors;

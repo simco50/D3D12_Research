@@ -26,7 +26,7 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 SyncPoint CommandQueue::ExecuteCommandLists(Span<CommandContext* const> contexts)
 {
 	PROFILE_CPU_SCOPE();
-	check(contexts.GetSize());
+	gAssert(contexts.GetSize());
 
 	// Commandlists can be recorded in parallel.
 	// The before state of a resource transition can't be known so commandlists keep local resource states
@@ -47,7 +47,7 @@ SyncPoint CommandQueue::ExecuteCommandLists(Span<CommandContext* const> contexts
 
 	for(CommandContext* pNextContext : contexts)
 	{
-		check(pNextContext);
+		gAssert(pNextContext);
 
 		pNextContext->ResolvePendingBarriers(*pCurrentContext);
 

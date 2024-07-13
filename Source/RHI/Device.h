@@ -25,8 +25,8 @@ public:
 	GlobalResource& operator=(Ref<T>&& pResource)
 	{
 		static_assert(std::is_base_of_v<DeviceObject, T>);
-		check(pResource);
-		check(m_pResource == nullptr);
+		gAssert(pResource);
+		gAssert(m_pResource == nullptr);
 		m_pResource = pResource.Get();
 		pResource->GetParent()->RegisterGlobalResource(std::move(pResource));
 		return *this;

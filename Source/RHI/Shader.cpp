@@ -392,7 +392,7 @@ namespace ShaderCompiler
 			{
 				Ref<IDxcBlobEncoding> pEncoding;
 				String path = Paths::Normalize(UNICODE_TO_MULTIBYTE(pFilename));
-				check(Paths::ResolveRelativePaths(path));
+				gVerify(Paths::ResolveRelativePaths(path), == true);
 
 				auto existingInclude = std::find_if(IncludedFiles.begin(), IncludedFiles.end(), [&path](const String& include) {
 					return CString::StrCmp(include.c_str(), path.c_str(), false);
@@ -535,7 +535,7 @@ namespace ShaderCompiler
 		for (const String& includePath : includeHandler.IncludedFiles)
 			result.Includes.push_back(includePath);
 
-		check(SaveToCache(cachePath.c_str(), compileJob, result));
+		gVerify(SaveToCache(cachePath.c_str(), compileJob, result), == true);
 		E_LOG(Warning, "Missing cached shader. Compile time: %.1fms ('%s.%s')", timer.Stop() * 1000, compileJob.FilePath.c_str(), compileJob.EntryPoint.c_str());
 
 		return result;

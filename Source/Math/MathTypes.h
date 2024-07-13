@@ -216,13 +216,13 @@ struct TRange
 	TRange(T begin, T end)
 		: Begin(begin), End(end)
 	{
-		check(begin <= end);
+		gAssert(begin <= end);
 	}
 
 	static bool Overlaps(const TRange& lhs, const TRange& rhs)
 	{
-		check(lhs.Begin < lhs.End);
-		check(rhs.Begin < rhs.End);
+		gAssert(lhs.Begin < lhs.End);
+		gAssert(rhs.Begin < rhs.End);
 		return lhs.Begin <= rhs.End && lhs.End >= rhs.Begin;
 	}
 
@@ -240,7 +240,7 @@ struct TRange
 		return Overlaps(*this, rhs);
 	}
 
-	T GetLength() const { check(Begin <= End); return End - Begin; }
+	T GetLength() const { gAssert(Begin <= End); return End - Begin; }
 
 	T Begin;
 	T End;

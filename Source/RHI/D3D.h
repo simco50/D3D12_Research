@@ -367,7 +367,7 @@ namespace D3D
 			case D3D12_RESOURCE_DIMENSION_TEXTURE1D:	pType = "Texture1D"; break;
 			case D3D12_RESOURCE_DIMENSION_TEXTURE2D:	pType = "Texture2D"; break;
 			case D3D12_RESOURCE_DIMENSION_TEXTURE3D:	pType = "Texture3D"; break;
-			default: noEntry();
+			default: gUnreachable();
 			}
 
 			// Find ResourceFormat from DXGI_FORMAT

@@ -25,7 +25,7 @@ struct BufferDesc
 
 	static BufferDesc CreateIndexBuffer(uint32 elements, ResourceFormat format, BufferFlag flags = BufferFlag::None)
 	{
-		check(format == ResourceFormat::R32_UINT || format == ResourceFormat::R16_UINT);
+		gAssert(format == ResourceFormat::R32_UINT || format == ResourceFormat::R16_UINT);
 		const FormatInfo& info = RHI::GetFormatInfo(format);
 		return { .Size = elements * info.BytesPerBlock, .ElementSize = info.BytesPerBlock, .Flags = flags };
 	}
@@ -37,25 +37,25 @@ struct BufferDesc
 
 	static BufferDesc CreateReadback(uint64 bytes)
 	{
-		check(bytes % 4 == 0);
+		gAssert(bytes % 4 == 0);
 		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::Readback | BufferFlag::NoBindless };
 	}
 
 	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag flags = BufferFlag::None)
 	{
-		check(bytes % 4 == 0);
+		gAssert(bytes % 4 == 0);
 		return { .Size = bytes, .ElementSize = 4, .Flags = flags | BufferFlag::ShaderResource | BufferFlag::ByteAddress };
 	}
 
 	static BufferDesc CreateBLAS(uint64 bytes)
 	{
-		check(bytes % 4 == 0);
+		gAssert(bytes % 4 == 0);
 		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess | BufferFlag::NoBindless };
 	}
 
 	static BufferDesc CreateTLAS(uint64 bytes)
 	{
-		check(bytes % 4 == 0);
+		gAssert(bytes % 4 == 0);
 		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess };
 	}
 
@@ -67,7 +67,7 @@ struct BufferDesc
 	static BufferDesc CreateTyped(uint32 elementCount, ResourceFormat format, BufferFlag flags = BufferFlag::None)
 	{
 		const FormatInfo& info = RHI::GetFormatInfo(format);
-		check(!info.IsBC);
+		gAssert(!info.IsBC);
 		return { .Size = (uint64)elementCount * info.BytesPerBlock, .ElementSize = info.BytesPerBlock, .Flags = flags | BufferFlag::ShaderResource, .Format = format };
 	}
 
@@ -110,7 +110,7 @@ public:
 	ShaderResourceView* GetSRV() const { return m_pSRV; }
 	uint32 GetUAVIndex() const;
 	uint32 GetSRVIndex() const;
-	void* GetMappedData() const { check(m_pMappedData); return m_pMappedData; }
+	void* GetMappedData() const { gAssert(m_pMappedData); return m_pMappedData; }
 
 private:
 	Ref<UnorderedAccessView> m_pUAV;
@@ -129,7 +129,7 @@ struct VertexBufferView
 	VertexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, uint32 stride, uint64 offsetFromStart)
 		: Location(location), Elements(elements), Stride(stride), OffsetFromStart((uint32)offsetFromStart)
 	{
-		check(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
+		gAssert(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
 	}
 
 	VertexBufferView(Buffer* pBuffer)
@@ -151,7 +151,7 @@ struct IndexBufferView
 	IndexBufferView(D3D12_GPU_VIRTUAL_ADDRESS location, uint32 elements, ResourceFormat format, uint64 offsetFromStart)
 		: Location(location), Elements(elements), OffsetFromStart((uint32)offsetFromStart), Format(format)
 	{
-		check(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
+		gAssert(offsetFromStart <= std::numeric_limits<uint32>::max(), "Buffer offset (%llx) will be stored in a 32-bit uint and does not fit.", offsetFromStart);
 	}
 
 	uint32 Stride() const

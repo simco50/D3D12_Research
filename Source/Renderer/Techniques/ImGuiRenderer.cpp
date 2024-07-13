@@ -187,7 +187,7 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 				if (!pTexture)
 					pTexture = gFontTexture;
 
-				check(pTexture->GetSRV());
+				gAssert(pTexture->GetSRV());
 
 				context.BindRootCBV(0, pTexture->GetSRVIndex());
 				context.SetScissorRect(FloatRect(clip_min.x, clip_min.y, clip_max.x, clip_max.y));

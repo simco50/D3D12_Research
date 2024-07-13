@@ -42,7 +42,7 @@ RGPass& RGPass::Write(Span<RGResource*> resources)
 
 RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassColorFlags flags, RGTexture* pResolveTarget)
 {
-	check(EnumHasAllFlags(Flags, RGPassFlag::Raster));
+	gAssert(EnumHasAllFlags(Flags, RGPassFlag::Raster));
 	AddAccess(pResource, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	if(pResolveTarget && pResolveTarget != pResource)
 		AddAccess(pResolveTarget, D3D12_RESOURCE_STATE_RESOLVE_DEST);
@@ -53,8 +53,8 @@ RGPass& RGPass::RenderTarget(RGTexture* pResource, RenderPassColorFlags flags, R
 
 RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderPassDepthFlags flags)
 {
-	check(EnumHasAllFlags(Flags, RGPassFlag::Raster));
-	check(!DepthStencilTarget.pResource, "Depth Target already assigned");
+	gAssert(EnumHasAllFlags(Flags, RGPassFlag::Raster));
+	gAssert(!DepthStencilTarget.pResource, "Depth Target already assigned");
 	AddAccess(pResource, EnumHasAllFlags(flags, RenderPassDepthFlags::ReadOnly) ? D3D12_RESOURCE_STATE_DEPTH_READ : D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	DepthStencilTarget = { pResource, flags };
 	return *this;
@@ -62,15 +62,15 @@ RGPass& RGPass::DepthStencil(RGTexture* pResource, RenderPassDepthFlags flags)
 
 void RGPass::AddAccess(RGResource* pResource, D3D12_RESOURCE_STATES state)
 {
-	check(pResource);
+	gAssert(pResource);
 	auto it = std::find_if(Accesses.begin(), Accesses.end(), [=](const ResourceAccess& access) { return pResource == access.pResource; });
 	if (it != Accesses.end())
 	{
 		if (EnumHasAllFlags(it->Access, state))
 			return;
 
-		check(it->Access == state || !D3D::HasWriteResourceState(it->Access), "Resource '%s' may not have any other states when it already has a write state (%s)", pResource->GetName(), D3D::ResourceStateToString(it->Access));
-		check(it->Access == state || !D3D::HasWriteResourceState(state), "Resource '%s' may not use a write state (%s) while it already has another state (%s)", pResource->GetName(), D3D::ResourceStateToString(state), D3D::ResourceStateToString(it->Access));
+		gAssert(it->Access == state || !D3D::HasWriteResourceState(it->Access), "Resource '%s' may not have any other states when it already has a write state (%s)", pResource->GetName(), D3D::ResourceStateToString(it->Access));
+		gAssert(it->Access == state || !D3D::HasWriteResourceState(state), "Resource '%s' may not use a write state (%s) while it already has another state (%s)", pResource->GetName(), D3D::ResourceStateToString(state), D3D::ResourceStateToString(it->Access));
 		it->Access |= state;
 	}
 	else
@@ -93,7 +93,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 {
 	PROFILE_CPU_SCOPE();
 
-	check(!m_IsCompiled);
+	gAssert(!m_IsCompiled);
 
 	if (options.PassCulling)
 	{
@@ -202,7 +202,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 				RGResource* pResource = access.pResource;
 				if (!pResource->GetPhysicalUnsafe())
 				{
-					check(pResource->FirstAccess == pPass->ID);
+					gAssert(pResource->FirstAccess == pPass->ID);
 
 					Ref<DeviceResource> pPhysicalResource;
 					if (pResource->GetType() == RGResourceType::Texture)
@@ -210,10 +210,10 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 					else if (pResource->GetType() == RGResourceType::Buffer)
 						pPhysicalResource = resourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc());
 					else
-						noEntry();
+						gUnreachable();
 					pResource->SetResource(pPhysicalResource);
 				}
-				check(pResource->GetPhysicalUnsafe());
+				gAssert(pResource->GetPhysicalUnsafe());
 
 
 				if (pResource->GetPhysicalUnsafe()->UseStateTracking())
@@ -267,14 +267,14 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 	// Export resources first so they can be available during pass execution.
 	for (ExportedTexture& exportResource : m_ExportTextures)
 	{
-		check(exportResource.pTexture->GetPhysicalUnsafe(), "Exported texture doesn't have a physical resource assigned");
+		gAssert(exportResource.pTexture->GetPhysicalUnsafe(), "Exported texture doesn't have a physical resource assigned");
 		Ref<Texture> pTexture = (Texture*)exportResource.pTexture->GetPhysicalUnsafe();
 		pTexture->SetName(exportResource.pTexture->GetName());
 		*exportResource.pTarget = pTexture;
 	}
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
 	{
-		check(exportResource.pBuffer->GetPhysicalUnsafe(), "Exported buffer doesn't have a physical resource assigned");
+		gAssert(exportResource.pBuffer->GetPhysicalUnsafe(), "Exported buffer doesn't have a physical resource assigned");
 		Ref<Buffer> pBuffer = (Buffer*)exportResource.pBuffer->GetPhysicalUnsafe();
 		pBuffer->SetName(exportResource.pBuffer->GetName());
 		*exportResource.pTarget = pBuffer;
@@ -311,7 +311,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			}
 		}
 		pLastActivePass->NumEventsToEnd += eventsToEnd;
-		check(eventsToStart.empty());
+		gAssert(eventsToStart.empty());
 	}
 
 	{
@@ -374,7 +374,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 void RGGraph::Export(RGTexture* pTexture, Ref<Texture>* pTarget, TextureFlag additionalFlags)
 {
 	auto it = std::find_if(m_ExportTextures.begin(), m_ExportTextures.end(), [&](const ExportedTexture& tex) { return tex.pTarget == pTarget; });
-	check(it == m_ExportTextures.end(), "Texture '%s' is exported to a target that has already been exported to by another texture ('%s').", pTexture->GetName(), it->pTexture->GetName());
+	gAssert(it == m_ExportTextures.end(), "Texture '%s' is exported to a target that has already been exported to by another texture ('%s').", pTexture->GetName(), it->pTexture->GetName());
 	pTexture->IsExported = true;
 	pTexture->Desc.Flags |= additionalFlags;
 	m_ExportTextures.push_back({ pTexture, pTarget });
@@ -383,7 +383,7 @@ void RGGraph::Export(RGTexture* pTexture, Ref<Texture>* pTarget, TextureFlag add
 void RGGraph::Export(RGBuffer* pBuffer, Ref<Buffer>* pTarget, BufferFlag additionalFlags)
 {
 	auto it = std::find_if(m_ExportBuffers.begin(), m_ExportBuffers.end(), [&](const ExportedBuffer& buff) { return buff.pTarget == pTarget; });
-	check(it == m_ExportBuffers.end(), "Buffer '%s' is exported to a target that has already been exported to by another texture ('%s').", pBuffer->GetName(), it->pBuffer->GetName());
+	gAssert(it == m_ExportBuffers.end(), "Buffer '%s' is exported to a target that has already been exported to by another texture ('%s').", pBuffer->GetName(), it->pBuffer->GetName());
 	pBuffer->IsExported = true;
 	pBuffer->Desc.Flags |= additionalFlags;
 	m_ExportBuffers.push_back({ pBuffer, pTarget });
@@ -406,7 +406,7 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 {
 	PROFILE_CPU_SCOPE();
 
-	check(m_IsCompiled);
+	gAssert(m_IsCompiled);
 
 	Array<CommandContext*> contexts;
 	contexts.reserve(m_PassExecuteGroups.size());
@@ -512,8 +512,8 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 	{
 		RGResource* pResource = transition.pResource;
 
-		check(pResource->GetPhysicalUnsafe(), "Resource was not allocated during the graph compile phase");
-		check(pResource->IsImported || pResource->IsExported || !pResource->IsAllocated(), "If resource is not external, it's reference should be released during the graph compile phase");
+		gAssert(pResource->GetPhysicalUnsafe(), "Resource was not allocated during the graph compile phase");
+		gAssert(pResource->IsImported || pResource->IsExported || !pResource->IsAllocated(), "If resource is not external, it's reference should be released during the graph compile phase");
 
 		context.InsertResourceBarrier(pResource->GetPhysicalUnsafe(), transition.BeforeState, transition.AfterState, transition.SubResource);
 	}
@@ -556,7 +556,7 @@ RenderPassInfo RGResources::GetRenderPassInfo() const
 
 DeviceResource* RGResources::GetResource(const RGResource* pResource, D3D12_RESOURCE_STATES requiredAccess) const
 {
-	check(std::find_if(m_Pass.Accesses.begin(), m_Pass.Accesses.end(), [=](const RGPass::ResourceAccess& access) { return access.pResource == pResource && (requiredAccess == 0 || (access.Access & requiredAccess) != 0); }) != m_Pass.Accesses.end());
+	gAssert(std::find_if(m_Pass.Accesses.begin(), m_Pass.Accesses.end(), [=](const RGPass::ResourceAccess& access) { return access.pResource == pResource && (requiredAccess == 0 || (access.Access & requiredAccess) != 0); }) != m_Pass.Accesses.end());
 	return pResource->GetPhysicalUnsafe();
 }
 
@@ -644,7 +644,7 @@ namespace RGUtils
 
 	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool doExport)
 	{
-		check(pStorageTarget);
+		gAssert(pStorageTarget);
 		RGBuffer* pBuffer = nullptr;
 		if (pStorageTarget->Get())
 		{
@@ -662,7 +662,7 @@ namespace RGUtils
 
 	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool doExport)
 	{
-		check(pStorageTarget);
+		gAssert(pStorageTarget);
 		RGTexture* pTexture = nullptr;
 		if (pStorageTarget->Get())
 		{

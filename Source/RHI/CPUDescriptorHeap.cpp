@@ -28,7 +28,7 @@ void CPUDescriptorHeap::FreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle)
 {
 	std::lock_guard lock(m_FreeListLock);
 
-	check(handle.ptr != DescriptorHandle::InvalidCPUHandle.ptr);
+	gAssert(handle.ptr != DescriptorHandle::InvalidCPUHandle.ptr);
 	uint32 elementIndex = (uint32)((handle.ptr - m_pHeap->GetCPUDescriptorHandleForHeapStart().ptr) / m_DescriptorSize);
 	m_FreeList.Free(elementIndex);
 }

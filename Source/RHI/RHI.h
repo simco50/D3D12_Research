@@ -130,20 +130,20 @@ public:
 
 	~FreeList()
 	{
-		check(m_NumAllocations == 0, "Free list not fully released");
+		gAssert(m_NumAllocations == 0, "Free list not fully released");
 	}
 
 	uint32 Allocate()
 	{
 		uint32 slot = m_NumAllocations++;
-		check(slot < m_FreeList.size());
+		gAssert(slot < m_FreeList.size());
 		return m_FreeList[slot];
 	}
 
 	void Free(uint32 index)
 	{
 		uint32 freed_index = m_NumAllocations--;
-		check(freed_index > 0);
+		gAssert(freed_index > 0);
 		m_FreeList[freed_index - 1] = index;
 	}
 

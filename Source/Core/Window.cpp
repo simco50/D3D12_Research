@@ -26,13 +26,13 @@ void Window::Init(uint32 width, uint32 height)
 	wc.style = CS_HREDRAW | CS_VREDRAW;
 	wc.lpszClassName = WINDOW_CLASS_NAME;
 	wc.hCursor = LoadCursorA(nullptr, IDC_ARROW);
-	check(RegisterClassExA(&wc));
+	gVerify(RegisterClassExA(&wc), == TRUE);
 
 	Vector2i displayDimensions = GetDisplaySize();
 
 	DWORD windowStyle = WS_OVERLAPPEDWINDOW;
 	RECT windowRect = { 0, 0, (LONG)width, (LONG)height };
-	AdjustWindowRect(&windowRect, windowStyle, false);
+	gVerify(AdjustWindowRect(&windowRect, windowStyle, false), == TRUE);
 
 	int x = (displayDimensions.x - width) / 2;
 	int y = (displayDimensions.y - height) / 2;
@@ -51,10 +51,10 @@ void Window::Init(uint32 width, uint32 height)
 		GetModuleHandleA(nullptr),
 		this
 	);
-	check(m_Window);
+	gAssert(m_Window);
 
-	ShowWindow(m_Window, SW_SHOWDEFAULT);
-	UpdateWindow(m_Window);
+	gVerify(ShowWindow(m_Window, SW_SHOWDEFAULT), == TRUE);
+	gVerify(UpdateWindow(m_Window), == TRUE);
 }
 
 Vector2i Window::GetDisplaySize()
