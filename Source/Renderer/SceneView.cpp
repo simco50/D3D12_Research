@@ -21,9 +21,10 @@ namespace Tweakables
 
 namespace Renderer
 {
-	void GetViewUniforms(const RenderView& view, ShaderInterop::ViewUniforms& outUniforms)
+	void CreateViewUniforms(GraphicsDevice* pDevice, RenderView& view)
 	{
-		ShaderInterop::ViewUniforms parameters;
+		ScratchAllocation allocation = pDevice->AllocateUploadScratch(sizeof(ShaderInterop::ViewUniforms), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+		ShaderInterop::ViewUniforms& parameters = *static_cast<ShaderInterop::ViewUniforms*>(allocation.pMappedMemory);
 
 		parameters.View						= view.View;
 		parameters.ViewInverse				= view.ViewInverse;
@@ -84,7 +85,7 @@ namespace Renderer
 		parameters.DebugRenderDataIndex		= world.DebugRenderData.RenderDataUAV;
 		parameters.FontSize					= world.DebugRenderData.FontSize;
 
-		outUniforms = parameters;
+		view.ViewCBV = allocation;
 	}
 
 	void UploadSceneData(CommandContext& context, RenderWorld* pRenderWorld)

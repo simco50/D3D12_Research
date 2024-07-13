@@ -329,14 +329,16 @@ void DemoApp::Update()
 		RenderWorld* pRenderWorld = &m_RenderWorld;
 		World* pWorldMut = &m_World;
 
-		auto view = pWorldMut->Registry.view<Transform>();
-		view.each([&](Transform& transform)
-			{
-				transform.World = Matrix::CreateScale(transform.Scale) *
-					Matrix::CreateFromQuaternion(transform.Rotation) *
-					Matrix::CreateTranslation(transform.Position);
-			});
-
+		{
+			PROFILE_CPU_SCOPE("Update Entity Transforms");
+			auto view = pWorldMut->Registry.view<Transform>();
+			view.each([&](Transform& transform)
+				{
+					transform.World = Matrix::CreateScale(transform.Scale) *
+						Matrix::CreateFromQuaternion(transform.Rotation) *
+						Matrix::CreateTranslation(transform.Position);
+				});
+		}
 
 		{
 			PROFILE_CPU_SCOPE("Flush GPU uploads");
@@ -417,8 +419,9 @@ void DemoApp::Update()
 
 		{
 			PROFILE_CPU_SCOPE("Upload View Constants");
-			m_MainView.ViewCBV = m_pDevice->AllocateUploadScratch(sizeof(ShaderInterop::ViewUniforms), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
-			Renderer::GetViewUniforms(m_MainView, *(ShaderInterop::ViewUniforms*)m_MainView.ViewCBV.pMappedMemory);
+			Renderer::CreateViewUniforms(m_pDevice, m_MainView);
+			for(RenderView& view : m_RenderWorld.ShadowViews)
+				Renderer::CreateViewUniforms(m_pDevice, view);
 		}
 
 		RGGraph graph;
@@ -511,7 +514,7 @@ void DemoApp::Update()
 										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 										const ShadowView& view = pRenderWorld->ShadowViews[i];
-										context.BindRootCBV(1, Renderer::GetViewUniforms(view));
+										context.BindRootCBV(1, view.ViewCBV);
 
 										{
 											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");

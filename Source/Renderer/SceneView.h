@@ -185,9 +185,8 @@ namespace Renderer
 {
 	void DrawScene(CommandContext& context, const RenderView& view, Batch::Blending blendModes);
 	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes);
-	void GetViewUniforms(const RenderView& view, ShaderInterop::ViewUniforms& outUniforms);
 
-	inline ShaderInterop::ViewUniforms GetViewUniforms(const RenderView& view)		{ ShaderInterop::ViewUniforms uniforms; GetViewUniforms(view, uniforms); return uniforms; }
+	void CreateViewUniforms(GraphicsDevice* pDevice, RenderView& view);
 
 	void UploadSceneData(CommandContext& context, RenderWorld* pWorld);
 }
