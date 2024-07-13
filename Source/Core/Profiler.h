@@ -266,7 +266,7 @@ public:
 
 	const ProfilerEventData& GetEventData(uint32 frameIndex) const
 	{
-		gBoundCheck(frameIndex, GetFrameRange().Begin, frameIndex < GetFrameRange().End);
+		gBoundCheck(frameIndex, GetFrameRange().Begin, GetFrameRange().End);
 		return GetSampleFrame(frameIndex);
 	}
 
@@ -543,7 +543,7 @@ public:
 
 	const ProfilerEventData& GetEventData(uint32 frameIndex) const
 	{
-		gBoundCheck(frameIndex, GetFrameRange().Begin, frameIndex < GetFrameRange().End);
+		gBoundCheck(frameIndex, GetFrameRange().Begin, GetFrameRange().End);
 		return GetData(frameIndex);
 	}
 

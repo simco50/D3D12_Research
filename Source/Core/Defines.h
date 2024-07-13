@@ -5,7 +5,7 @@
 #define CONCAT_IMPL( x, y ) x##y
 #define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
 
-#define ENABLE_ASSERTS 0
+#define ENABLE_ASSERTS 1
 
 #if ENABLE_ASSERTS
 
@@ -20,14 +20,17 @@
 	} while(0)
 
 #define gAssertOnce(expression, ...)								\
-	static bool MACRO_CONCAT(assert, __COUNTER__) = false;			\
 	do																\
 	{																\
-		if(!(expression) && !MACRO_CONCAT(assert, __COUNTER__))		\
+		if(!(expression))		\
 		{															\
-			MACRO_CONCAT(assert, __COUNTER__) = true;				\
-			Console::LogFormat(LogType::Warning, __VA_ARGS__);		\
-			__debugbreak();											\
+			static bool has_executed = false;						\
+			if(!has_executed)										\
+			{														\
+				has_executed = true;								\
+				Console::LogFormat(LogType::Warning, __VA_ARGS__);	\
+				__debugbreak();										\
+			}														\
 		}															\
 	} while(0)
 
@@ -35,7 +38,7 @@
 #define gVerify(expression, validation, ...)						\
 	do																\
 	{																\
-		if(!((expression) (validation)))							\
+		if(!((expression) validation))								\
 		{															\
 			Console::LogFormat(LogType::Warning, __VA_ARGS__);		\
 			__debugbreak();											\

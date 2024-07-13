@@ -26,7 +26,7 @@ void Window::Init(uint32 width, uint32 height)
 	wc.style = CS_HREDRAW | CS_VREDRAW;
 	wc.lpszClassName = WINDOW_CLASS_NAME;
 	wc.hCursor = LoadCursorA(nullptr, IDC_ARROW);
-	gVerify(RegisterClassExA(&wc), == TRUE);
+	gVerify(RegisterClassExA(&wc), != 0);
 
 	Vector2i displayDimensions = GetDisplaySize();
 
@@ -53,7 +53,7 @@ void Window::Init(uint32 width, uint32 height)
 	);
 	gAssert(m_Window);
 
-	gVerify(ShowWindow(m_Window, SW_SHOWDEFAULT), == TRUE);
+	ShowWindow(m_Window, SW_SHOWDEFAULT);
 	gVerify(UpdateWindow(m_Window), == TRUE);
 }
 
