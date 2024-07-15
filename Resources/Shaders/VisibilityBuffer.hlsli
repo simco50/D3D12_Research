@@ -135,7 +135,7 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttribute attributes)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor * Unpack_RGBA8_UNORM(attributes.Color);
+	float4 baseColor = material.BaseColorFactor * RGBA8_UNORM::Unpack(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
 		baseColor *= SampleGrad2D(NonUniformResourceIndex(material.Diffuse), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);

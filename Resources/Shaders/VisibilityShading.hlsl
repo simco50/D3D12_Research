@@ -84,7 +84,7 @@ bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));
 
 	output.Color = float4(outRadiance, surface.Opacity);
-	output.Normal = EncodeNormalOctahedron(surface.Normal);
+	output.Normal = Octahedral::Pack(surface.Normal);
 	output.Roughness = reflectivity;
 	return true;
 }

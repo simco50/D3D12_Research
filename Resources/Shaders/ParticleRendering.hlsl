@@ -73,7 +73,7 @@ PSOut PSMain(InterpolantsVSToPS input)
 
 	PSOut output;
 	output.Color = float4(radiance, 1.0f);
-	output.Normal = EncodeNormalOctahedron(input.Normal);
+	output.Normal = Octahedral::Pack(input.Normal);
 	output.Roughness = 0.3f;
 	return output;
 }

@@ -26,9 +26,9 @@ struct PackedCharacterInstance
 PackedCharacterInstance PackCharacterInstance(CharacterInstance c)
 {
 	PackedCharacterInstance p;
-	p.Position = Pack_RG16_FLOAT(c.Position);
+	p.Position = RG16_FLOAT::Pack(c.Position);
 	p.Character = c.Character;
-	p.Color = Pack_RGBA8_UNORM(c.Color);
+	p.Color = RGBA8_UNORM::Pack(c.Color);
 	p.Scale = asuint(f32tof16(c.Scale));
 	return p;
 }
@@ -36,9 +36,9 @@ PackedCharacterInstance PackCharacterInstance(CharacterInstance c)
 CharacterInstance UnpackCharacterInstance(PackedCharacterInstance p)
 {
 	CharacterInstance c;
-	c.Position = Unpack_RG16_FLOAT(p.Position);
+	c.Position = RG16_FLOAT::Unpack(p.Position);
 	c.Character = p.Character;
-	c.Color = Unpack_RGBA8_UNORM(p.Color);
+	c.Color = RGBA8_UNORM::Unpack(p.Color);
 	c.Scale = asfloat(f16tof32(p.Scale));
 	return c;
 }
@@ -64,10 +64,10 @@ PackedLineInstance PackLineInstance(LineInstance l)
 {
 	PackedLineInstance p;
 	p.A = l.A;
-	p.ColorA = Pack_RGBA8_UNORM(l.ColorA) & 0xFFFFFFFE;
+	p.ColorA = RGBA8_UNORM::Pack(l.ColorA) & 0xFFFFFFFE;
 	p.ColorA |= l.ScreenSpace ? 0x1 : 0x0;
 	p.B = l.B;
-	p.ColorB = Pack_RGBA8_UNORM(l.ColorB);
+	p.ColorB = RGBA8_UNORM::Pack(l.ColorB);
 	return p;
 }
 
@@ -75,9 +75,9 @@ LineInstance UnpackLineInstance(PackedLineInstance p)
 {
 	LineInstance l;
 	l.A = p.A;
-	l.ColorA = Unpack_RGBA8_UNORM(p.ColorA);
+	l.ColorA = RGBA8_UNORM::Unpack(p.ColorA);
 	l.B = p.B;
-	l.ColorB = Unpack_RGBA8_UNORM(p.ColorB);
+	l.ColorB = RGBA8_UNORM::Unpack(p.ColorB);
 	l.ScreenSpace = (p.ColorA & 0x1) > 0;
 	return l;
 }

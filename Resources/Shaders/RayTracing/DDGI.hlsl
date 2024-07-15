@@ -67,7 +67,7 @@ void UpdateIrradianceCS(
 	texelLocation += groupThreadId.xy;
 	Texture2D<float4> tIrradianceMap = ResourceDescriptorHeap[volume.IrradianceIndex];
 	float3 prevRadiance = tIrradianceMap[texelLocation].rgb;
-	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_IRRADIANCE_TEXELS) * 2 - 1);
+	float3 probeDirection = Octahedral::Unpack(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_IRRADIANCE_TEXELS) * 2 - 1);
 	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 
 	float weightSum = 0;
@@ -159,7 +159,7 @@ void UpdateDepthCS(
 	texelLocation += groupThreadId.xy;
 	Texture2D<float2> tDepthMap = ResourceDescriptorHeap[volume.DepthIndex];
 	float2 prevDepth = tDepthMap[texelLocation];
-	float3 probeDirection = DecodeNormalOctahedron(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_DEPTH_TEXELS) * 2 - 1);
+	float3 probeDirection = Octahedral::Unpack(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_DEPTH_TEXELS) * 2 - 1);
 	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
 
 	float weightSum = 0;

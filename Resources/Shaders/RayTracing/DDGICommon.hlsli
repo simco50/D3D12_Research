@@ -81,7 +81,7 @@ float2 GetDDGIProbeUV(DDGIVolume volume, uint3 probeIndex3D, float3 direction, u
 	uint textureHeight = numProbeTexels * volume.ProbeVolumeDimensions.z;
 
 	float2 pixel = GetDDGIProbeTexel(volume, probeIndex3D, numProbeInteriorTexels);
-	pixel += (EncodeNormalOctahedron(normalize(direction)) * 0.5f + 0.5f) * numProbeInteriorTexels;
+	pixel += (Octahedral::Pack(normalize(direction)) * 0.5f + 0.5f) * numProbeInteriorTexels;
 	return pixel / float2(textureWidth, textureHeight);
 }
 

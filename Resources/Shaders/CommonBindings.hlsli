@@ -111,12 +111,12 @@ struct Vertex
 Vertex LoadVertex(MeshData mesh, uint vertexId)
 {
 	Vertex vertex;
-	vertex.Position = Unpack_RGBA16_SNORM(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
-	vertex.UV = Unpack_RG16_FLOAT(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+	vertex.Position = RGBA16_SNORM::Unpack(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
+	vertex.UV = RG16_FLOAT::Unpack(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
 	uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
-	vertex.Normal = Unpack_RGB10A2_SNORM(normalData.x).xyz;
-	vertex.Tangent = Unpack_RGB10A2_SNORM(normalData.y);
+	vertex.Normal = RGB10A2_SNORM::Unpack(normalData.x).xyz;
+	vertex.Tangent = RGB10A2_SNORM::Unpack(normalData.y);
 
 	vertex.Color = 0xFFFFFFFF;
 	if(mesh.ColorsOffset != ~0u)

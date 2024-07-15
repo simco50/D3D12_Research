@@ -30,7 +30,7 @@ void RayGen()
 
 	float depth = tDepth.SampleLevel(sPointClamp, uv, 0).r;
 	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, uv, 0);
-	float3 N = DecodeNormalOctahedron(tSceneNormals.SampleLevel(sLinearClamp, uv, 0));
+	float3 N = Octahedral::Unpack(tSceneNormals.SampleLevel(sLinearClamp, uv, 0));
 	float R = tSceneRoughness.SampleLevel(sLinearClamp, uv, 0);
 
 	float3 worldPosition = WorldPositionFromDepth(uv, depth, cView.ViewProjectionInverse);

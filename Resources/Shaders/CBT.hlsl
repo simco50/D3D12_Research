@@ -530,7 +530,7 @@ void ShadePS(
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
 	output.Color = float4(outRadiance, 1);
-	output.Normal = EncodeNormalOctahedron(surface.Normal);
+	output.Normal = Octahedral::Pack(surface.Normal);
 	output.Roughness = brdfData.Roughness;
 }
 

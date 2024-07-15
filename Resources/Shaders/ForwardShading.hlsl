@@ -213,7 +213,7 @@ void DepthOnlyPS(InterpolantsVSToPS input)
 MaterialProperties EvaluateMaterial(MaterialData material, InterpolantsVSToPS attributes)
 {
 	MaterialProperties properties;
-	float4 baseColor = material.BaseColorFactor * Unpack_RGBA8_UNORM(attributes.Color);
+	float4 baseColor = material.BaseColorFactor * RGBA8_UNORM::Unpack(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{
 		baseColor *= Sample2D(material.Diffuse, sMaterialSampler, attributes.UV);
@@ -285,7 +285,7 @@ void ShadePS(InterpolantsVSToPS input, out PSOut output)
 	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdfData.Roughness));
 
 	output.Color = float4(outRadiance, surface.Opacity);
-	output.Normal = EncodeNormalOctahedron(surface.Normal);
+	output.Normal = Octahedral::Pack(surface.Normal);
 	output.Roughness = saturate(reflectivity - ssrWeight);
 }
 
