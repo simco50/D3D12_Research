@@ -391,3 +391,17 @@ uint DivideAndRoundUp(uint x, uint y)
 {
 	return (x + y - 1) / y;
 }
+
+float3 HUE_2_RGB(float H)
+{
+	float R = abs(H * 6 - 3) - 1;
+	float G = 2 - abs(H * 6 - 2);
+	float B = 2 - abs(H * 6 - 4);
+	return saturate(float3(R, G, B));
+}
+
+float3 HSV_2_RGB(in float3 HSV)
+{
+	float3 RGB = HUE_2_RGB(HSV.x);
+	return ((RGB - 1) * HSV.y + 1) * HSV.z;
+}
