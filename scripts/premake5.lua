@@ -90,6 +90,16 @@ workspace (ENGINE_NAME)
 			(SOURCE_DIR .. "**.editorconfig"),
 		}
 
+		files
+		{
+			(ROOT .. "Resources/Shaders/Interop/**.h")
+		}
+
+		vpaths 
+		{
+			{ ["ShaderInterop"] = (ROOT .. "Resources/Shaders/Interop/**.h") }
+		}
+
 		filter ("files:" .. ROOT .. "ThirdParty/**")
 			flags { "NoPCH" }
 			removeflags "FatalWarnings"
