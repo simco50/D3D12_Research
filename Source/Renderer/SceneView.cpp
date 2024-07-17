@@ -90,6 +90,20 @@ namespace Renderer
 		parameters.FontSize					= world.DebugRenderData.FontSize;
 
 		context.CopyBuffer(alloc.pBackingResource, view.ViewCB, alloc.Size, alloc.Offset, 0);
+
+		if (view.RequestFreezeCull && !view.FreezeCull)
+		{
+			view.CullViewCB = context.GetParent()->CreateBuffer(view.ViewCB->GetDesc(), "CullViewUniforms");
+			context.InsertResourceBarrier(view.ViewCB, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE);
+			context.CopyResource(view.ViewCB, view.CullViewCB);
+			context.InsertResourceBarrier(view.ViewCB, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+		}
+
+		view.FreezeCull = view.RequestFreezeCull;
+		if(!view.FreezeCull)
+		{
+			view.CullViewCB = view.ViewCB;
+		}
 	}
 
 	void UploadSceneData(CommandContext& context, RenderWorld* pRenderWorld)

@@ -105,6 +105,11 @@ struct RenderView : ViewTransform
 	VisibilityMask VisibilityMask;
 
 	Ref<Buffer> ViewCB;
+	Ref<Buffer> CullViewCB;
+
+	bool RequestFreezeCull = false;
+	bool FreezeCull = false;
+
 	bool CameraCut = false;
 };
 

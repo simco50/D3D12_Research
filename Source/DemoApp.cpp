@@ -1414,6 +1414,7 @@ void DemoApp::UpdateImGui()
 
 			if (m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred)
 			{
+				ImGui::Checkbox("Freeze Culling", &m_MainView.RequestFreezeCull);
 				ImGui::Checkbox("Occlusion Culling", &Tweakables::gOcclusionCulling.Get());
 				static constexpr const char* pDebugViewNames[] =
 				{

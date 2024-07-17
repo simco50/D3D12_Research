@@ -393,7 +393,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(0, params);
-					context.BindRootCBV(1, pView->ViewCB);
+					context.BindRootCBV(1, pView->CullViewCB);
 					context.BindResources(2, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
@@ -448,7 +448,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(0, params);
-					context.BindRootCBV(1, pView->ViewCB);
+					context.BindRootCBV(1, pView->CullViewCB);
 					context.BindResources(2, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
@@ -629,7 +629,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 	// Build the HZB, this HZB must be persistent across frames for this system to work.
 	// In Phase 1, the HZB is built so it can be used in Phase 2 for accurrate occlusion culling.
 	// In Phase 2, the HZB is built to be used by Phase 1 in the next frame.
-	if (rasterContext.EnableOcclusionCulling)
+	if (rasterContext.EnableOcclusionCulling && !pView->FreezeCull)
 		BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
 }
 

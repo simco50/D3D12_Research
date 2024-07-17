@@ -114,7 +114,7 @@ void CommandContext::InsertResourceBarrier(DeviceResource* pResource, D3D12_RESO
 {
 	gAssert(!m_InRenderPass);
 	gAssert(pResource && pResource->GetResource());
-	gAssert(pResource->UseStateTracking());
+	gAssert(beforeState != D3D12_RESOURCE_STATE_UNKNOWN || pResource->UseStateTracking());
 	gAssert(D3D::IsTransitionAllowed(m_Type, beforeState), "Before state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
 	gAssert(D3D::IsTransitionAllowed(m_Type, afterState), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(afterState).c_str(), D3D::CommandlistTypeToString(m_Type));
 
