@@ -41,7 +41,7 @@ using MultibyteToUnicode = StringConverter<char, wchar_t>;
 #define UNICODE_TO_MULTIBYTE(input) UnicodeToMultibyte(input).Get()
 #define MULTIBYTE_TO_UNICODE(input) MultibyteToUnicode(input).Get()
 
-inline int FormatString(char* pBuffer, int bufferSize, const char* pFormat, ...)
+inline int FormatStringV(char* pBuffer, int bufferSize, const char* pFormat, ...)
 {
 	va_list args;
 	va_start(args, pFormat);
@@ -55,6 +55,7 @@ inline int FormatString(char* pBuffer, int bufferSize, const char* pFormat, ...)
 	return w;
 }
 
+
 template <class T>
 decltype(auto) GetFormatArgument(const T& arg)
 {
@@ -65,6 +66,14 @@ inline const char* GetFormatArgument(const String& arg)
 {
 	return arg.c_str();
 }
+
+
+template<typename... Args>
+int FormatString(char* pBuffer, int bufferSize, const char* pFormat, Args&&... args)
+{
+	return FormatStringV(pBuffer, bufferSize, pFormat, GetFormatArgument(std::forward<Args&&>(args))...);
+}
+
 
 template<typename... Args>
 String Sprintf(const char* pFormat, Args&&... args)

@@ -565,7 +565,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 							stream.resize(attribute.data->count);
 							for (size_t i = 0; i < attribute.data->count; ++i)
 							{
-								gVerify(cgltf_accessor_read_float(attribute.data, i, &stream[i].x, numComponents), == true);
+								gVerify(cgltf_accessor_read_float(attribute.data, i, &stream[i].x, numComponents), == 1);
 							}
 						}
 					};

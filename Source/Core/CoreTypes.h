@@ -14,6 +14,13 @@
 
 #include "unordered_dense.h"
 
+#define STRINGIFY_HELPER(a) #a
+#define STRINGIFY(a) STRINGIFY_HELPER(a)
+#define CONCAT_IMPL( x, y ) x##y
+#define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
+
+#define NODISCARD [[nodiscard]]
+
 using int8 = int8_t;
 using int16 = int16_t;
 using int32 = int32_t;

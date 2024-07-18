@@ -8,8 +8,8 @@
 
 #include <imgui.h>
 
-#include "Core/Defines.h"
 #include "Core/CoreTypes.h"
+#include "Core/Assert.h"
 #include "Core/CString.h"
 #include "Core/Thread.h"
 #include "Core/Time.h"
