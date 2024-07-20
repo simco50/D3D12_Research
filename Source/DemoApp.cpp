@@ -1582,91 +1582,110 @@ void DemoApp::UpdateImGui()
 
 void DemoApp::UpdateSkinning(RGGraph& graph)
 {
+	struct SkinningUpdateInfo
+	{
+		uint32 SkinMatrixOffset;
+		uint32 PositionsOffset;
+		uint32 NormalsOffset;
+		uint32 JointsOffset;
+		uint32 WeightsOffset;
+		uint32 SkinnedPositionsOffset;
+		uint32 SkinnedNormalsOffset;
+		uint32 NumTriangles;
+	};
+	Array<SkinningUpdateInfo> skinDatas;
+	Array<Matrix> skinningTransforms;
+	Array<Mesh*> meshes;
+
+	auto view = m_World.Registry.view<const Model>();
+	view.each([&](const Model& model)
+		{
+			if (model.SkeletonIndex != -1)
+			{
+				SkinningUpdateInfo& skinData = skinDatas.emplace_back();
+
+				Mesh& mesh = m_World.Meshes[model.MeshIndex];
+				meshes.push_back(&mesh);
+				skinData.SkinMatrixOffset			= (uint32)skinningTransforms.size();
+				skinData.SkinnedPositionsOffset		= mesh.SkinnedPositionStreamLocation.OffsetFromStart;
+				skinData.SkinnedNormalsOffset		= mesh.SkinnedNormalStreamLocation.OffsetFromStart;
+				skinData.PositionsOffset			= mesh.PositionStreamLocation.OffsetFromStart;
+				skinData.NormalsOffset				= mesh.NormalStreamLocation.OffsetFromStart;
+				skinData.JointsOffset				= mesh.JointsStreamLocation.OffsetFromStart;
+				skinData.WeightsOffset				= mesh.WeightsStreamLocation.OffsetFromStart;
+				skinData.NumTriangles				= mesh.PositionStreamLocation.Elements;
+
+				const Animation& anim = m_World.Animations[model.AnimationIndex];
+				const Skeleton& skeleton = m_World.Skeletons[model.SkeletonIndex];
+				skinningTransforms.resize(skinningTransforms.size() + skeleton.NumJoints());
+				Matrix* pSkinMatrices = &skinningTransforms[skinData.SkinMatrixOffset];
+
+				float t = fmod(Time::TotalTime(), anim.TimeEnd - anim.TimeStart);
+				float time = t + anim.TimeStart;
+
+				Array<Transform> animTransforms(skeleton.NumJoints());
+				for (const AnimationChannel& channel : anim.Channels)
+				{
+					Transform& jointTransform = animTransforms[skeleton.GetJoint(channel.Target)];
+					if (channel.Path == AnimationChannel::PathType::Translation)
+						jointTransform.Position = Vector3(channel.Evaluate(time));
+					else if (channel.Path == AnimationChannel::PathType::Rotation)
+						jointTransform.Rotation = channel.Evaluate(time);
+					else if (channel.Path == AnimationChannel::PathType::Scale)
+						jointTransform.Scale = Vector3(channel.Evaluate(time));
+				}
+
+				for (Transform& jointTransform : animTransforms)
+				{
+					jointTransform.WorldPrev = jointTransform.World;
+					jointTransform.World = Matrix::CreateScale(jointTransform.Scale) *
+						Matrix::CreateFromQuaternion(jointTransform.Rotation) *
+						Matrix::CreateTranslation(jointTransform.Position);
+				}
+
+				for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
+				{
+					// Update joints in an order so that parent joints are always computed before any children
+					Skeleton::JointIndex jointIndex = skeleton.JointUpdateOrder[i];
+					Matrix& jointTransform = pSkinMatrices[jointIndex];
+
+					jointTransform = animTransforms[jointIndex].World;
+					Skeleton::JointIndex parentJointIndex = skeleton.ParentIndices[jointIndex];
+					if (parentJointIndex != Skeleton::InvalidJoint)
+						jointTransform *= pSkinMatrices[parentJointIndex];
+				}
+
+				// Compute final skin transforms
+				for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
+					pSkinMatrices[i] = skeleton.InverseBindMatrices[i] * pSkinMatrices[i];
+			}
+		});
+
+	if (skinningTransforms.empty())
+		return;
+
+	RGBuffer* pSkinningMatrices = graph.Create("Skinning Matrices", BufferDesc::CreateStructured((uint32)skinningTransforms.size(), sizeof(Matrix)));
+	RGUtils::DoUpload(graph, pSkinningMatrices, skinningTransforms.data(), (uint32)skinningTransforms.size() * sizeof(Matrix));
+
 	graph.AddPass("GPU Skinning", RGPassFlag::Compute | RGPassFlag::NeverCull)
+		.Read(pSkinningMatrices)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSkinPSO);
 
-				auto view = m_World.Registry.view<const Model>();
-				view.each([&](const Model& model)
-					{
-						if (model.SkeletonIndex != -1)
-						{
-							const Animation& anim = m_World.Animations[model.AnimationIndex];
-							const Skeleton& skeleton = m_World.Skeletons[model.SkeletonIndex];
+				context.BindResources(3, resources.GetSRV(pSkinningMatrices));
 
+				for(int i = 0; i < (int)skinDatas.size(); ++i)
+				{
+					context.InsertResourceBarrier(meshes[i]->pBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-							float t = fmod(Time::TotalTime(), anim.TimeEnd - anim.TimeStart);
-							float time = t + anim.TimeStart;
+					context.BindRootCBV(1, skinDatas[i]);
+					context.BindResources(2, { meshes[i]->pBuffer->GetUAV() });
+					context.Dispatch(ComputeUtils::GetNumThreadGroups(meshes[i]->PositionStreamLocation.Elements, 64));
 
-							struct
-							{
-								Matrix SkinTransforms[128];
-								uint32 PositionsOffset;
-								uint32 NormalsOffset;
-								uint32 JointsOffset;
-								uint32 WeightsOffset;
-								uint32 SkinnedPositionsOffset;
-								uint32 SkinnedNormalsOffset;
-								uint32 NumTriangles;
-							} meshData;
-
-							const Mesh& mesh = m_World.Meshes[model.MeshIndex];
-							meshData.SkinnedPositionsOffset		= mesh.SkinnedPositionStreamLocation.OffsetFromStart;
-							meshData.SkinnedNormalsOffset		= mesh.SkinnedNormalStreamLocation.OffsetFromStart;
-							meshData.PositionsOffset			= mesh.PositionStreamLocation.OffsetFromStart;
-							meshData.NormalsOffset				= mesh.NormalStreamLocation.OffsetFromStart;
-							meshData.JointsOffset				= mesh.JointsStreamLocation.OffsetFromStart;
-							meshData.WeightsOffset				= mesh.WeightsStreamLocation.OffsetFromStart;
-							meshData.NumTriangles				= mesh.PositionStreamLocation.Elements;
-
-							Array<Transform> animTransforms(skeleton.NumJoints());
-							for (const AnimationChannel& channel : anim.Channels)
-							{
-								Transform& jointTransform = animTransforms[skeleton.GetJoint(channel.Target)];
-								if (channel.Path == AnimationChannel::PathType::Translation)
-									jointTransform.Position = Vector3(channel.Evaluate(time));
-								else if (channel.Path == AnimationChannel::PathType::Rotation)
-									jointTransform.Rotation = channel.Evaluate(time);
-								else if (channel.Path == AnimationChannel::PathType::Scale)
-									jointTransform.Scale = Vector3(channel.Evaluate(time));
-							}
-
-							for (Transform& jointTransform : animTransforms)
-							{
-								jointTransform.WorldPrev = jointTransform.World;
-								jointTransform.World = Matrix::CreateScale(jointTransform.Scale) *
-									Matrix::CreateFromQuaternion(jointTransform.Rotation) *
-									Matrix::CreateTranslation(jointTransform.Position);
-							}
-
-							for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
-							{
-								// Update joints in an order so that parent joints are always computed before any children
-								Skeleton::JointIndex jointIndex = skeleton.JointUpdateOrder[i];
-								Matrix& jointTransform = meshData.SkinTransforms[jointIndex];
-
-								jointTransform = animTransforms[jointIndex].World;
-								Skeleton::JointIndex parentJointIndex = skeleton.ParentIndices[jointIndex];
-								if (parentJointIndex != Skeleton::InvalidJoint)
-									jointTransform *= meshData.SkinTransforms[parentJointIndex];
-							}
-
-							// Compute final skin transforms
-							for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
-								meshData.SkinTransforms[i] = skeleton.InverseBindMatrices[i] * meshData.SkinTransforms[i];
-
-							context.InsertResourceBarrier(mesh.pBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-							context.BindRootCBV(1, meshData);
-							context.BindResources(2, { mesh.pBuffer->GetUAV() });
-
-							context.Dispatch(ComputeUtils::GetNumThreadGroups(mesh.PositionStreamLocation.Elements, 64));
-
-							context.InsertResourceBarrier(mesh.pBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-						}
-					});
+					context.InsertResourceBarrier(meshes[i]->pBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+				}
 			});
 }
 

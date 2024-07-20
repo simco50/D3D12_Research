@@ -364,6 +364,7 @@ namespace ShaderCompiler
 		arguments.AddArgument(DXC_ARG_PACK_MATRIX_ROW_MAJOR);
 
 		arguments.AddArgument("-HV", "2021");
+		arguments.AddArgument("-enable-16bit-types");
 
 		result.IsDebug = compileJob.EnableDebugMode;
 

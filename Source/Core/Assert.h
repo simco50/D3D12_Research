@@ -12,8 +12,9 @@ template<typename... Args>
 bool ReportAssertFmt(const char* pFilePath, int line, const char* pExpression, const char* pMessage = nullptr, Args&&... args)
 {
 	char message[4096];
-	FormatString(message, ARRAYSIZE(message), pMessage, args...);
-	return ReportAssert(pFilePath, line, pExpression, message);
+	if(pMessage)
+		FormatString(message, ARRAYSIZE(message), pMessage, args...);	
+	return ReportAssert(pFilePath, line, pExpression, pMessage ? message : "");
 }
 
 #define gAssert(expression, ...)																\

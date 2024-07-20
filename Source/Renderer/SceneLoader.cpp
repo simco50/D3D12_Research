@@ -139,23 +139,22 @@ static Mesh CreateMesh(GraphicsDevice* pDevice, MeshData& meshData)
 	using TWeightsStream = Vector2u;
 	struct TJointsStream { uint16 Joints[4]; };
 
-	bufferSize += Math::AlignUp<uint64>(meshData.Indices.size() * sizeof(uint32), bufferAlignment);
-	bufferSize += Math::AlignUp<uint64>(meshData.PositionsStream.size() * sizeof(TVertexPositionStream), bufferAlignment);
-	bufferSize += Math::AlignUp<uint64>(meshData.UVsStream.size() * sizeof(TVertexUVStream), bufferAlignment);
-	bufferSize += Math::AlignUp<uint64>(meshData.NormalsStream.size() * sizeof(TVertexNormalStream), bufferAlignment);
-	bufferSize += Math::AlignUp<uint64>(meshData.ColorsStream.size() * sizeof(TVertexColorStream), bufferAlignment);
-	bufferSize += Math::AlignUp<uint64>(meshData.JointsStream.size() * sizeof(TJointsStream), bufferAlignment);
-	bufferSize += Math::AlignUp<uint64>(meshData.WeightsStream.size() * sizeof(TWeightsStream), bufferAlignment);
-
-	bufferSize += Math::AlignUp<uint64>(meshData.Meshlets.size() * sizeof(ShaderInterop::Meshlet), bufferAlignment);
-	bufferSize += Math::AlignUp<uint64>(meshData.MeshletVertices.size() * sizeof(uint32), bufferAlignment);
-	bufferSize += Math::AlignUp<uint64>(meshData.MeshletTriangles.size() * sizeof(ShaderInterop::Meshlet::Triangle), bufferAlignment);
-	bufferSize += Math::AlignUp<uint64>(meshData.MeshletBounds.size() * sizeof(ShaderInterop::Meshlet::Bounds), bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.Indices.size()				* sizeof(uint32),										bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.PositionsStream.size()		* sizeof(TVertexPositionStream),						bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.UVsStream.size()			* sizeof(TVertexUVStream),								bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.NormalsStream.size()		* sizeof(TVertexNormalStream),							bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.ColorsStream.size()		* sizeof(TVertexColorStream),							bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.JointsStream.size()		* sizeof(TJointsStream),								bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.WeightsStream.size()		* sizeof(TWeightsStream),								bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.Meshlets.size()			* sizeof(ShaderInterop::Meshlet),						bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.MeshletVertices.size()		* sizeof(uint32),										bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.MeshletTriangles.size()	* sizeof(ShaderInterop::Meshlet::Triangle),				bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.MeshletBounds.size()		* sizeof(ShaderInterop::Meshlet::Bounds),				bufferAlignment);
 
 	if (hasAnim)
 	{
 		bufferSize += Math::AlignUp<uint64>(meshData.PositionsStream.size() * sizeof(TVertexPositionStream), bufferAlignment);
-		bufferSize += Math::AlignUp<uint64>(meshData.NormalsStream.size() * sizeof(TVertexNormalStream), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.NormalsStream.size()	* sizeof(TVertexNormalStream), bufferAlignment);
 	}
 
 	gAssert(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
