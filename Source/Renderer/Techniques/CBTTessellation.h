@@ -21,6 +21,7 @@ public:
 	CBTTessellation(GraphicsDevice* pDevice);
 
 	void RasterMain(RGGraph& graph, const RenderView* pView, const SceneTextures& sceneTextures);
+
 	void Shade(RGGraph& graph, const RenderView* pView, const SceneTextures& sceneTextures, RGTexture* pFog);
 	static void CBTDemo();
 
@@ -28,7 +29,6 @@ private:
 	void SetupPipelines(GraphicsDevice* pDevice);
 
 	GraphicsDevice* m_pDevice;
-	CBTData m_CBTData;
 
 	Ref<RootSignature> m_pCBTRS;
 	Ref<PipelineState> m_pCBTIndirectArgsPSO;

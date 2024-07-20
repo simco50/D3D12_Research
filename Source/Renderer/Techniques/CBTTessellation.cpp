@@ -137,8 +137,6 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 			bool invalidatePSOs = false;
 
 			ImGui::SliderFloat("Height Scale", &CBTSettings::HeightScale, 1.0f, 40.0f);
-			if (ImGui::SliderInt("CBT Depth", &CBTSettings::CBTDepth, 10, 28))
-				m_CBTData.pCBTBuffer = nullptr;
 
 			invalidatePSOs |= ImGui::SliderInt("Triangle SubD", &CBTSettings::SubD, 0, 3);
 			ImGui::SliderFloat("Screen Size Bias", &CBTSettings::ScreenSizeBias, 0, 15);
@@ -153,7 +151,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 			invalidatePSOs |= ImGui::Checkbox("Distance LOD", &CBTSettings::DistanceLOD);
 			invalidatePSOs |= ImGui::Checkbox("Always Subdivide", &CBTSettings::AlwaysSubdivide);
 
-			if(invalidatePSOs)
+			if (invalidatePSOs)
 				SetupPipelines(m_pDevice);
 		}
 	}
@@ -166,223 +164,227 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 
 	RG_GRAPH_SCOPE("CBT", graph);
 
-	RGBuffer* pCBTBuffer = graph.TryImport(m_CBTData.pCBTBuffer);
-	if (!pCBTBuffer)
-	{
-		uint32 size = CBT::ComputeSize(CBTSettings::CBTDepth);
-		pCBTBuffer = RGUtils::CreatePersistent(graph, "CBT", BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), &m_CBTData.pCBTBuffer, true);
-
-		graph.AddPass("CBT Upload", RGPassFlag::Copy)
-			.Write({ pCBTBuffer })
-			.Bind([=](CommandContext& context, const RGResources& resources)
-				{
-					CBT cbt;
-					cbt.InitBare(CBTSettings::CBTDepth, 1);
-					ScratchAllocation alloc = context.AllocateScratch(size);
-					memcpy(alloc.pMappedMemory, cbt.GetData(), size);
-					context.CopyBuffer(alloc.pBackingResource, resources.Get(pCBTBuffer), alloc.Size, alloc.Offset, 0);
-				});
-	}
-	m_CBTData.pCBT = pCBTBuffer;
-
-	struct
-	{
-		float HeightScale;
-		float PlaneScale;
-		uint32 NumCBTElements;
-	} commonArgs;
-	commonArgs.HeightScale = CBTSettings::HeightScale;
-	commonArgs.PlaneScale = CBTSettings::PlaneScale;
-	commonArgs.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
-
-	RGBuffer* pIndirectArgs = RGUtils::CreatePersistent(graph, "CBT.IndirectArgs", BufferDesc::CreateIndirectArguments<IndirectDrawArgs>(1, BufferFlag::UnorderedAccess), &m_CBTData.pCBTIndirectArgs, true);
-
-	if (!CBTSettings::MeshShader)
-	{
-		graph.AddPass("CBT Update", RGPassFlag::Compute)
-			.Write({ pCBTBuffer })
-			.Read({ pIndirectArgs })
-			.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				context.SetComputeRootSignature(m_pCBTRS);
-
-				struct
-				{
-					float ScreenSizeBias;
-					float HeightmapVarianceBias;
-					uint32 SplitMode;
-				} updateParams;
-				updateParams.ScreenSizeBias = CBTSettings::ScreenSizeBias;
-				updateParams.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
-				updateParams.SplitMode = m_CBTData.SplitMode;
-
-				context.BindRootCBV(0, updateParams);
-				context.BindRootCBV(1, commonArgs);
-				context.BindRootCBV(2, pView->ViewCB);
-				context.BindResources(3, {
-					resources.GetUAV(pCBTBuffer),
-					});
-
-				context.SetPipelineState(m_pCBTUpdatePSO);
-				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, UpdateDispatchArgs));
-				context.InsertUAVBarrier(resources.Get(pCBTBuffer));
-				});
-	}
-
-	// Because the bits in the bitfield are counted directly, we need a snapshot of the bitfield before subdivision starts
-	// Cache the bitfield in the second to last layer as it is unused memory now.
-	// Also required by sum reduction pass
-	graph.AddPass("CBT Cache Bitfield", RGPassFlag::Compute)
-		.Write(pCBTBuffer)
-		.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				context.SetComputeRootSignature(m_pCBTRS);
-
-				struct
-				{
-					uint32 Depth;
-					uint32 NumCBTElements;
-				} reductionArgs;
-				int32 currentDepth = CBTSettings::CBTDepth;
-
-				reductionArgs.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
-				reductionArgs.Depth = currentDepth;
-				context.BindRootCBV(0, reductionArgs);
-				context.BindRootCBV(2, pView->ViewCB);
-				context.BindResources(3, {
-					resources.GetUAV(pCBTBuffer),
-					});
-
-				context.SetPipelineState(m_pCBTCacheBitfieldPSO);
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
-				context.InsertUAVBarrier(resources.Get(pCBTBuffer));
-			});
-
-	graph.AddPass("CBT Sum Reduction", RGPassFlag::Compute)
-		.Write(pCBTBuffer)
-		.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				context.SetComputeRootSignature(m_pCBTRS);
-				context.BindRootCBV(2, pView->ViewCB);
-				context.BindResources(3, {
-					resources.GetUAV(pCBTBuffer),
-					});
-
-				struct SumReductionData
-				{
-					uint32 Depth;
-					uint32 NumCBTElements;
-				} reductionArgs;
-				int32 currentDepth = CBTSettings::CBTDepth - 5;
-
-				reductionArgs.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
-
-				for (currentDepth = currentDepth - 1; currentDepth >= 0; --currentDepth)
-				{
-					reductionArgs.Depth = currentDepth;
-					context.BindRootCBV(0, reductionArgs);
-
-					context.SetPipelineState(m_pCBTSumReductionPSO);
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
-					context.InsertUAVBarrier(resources.Get(pCBTBuffer));
-				}
-			});
-
-	graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
-		.Write({ pCBTBuffer, pIndirectArgs })
-		.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				struct
-				{
-					uint32 NumCBTElements;
-				} params;
-				params.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
-
-				context.SetComputeRootSignature(m_pCBTRS);
-				context.BindRootCBV(0, params);
-				context.BindRootCBV(2, pView->ViewCB);
-				context.BindResources(3, {
-					resources.GetUAV(pCBTBuffer),
-					resources.GetUAV(pIndirectArgs),
-					});
-				context.SetPipelineState(m_pCBTIndirectArgsPSO);
-				context.Dispatch(1);
-				context.InsertUAVBarrier(resources.Get(pCBTBuffer));
-			});
-
-	// Amplification + Mesh shader variant performs subdivision used for the next frame while rendering with the subdivision state of the previous frame.
-	graph.AddPass("CBT Render", RGPassFlag::Raster)
-		.Write(pCBTBuffer)
-		.Read(pIndirectArgs)
-		.DepthStencil(sceneTextures.pDepth)
-		.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				context.SetGraphicsRootSignature(m_pCBTRS);
-				context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
-				context.SetStencilRef((uint32)StencilBit::Terrain);
-				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-				struct
-				{
-					float ScreenSizeBias;
-					float HeightmapVarianceBias;
-					uint32 SplitMode;
-				} updateParams;
-				updateParams.ScreenSizeBias = CBTSettings::ScreenSizeBias;
-				updateParams.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
-				updateParams.SplitMode = m_CBTData.SplitMode;
-
-				context.BindRootCBV(0, updateParams);
-				context.BindRootCBV(1, commonArgs);
-				context.BindRootCBV(2, pView->ViewCB);
-				context.BindResources(3, {
-					resources.GetUAV(pCBTBuffer),
-					});
-
-				if (CBTSettings::MeshShader)
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, DispatchMeshArgs));
-				else
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, DrawArgs));
-			});
-
-	if (CBTSettings::DebugVisualize)
-	{
-		if (m_CBTData.pDebugVisualizeTexture)
+	auto cbt_view = pView->pWorld->Registry.view<CBTData>();
+	cbt_view.each([&](CBTData& cbtData)
 		{
-			ImGui::Begin("CBT");
-			ImVec2 size = ImGui::GetAutoSize(ImVec2((float)m_CBTData.pDebugVisualizeTexture->GetWidth(), (float)m_CBTData.pDebugVisualizeTexture->GetHeight()));
-			ImGui::Image(m_CBTData.pDebugVisualizeTexture, size);
-			ImGui::End();
-		}
+			RGBuffer* pCBTBuffer = graph.TryImport(cbtData.pCBTBuffer);
+			if (!pCBTBuffer)
+			{
+				uint32 size = CBT::ComputeSize(CBTSettings::CBTDepth);
+				pCBTBuffer = RGUtils::CreatePersistent(graph, "CBT", BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), &cbtData.pCBTBuffer, true);
 
-		RGTexture* pVisualizeTarget = RGUtils::CreatePersistent(graph, "CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_CBTData.pDebugVisualizeTexture, true);
-		graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
-			.Read({ pIndirectArgs })
-			.Write({ pCBTBuffer })
-			.RenderTarget(pVisualizeTarget)
-			.Bind([=](CommandContext& context, const RGResources& resources)
-				{
-					context.SetGraphicsRootSignature(m_pCBTRS);
-					context.SetPipelineState(m_pCBTDebugVisualizePSO);
-					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-					struct
-					{
-						uint32 NumCBTElements;
-					} params;
-					params.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
-
-					context.BindRootCBV(0, params);
-					context.BindRootCBV(2, pView->ViewCB);
-					context.BindResources(3, {
-						resources.GetUAV(pCBTBuffer),
+				graph.AddPass("CBT Upload", RGPassFlag::Copy)
+					.Write({ pCBTBuffer })
+					.Bind([=](CommandContext& context, const RGResources& resources)
+						{
+							CBT cbt;
+							cbt.InitBare(CBTSettings::CBTDepth, 1);
+							ScratchAllocation alloc = context.AllocateScratch(size);
+							memcpy(alloc.pMappedMemory, cbt.GetData(), size);
+							context.CopyBuffer(alloc.pBackingResource, resources.Get(pCBTBuffer), alloc.Size, alloc.Offset, 0);
 						});
+			}
+			cbtData.pCBT = pCBTBuffer;
 
-					context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, DebugDrawArgs));
-				});
-	}
+			struct
+			{
+				float HeightScale;
+				float PlaneScale;
+				uint32 NumCBTElements;
+			} commonArgs;
+			commonArgs.HeightScale = CBTSettings::HeightScale;
+			commonArgs.PlaneScale = CBTSettings::PlaneScale;
+			commonArgs.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
 
-	m_CBTData.SplitMode = 1 - m_CBTData.SplitMode;
+			RGBuffer* pIndirectArgs = RGUtils::CreatePersistent(graph, "CBT.IndirectArgs", BufferDesc::CreateIndirectArguments<IndirectDrawArgs>(1, BufferFlag::UnorderedAccess), &cbtData.pCBTIndirectArgs, true);
+
+			if (!CBTSettings::MeshShader)
+			{
+				graph.AddPass("CBT Update", RGPassFlag::Compute)
+					.Write({ pCBTBuffer })
+					.Read({ pIndirectArgs })
+					.Bind([=](CommandContext& context, const RGResources& resources)
+						{
+							context.SetComputeRootSignature(m_pCBTRS);
+
+							struct
+							{
+								float ScreenSizeBias;
+								float HeightmapVarianceBias;
+								uint32 SplitMode;
+							} updateParams;
+							updateParams.ScreenSizeBias = CBTSettings::ScreenSizeBias;
+							updateParams.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
+							updateParams.SplitMode = cbtData.SplitMode;
+
+							context.BindRootCBV(0, updateParams);
+							context.BindRootCBV(1, commonArgs);
+							context.BindRootCBV(2, pView->ViewCB);
+							context.BindResources(3, {
+								resources.GetUAV(pCBTBuffer),
+								});
+
+							context.SetPipelineState(m_pCBTUpdatePSO);
+							context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, UpdateDispatchArgs));
+							context.InsertUAVBarrier(resources.Get(pCBTBuffer));
+						});
+			}
+
+			// Because the bits in the bitfield are counted directly, we need a snapshot of the bitfield before subdivision starts
+			// Cache the bitfield in the second to last layer as it is unused memory now.
+			// Also required by sum reduction pass
+			graph.AddPass("CBT Cache Bitfield", RGPassFlag::Compute)
+				.Write(pCBTBuffer)
+				.Bind([=](CommandContext& context, const RGResources& resources)
+					{
+						context.SetComputeRootSignature(m_pCBTRS);
+
+						struct
+						{
+							uint32 Depth;
+							uint32 NumCBTElements;
+						} reductionArgs;
+						int32 currentDepth = CBTSettings::CBTDepth;
+
+						reductionArgs.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
+						reductionArgs.Depth = currentDepth;
+						context.BindRootCBV(0, reductionArgs);
+						context.BindRootCBV(2, pView->ViewCB);
+						context.BindResources(3, {
+							resources.GetUAV(pCBTBuffer),
+							});
+
+						context.SetPipelineState(m_pCBTCacheBitfieldPSO);
+						context.Dispatch(ComputeUtils::GetNumThreadGroups(1u << currentDepth, 256 * 32));
+						context.InsertUAVBarrier(resources.Get(pCBTBuffer));
+					});
+
+			graph.AddPass("CBT Sum Reduction", RGPassFlag::Compute)
+				.Write(pCBTBuffer)
+				.Bind([=](CommandContext& context, const RGResources& resources)
+					{
+						context.SetComputeRootSignature(m_pCBTRS);
+						context.BindRootCBV(2, pView->ViewCB);
+						context.BindResources(3, {
+							resources.GetUAV(pCBTBuffer),
+							});
+
+						struct SumReductionData
+						{
+							uint32 Depth;
+							uint32 NumCBTElements;
+						} reductionArgs;
+						int32 currentDepth = CBTSettings::CBTDepth - 5;
+
+						reductionArgs.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
+
+						for (currentDepth = currentDepth - 1; currentDepth >= 0; --currentDepth)
+						{
+							reductionArgs.Depth = currentDepth;
+							context.BindRootCBV(0, reductionArgs);
+
+							context.SetPipelineState(m_pCBTSumReductionPSO);
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(1 << currentDepth, 256));
+							context.InsertUAVBarrier(resources.Get(pCBTBuffer));
+						}
+					});
+
+			graph.AddPass("CBT Update Indirect Args", RGPassFlag::Compute)
+				.Write({ pCBTBuffer, pIndirectArgs })
+				.Bind([=](CommandContext& context, const RGResources& resources)
+					{
+						struct
+						{
+							uint32 NumCBTElements;
+						} params;
+						params.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
+
+						context.SetComputeRootSignature(m_pCBTRS);
+						context.BindRootCBV(0, params);
+						context.BindRootCBV(2, pView->ViewCB);
+						context.BindResources(3, {
+							resources.GetUAV(pCBTBuffer),
+							resources.GetUAV(pIndirectArgs),
+							});
+						context.SetPipelineState(m_pCBTIndirectArgsPSO);
+						context.Dispatch(1);
+						context.InsertUAVBarrier(resources.Get(pCBTBuffer));
+					});
+
+			// Amplification + Mesh shader variant performs subdivision used for the next frame while rendering with the subdivision state of the previous frame.
+			graph.AddPass("CBT Render", RGPassFlag::Raster)
+				.Write(pCBTBuffer)
+				.Read(pIndirectArgs)
+				.DepthStencil(sceneTextures.pDepth)
+				.Bind([=](CommandContext& context, const RGResources& resources)
+					{
+						context.SetGraphicsRootSignature(m_pCBTRS);
+						context.SetPipelineState(CBTSettings::MeshShader ? m_pCBTRenderMeshShaderPSO : m_pCBTRenderPSO);
+						context.SetStencilRef((uint32)StencilBit::Terrain);
+						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+						struct
+						{
+							float ScreenSizeBias;
+							float HeightmapVarianceBias;
+							uint32 SplitMode;
+						} updateParams;
+						updateParams.ScreenSizeBias = CBTSettings::ScreenSizeBias;
+						updateParams.HeightmapVarianceBias = CBTSettings::HeightmapVarianceBias;
+						updateParams.SplitMode = cbtData.SplitMode;
+
+						context.BindRootCBV(0, updateParams);
+						context.BindRootCBV(1, commonArgs);
+						context.BindRootCBV(2, pView->ViewCB);
+						context.BindResources(3, {
+							resources.GetUAV(pCBTBuffer),
+							});
+
+						if (CBTSettings::MeshShader)
+							context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, DispatchMeshArgs));
+						else
+							context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, DrawArgs));
+					});
+
+			if (CBTSettings::DebugVisualize)
+			{
+				if (cbtData.pDebugVisualizeTexture)
+				{
+					ImGui::Begin("CBT");
+					ImVec2 size = ImGui::GetAutoSize(ImVec2((float)cbtData.pDebugVisualizeTexture->GetWidth(), (float)cbtData.pDebugVisualizeTexture->GetHeight()));
+					ImGui::Image(cbtData.pDebugVisualizeTexture, size);
+					ImGui::End();
+				}
+
+				RGTexture* pVisualizeTarget = RGUtils::CreatePersistent(graph, "CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &cbtData.pDebugVisualizeTexture, true);
+				graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
+					.Read({ pIndirectArgs })
+					.Write({ pCBTBuffer })
+					.RenderTarget(pVisualizeTarget)
+					.Bind([=](CommandContext& context, const RGResources& resources)
+						{
+							context.SetGraphicsRootSignature(m_pCBTRS);
+							context.SetPipelineState(m_pCBTDebugVisualizePSO);
+							context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+							struct
+							{
+								uint32 NumCBTElements;
+							} params;
+							params.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
+
+							context.BindRootCBV(0, params);
+							context.BindRootCBV(2, pView->ViewCB);
+							context.BindResources(3, {
+								resources.GetUAV(pCBTBuffer),
+								});
+
+							context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectDrawArgs, DebugDrawArgs));
+						});
+			}
+
+			cbtData.SplitMode = 1 - cbtData.SplitMode;
+		});
 }
 
 void CBTTessellation::Shade(RGGraph& graph, const RenderView* pView, const SceneTextures& sceneTextures, RGTexture* pFog)
@@ -395,7 +397,6 @@ void CBTTessellation::Shade(RGGraph& graph, const RenderView* pView, const Scene
 	} commonArgs;
 	commonArgs.HeightScale = CBTSettings::HeightScale;
 	commonArgs.PlaneScale = CBTSettings::PlaneScale;
-	commonArgs.NumCBTElements = (uint32)m_CBTData.pCBT->GetDesc().Size / sizeof(uint32);
 
 	graph.AddPass("CBT Shade", RGPassFlag::Raster)
 		.Read({ pFog, sceneTextures.pDepth })

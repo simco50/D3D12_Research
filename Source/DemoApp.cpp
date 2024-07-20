@@ -238,6 +238,11 @@ void DemoApp::SetupScene(const char* pPath)
 		volume.DensityChange = 0.03f;
 	}
 
+	{
+		entt::entity entity = m_World.CreateEntity("Terrain");
+		CBTData cbtData = m_World.Registry.emplace<CBTData>(entity);
+	}
+
 
 	m_pLensDirtTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LensDirt.dds", true, "Lens Dirt");
 }
@@ -1591,7 +1596,7 @@ void DemoApp::UpdateSkinning(RGGraph& graph)
 		uint32 WeightsOffset;
 		uint32 SkinnedPositionsOffset;
 		uint32 SkinnedNormalsOffset;
-		uint32 NumTriangles;
+		uint32 NumVertices;
 	};
 	Array<SkinningUpdateInfo> skinDatas;
 	Array<Matrix> skinningTransforms;
@@ -1613,7 +1618,7 @@ void DemoApp::UpdateSkinning(RGGraph& graph)
 				skinData.NormalsOffset				= mesh.NormalStreamLocation.OffsetFromStart;
 				skinData.JointsOffset				= mesh.JointsStreamLocation.OffsetFromStart;
 				skinData.WeightsOffset				= mesh.WeightsStreamLocation.OffsetFromStart;
-				skinData.NumTriangles				= mesh.PositionStreamLocation.Elements;
+				skinData.NumVertices				= mesh.PositionStreamLocation.Elements;
 
 				const Animation& anim = m_World.Animations[model.AnimationIndex];
 				const Skeleton& skeleton = m_World.Skeletons[model.SkeletonIndex];

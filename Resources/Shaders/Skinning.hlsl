@@ -9,7 +9,7 @@ struct SkinnedMeshData
     uint WeightsOffset;
     uint SkinnedPositionsOffset;
     uint SkinnedNormalsOffset;
-    uint NumTriangles;
+    uint NumVertices;
 };
 
 ConstantBuffer<SkinnedMeshData>   cMeshInfo             : register(b0, space1);
@@ -19,7 +19,7 @@ StructuredBuffer<float4x4>        tSkinMatrices         : register(t0);
 [numthreads(64, 1, 1)]
 void CSMain(uint threadID : SV_DispatchThreadID)
 {
-    if(threadID >= cMeshInfo.NumTriangles)
+    if(threadID >= cMeshInfo.NumVertices)
         return;
 
     float3 position = ByteBufferLoad<float3>(uMeshData, threadID, cMeshInfo.PositionsOffset);

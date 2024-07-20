@@ -49,7 +49,7 @@ struct LightResult
 	}
 };
 
-LightResult DefaultLitBxDF(float3 specularColor, float specularRoughness, float3 diffuseColor, half3 N, half3 V, half3 L, float falloff)
+LightResult DefaultLitBxDF(float3 specularColor, float specularRoughness, float3 diffuseColor, float3 N, float3 V, float3 L, float falloff)
 {
 	LightResult lighting = (LightResult)0;
 	if(falloff <= 0.0f)
