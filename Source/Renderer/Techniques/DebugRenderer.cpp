@@ -88,21 +88,23 @@ void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* p
 
 				if (numLines != 0)
 				{
-					ScratchAllocation allocation = context.AllocateScratch(numLines * VertexStride);
-					memcpy(allocation.pMappedMemory, m_Lines, numLines * VertexStride);
+					uint32 numVertices = numLines * 2;
+					ScratchAllocation allocation = context.AllocateScratch(numVertices * VertexStride);
+					memcpy(allocation.pMappedMemory, m_Lines, numVertices * VertexStride);
 					context.BindRootSRV(0, allocation.GpuHandle);
 					context.SetPipelineState(m_pLinesPSO);
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-					context.Draw(0, numLines);
+					context.Draw(0, numVertices);
 				}
 				if (numTriangles != 0)
 				{
-					ScratchAllocation allocation = context.AllocateScratch(numTriangles * VertexStride);
-					memcpy(allocation.pMappedMemory, m_Triangles, numTriangles * VertexStride);
+					uint32 numVertices = numTriangles * 2;
+					ScratchAllocation allocation = context.AllocateScratch(numVertices * VertexStride);
+					memcpy(allocation.pMappedMemory, m_Triangles, numVertices * VertexStride);
 					context.BindRootSRV(0, allocation.GpuHandle);
 					context.SetPipelineState(m_pTrianglesPSO);
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-					context.Draw(0, numTriangles);
+					context.Draw(0, numVertices);
 				}
 			});
 
@@ -333,15 +335,14 @@ void DebugRenderer::AddCone(const Vector3& position, const Quaternion& rotation,
 	}
 }
 
-void DebugRenderer::AddBone(const Matrix& matrix, float length, const IntColor& color)
+void DebugRenderer::AddBone(const Matrix& matrix, float size, const IntColor& color)
 {
-	float boneSize = 2;
 	Vector3 start = Vector3::Transform(Vector3(0, 0, 0), matrix);
-	Vector3 a = Vector3::Transform(Vector3(-boneSize, boneSize, boneSize), matrix);
-	Vector3 b = Vector3::Transform(Vector3(boneSize, boneSize, boneSize), matrix);
-	Vector3 c = Vector3::Transform(Vector3(boneSize, -boneSize, boneSize), matrix);
-	Vector3 d = Vector3::Transform(Vector3(-boneSize, -boneSize, boneSize), matrix);
-	Vector3 tip = Vector3::Transform(Vector3(0, 0, -boneSize * length), matrix);
+	Vector3 a = Vector3::Transform(Vector3(-size, size, size), matrix);
+	Vector3 b = Vector3::Transform(Vector3(size, size, size), matrix);
+	Vector3 c = Vector3::Transform(Vector3(size, -size, size), matrix);
+	Vector3 d = Vector3::Transform(Vector3(-size, -size, size), matrix);
+	Vector3 tip = Vector3::Transform(Vector3(0, 0, -size * 4), matrix);
 
 	AddTriangle(start, d, c, color, false);
 	AddTriangle(start, a, d, color, false);

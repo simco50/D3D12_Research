@@ -1,6 +1,59 @@
 #pragma once
 
 #include "RHI/RHI.h"
+#include "RHI/Buffer.h"
+
+struct Skeleton
+{
+	using JointIndex = uint16;
+	static constexpr JointIndex InvalidJoint = 0xFFFF;
+
+	HashMap<String, JointIndex> JointsMap;
+	Array<JointIndex> JointUpdateOrder;
+
+	Array<JointIndex> ParentIndices;
+	Array<Matrix> InverseBindMatrices;
+
+	JointIndex GetJoint(String inName) const { auto it = JointsMap.find(inName); return it != JointsMap.end() ? it->second : InvalidJoint; }
+	uint32 NumJoints() const { return (uint32)InverseBindMatrices.size(); }
+};
+
+struct AnimationChannel
+{
+	enum class PathType
+	{
+		Translation,
+		Rotation,
+		Scale,
+	};
+
+	enum class Interpolation
+	{
+		Linear,
+		Step,
+		Cubic,
+	};
+
+	Vector4 Evaluate(float time) const;
+
+	const Vector4& GetInTangent(int index) const { gAssert(Interpolation == Interpolation::Cubic); return Data[index * 3 + 0]; }
+	const Vector4& GetVertex(int index)	const { return Interpolation == Interpolation::Cubic ? Data[index * 3 + 1] : Data[index]; }
+	const Vector4& GetOutTangent(int index) const { gAssert(Interpolation == Interpolation::Cubic); return Data[index * 3 + 2]; }
+
+	String			Target;
+	Array<float>	KeyFrames;
+	Array<Vector4>	Data;
+	Interpolation	Interpolation = Interpolation::Linear;
+	PathType		Path = PathType::Translation;
+};
+
+struct Animation
+{
+	String Name;
+	Array<AnimationChannel> Channels;
+	float TimeStart = std::numeric_limits<float>::max();
+	float TimeEnd = std::numeric_limits<float>::min();
+};
 
 enum class MaterialAlphaMode
 {
@@ -24,16 +77,25 @@ struct Material
 	MaterialAlphaMode AlphaMode;
 };
 
+
 struct Mesh
 {
 	uint32 MaterialId;
 
+	bool IsAnimated() const { return SkinnedPositionStreamLocation.IsValid(); }
+
 	ResourceFormat PositionsFormat = ResourceFormat::RGB32_FLOAT;
 	VertexBufferView PositionStreamLocation;
+	VertexBufferView SkinnedPositionStreamLocation;
 	VertexBufferView UVStreamLocation;
 	VertexBufferView NormalStreamLocation;
+	VertexBufferView SkinnedNormalStreamLocation;
 	VertexBufferView ColorsStreamLocation;
+	VertexBufferView JointsStreamLocation;
+	VertexBufferView WeightsStreamLocation;
+
 	IndexBufferView IndicesLocation;
+
 	uint32 MeshletsLocation;
 	uint32 MeshletVerticesLocation;
 	uint32 MeshletTrianglesLocation;
@@ -43,11 +105,13 @@ struct Mesh
 	BoundingBox Bounds;
 
 	Ref<Buffer> pBuffer;
+	Ref<Buffer> pBLASScratch;
 	Ref<Buffer> pBLAS;
-	float ScaleFactor = 1.0f;
 };
 
 struct Model
 {
-	int MeshIndex;
+	int MeshIndex = -1;
+	int SkeletonIndex = -1;
+	int AnimationIndex = -1;
 };

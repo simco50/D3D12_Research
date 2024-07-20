@@ -58,6 +58,7 @@ private:
 
 	void UpdateImGui();
 
+	void UpdateSkinning(RGGraph& graph);
 	RGTexture* ComputeBloom(RGGraph& graph, const RenderView* pView, RGTexture* pColor);
 	RGBuffer* ComputeExposure(RGGraph& graph, const RenderView* pView, RGTexture* pColor);
 	void MakeScreenshot();
@@ -93,7 +94,6 @@ private:
 	VolumetricFogData m_FogData;
 
 	WindowHandle m_Window = nullptr;
-	std::unique_ptr<Camera> m_pCamera;
 
 	RenderPath m_RenderPath = RenderPath::Visibility;
 
@@ -148,4 +148,7 @@ private:
 
 	Ref<PipelineState> m_pVisibilityGBufferPSO;
 	Ref<PipelineState> m_pDeferredShadePSO;
+
+	// Skinning
+	Ref<PipelineState> m_pSkinPSO;
 };

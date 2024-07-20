@@ -18,5 +18,6 @@
 #include "Core/Delegates.h"
 #include "Core/Ref.h"
 #include "Core/Span.h"
+#include "Core/EnumSet.h"
 #include "Math/MathTypes.h"
 #include "Math/Math.h"

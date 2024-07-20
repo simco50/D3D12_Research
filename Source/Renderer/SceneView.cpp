@@ -161,7 +161,7 @@ namespace Renderer
 					meshInstance.MeshIndex				= model.MeshIndex;
 					meshInstance.MaterialIndex			= mesh.MaterialId;
 					meshInstance.LocalToWorld			= transform.World;
-					meshInstance.LocalToWorldPrev		= transform.World; //#todo
+					meshInstance.LocalToWorldPrev		= transform.WorldPrev;
 					meshInstance.LocalBoundsOrigin		= mesh.Bounds.Center;
 					meshInstance.LocalBoundsExtents		= mesh.Bounds.Extents;
 
@@ -180,8 +180,8 @@ namespace Renderer
 				meshData.BufferIndex			= mesh.pBuffer->GetSRVIndex();
 				meshData.IndexByteSize			= mesh.IndicesLocation.Stride();
 				meshData.IndicesOffset			= (uint32)mesh.IndicesLocation.OffsetFromStart;
-				meshData.PositionsOffset		= (uint32)mesh.PositionStreamLocation.OffsetFromStart;
-				meshData.NormalsOffset			= (uint32)mesh.NormalStreamLocation.OffsetFromStart;
+				meshData.PositionsOffset		= mesh.SkinnedPositionStreamLocation.IsValid() ? (uint32)mesh.SkinnedPositionStreamLocation.OffsetFromStart : (uint32)mesh.PositionStreamLocation.OffsetFromStart;
+				meshData.NormalsOffset			= mesh.SkinnedNormalStreamLocation.IsValid() ? (uint32)mesh.SkinnedNormalStreamLocation.OffsetFromStart : (uint32)mesh.NormalStreamLocation.OffsetFromStart;
 				meshData.ColorsOffset			= (uint32)mesh.ColorsStreamLocation.OffsetFromStart;
 				meshData.UVsOffset				= (uint32)mesh.UVStreamLocation.OffsetFromStart;
 

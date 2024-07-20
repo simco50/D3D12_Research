@@ -22,10 +22,28 @@ SamplerComparisonState sLinearClampComparisonGreater :		register(s10, space1);
 SamplerComparisonState sLinearWrapComparisonGreater :		register(s11, space1);
 
 template<typename T>
-T BufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
+T ByteBufferLoad(ByteAddressBuffer buffer, uint elementIndex, uint byteOffset = 0)
+{
+	return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
+}
+
+template<typename T>
+T ByteBufferLoad(RWByteAddressBuffer buffer, uint elementIndex, uint byteOffset = 0)
+{
+	return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
+}
+
+template<typename T>
+T ByteBufferLoad(uint bufferIndex, uint elementIndex, uint byteOffset = 0)
 {
 	ByteAddressBuffer buffer = ResourceDescriptorHeap[NonUniformResourceIndex(bufferIndex)];
-	return buffer.Load<T>(elementIndex * sizeof(T) + byteOffset);
+	return ByteBufferLoad<T>(buffer, elementIndex, byteOffset);
+}
+
+template<typename T>
+void ByteBufferStore(RWByteAddressBuffer buffer, T value, uint elementIndex, uint byteOffset = 0)
+{
+	buffer.Store<T>(elementIndex * sizeof(T) + byteOffset, value);
 }
 
 float4 Sample2D(int index, SamplerState s, float2 uv, uint2 offset = 0)
@@ -75,13 +93,13 @@ uint3 GetPrimitive(MeshData mesh, uint primitiveIndex)
 	uint3 indices;
 	if(mesh.IndexByteSize == 4)
 	{
-		indices = BufferLoad<uint3>(mesh.BufferIndex, primitiveIndex, mesh.IndicesOffset);
+		indices = ByteBufferLoad<uint3>(mesh.BufferIndex, primitiveIndex, mesh.IndicesOffset);
 	}
 	else
 	{
 		uint byteOffset = primitiveIndex * 3 * 2;
 		uint alignedByteOffset = byteOffset & ~3;
-		uint2 four16BitIndices = BufferLoad<uint2>(mesh.BufferIndex, 0, mesh.IndicesOffset + alignedByteOffset);
+		uint2 four16BitIndices = ByteBufferLoad<uint2>(mesh.BufferIndex, 0, mesh.IndicesOffset + alignedByteOffset);
 
 		if (byteOffset == alignedByteOffset)
 		{
@@ -111,15 +129,15 @@ struct Vertex
 Vertex LoadVertex(MeshData mesh, uint vertexId)
 {
 	Vertex vertex;
-	vertex.Position = RGBA16_SNORM::Unpack(BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.PositionsOffset)).xyz;
-	vertex.UV = RG16_FLOAT::Unpack(BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
+	vertex.Position = ByteBufferLoad<float3>(mesh.BufferIndex, vertexId, mesh.PositionsOffset);
+	vertex.UV = RG16_FLOAT::Unpack(ByteBufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.UVsOffset));
 
-	uint2 normalData = BufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
+	uint2 normalData = ByteBufferLoad<uint2>(mesh.BufferIndex, vertexId, mesh.NormalsOffset);
 	vertex.Normal = RGB10A2_SNORM::Unpack(normalData.x).xyz;
 	vertex.Tangent = RGB10A2_SNORM::Unpack(normalData.y);
 
 	vertex.Color = 0xFFFFFFFF;
 	if(mesh.ColorsOffset != ~0u)
-		vertex.Color = BufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
+		vertex.Color = ByteBufferLoad<uint>(mesh.BufferIndex, vertexId, mesh.ColorsOffset);
 	return vertex;
 }

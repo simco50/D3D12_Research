@@ -64,7 +64,7 @@ public:
 	void AddAxisSystem(const Matrix& transform, float lineLength = 1.0f);
 	void AddWireCylinder(const Vector3& position, const Quaternion& rotation, float height, float radius, int segments, const IntColor& color);
 	void AddCone(const Vector3& position, const Quaternion& rotation, float height, float angle, int segments, const IntColor& color, bool solid = false);
-	void AddBone(const Matrix& matrix, float length, const IntColor& color);
+	void AddBone(const Matrix& matrix, float size, const IntColor& color);
 	void AddLight(const Transform& transform, const Light& light, const IntColor& color = Colors::Yellow);
 
 private:

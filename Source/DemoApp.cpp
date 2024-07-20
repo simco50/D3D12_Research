@@ -148,7 +148,9 @@ void DemoApp::Init()
 	m_MainView.pWorld = &m_World;
 	m_RenderWorld.AccelerationStructure.Init(m_pDevice);
 
-	SetupScene("Resources/Scenes/Sponza/Sponza.gltf");
+	const char* pScene = "Resources/Scenes/Sponza/Sponza.gltf";
+	CommandLine::GetValue("scene", &pScene);
+	SetupScene(pScene);
 }
 
 void DemoApp::Shutdown()
@@ -160,13 +162,14 @@ void DemoApp::SetupScene(const char* pPath)
 {
 	m_World = {};
 
-	m_pCamera = std::make_unique<FreeCamera>();
-	m_pCamera->SetPosition(Vector3(-1.3f, 12.4f, -1.5f));
-	m_pCamera->SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
+	m_World.Camera = m_World.CreateEntity("Main Camera");
+	FreeCamera& camera = m_World.Registry.emplace<FreeCamera>(m_World.Camera);
+	camera.SetPosition(Vector3(-1.3f, 1.4f, -1.5f));
+	camera.SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
 	OnResizeViewport(16, 16);
 
-	SceneLoader::Load(pPath, m_pDevice, m_World, 1.0f);
+	SceneLoader::Load(pPath, m_pDevice, m_World);
 
 
 	{
@@ -304,10 +307,11 @@ void DemoApp::Update()
 				volume.Extents = 1.1f * Vector3(m_RenderWorld.SceneAABB.Extents);
 			});
 
-		m_pCamera->Update();
+		Camera& camera = m_World.GetComponent<FreeCamera>(m_World.Camera);
+		camera.Update();
 
 		bool jitter = Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing;
-		m_pCamera->ApplyViewTransform(m_MainView, jitter);
+		camera.ApplyViewTransform(m_MainView, jitter);
 
 		// Directional light is expected to be at index 0
 		m_World.Registry.sort<Light>([](const Light& a, const Light& b) {
@@ -423,6 +427,8 @@ void DemoApp::Update()
 		{
 			RG_GRAPH_SCOPE("GPU Frame", graph);
 			PROFILE_CPU_SCOPE("Record RenderGraph");
+
+			UpdateSkinning(graph);
 
 			graph.AddPass("Build Acceleration Structures", RGPassFlag::Compute | RGPassFlag::NeverCull)
 				.Bind([=](CommandContext& context, const RGResources& resources)
@@ -1101,6 +1107,10 @@ void DemoApp::InitializePipelines()
 
 		m_pDeferredShadePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DeferredShading.hlsl", "ShadeCS");
 	}
+
+	{
+		m_pSkinPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "Skinning.hlsl", "CSMain");
+	}
 }
 
 void DemoApp::UpdateImGui()
@@ -1299,6 +1309,22 @@ void DemoApp::UpdateImGui()
 					ImGui::TreePop();
 				}
 			}
+			if (Model* pModel = m_World.Registry.try_get<Model>(selectedEntity))
+			{
+				if (ImGui::TreeNodeEx("Mesh", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+
+					if (pModel->AnimationIndex != -1)
+					{
+						ImGui::Combo("Animation", &pModel->AnimationIndex, [](void* pUserData, int index)
+							{
+								const World* pWorld = (World*)pUserData;
+								return pWorld->Animations[index].Name.c_str();
+							}, &m_World, (int)m_World.Animations.size());
+					}
+					ImGui::TreePop();
+				}
+			}
 		}
 		ImGui::End();
 	}
@@ -1430,16 +1456,13 @@ void DemoApp::UpdateImGui()
 				ImGui::Checkbox("Work Graph", &Tweakables::gWorkGraph.Get());
 			}
 
-			if (m_pCamera)
 			{
 				ViewTransform& view = m_MainView;
 				ImGui::Text("Camera");
-				ImGui::Text("Location: [%.2f, %.2f, %.2f]", m_pCamera->GetPosition().x, m_pCamera->GetPosition().y, m_pCamera->GetPosition().z);
+				ImGui::Text("Location: [%.2f, %.2f, %.2f]", view.Position.x, view.Position.y, view.Position.z);
 				float fov = view.FoV;
 				if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
-				{
-					m_pCamera->SetFOV(fov);
-				}
+					view.FoV = fov;
 				Vector2 farNear(view.FarPlane, view.NearPlane);
 				if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
 				{
@@ -1555,6 +1578,96 @@ void DemoApp::UpdateImGui()
 		}
 	}
 	ImGui::End();
+}
+
+void DemoApp::UpdateSkinning(RGGraph& graph)
+{
+	graph.AddPass("GPU Skinning", RGPassFlag::Compute | RGPassFlag::NeverCull)
+		.Bind([=](CommandContext& context, const RGResources& resources)
+			{
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetPipelineState(m_pSkinPSO);
+
+				auto view = m_World.Registry.view<const Model>();
+				view.each([&](const Model& model)
+					{
+						if (model.SkeletonIndex != -1)
+						{
+							const Animation& anim = m_World.Animations[model.AnimationIndex];
+							const Skeleton& skeleton = m_World.Skeletons[model.SkeletonIndex];
+
+
+							float t = fmod(Time::TotalTime(), anim.TimeEnd - anim.TimeStart);
+							float time = t + anim.TimeStart;
+
+							struct
+							{
+								Matrix SkinTransforms[128];
+								uint32 PositionsOffset;
+								uint32 NormalsOffset;
+								uint32 JointsOffset;
+								uint32 WeightsOffset;
+								uint32 SkinnedPositionsOffset;
+								uint32 SkinnedNormalsOffset;
+								uint32 NumTriangles;
+							} meshData;
+
+							const Mesh& mesh = m_World.Meshes[model.MeshIndex];
+							meshData.SkinnedPositionsOffset		= mesh.SkinnedPositionStreamLocation.OffsetFromStart;
+							meshData.SkinnedNormalsOffset		= mesh.SkinnedNormalStreamLocation.OffsetFromStart;
+							meshData.PositionsOffset			= mesh.PositionStreamLocation.OffsetFromStart;
+							meshData.NormalsOffset				= mesh.NormalStreamLocation.OffsetFromStart;
+							meshData.JointsOffset				= mesh.JointsStreamLocation.OffsetFromStart;
+							meshData.WeightsOffset				= mesh.WeightsStreamLocation.OffsetFromStart;
+							meshData.NumTriangles				= mesh.PositionStreamLocation.Elements;
+
+							Array<Transform> animTransforms(skeleton.NumJoints());
+							for (const AnimationChannel& channel : anim.Channels)
+							{
+								Transform& jointTransform = animTransforms[skeleton.GetJoint(channel.Target)];
+								if (channel.Path == AnimationChannel::PathType::Translation)
+									jointTransform.Position = Vector3(channel.Evaluate(time));
+								else if (channel.Path == AnimationChannel::PathType::Rotation)
+									jointTransform.Rotation = channel.Evaluate(time);
+								else if (channel.Path == AnimationChannel::PathType::Scale)
+									jointTransform.Scale = Vector3(channel.Evaluate(time));
+							}
+
+							for (Transform& jointTransform : animTransforms)
+							{
+								jointTransform.WorldPrev = jointTransform.World;
+								jointTransform.World = Matrix::CreateScale(jointTransform.Scale) *
+									Matrix::CreateFromQuaternion(jointTransform.Rotation) *
+									Matrix::CreateTranslation(jointTransform.Position);
+							}
+
+							for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
+							{
+								// Update joints in an order so that parent joints are always computed before any children
+								Skeleton::JointIndex jointIndex = skeleton.JointUpdateOrder[i];
+								Matrix& jointTransform = meshData.SkinTransforms[jointIndex];
+
+								jointTransform = animTransforms[jointIndex].World;
+								Skeleton::JointIndex parentJointIndex = skeleton.ParentIndices[jointIndex];
+								if (parentJointIndex != Skeleton::InvalidJoint)
+									jointTransform *= meshData.SkinTransforms[parentJointIndex];
+							}
+
+							// Compute final skin transforms
+							for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
+								meshData.SkinTransforms[i] = skeleton.InverseBindMatrices[i] * meshData.SkinTransforms[i];
+
+							context.InsertResourceBarrier(mesh.pBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+							context.BindRootCBV(1, meshData);
+							context.BindResources(2, { mesh.pBuffer->GetUAV() });
+
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(mesh.PositionStreamLocation.Elements, 64));
+
+							context.InsertResourceBarrier(mesh.pBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+						}
+					});
+			});
 }
 
 RGTexture* DemoApp::ComputeBloom(RGGraph& graph, const RenderView* pView, RGTexture* pColor)

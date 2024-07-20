@@ -190,7 +190,7 @@ void MeshletCull(MeshletCandidate candidate, NodeOutputArray<VisibleMeshlet> mes
 		return;
 
 	// Frustum test meshlet against the current view
-	Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
+	Meshlet::Bounds bounds = ByteBufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
 
 	FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.ViewProjection);
 	bool isVisible = cullData.IsVisible;

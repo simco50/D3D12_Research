@@ -144,7 +144,7 @@ void ASMain(uint threadId : SV_DispatchThreadID)
 	MeshData mesh = GetMesh(instance.MeshIndex);;
 	if (threadId < mesh.MeshletCount)
 	{
-		Meshlet::Bounds bounds = BufferLoad<Meshlet::Bounds>(mesh.BufferIndex, threadId, mesh.MeshletBoundsOffset);
+		Meshlet::Bounds bounds = ByteBufferLoad<Meshlet::Bounds>(mesh.BufferIndex, threadId, mesh.MeshletBoundsOffset);
 		FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.ViewProjection);
 		visible = cullData.IsVisible;
 	}
@@ -178,20 +178,20 @@ void MSMain(
 	if(meshletIndex >= mesh.MeshletCount)
 		return;
 
-	Meshlet meshlet = BufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
+	Meshlet meshlet = ByteBufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
 
 	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
 
 	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
-		uint vertexId = BufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
+		uint vertexId = ByteBufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
 		InterpolantsVSToPS result = LoadVertex(mesh, instance.LocalToWorld, vertexId);
 		verts[i] = result;
 	}
 
 	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += NUM_MESHLET_THREADS)
 	{
-		Meshlet::Triangle tri = BufferLoad<Meshlet::Triangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		Meshlet::Triangle tri = ByteBufferLoad<Meshlet::Triangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
 	}
 }

@@ -155,11 +155,13 @@ bool EvaluateIndirectBRDF(int rayType, float2 u, BrdfData brdfData, float3 N, fl
 		// Due to the clever VNDF sampling method, many of the terms cancel out
 		weight = F * G;
 
+#if 0 // Causes NaNs when specular is 0
 		// Kulla17 - Energy conervation due to multiple scattering
 		float gloss = Pow4(1 - brdfData.Roughness);
-		float3 DFG = EnvDFGPolynomial(brdfData.Specular, gloss, NdotV);
+		float3 DFG = EnvDFGPolynomial(brdfData.Specular + 0.001f, gloss, NdotV);
 		float3 energyCompensation = 1.0f + brdfData.Specular * (1.0f / DFG.y - 1.0f);
 		weight *= energyCompensation;
+#endif
 
 		directionLocal = Llocal;
 	}

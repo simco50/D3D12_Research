@@ -76,18 +76,10 @@ bool CommandLine::Parse(const char* pCommandLine)
 
 bool CommandLine::GetInt(const char* name, int& value, int defaultValue /*= 0*/)
 {
-	auto it = m_Parameters.find(name);
-	if (it != m_Parameters.end())
+	const char* pValue;
+	if (GetValue(name, &pValue))
 	{
-		for (char c : it->second)
-		{
-			if (!std::isdigit(c))
-			{
-				value = defaultValue;
-				return false;
-			}
-		}
-		value = std::stoi(it->second);
+		value = std::stoi(pValue);
 		return true;
 	}
 	value = defaultValue;
@@ -96,7 +88,19 @@ bool CommandLine::GetInt(const char* name, int& value, int defaultValue /*= 0*/)
 
 bool CommandLine::GetBool(const char* parameter)
 {
-	return m_Parameters.find(parameter) != m_Parameters.end();
+	const char* pValue;
+	return GetValue(parameter, &pValue);
+}
+
+bool CommandLine::GetValue(const char* pName, const char** pOutValue)
+{
+	auto it = m_Parameters.find(pName);
+	if (it != m_Parameters.end())
+	{
+		*pOutValue = it->second.c_str();
+		return true;
+	}
+	return false;
 }
 
 const String& CommandLine::Get()

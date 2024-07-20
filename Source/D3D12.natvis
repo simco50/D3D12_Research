@@ -72,5 +72,25 @@
 		<DisplayString Condition="IsCulled">[CULLED] {pName,s} - {Flags}</DisplayString>
 	</Type>
 
+	<Type Name="EnumSet&lt;*&gt;">
+		<Expand>
+			<CustomListItems MaxItemsPerView="500">
+				<Variable Name="value" InitialValue="Value" />
+				<Variable Name="i" InitialValue="0" />
+
+				<Size>100</Size>
+				<Loop>
+					<Break Condition="value == 0" />
+					<If Condition="value &amp; 1">
+						<Item>($T1)i, en</Item>
+					</If>
+					<Exec>i += 1</Exec>
+					<Exec>value >>= 1</Exec>
+				</Loop>
+			</CustomListItems>
+		</Expand>
+		
+	</Type>
+
 
 </AutoVisualizer>

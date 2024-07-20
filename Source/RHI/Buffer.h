@@ -136,6 +136,8 @@ struct VertexBufferView
 		: Location(pBuffer->GetGpuHandle()), Elements(pBuffer->GetNumElements()), Stride(pBuffer->GetDesc().ElementSize), OffsetFromStart(0)
 	{}
 
+	bool IsValid() const { return Elements > 0; }
+
 	D3D12_GPU_VIRTUAL_ADDRESS Location;
 	uint32 Elements;
 	uint32 Stride;

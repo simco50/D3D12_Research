@@ -11,6 +11,7 @@
 #include "ShaderInterop.h"
 #include "Renderer/SceneView.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/Light.h"
 #include "Core/Stream.h"
 
 #pragma warning(push)
@@ -22,16 +23,19 @@
 #include <meshoptimizer.h>
 #include <LDraw.h>
 
+
+
 struct MeshData
 {
 	uint32 MaterialIndex = 0;
-	float ScaleFactor = 1;
 
 	Array<Vector3> PositionsStream;
 	Array<Vector3> NormalsStream;
 	Array<Vector4> TangentsStream;
 	Array<Vector2> UVsStream;
 	Array<Vector4> ColorsStream;
+	Array<Vector4i> JointsStream;
+	Array<Vector4> WeightsStream;
 	Array<uint32> Indices;
 
 	Array<ShaderInterop::Meshlet> Meshlets;
@@ -43,20 +47,7 @@ struct MeshData
 
 static void BuildMeshData(MeshData& meshData)
 {
-	for (const Vector3& position : meshData.PositionsStream)
-	{
-		meshData.ScaleFactor = Math::Max(fabs(position.x), meshData.ScaleFactor);
-		meshData.ScaleFactor = Math::Max(fabs(position.y), meshData.ScaleFactor);
-		meshData.ScaleFactor = Math::Max(fabs(position.z), meshData.ScaleFactor);
-	}
-	for (Vector3& position : meshData.PositionsStream)
-	{
-		position /= meshData.ScaleFactor;
-		gAssert(fabs(position.x) <= 1.0f && fabs(position.y) <= 1.0f && fabs(position.z) <= 1.0f);
-	}
-
 	meshopt_optimizeVertexCache(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), meshData.PositionsStream.size());
-
 	meshopt_optimizeOverdraw(meshData.Indices.data(), meshData.Indices.data(), meshData.Indices.size(), &meshData.PositionsStream[0].x, meshData.PositionsStream.size(), sizeof(Vector3), 1.05f);
 
 	Array<uint32> remap(meshData.PositionsStream.size());
@@ -66,8 +57,9 @@ static void BuildMeshData(MeshData& meshData)
 	meshopt_remapVertexBuffer(meshData.NormalsStream.data(), meshData.NormalsStream.data(), meshData.NormalsStream.size(), sizeof(Vector3), &remap[0]);
 	meshopt_remapVertexBuffer(meshData.TangentsStream.data(), meshData.TangentsStream.data(), meshData.TangentsStream.size(), sizeof(Vector4), &remap[0]);
 	meshopt_remapVertexBuffer(meshData.UVsStream.data(), meshData.UVsStream.data(), meshData.UVsStream.size(), sizeof(Vector2), &remap[0]);
-	if (!meshData.ColorsStream.empty())
-		meshopt_remapVertexBuffer(meshData.ColorsStream.data(), meshData.ColorsStream.data(), meshData.ColorsStream.size(), sizeof(Vector4), &remap[0]);
+	meshopt_remapVertexBuffer(meshData.JointsStream.data(), meshData.JointsStream.data(), meshData.JointsStream.size(), sizeof(Vector4i), &remap[0]);
+	meshopt_remapVertexBuffer(meshData.WeightsStream.data(), meshData.WeightsStream.data(), meshData.WeightsStream.size(), sizeof(Vector4), &remap[0]);
+	meshopt_remapVertexBuffer(meshData.ColorsStream.data(), meshData.ColorsStream.data(), meshData.ColorsStream.size(), sizeof(Vector4), &remap[0]);
 
 	// Meshlet generation
 	const size_t maxVertices = ShaderInterop::MESHLET_MAX_VERTICES;
@@ -136,26 +128,38 @@ static Mesh CreateMesh(GraphicsDevice* pDevice, MeshData& meshData)
 {
 	BuildMeshData(meshData);
 
+	bool hasAnim = !meshData.WeightsStream.empty();
+
 	constexpr uint64 bufferAlignment = 16;
 	uint64 bufferSize = 0;
-	using TVertexPositionStream = Vector2u;
+	using TVertexPositionStream = Vector3;
 	using TVertexNormalStream = Vector2u;
 	using TVertexColorStream = uint32;
 	using TVertexUVStream = uint32;
+	using TWeightsStream = Vector2u;
+	struct TJointsStream { uint16 Joints[4]; };
 
 	bufferSize += Math::AlignUp<uint64>(meshData.Indices.size() * sizeof(uint32), bufferAlignment);
 	bufferSize += Math::AlignUp<uint64>(meshData.PositionsStream.size() * sizeof(TVertexPositionStream), bufferAlignment);
 	bufferSize += Math::AlignUp<uint64>(meshData.UVsStream.size() * sizeof(TVertexUVStream), bufferAlignment);
 	bufferSize += Math::AlignUp<uint64>(meshData.NormalsStream.size() * sizeof(TVertexNormalStream), bufferAlignment);
 	bufferSize += Math::AlignUp<uint64>(meshData.ColorsStream.size() * sizeof(TVertexColorStream), bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.JointsStream.size() * sizeof(TJointsStream), bufferAlignment);
+	bufferSize += Math::AlignUp<uint64>(meshData.WeightsStream.size() * sizeof(TWeightsStream), bufferAlignment);
 
 	bufferSize += Math::AlignUp<uint64>(meshData.Meshlets.size() * sizeof(ShaderInterop::Meshlet), bufferAlignment);
 	bufferSize += Math::AlignUp<uint64>(meshData.MeshletVertices.size() * sizeof(uint32), bufferAlignment);
 	bufferSize += Math::AlignUp<uint64>(meshData.MeshletTriangles.size() * sizeof(ShaderInterop::Meshlet::Triangle), bufferAlignment);
 	bufferSize += Math::AlignUp<uint64>(meshData.MeshletBounds.size() * sizeof(ShaderInterop::Meshlet::Bounds), bufferAlignment);
 
+	if (hasAnim)
+	{
+		bufferSize += Math::AlignUp<uint64>(meshData.PositionsStream.size() * sizeof(TVertexPositionStream), bufferAlignment);
+		bufferSize += Math::AlignUp<uint64>(meshData.NormalsStream.size() * sizeof(TVertexNormalStream), bufferAlignment);
+	}
+
 	gAssert(bufferSize < std::numeric_limits<uint32>::max(), "Offset stored in 32-bit int");
-	Ref<Buffer> pGeometryData = pDevice->CreateBuffer(BufferDesc{ .Size = bufferSize, .Flags = BufferFlag::ShaderResource | BufferFlag::ByteAddress }, "Geometry Buffer");
+	Ref<Buffer> pGeometryData = pDevice->CreateBuffer(BufferDesc{ .Size = bufferSize, .ElementSize = (uint32)bufferSize, .Flags = BufferFlag::ShaderResource | BufferFlag::ByteAddress | BufferFlag::UnorderedAccess }, "Geometry Buffer");
 
 	RingBufferAllocation allocation;
 	pDevice->GetRingBuffer()->Allocate((uint32)bufferSize, allocation);
@@ -173,19 +177,24 @@ static Mesh CreateMesh(GraphicsDevice* pDevice, MeshData& meshData)
 	bounds.CreateFromPoints(bounds, meshData.PositionsStream.size(), (DirectX::XMFLOAT3*)meshData.PositionsStream.data(), sizeof(Vector3));
 
 	Mesh subMesh;
-	subMesh.ScaleFactor = meshData.ScaleFactor;
 	subMesh.Bounds = bounds;
 	subMesh.MaterialId = meshData.MaterialIndex;
-	subMesh.PositionsFormat = ResourceFormat::RGBA16_SNORM;
+	subMesh.PositionsFormat = ResourceFormat::RGB32_FLOAT;
 
 	{
 		subMesh.PositionStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(TVertexPositionStream), dataOffset);
 		TVertexPositionStream* pTarget = (TVertexPositionStream*)(pMappedMemory + dataOffset);
 		for (const Vector3& position : meshData.PositionsStream)
 		{
-			*pTarget++ = { Math::Pack_RGBA16_SNORM(Vector4(position)) };
+			*pTarget++ = { position };
 		}
 		dataOffset = Math::AlignUp(dataOffset + meshData.PositionsStream.size() * sizeof(TVertexPositionStream), bufferAlignment);
+
+		if (hasAnim)
+		{
+			subMesh.SkinnedPositionStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(TVertexPositionStream), dataOffset);
+			dataOffset = Math::AlignUp(dataOffset + meshData.PositionsStream.size() * sizeof(TVertexPositionStream), bufferAlignment);
+		}
 	}
 
 	{
@@ -199,6 +208,12 @@ static Mesh CreateMesh(GraphicsDevice* pDevice, MeshData& meshData)
 			};
 		}
 		dataOffset = Math::AlignUp(dataOffset + meshData.NormalsStream.size() * sizeof(TVertexNormalStream), bufferAlignment);
+
+		if (hasAnim)
+		{
+			subMesh.SkinnedNormalStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.NormalsStream.size(), sizeof(TVertexNormalStream), dataOffset);
+			dataOffset = Math::AlignUp(dataOffset + meshData.NormalsStream.size() * sizeof(TVertexNormalStream), bufferAlignment);
+		}
 	}
 
 	if (!meshData.ColorsStream.empty())
@@ -221,6 +236,28 @@ static Mesh CreateMesh(GraphicsDevice* pDevice, MeshData& meshData)
 			*pTarget++ = { Math::Pack_RG16_FLOAT(uv) };
 		}
 		dataOffset = Math::AlignUp(dataOffset + meshData.UVsStream.size() * sizeof(TVertexUVStream), bufferAlignment);
+	}
+
+	if (!meshData.JointsStream.empty())
+	{
+		subMesh.JointsStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.JointsStream.size(), sizeof(TJointsStream), dataOffset);
+		TJointsStream* pTarget = (TJointsStream*)(pMappedMemory + dataOffset);
+		for (const Vector4i& joint : meshData.JointsStream)
+		{
+			*pTarget++ = { (uint16)joint.x, (uint16)joint.y, (uint16)joint.z, (uint16)joint.w };
+		}
+		dataOffset = Math::AlignUp(dataOffset + meshData.JointsStream.size() * sizeof(TJointsStream), bufferAlignment);
+	}
+
+	if (!meshData.WeightsStream.empty())
+	{
+		subMesh.WeightsStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.WeightsStream.size(), sizeof(TWeightsStream), dataOffset);
+		TWeightsStream* pTarget = (TWeightsStream*)(pMappedMemory + dataOffset);
+		for (const Vector4& weight: meshData.WeightsStream)
+		{
+			*pTarget++ = { Math::Pack_RGBA16_FLOAT(weight) };
+		}
+		dataOffset = Math::AlignUp(dataOffset + meshData.WeightsStream.size() * sizeof(TWeightsStream), bufferAlignment);
 	}
 
 	{
@@ -259,7 +296,7 @@ static Mesh CreateMesh(GraphicsDevice* pDevice, MeshData& meshData)
 }
 
 
-static bool LoadLdr(const char* pFilePath, GraphicsDevice* pDevice, World& world, float uniformScale /*= 1.0f*/)
+static bool LoadLdr(const char* pFilePath, GraphicsDevice* pDevice, World& world)
 {
 	LdrConfig config;
 	config.pDatabasePath = "D:/References/ldraw/ldraw/";
@@ -389,14 +426,14 @@ static bool LoadLdr(const char* pFilePath, GraphicsDevice* pDevice, World& world
 		model.MeshIndex = meshIndex;
 		Transform& transform = world.Registry.emplace<Transform>(entity);
 
-		Matrix t = Matrix::CreateScale(world.Meshes[model.MeshIndex].ScaleFactor) * Matrix(&instance.Transform.m[0][0]);
+		Matrix t = Matrix(&instance.Transform.m[0][0]);
 		t.Decompose(transform.Scale, transform.Rotation, transform.Position);
 	}
 	return true;
 }
 
 
-static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& world, float uniformScale /*= 1.0f*/)
+static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& world)
 {
 	cgltf_options options{};
 	cgltf_data* pGltfData = nullptr;
@@ -428,6 +465,10 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 		{
 			return meshOffset + index;
 		};
+	auto NodeIndex = [&](const cgltf_node* pNode) -> int
+		{
+			return (int)(pNode - pGltfData->nodes);
+		};
 
 	using Hash = TStringHash<false>;
 	Array<Hash> usedExtensions;
@@ -435,12 +476,115 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 	{
 		usedExtensions.push_back(pGltfData->extensions_used[i]);
 	}
-	bool useEmissiveStrength = std::find_if(usedExtensions.begin(), usedExtensions.end(), [](const Hash& rhs) { return rhs == "KHR_materials_emissive_strength"; }) != usedExtensions.end();
 
-	for (size_t i = 0; i < pGltfData->materials_count; ++i)
+	// Load Animations
+	for (const cgltf_animation& gltfAnimation : Span(pGltfData->animations, (uint32)pGltfData->animations_count))
 	{
-		const cgltf_material& gltfMaterial = pGltfData->materials[i];
+		Animation& animation = world.Animations.emplace_back();
 
+		animation.Name = gltfAnimation.name ? gltfAnimation.name : "Unnamed";
+		for (const cgltf_animation_channel& gltfChannel : Span(gltfAnimation.channels, (uint32)gltfAnimation.channels_count))
+		{
+			AnimationChannel& channel = animation.Channels.emplace_back();
+
+			channel.Target = gltfChannel.target_node->name;
+
+			// Animation type
+			switch (gltfChannel.target_path)
+			{
+			case cgltf_animation_path_type_translation:		channel.Path = AnimationChannel::PathType::Translation; break;
+			case cgltf_animation_path_type_rotation:		channel.Path = AnimationChannel::PathType::Rotation; break;
+			case cgltf_animation_path_type_scale:			channel.Path = AnimationChannel::PathType::Scale; break;
+			default: gUnreachable();
+			}
+
+			// Sampler
+			const cgltf_animation_sampler& gltfSampler = *gltfChannel.sampler;
+			switch (gltfSampler.interpolation)
+			{
+			case cgltf_interpolation_type_step:				channel.Interpolation = AnimationChannel::Interpolation::Step; break;
+			case cgltf_interpolation_type_linear:			channel.Interpolation = AnimationChannel::Interpolation::Linear; break;
+			case cgltf_interpolation_type_cubic_spline:		channel.Interpolation = AnimationChannel::Interpolation::Cubic; break;
+			default: gUnreachable();
+			}
+
+			// Read time keys
+			channel.KeyFrames.resize(gltfSampler.input->count);
+			gAssert(cgltf_num_components(gltfSampler.input->type) == 1);
+			gVerify(cgltf_accessor_unpack_floats(gltfSampler.input, &channel.KeyFrames[0], gltfSampler.input->count), > 0);
+
+			// Read key data
+			channel.Data.resize(gltfSampler.output->count);
+			int num_components = (int)cgltf_num_components(gltfSampler.output->type);
+			gAssert(num_components <= 4);
+			for (int i = 0; i < gltfSampler.output->count; ++i)
+			{
+				gVerify(cgltf_accessor_read_float(gltfSampler.output, i, &channel.Data[i].x, num_components), == 1);
+			}
+
+			// Track min/max time of animation
+			animation.TimeStart = Math::Min(animation.TimeStart, channel.KeyFrames.front());
+			animation.TimeEnd = Math::Max(animation.TimeEnd, channel.KeyFrames.back());
+		}
+	}
+
+	// Load Skeletons
+	for (const cgltf_skin& gltfSkin : Span(pGltfData->skins, (uint32)pGltfData->skins_count))
+	{
+		Skeleton& skeleton = world.Skeletons.emplace_back();
+
+		// Load inverse bind matrices
+		skeleton.InverseBindMatrices.resize(gltfSkin.joints_count);
+		gAssert(cgltf_num_components(gltfSkin.inverse_bind_matrices->type) == 16);
+		gVerify(cgltf_accessor_unpack_floats(gltfSkin.inverse_bind_matrices, &skeleton.InverseBindMatrices[0].m[0][0], gltfSkin.joints_count * 16), > 0);
+
+		// Joint name to index mapping
+		for (int i = 0; i < gltfSkin.joints_count; ++i)
+		{
+			Skeleton::JointIndex joint = (Skeleton::JointIndex)i;
+			skeleton.JointsMap[gltfSkin.joints[i]->name] = joint;
+		}
+
+		// Compute parent index of each joint
+		Skeleton::JointIndex rootJoint = Skeleton::InvalidJoint;
+		Array<Array<Skeleton::JointIndex>> parentToChildMap(gltfSkin.joints_count);
+		skeleton.ParentIndices.resize(gltfSkin.joints_count);
+		for (Skeleton::JointIndex i = 0; i < (Skeleton::JointIndex)gltfSkin.joints_count; ++i)
+		{
+			if (gltfSkin.joints[i] != gltfSkin.skeleton)
+			{
+				const cgltf_node* pParent = gltfSkin.joints[i]->parent;
+				Skeleton::JointIndex parentJoint = skeleton.GetJoint(pParent->name);
+				skeleton.ParentIndices[i] = parentJoint;
+
+				parentToChildMap[parentJoint].push_back(i);
+			}
+			else
+			{
+				skeleton.ParentIndices[i] = Skeleton::InvalidJoint;
+				rootJoint = i;
+			}
+		}
+
+		// Compute joints order so that parent joints are always evaluates before any children
+		skeleton.JointUpdateOrder.reserve(gltfSkin.joints_count);
+		Array<Skeleton::JointIndex> stack;
+		stack.reserve(gltfSkin.joints_count);
+		stack.push_back(rootJoint);
+		while (!stack.empty())
+		{
+			Skeleton::JointIndex joint = stack.back();
+			stack.pop_back();
+			skeleton.JointUpdateOrder.push_back(joint);
+			for (Skeleton::JointIndex childJoint : parentToChildMap[joint])
+				stack.push_back(childJoint);
+		}
+	}
+
+	// Load Materials and Textures
+	bool useEmissiveStrength = std::find_if(usedExtensions.begin(), usedExtensions.end(), [](const Hash& rhs) { return rhs == "KHR_materials_emissive_strength"; }) != usedExtensions.end();
+	for (const cgltf_material& gltfMaterial : Span(pGltfData->materials, (uint32)pGltfData->materials_count))
+	{
 		Material& material = world.Materials.emplace_back();
 		auto RetrieveTexture = [&textureMap, &world, pDevice, pFilePath](const cgltf_texture_view& texture, bool srgb) -> Texture*
 			{
@@ -530,16 +674,15 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 			material.Name = gltfMaterial.name;
 	}
 
+	// Load Meshes
 	HashMap<const cgltf_mesh*, Array<int>> meshToPrimitives;
 	int primitiveIndex = 0;
-	for (size_t meshIdx = 0; meshIdx < pGltfData->meshes_count; ++meshIdx)
+	for (const cgltf_mesh& mesh : Span(pGltfData->meshes, (uint32)pGltfData->meshes_count))
 	{
-		const cgltf_mesh& mesh = pGltfData->meshes[meshIdx];
-		Array<int> primitives;
-		for (size_t primIdx = 0; primIdx < mesh.primitives_count; ++primIdx)
+		Array<int> meshPrimitives;
+		for (const cgltf_primitive& primitive : Span(mesh.primitives, (uint32)mesh.primitives_count))
 		{
-			const cgltf_primitive& primitive = mesh.primitives[primIdx];
-			primitives.push_back(primitiveIndex++);
+			meshPrimitives.push_back(primitiveIndex++);
 
 			MeshData meshData;
 			meshData.MaterialIndex = MaterialIndex(primitive.material);
@@ -556,35 +699,56 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 			for (size_t attrIdx = 0; attrIdx < primitive.attributes_count; ++attrIdx)
 			{
 				const cgltf_attribute& attribute = primitive.attributes[attrIdx];
-				const char* pName = attribute.name;
-
-				auto ReadAttributeData = [&](const char* pStreamName, auto& stream, uint32 numComponents)
+				if (attribute.type == cgltf_attribute_type_position)
+				{
+					meshData.PositionsStream.resize(attribute.data->count);
+					gVerify(cgltf_accessor_unpack_floats(attribute.data, &meshData.PositionsStream[0].x, attribute.data->count * 3), > 0);
+				}
+				else if (attribute.type == cgltf_attribute_type_normal)
+				{
+					meshData.NormalsStream.resize(attribute.data->count);
+					gVerify(cgltf_accessor_unpack_floats(attribute.data, &meshData.NormalsStream[0].x, attribute.data->count * 3), > 0);
+				}
+				else if (attribute.type == cgltf_attribute_type_tangent)
+				{
+					meshData.TangentsStream.resize(attribute.data->count);
+					gVerify(cgltf_accessor_unpack_floats(attribute.data, &meshData.TangentsStream[0].x, attribute.data->count * 4), > 0);
+				}
+				else if (attribute.type == cgltf_attribute_type_texcoord && attribute.index == 0)
+				{
+					meshData.UVsStream.resize(attribute.data->count);
+					gVerify(cgltf_accessor_unpack_floats(attribute.data, &meshData.UVsStream[0].x, attribute.data->count * 2), > 0);
+				}
+				else if (attribute.type == cgltf_attribute_type_color && attribute.index == 0)
+				{
+					meshData.ColorsStream.resize(attribute.data->count);
+					gVerify(cgltf_accessor_unpack_floats(attribute.data, &meshData.ColorsStream[0].x, attribute.data->count * 4), > 0);
+				}
+				else if (attribute.type == cgltf_attribute_type_weights && attribute.index == 0)
+				{
+					meshData.WeightsStream.resize(attribute.data->count);
+					gVerify(cgltf_accessor_unpack_floats(attribute.data, &meshData.WeightsStream[0].x, attribute.data->count * 4), > 0);
+				}
+				else if (attribute.type == cgltf_attribute_type_joints && attribute.index == 0)
+				{
+					Vector4 joints;
+					meshData.JointsStream.resize(attribute.data->count);
+					for (int i = 0; i < attribute.data->count; ++i)
 					{
-						if (strcmp(pName, pStreamName) == 0)
-						{
-							stream.resize(attribute.data->count);
-							for (size_t i = 0; i < attribute.data->count; ++i)
-							{
-								gVerify(cgltf_accessor_read_float(attribute.data, i, &stream[i].x, numComponents), == 1);
-							}
-						}
-					};
-				ReadAttributeData("POSITION", meshData.PositionsStream, 3);
-				ReadAttributeData("NORMAL", meshData.NormalsStream, 3);
-				ReadAttributeData("TANGENT", meshData.TangentsStream, 4);
-				ReadAttributeData("TEXCOORD_0", meshData.UVsStream, 2);
-				ReadAttributeData("COLOR_0", meshData.ColorsStream, 4);
+						gVerify(cgltf_accessor_read_float(attribute.data, i, &joints.x, 4), > 0);
+						meshData.JointsStream[i] = Vector4i((int)joints.x, (int)joints.y, (int)joints.z, (int)joints.w);
+					}
+				}
 			}
-
 			world.Meshes.push_back(CreateMesh(pDevice, meshData));
 		}
-		meshToPrimitives[&mesh] = primitives;
+		meshToPrimitives[&mesh] = meshPrimitives;
 	}
 
-	for (size_t i = 0; i < pGltfData->nodes_count; i++)
-	{
-		const cgltf_node& node = pGltfData->nodes[i];
 
+	// Load Scene Nodes
+	for (const cgltf_node& node : Span(pGltfData->nodes, (uint32)pGltfData->nodes_count))
+	{
 		if (node.mesh)
 		{
 			Matrix localToWorld;
@@ -597,10 +761,41 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 				Model& model = world.Registry.emplace<Model>(entity);
 
 				model.MeshIndex = MeshIndex(primitive);
-				Matrix m = Matrix::CreateScale(world.Meshes[model.MeshIndex].ScaleFactor) * localToWorld * Matrix::CreateScale(uniformScale, uniformScale, -uniformScale);
+				Matrix m = localToWorld * Matrix::CreateScale(1, 1, -1);
 				m.Decompose(transform.Scale, transform.Rotation, transform.Position);
+
+				if (node.skin)
+				{
+					model.SkeletonIndex = 0;
+					model.AnimationIndex = 0;
+				}
 			}
 		}
+
+#if 0
+		if (node.light)
+		{
+			Matrix localToWorld;
+			cgltf_node_transform_world(&node, &localToWorld.m[0][0]);
+			entt::entity entity = world.CreateEntity(node.name ? node.name : "Light");
+			Transform& transform = world.Registry.emplace<Transform>(entity);
+			localToWorld.Decompose(transform.Scale, transform.Rotation, transform.Position);
+
+			Light& light = world.Registry.emplace<Light>(entity);
+			light.Colour = Color(node.light->color[0], node.light->color[1], node.light->color[2], 1.0f);
+			light.Intensity = node.light->intensity;
+			light.Range = node.light->range;
+			light.UmbraAngleDegrees = node.light->spot_inner_cone_angle;
+			light.PenumbraAngleDegrees = node.light->spot_outer_cone_angle;
+
+			switch (node.light->type)
+			{
+			case cgltf_light_type_directional:	light.Type = LightType::Directional; break;
+			case cgltf_light_type_spot:			light.Type = LightType::Spot; break;
+			case cgltf_light_type_point:		light.Type = LightType::Point; break;
+			}
+		}
+#endif
 	}
 
 	cgltf_free(pGltfData);
@@ -608,16 +803,16 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 }
 
 
-bool SceneLoader::Load(const char* pFilePath, GraphicsDevice* pDevice, World& world, float uniformScale /*= 1.0f*/)
+bool SceneLoader::Load(const char* pFilePath, GraphicsDevice* pDevice, World& world)
 {
 	String extension = Paths::GetFileExtenstion(pFilePath);
 	if (extension == "dat" || extension == "ldr" || extension == "mpd")
 	{
-		LoadLdr(pFilePath, pDevice, world, uniformScale);
+		LoadLdr(pFilePath, pDevice, world);
 	}
 	else
 	{
-		LoadGltf(pFilePath, pDevice, world, uniformScale);
+		LoadGltf(pFilePath, pDevice, world);
 	}
 	return true;
 }

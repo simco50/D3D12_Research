@@ -59,7 +59,8 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 		{
 			uint64 GPUAddress;
 			uint32 WorldMatrix;
-			uint32 Flags;
+			uint32 Flags			: 8;
+			uint32 InstanceMask		: 8;
 		};
 		Array<BLASInstance> blasInstances;
 		blasInstances.reserve(world.Batches.size());
@@ -68,7 +69,7 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 		{
 			Mesh* pMesh = const_cast<Mesh*>(batch.pMesh);
 
-			if (!pMesh->pBLAS && numBLASBuiltVertices < Tweakables::gMaxNumBLASVerticesPerFrame)
+			if ((!pMesh->pBLAS || pMesh->IsAnimated()) && numBLASBuiltVertices < Tweakables::gMaxNumBLASVerticesPerFrame)
 			{
 				numBLASBuiltVertices += pMesh->PositionStreamLocation.Elements;
 				++numBuiltBLAS;
@@ -85,16 +86,34 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 				geometryDesc.Triangles.IndexCount = pMesh->IndicesLocation.Elements;
 				geometryDesc.Triangles.IndexFormat = D3D::ConvertFormat(pMesh->IndicesLocation.Format);
 				geometryDesc.Triangles.Transform3x4 = 0;
-				geometryDesc.Triangles.VertexBuffer.StartAddress = pMesh->PositionStreamLocation.Location;
+				geometryDesc.Triangles.VertexBuffer.StartAddress = pMesh->SkinnedPositionStreamLocation.IsValid() ? pMesh->SkinnedPositionStreamLocation.Location : pMesh->PositionStreamLocation.Location;
 				geometryDesc.Triangles.VertexBuffer.StrideInBytes = pMesh->PositionStreamLocation.Stride;
 				geometryDesc.Triangles.VertexCount = pMesh->PositionStreamLocation.Elements;
 				geometryDesc.Triangles.VertexFormat = D3D::ConvertFormat(pMesh->PositionsFormat);
 
 				D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS prebuildInfo{};
 				prebuildInfo.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-				prebuildInfo.Flags =
-					D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE
-					| D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+				
+				bool doUpdate = false;
+				if (pMesh->IsAnimated())
+				{
+					prebuildInfo.Flags =
+						D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD
+						| D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+
+					if (pMesh->pBLAS)
+					{
+						prebuildInfo.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+						doUpdate = true;
+					}
+				}
+				else
+				{
+					prebuildInfo.Flags =
+						D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE
+						| D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION;
+				}
+
 				prebuildInfo.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 				prebuildInfo.NumDescs = 1;
 				prebuildInfo.pGeometryDescs = &geometryDesc;
@@ -102,31 +121,42 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 				D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
 				pDevice->GetDevice()->GetRaytracingAccelerationStructurePrebuildInfo(&prebuildInfo, &info);
 
-				Ref<Buffer> pBLASScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::NoBindless), "BLAS.ScratchBuffer");
-				Ref<Buffer> pBLAS = pDevice->CreateBuffer(BufferDesc::CreateBLAS(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT)), "BLAS.Buffer");
+				Ref<Buffer> pBLASScratch = pMesh->pBLASScratch;
+				Ref<Buffer> pBLAS = pMesh->pBLAS;
+
+				if (!pBLAS)
+				{
+					pBLAS = pDevice->CreateBuffer(BufferDesc::CreateBLAS(Math::AlignUp<uint64>(info.ResultDataMaxSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT)), "BLAS.Buffer");
+					pMesh->pBLAS = pBLAS;
+				}
+
+				if (!pBLASScratch)
+				{
+					pBLASScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::NoBindless), "BLAS.ScratchBuffer");
+					pMesh->pBLASScratch = pBLASScratch;
+				}
 
 				D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
 				asDesc.Inputs = prebuildInfo;
 				asDesc.DestAccelerationStructureData = pBLAS->GetGpuHandle();
 				asDesc.ScratchAccelerationStructureData = pBLASScratch->GetGpuHandle();
-				asDesc.SourceAccelerationStructureData = 0;
+				asDesc.SourceAccelerationStructureData = doUpdate ? pBLAS->GetGpuHandle() : 0;	// Allowed to be in-place
 
 				pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 
-				pMesh->pBLAS = pBLAS;
 				m_QueuedRequests.push_back(&pMesh->pBLAS);
 			}
 
 			if (pMesh->pBLAS)
 			{
 				BLASInstance& blasInstance = blasInstances.emplace_back();
-				blasInstance.GPUAddress = pMesh->pBLAS->GetGpuHandle();
-				blasInstance.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-				blasInstance.WorldMatrix = batch.InstanceID;
+				blasInstance.GPUAddress		= pMesh->pBLAS->GetGpuHandle();
+				blasInstance.Flags			= D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+				blasInstance.WorldMatrix	= batch.InstanceID;
+				blasInstance.InstanceMask	= 0xFF;
+
 				if (batch.WorldMatrix.Determinant() < 0)
-				{
 					blasInstance.Flags |= D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_FRONT_COUNTERCLOCKWISE;
-				}
 			}
 		}
 

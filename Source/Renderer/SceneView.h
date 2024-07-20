@@ -15,6 +15,8 @@ struct Mesh;
 class Image;
 struct Material;
 struct Light;
+struct Skeleton;
+struct Animation;
 
 enum class StencilBit : uint8
 {
@@ -33,6 +35,7 @@ struct Transform
 	Quaternion Rotation = Quaternion::Identity;
 	Vector3 Scale		= Vector3::One;
 
+	Matrix WorldPrev	= Matrix::Identity;
 	Matrix World		= Matrix::Identity;
 };
 
@@ -50,12 +53,18 @@ struct World
 		return e;
 	}
 
+	template<typename T>
+	T& GetComponent(entt::entity entity) { return Registry.get<T>(entity); }
+
 	Array<Ref<Texture>> Textures;
 	Array<Mesh> Meshes;
 	Array<Material> Materials;
+	Array<Skeleton> Skeletons;
+	Array<Animation> Animations;
 
 	entt::registry Registry;
 	entt::entity Sunlight;
+	entt::entity Camera;
 };
 
 

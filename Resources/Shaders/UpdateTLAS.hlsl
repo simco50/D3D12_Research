@@ -10,7 +10,8 @@ struct BLASInstance
 {
 	D3D12_GPU_VIRTUAL_ADDRESS AccelerationStructure;
 	uint InstanceID;
-	uint Flags;
+	uint Flags				: 8;
+	uint InstanceMask		: 8;
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
@@ -25,7 +26,7 @@ void UpdateTLASCS(uint threadID : SV_DispatchThreadID)
 		BLASInstance blasDesc = tInputInstances[threadID];
 		D3D12_RAYTRACING_INSTANCE_DESC output;
 		output.InstanceID = blasDesc.InstanceID;
-		output.InstanceMask = 0xFF;
+		output.InstanceMask = blasDesc.InstanceMask;
 		output.InstanceContributionToHitGroupIndex = 0;
 		output.Flags = blasDesc.Flags;
 		output.AccelerationStructure = blasDesc.AccelerationStructure;
