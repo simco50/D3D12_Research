@@ -343,6 +343,7 @@ void DemoApp::Update()
 			auto view = pWorldMut->Registry.view<Transform>();
 			view.each([&](Transform& transform)
 				{
+					transform.WorldPrev = transform.World;
 					transform.World = Matrix::CreateScale(transform.Scale) *
 						Matrix::CreateFromQuaternion(transform.Rotation) *
 						Matrix::CreateTranslation(transform.Position);
