@@ -1,8 +1,11 @@
 require "vstudio"
 
-ENGINE_NAME = "D3D12"
-ROOT = "../"
-SOURCE_DIR = ROOT .. "Source/"
+PROJECT_NAME = "D3D12"
+SOURCE_DIR = "Source/"
+RESOURCE_DIR = "Resources/"
+THIRD_PARTY_DIR = "ThirdParty/"
+TARGET_DIR = "Build/"
+
 WIN_SDK = "latest"
 
 function runtimeDependency(source, destination)
@@ -12,22 +15,22 @@ end
 function compileThirdPartyLibrary(name)
 	includedirs ("$(SolutionDir)ThirdParty/" .. name)
 	files {
-		(ROOT .. "ThirdParty/".. name .. "/*.cpp"),
-		(ROOT .. "ThirdParty/" .. name .. "/*.h"),
-		(ROOT .. "ThirdParty/" .. name .. "/*.hpp"),
-		(ROOT .. "ThirdParty/" .. name .. "/*.inl"),
-		(ROOT .. "ThirdParty/" .. name .. "/*.natvis"),
+		(THIRD_PARTY_DIR.. name .. "/*.cpp"),
+		(THIRD_PARTY_DIR .. name .. "/*.h"),
+		(THIRD_PARTY_DIR .. name .. "/*.hpp"),
+		(THIRD_PARTY_DIR .. name .. "/*.inl"),
+		(THIRD_PARTY_DIR .. name .. "/*.natvis"),
 	}
 end
 
-workspace (ENGINE_NAME)
+workspace (PROJECT_NAME)
 	basedir (ROOT)
 	configurations { "Debug", "Release", "DebugASAN" }
     platforms { "x64" }
 	defines { "x64" }
 	language "C++"
 	cppdialect "c++20"
-	startproject (ENGINE_NAME)
+	startproject (PROJECT_NAME)
 	symbols "On"
 	architecture "x64"
 	characterset "MBCS"
@@ -37,8 +40,8 @@ workspace (ENGINE_NAME)
 	system "windows"
 	conformancemode "On"
 	defines { "PLATFORM_WINDOWS=1", "WIN32" }
-	targetdir (ROOT .. "Build/$(ProjectName)_$(Platform)_$(Configuration)")
-	objdir (ROOT .. "Build/Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
+	targetdir (TARGET_DIR .. "$(ProjectName)_$(Platform)_$(Configuration)")
+	objdir (TARGET_DIR .. "Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
 	
 	-- Unreferenced variable
 	disablewarnings {"4100"}
@@ -70,7 +73,7 @@ workspace (ENGINE_NAME)
 
 	filter {}
 
-	project (ENGINE_NAME)
+	project (PROJECT_NAME)
 		location (ROOT)
 		pchheader ("stdafx.h")
 		pchsource (SOURCE_DIR .. "stdafx.cpp")
@@ -92,15 +95,15 @@ workspace (ENGINE_NAME)
 
 		files
 		{
-			(ROOT .. "Resources/Shaders/Interop/**.h")
+			(RESOURCE_DIR .. "Shaders/Interop/**.h")
 		}
 
 		vpaths 
 		{
-			{ ["ShaderInterop"] = (ROOT .. "Resources/Shaders/Interop/**.h") }
+			{ ["ShaderInterop"] = (RESOURCE_DIR .. "Shaders/Interop/**.h") }
 		}
 
-		filter ("files:" .. ROOT .. "ThirdParty/**")
+		filter ("files:" .. THIRD_PARTY_DIR .. "**")
 			flags { "NoPCH" }
 			removeflags "FatalWarnings"
 			warnings "Default"
@@ -154,10 +157,10 @@ newaction {
 	description = "Remove all binaries and generated files",
 
 	execute = function()
-		os.rmdir(ROOT .. "Build")
-		os.rmdir(ROOT .. ".vs")
-		os.remove(ROOT .. "*.sln")
-		os.remove(ROOT .. "*.vcxproj.*")
+		os.rmdir("Build")
+		os.rmdir(".vs")
+		os.remove("*.sln")
+		os.remove("*.vcxproj.*")
 	end
 }
 			
