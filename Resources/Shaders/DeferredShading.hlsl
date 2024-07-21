@@ -6,12 +6,13 @@
 #include "DeferredCommon.hlsli"
 
 Texture2D<float4> tGBuffer0 				: register(t0);
-Texture2D<float4> tGBuffer1					: register(t1);
-Texture2D<float> tDepth 					: register(t2);
-Texture2D tPreviousSceneColor 				: register(t3);
-Texture3D<float4> tFog 						: register(t4);
-StructuredBuffer<uint> tLightGrid 			: register(t5);
-Texture2D<float> tAO						: register(t6);
+Texture2D<float2> tGBuffer1					: register(t1);
+Texture2D<float2> tGBuffer2					: register(t2);
+Texture2D<float> tDepth 					: register(t3);
+Texture2D tPreviousSceneColor 				: register(t4);
+Texture3D<float4> tFog 						: register(t5);
+StructuredBuffer<uint> tLightGrid 			: register(t6);
+Texture2D<float> tAO						: register(t7);
 
 RWTexture2D<float4> uOutput 				: register(u0);
 
@@ -53,11 +54,13 @@ void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 	float linearDepth = viewPos.z;
 
 	float4 gbuffer0 = tGBuffer0[texel];
-	float4 gbuffer1 = tGBuffer1[texel];
+	float2 gbuffer1 = tGBuffer1[texel];
+	float2 gbuffer2 = tGBuffer2[texel];
 
 	MaterialProperties surface = (MaterialProperties)0;
 	UnpackGBuffer0(gbuffer0, surface.BaseColor, surface.Specular);
-	UnpackGBuffer1(gbuffer1, surface.Normal, surface.Roughness, surface.Metalness);
+	UnpackGBuffer1(gbuffer1, surface.Normal);
+	UnpackGBuffer2(gbuffer2, surface.Roughness, surface.Metalness);
 
 	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, uv, 0);
 	float dither = InterleavedGradientNoise(texel);

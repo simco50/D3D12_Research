@@ -193,6 +193,7 @@ struct SceneTextures
 
 	RGTexture* pGBuffer0			= nullptr;
 	RGTexture* pGBuffer1			= nullptr;
+	RGTexture* pGBuffer2			= nullptr;
 };
 
 namespace Renderer
@@ -241,7 +242,8 @@ namespace GraphicsCommon
 	};
 	constexpr static ResourceFormat DeferredGBufferFormat[] = {
 			ResourceFormat::RGBA8_UNORM,
-			ResourceFormat::RGB10A2_UNORM,
+			ResourceFormat::RG16_UNORM,
+			ResourceFormat::RG8_UNORM,
 	};
 
 	extern Ref<CommandSignature> pIndirectDrawSignature;

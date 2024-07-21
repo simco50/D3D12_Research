@@ -9,7 +9,8 @@ StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t1);
 struct PSOut
 {
  	float4 GBuffer0 : SV_Target0;
- 	float4 GBuffer1 : SV_Target1;
+ 	float2 GBuffer1 : SV_Target1;
+ 	float2 GBuffer2 : SV_Target2;
 };
 
 bool VisibilityShadingCommon(uint2 texel, out PSOut output)
@@ -31,7 +32,8 @@ bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 	MaterialProperties surface = EvaluateMaterial(material, vertex);
 
 	output.GBuffer0 = PackGBuffer0(surface.BaseColor, surface.Specular);
-	output.GBuffer1 = PackGBuffer1(surface.Normal, surface.Roughness, surface.Metalness);
+	output.GBuffer1 = PackGBuffer1(surface.Normal);
+	output.GBuffer2 = PackGBuffer2(surface.Roughness, surface.Metalness);
 
 	return true;
 }

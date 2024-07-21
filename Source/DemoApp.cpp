@@ -454,6 +454,7 @@ void DemoApp::Update()
 
 			sceneTextures.pGBuffer0 = graph.Create("GBuffer 0", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[0]));
 			sceneTextures.pGBuffer1 = graph.Create("GBuffer 1", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[1]));
+			sceneTextures.pGBuffer2 = graph.Create("GBuffer 2", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[2]));
 
 			LightCull2DData lightCull2DData;
 			LightCull3DData lightCull3DData;
@@ -724,6 +725,7 @@ void DemoApp::Update()
 						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
 						.RenderTarget(sceneTextures.pGBuffer0)
 						.RenderTarget(sceneTextures.pGBuffer1)
+						.RenderTarget(sceneTextures.pGBuffer2)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
 								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
@@ -743,7 +745,7 @@ void DemoApp::Update()
 						.Read({ pFog })
 						.Read({ sceneTextures.pDepth, pAO, sceneTextures.pPreviousColor })
 						.Read({ lightCull2DData.pLightListOpaque })
-						.Read({ sceneTextures.pGBuffer0, sceneTextures.pGBuffer1 })
+						.Read({ sceneTextures.pGBuffer0, sceneTextures.pGBuffer1, sceneTextures.pGBuffer2 })
 						.Write(sceneTextures.pColorTarget)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
@@ -757,6 +759,7 @@ void DemoApp::Update()
 								context.BindResources(3, {
 									resources.GetSRV(sceneTextures.pGBuffer0),
 									resources.GetSRV(sceneTextures.pGBuffer1),
+									resources.GetSRV(sceneTextures.pGBuffer2),
 									resources.GetSRV(sceneTextures.pDepth),
 									resources.GetSRV(sceneTextures.pPreviousColor),
 									resources.GetSRV(pFog),
