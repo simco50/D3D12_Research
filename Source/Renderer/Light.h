@@ -19,8 +19,8 @@ static constexpr const char* gLightTypeStr[] = {
 struct Light
 {
 	LightType Type = LightType::MAX;
-	float UmbraAngleDegrees = 0;
-	float PenumbraAngleDegrees = 0;
+	float InnerConeAngle = 0;
+	float OuterConeAngle = 0;
 	Color Colour = Colors::White;
 	float Intensity = 1;
 	float Range = 1;

@@ -27,8 +27,6 @@
 
 struct MeshData
 {
-	uint32 MaterialIndex = 0;
-
 	Array<Vector3> PositionsStream;
 	Array<Vector3> NormalsStream;
 	Array<Vector4> TangentsStream;
@@ -177,7 +175,6 @@ static Mesh CreateMesh(GraphicsDevice* pDevice, MeshData& meshData)
 
 	Mesh subMesh;
 	subMesh.Bounds = bounds;
-	subMesh.MaterialId = meshData.MaterialIndex;
 	subMesh.PositionsFormat = ResourceFormat::RGB32_FLOAT;
 
 	{
@@ -370,10 +367,12 @@ static bool LoadLdr(const char* pFilePath, GraphicsDevice* pDevice, World& world
 				return cm.Color == instance.Color && cm.pPart == pPart;
 			});
 
+		uint32 materialIndex = 0;
 		uint32 meshIndex = 0;
 		if (it != map.end())
 		{
 			meshIndex = it->Index;
+			materialIndex = it->Index;
 		}
 		else
 		{
@@ -382,7 +381,6 @@ static bool LoadLdr(const char* pFilePath, GraphicsDevice* pDevice, World& world
 				material.BaseColorFactor = Color(1, 1, 1, 1);
 
 			MeshData mesh;
-			mesh.MaterialIndex = (int)map.size();
 			mesh.Indices.resize(pPart->Indices.size());
 			for (int j = 0; j < (int)pPart->Indices.size(); ++j)
 			{
@@ -423,6 +421,7 @@ static bool LoadLdr(const char* pFilePath, GraphicsDevice* pDevice, World& world
 		entt::entity entity = world.Registry.create();
 		Model& model = world.Registry.emplace<Model>(entity);
 		model.MeshIndex = meshIndex;
+		model.MaterialId = materialIndex;
 		Transform& transform = world.Registry.emplace<Transform>(entity);
 
 		Matrix t = Matrix(&instance.Transform.m[0][0]);
@@ -450,31 +449,10 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 	}
 
 	// Load unique textures;
-	HashMap<const cgltf_image*, Texture*> textureMap;
-
-	uint32 materialOffset = (uint32)world.Materials.size();
-	uint32 meshOffset = (uint32)world.Meshes.size();
-	auto MaterialIndex = [&](const cgltf_material* pMat) -> int
-		{
-			if (!pMat)
-				return 0;
-			return materialOffset + (int)(pMat - pGltfData->materials);
-		};
-	auto MeshIndex = [&](uint32 index)
-		{
-			return meshOffset + index;
-		};
-	auto NodeIndex = [&](const cgltf_node* pNode) -> int
-		{
-			return (int)(pNode - pGltfData->nodes);
-		};
-
-	using Hash = TStringHash<false>;
-	Array<Hash> usedExtensions;
-	for (uint32 i = 0; i < pGltfData->extensions_used_count; ++i)
-	{
-		usedExtensions.push_back(pGltfData->extensions_used[i]);
-	}
+	HashMap<const cgltf_texture*, Texture*> imageToTexture;
+	HashMap<const cgltf_material*, uint32> materialToIndex;
+	materialToIndex[nullptr] = 0;
+	HashMap<const cgltf_primitive*, uint32> meshToIndex;
 
 	// Load Animations
 	for (const cgltf_animation& gltfAnimation : Span(pGltfData->animations, (uint32)pGltfData->animations_count))
@@ -581,19 +559,19 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 	}
 
 	// Load Materials and Textures
-	bool useEmissiveStrength = std::find_if(usedExtensions.begin(), usedExtensions.end(), [](const Hash& rhs) { return rhs == "KHR_materials_emissive_strength"; }) != usedExtensions.end();
 	for (const cgltf_material& gltfMaterial : Span(pGltfData->materials, (uint32)pGltfData->materials_count))
 	{
+		materialToIndex[&gltfMaterial] = (uint32)world.Materials.size();
 		Material& material = world.Materials.emplace_back();
-		auto RetrieveTexture = [&textureMap, &world, pDevice, pFilePath](const cgltf_texture_view& texture, bool srgb) -> Texture*
+		auto RetrieveTexture = [&imageToTexture, &world, pDevice, pFilePath](const cgltf_texture_view& texture, bool srgb) -> Texture*
 			{
 				if (texture.texture)
 				{
+					auto it = imageToTexture.find(texture.texture);
 					const cgltf_image* pImage = texture.texture->image;
-					auto it = textureMap.find(pImage);
 					const char* pName = pImage->uri ? pImage->uri : "Material Texture";
 					Ref<Texture> pTex;
-					if (it == textureMap.end())
+					if (it == imageToTexture.end())
 					{
 						Image image;
 						bool validImage = false;
@@ -621,7 +599,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 						}
 
 						world.Textures.push_back(pTex);
-						textureMap[pImage] = world.Textures.back();
+						imageToTexture[texture.texture] = world.Textures.back();
 						return world.Textures.back();
 
 					}
@@ -666,7 +644,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 		material.EmissiveFactor.x = gltfMaterial.emissive_factor[0];
 		material.EmissiveFactor.y = gltfMaterial.emissive_factor[1];
 		material.EmissiveFactor.z = gltfMaterial.emissive_factor[2];
-		if (useEmissiveStrength)
+		if (gltfMaterial.has_emissive_strength)
 			material.EmissiveFactor *= gltfMaterial.emissive_strength.emissive_strength;
 		material.pNormalTexture = RetrieveTexture(gltfMaterial.normal_texture, false);
 		if (gltfMaterial.name)
@@ -674,25 +652,19 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 	}
 
 	// Load Meshes
-	HashMap<const cgltf_mesh*, Array<int>> meshToPrimitives;
-	int primitiveIndex = 0;
 	for (const cgltf_mesh& mesh : Span(pGltfData->meshes, (uint32)pGltfData->meshes_count))
 	{
-		Array<int> meshPrimitives;
 		for (const cgltf_primitive& primitive : Span(mesh.primitives, (uint32)mesh.primitives_count))
 		{
-			meshPrimitives.push_back(primitiveIndex++);
-
 			MeshData meshData;
-			meshData.MaterialIndex = MaterialIndex(primitive.material);
 			meshData.Indices.resize(primitive.indices->count);
 
 			constexpr int indexMap[] = { 0, 2, 1 };
 			for (size_t i = 0; i < primitive.indices->count; i += 3)
 			{
-				meshData.Indices[i + 0] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
-				meshData.Indices[i + 1] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[1]);
-				meshData.Indices[i + 2] = (int)cgltf_accessor_read_index(primitive.indices, i + indexMap[2]);
+				meshData.Indices[i + 0] = (uint32)cgltf_accessor_read_index(primitive.indices, i + indexMap[0]);
+				meshData.Indices[i + 1] = (uint32)cgltf_accessor_read_index(primitive.indices, i + indexMap[1]);
+				meshData.Indices[i + 2] = (uint32)cgltf_accessor_read_index(primitive.indices, i + indexMap[2]);
 			}
 
 			for (size_t attrIdx = 0; attrIdx < primitive.attributes_count; ++attrIdx)
@@ -739,9 +711,9 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 					}
 				}
 			}
+			meshToIndex[&primitive] = (uint32)world.Meshes.size();
 			world.Meshes.push_back(CreateMesh(pDevice, meshData));
 		}
-		meshToPrimitives[&mesh] = meshPrimitives;
 	}
 
 
@@ -753,13 +725,14 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 			Matrix localToWorld;
 			cgltf_node_transform_world(&node, &localToWorld.m[0][0]);
 
-			for (int primitive : meshToPrimitives[node.mesh])
+			for (const cgltf_primitive& primitive : Span(node.mesh->primitives, (uint32)node.mesh->primitives_count))
 			{
-				entt::entity entity = world.CreateEntity(node.name ? node.name : "MeshNode");
+				entt::entity entity = world.CreateEntity(node.name ? node.name : "Primitive");
 				Transform& transform = world.Registry.emplace<Transform>(entity);
 				Model& model = world.Registry.emplace<Model>(entity);
 
-				model.MeshIndex = MeshIndex(primitive);
+				model.MeshIndex = meshToIndex.at(&primitive);
+				model.MaterialId = materialToIndex.at(primitive.material);
 				Matrix m = localToWorld * Matrix::CreateScale(1, 1, -1);
 				m.Decompose(transform.Scale, transform.Rotation, transform.Position);
 
@@ -771,7 +744,6 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 			}
 		}
 
-#if 0
 		if (node.light)
 		{
 			Matrix localToWorld;
@@ -780,12 +752,12 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 			Transform& transform = world.Registry.emplace<Transform>(entity);
 			localToWorld.Decompose(transform.Scale, transform.Rotation, transform.Position);
 
-			Light& light = world.Registry.emplace<Light>(entity);
-			light.Colour = Color(node.light->color[0], node.light->color[1], node.light->color[2], 1.0f);
-			light.Intensity = node.light->intensity;
-			light.Range = node.light->range;
-			light.UmbraAngleDegrees = node.light->spot_inner_cone_angle;
-			light.PenumbraAngleDegrees = node.light->spot_outer_cone_angle;
+			Light& light				= world.Registry.emplace<Light>(entity);
+			light.Colour				= Color(node.light->color[0], node.light->color[1], node.light->color[2], 1.0f);
+			light.Intensity				= node.light->intensity;
+			light.Range					= node.light->range;
+			light.InnerConeAngle		= node.light->spot_inner_cone_angle;
+			light.OuterConeAngle		= node.light->spot_outer_cone_angle;
 
 			switch (node.light->type)
 			{
@@ -794,7 +766,6 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 			case cgltf_light_type_point:		light.Type = LightType::Point; break;
 			}
 		}
-#endif
 	}
 
 	cgltf_free(pGltfData);

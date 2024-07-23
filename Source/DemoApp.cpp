@@ -190,8 +190,8 @@ void DemoApp::SetupScene(const char* pPath)
 	{
 		Light spot;
 		spot.Range = 4;
-		spot.UmbraAngleDegrees = 70.0f;
-		spot.PenumbraAngleDegrees = 50.0f;
+		spot.OuterConeAngle = 70.0f * Math::DegreesToRadians;
+		spot.InnerConeAngle = 50.0f * Math::DegreesToRadians;
 		spot.Intensity = 100.0f;
 		spot.CastShadows = true;
 		spot.VolumetricLighting = true;
@@ -2115,7 +2115,7 @@ void DemoApp::CreateShadowViews(const RenderView& mainView, World& world, Render
 			if (!viewTransform.PerspectiveFrustum.Contains(box))
 				return;
 
-			const Matrix projection = Math::CreatePerspectiveMatrix(light.UmbraAngleDegrees * Math::DegreesToRadians, 1.0f, light.Range, 0.01f);
+			const Matrix projection = Math::CreatePerspectiveMatrix(light.OuterConeAngle, 1.0f, light.Range, 0.01f);
 			const Matrix lightView = transform.World.Invert();
 
 			ShadowView shadowView;

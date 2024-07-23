@@ -43,15 +43,16 @@ void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 	m_pRS = new RootSignature(pDevice);
 	m_pRS->AddRootSRV(0, ShaderBindingSpace::Default);
 	m_pRS->AddRootCBV(0, ShaderBindingSpace::View);
+	m_pRS->AddDescriptorTable(1, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
 	m_pRS->Finalize("Primitive Debug Render");
 
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetRootSignature(m_pRS);
 	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
 	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
-	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, GraphicsCommon::DepthStencilFormat, 1);
-	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
-	psoDesc.SetDepthWrite(true);
+	psoDesc.SetDepthEnabled(false);
+	psoDesc.SetBlendMode(BlendMode::Alpha, false);
+	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 	psoDesc.SetName("Triangle DebugRenderer");
 	m_pTrianglesPSO = pDevice->CreatePipeline(psoDesc);
@@ -79,12 +80,13 @@ void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* p
 
 	graph.AddPass("Debug Rendering", RGPassFlag::Raster)
 		.RenderTarget(pTarget)
-		.DepthStencil(pDepth)
+		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetGraphicsRootSignature(m_pRS);
 
 				context.BindRootCBV(1, pView->ViewCB);
+				context.BindResources(2, resources.GetSRV(pDepth));
 
 				if (numLines != 0)
 				{
@@ -324,7 +326,7 @@ void DebugRenderer::AddCone(const Vector3& position, const Quaternion& rotation,
 {
 	Matrix world = Matrix::CreateFromQuaternion(rotation) * Matrix::CreateTranslation(position);
 
-	float radius = tanf(0.5f * angle * Math::DegreesToRadians) * height;
+	float radius = tanf(0.5f * angle) * height;
 	float t = Math::PI * 2 / (segments + 1);
 	for (int i = 0; i < segments + 1; ++i)
 	{
@@ -366,7 +368,8 @@ void DebugRenderer::AddLight(const Transform& transform, const Light& light, con
 		AddSphere(transform.Position, light.Range, 8, 8, color, false);
 		break;
 	case LightType::Spot:
-		AddCone(transform.Position, transform.Rotation, light.Range, light.UmbraAngleDegrees, 10, color);
+		AddCone(transform.Position, transform.Rotation, light.Range, light.OuterConeAngle, 10, color);
+		AddCone(transform.Position, transform.Rotation, light.Range, light.InnerConeAngle, 10, color);
 		break;
 	default:
 		break;

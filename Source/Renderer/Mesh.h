@@ -80,8 +80,6 @@ struct Material
 
 struct Mesh
 {
-	uint32 MaterialId;
-
 	bool IsAnimated() const { return SkinnedPositionStreamLocation.IsValid(); }
 
 	ResourceFormat PositionsFormat = ResourceFormat::RGB32_FLOAT;
@@ -111,6 +109,7 @@ struct Mesh
 
 struct Model
 {
+	uint32 MaterialId;
 	int MeshIndex = -1;
 	int SkeletonIndex = -1;
 	int AnimationIndex = -1;

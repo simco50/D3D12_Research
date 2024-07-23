@@ -89,8 +89,8 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 						PrecomputedLightData& data = *pLightData++;
 						data.ViewSpacePosition = Vector3::Transform(transform.Position, viewMatrix);
 						data.ViewSpaceDirection = Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, transform.Rotation), viewMatrix);
-						data.SpotCosAngle = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-						data.SpotSinAngle = sin(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+						data.SpotCosAngle = cos(light.OuterConeAngle / 2.0f);
+						data.SpotSinAngle = sin(light.OuterConeAngle / 2.0f);
 						data.Range = light.Range;
 						data.IsSpot = light.Type == LightType::Spot;
 						data.IsPoint = light.Type == LightType::Point;
@@ -185,7 +185,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 						}
 						else if (light.Type == LightType::Spot)
 						{
-							float cosAngle = cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+							float cosAngle = cos(light.OuterConeAngle / 2.0f);
 
 							data.SphereRadius = light.Range * 0.5f / powf(cosAngle, 2);
 							data.SphereViewPosition = Vector3::Transform(transform.Position, viewMatrix) + Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, transform.Rotation), viewMatrix) * light.Range;

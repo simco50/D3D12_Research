@@ -74,14 +74,9 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 				numBLASBuiltVertices += pMesh->PositionStreamLocation.Elements;
 				++numBuiltBLAS;
 
-				const Material& material = world.pWorld->Materials[pMesh->MaterialId];
 				D3D12_RAYTRACING_GEOMETRY_DESC geometryDesc{};
 				geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-				geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
-				if (material.AlphaMode == MaterialAlphaMode::Opaque)
-				{
-					geometryDesc.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-				}
+				geometryDesc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 				geometryDesc.Triangles.IndexBuffer = pMesh->IndicesLocation.Location;
 				geometryDesc.Triangles.IndexCount = pMesh->IndicesLocation.Elements;
 				geometryDesc.Triangles.IndexFormat = D3D::ConvertFormat(pMesh->IndicesLocation.Format);

@@ -136,7 +136,7 @@ namespace Renderer
 			view.each([&](const Transform& transform, const Model& model)
 				{
 					const Mesh& mesh = pWorld->Meshes[model.MeshIndex];
-					const Material& meshMaterial = pWorld->Materials[mesh.MaterialId];
+					const Material& material = pWorld->Materials[model.MaterialId];
 
 					auto GetBlendMode = [](MaterialAlphaMode mode) {
 						switch (mode)
@@ -151,7 +151,8 @@ namespace Renderer
 					Batch& batch = sceneBatches.emplace_back();
 					batch.InstanceID		= instanceID;
 					batch.pMesh				= &mesh;
-					batch.BlendMode			= GetBlendMode(meshMaterial.AlphaMode);
+					batch.pMaterial			= &material;
+					batch.BlendMode			= GetBlendMode(material.AlphaMode);
 					batch.WorldMatrix		= transform.World;
 					batch.Radius			= Vector3(batch.Bounds.Extents).Length();
 					mesh.Bounds.Transform(batch.Bounds, batch.WorldMatrix);
@@ -159,7 +160,7 @@ namespace Renderer
 					ShaderInterop::InstanceData& meshInstance = meshInstances.emplace_back();
 					meshInstance.ID						= instanceID;
 					meshInstance.MeshIndex				= model.MeshIndex;
-					meshInstance.MaterialIndex			= mesh.MaterialId;
+					meshInstance.MaterialIndex			= model.MaterialId;
 					meshInstance.LocalToWorld			= transform.World;
 					meshInstance.LocalToWorldPrev		= transform.WorldPrev;
 					meshInstance.LocalBoundsOrigin		= mesh.Bounds.Center;
@@ -251,8 +252,8 @@ namespace Renderer
 					ShaderInterop::Light& data = lightData.emplace_back();
 					data.Position			= transform.Position;
 					data.Direction			= Vector3::Transform(Vector3::Forward, transform.Rotation);
-					data.SpotlightAngles.x	= cos(light.PenumbraAngleDegrees * Math::DegreesToRadians / 2.0f);
-					data.SpotlightAngles.y	= cos(light.UmbraAngleDegrees * Math::DegreesToRadians / 2.0f);
+					data.SpotlightAngles.x	= cos(light.InnerConeAngle / 2.0f);
+					data.SpotlightAngles.y	= cos(light.OuterConeAngle / 2.0f);
 					data.Color				= Math::Pack_RGBA8_UNORM(light.Colour);
 					data.Intensity			= light.Intensity;
 					data.Range				= light.Range;

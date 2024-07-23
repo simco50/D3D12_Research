@@ -139,12 +139,15 @@ struct Batch
 		AlphaMask = 2,
 		AlphaBlend = 4,
 	};
-	uint32 InstanceID;
-	Blending BlendMode = Blending::Opaque;
-	const Mesh* pMesh;
-	Matrix WorldMatrix;
-	BoundingBox Bounds;
-	float Radius;
+
+	uint32				InstanceID;
+	const Mesh*			pMesh;
+	const Material*		pMaterial;
+	Matrix				WorldMatrix;
+	BoundingBox			Bounds;
+	float				Radius;
+
+	Blending			BlendMode	= Blending::Opaque;
 };
 DECLARE_BITMASK_TYPE(Batch::Blending)
 
