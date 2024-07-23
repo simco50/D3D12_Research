@@ -221,26 +221,27 @@ namespace Renderer
 		}
 
 		// DDGI
-		if (Tweakables::gEnableDDGI)
 		{
 			Array<ShaderInterop::DDGIVolume> ddgiVolumes;
-			auto ddgi_view = pWorld->Registry.view<Transform, DDGIVolume>();
-			ddgi_view.each([&](const Transform& transform, const DDGIVolume& volume)
-				{
-					ShaderInterop::DDGIVolume& ddgi = ddgiVolumes.emplace_back();
-					ddgi.BoundsMin				= transform.Position - volume.Extents;
-					ddgi.ProbeSize				= 2 * volume.Extents / (Vector3((float)volume.NumProbes.x, (float)volume.NumProbes.y, (float)volume.NumProbes.z) - Vector3::One);
-					ddgi.ProbeVolumeDimensions	= Vector3u(volume.NumProbes.x, volume.NumProbes.y, volume.NumProbes.z);
-					ddgi.IrradianceIndex		= volume.pIrradianceHistory ? volume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.DepthIndex				= volume.pDepthHistory ? volume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.ProbeOffsetIndex		= volume.pProbeOffset ? volume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.ProbeStatesIndex		= volume.pProbeStates ? volume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.NumRaysPerProbe		= volume.NumRays;
-					ddgi.MaxRaysPerProbe		= volume.MaxNumRays;
-				});
+			if (Tweakables::gEnableDDGI)
+			{
+				auto ddgi_view = pWorld->Registry.view<Transform, DDGIVolume>();
+				ddgi_view.each([&](const Transform& transform, const DDGIVolume& volume)
+					{
+						ShaderInterop::DDGIVolume& ddgi = ddgiVolumes.emplace_back();
+						ddgi.BoundsMin				= transform.Position - volume.Extents;
+						ddgi.ProbeSize				= 2 * volume.Extents / (Vector3((float)volume.NumProbes.x, (float)volume.NumProbes.y, (float)volume.NumProbes.z) - Vector3::One);
+						ddgi.ProbeVolumeDimensions	= Vector3u(volume.NumProbes.x, volume.NumProbes.y, volume.NumProbes.z);
+						ddgi.IrradianceIndex		= volume.pIrradianceHistory ? volume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+						ddgi.DepthIndex				= volume.pDepthHistory ? volume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+						ddgi.ProbeOffsetIndex		= volume.pProbeOffset ? volume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+						ddgi.ProbeStatesIndex		= volume.pProbeStates ? volume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+						ddgi.NumRaysPerProbe		= volume.NumRays;
+						ddgi.MaxRaysPerProbe		= volume.MaxNumRays;
+					});
+			}
 			CopyBufferData((uint32)ddgiVolumes.size(), sizeof(ShaderInterop::DDGIVolume), "DDGI Volumes", ddgiVolumes.data(), pRenderWorld->DDGIVolumesBuffer);
 		}
-
 		// Lights
 		{
 			Array<ShaderInterop::Light> lightData;
