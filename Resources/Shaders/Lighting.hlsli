@@ -175,15 +175,15 @@ float GetAttenuation(Light light, float3 worldPosition, out float3 L)
 
 float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<float> depthTexture, int stepCount, float rayLength, float ditherOffset)
 {
-	float4 rayStartPS = mul(float4(worldPosition, 1), cView.ViewProjection);
-	float4 rayDirPS = mul(float4(-lightDirection * rayLength, 0), cView.ViewProjection);
+	float4 rayStartPS = mul(float4(worldPosition, 1), cView.WorldToClip);
+	float4 rayDirPS = mul(float4(-lightDirection * rayLength, 0), cView.WorldToClip);
 	float4 rayEndPS = rayStartPS + rayDirPS;
 	rayStartPS.xyz /= rayStartPS.w;
 	rayEndPS.xyz /= rayEndPS.w;
 	float3 rayStep = rayEndPS.xyz - rayStartPS.xyz;
 	float stepSize = 1.0f / stepCount;
 
-	float4 rayDepthClip = rayStartPS + mul(float4(0, 0, rayLength, 0), cView.Projection);
+	float4 rayDepthClip = rayStartPS + mul(float4(0, 0, rayLength, 0), cView.ViewToClip);
 	rayDepthClip.xyz /= rayDepthClip.w;
 	float tolerance = abs(rayDepthClip.z - rayStartPS.z) * stepSize * 2;
 
@@ -236,13 +236,13 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 			float jitter = dither - 1.0f;
 			uint maxSteps = cView.SsrSamples;
 
-			float3 rayStartVS = mul(float4(worldPosition, 1), cView.View).xyz;
+			float3 rayStartVS = mul(float4(worldPosition, 1), cView.WorldToView).xyz;
 			float linearDepth = rayStartVS.z;
-			float3 reflectionVs = mul(reflectionWs, (float3x3)cView.View);
+			float3 reflectionVs = mul(reflectionWs, (float3x3)cView.WorldToView);
 			float3 rayEndVS = rayStartVS + (reflectionVs * linearDepth);
 
-			float3 rayStart = ViewPositionToUV(rayStartVS, cView.Projection);
-			float3 rayEnd = ViewPositionToUV(rayEndVS, cView.Projection);
+			float3 rayStart = ViewPositionToUV(rayStartVS, cView.ViewToClip);
+			float3 rayEnd = ViewPositionToUV(rayEndVS, cView.ViewToClip);
 
 			float3 rayStep = ((rayEnd - rayStart) / float(maxSteps));
 			rayStep = rayStep / length(rayEnd.xy - rayStart.xy);
@@ -287,7 +287,7 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 			if (hitIndex > 0)
 			{
 				float4 UV = float4(bestHit.xy, 0, 1);
-				UV = mul(UV, cView.ReprojectionMatrix);
+				UV = mul(UV, cView.UVToPrevUV);
 				float2 distanceFromCenter = (float2(UV.x, UV.y) * 2.0f) - float2(1.0f, 1.0f);
 				float edgeAttenuation = saturate((1.0 - ((float)hitIndex / maxSteps)) * 4.0f);
 				edgeAttenuation *= smoothstep(0.0f, 0.5f, saturate(1.0 - dot(distanceFromCenter, distanceFromCenter)));

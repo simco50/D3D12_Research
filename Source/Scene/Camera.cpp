@@ -6,15 +6,16 @@ void Camera::ApplyViewTransform(ViewTransform& transform, bool jitter) const
 {
 	// Update previous data
 	transform.PositionPrev = transform.Position;
-	transform.ViewProjectionPrev = transform.ViewProjection;
+	transform.WorldToClipPrev = transform.WorldToClip;
 	transform.JitterPrev = transform.Jitter;
 
 	// Update current data
-	transform.ViewInverse = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
-	transform.ViewInverse.Invert(transform.View);
+	transform.ViewToWorld = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
+	transform.ViewToWorld.Invert(transform.WorldToView);
 	float aspect = transform.Viewport.GetWidth() / transform.Viewport.GetHeight();
-	transform.Projection = Math::CreatePerspectiveMatrix(transform.FoV, aspect, transform.NearPlane, transform.FarPlane);
-	transform.UnjtteredViewProjection = transform.View * transform.Projection;
+	transform.ViewToClip = Math::CreatePerspectiveMatrix(transform.FoV, aspect, transform.NearPlane, transform.FarPlane);
+	transform.WorldToClipUnjittered = transform.WorldToView * transform.ViewToClip;
+	transform.ViewToClipUnjittered = transform.ViewToClip;
 
 	if (jitter)
 	{
@@ -23,8 +24,8 @@ void Camera::ApplyViewTransform(ViewTransform& transform, bool jitter) const
 
 		transform.Jitter.x = (x[transform.JitterIndex] * 2.0f - 1.0f) / transform.Viewport.GetWidth();
 		transform.Jitter.y = (y[transform.JitterIndex] * 2.0f - 1.0f) / transform.Viewport.GetHeight();
-		transform.Projection.m[2][0] += transform.Jitter.x;
-		transform.Projection.m[2][1] += transform.Jitter.y;
+		transform.ViewToClip.m[2][0] += transform.Jitter.x;
+		transform.ViewToClip.m[2][1] += transform.Jitter.y;
 		++transform.JitterIndex;
 	}
 	else
@@ -32,9 +33,9 @@ void Camera::ApplyViewTransform(ViewTransform& transform, bool jitter) const
 		transform.Jitter = Vector2::Zero;
 	}
 
-	transform.Projection.Invert(transform.ProjectionInverse);
-	transform.ViewProjection = transform.View * transform.Projection;
-	transform.PerspectiveFrustum = Math::CreateBoundingFrustum(transform.Projection, transform.View);
+	transform.ViewToClip.Invert(transform.ClipToView);
+	transform.WorldToClip = transform.WorldToView * transform.ViewToClip;
+	transform.PerspectiveFrustum = Math::CreateBoundingFrustum(transform.ViewToClip, transform.WorldToView);
 	transform.Position = m_Position;
 }
 
@@ -80,7 +81,7 @@ Ray Camera::GetMouseRay(const FloatRect& viewport) const
 	ApplyViewTransform(transform, false);
 
 	Matrix viewProjInverse;
-	transform.ViewProjection.Invert(viewProjInverse);
+	transform.WorldToClip.Invert(viewProjInverse);
 	Vector3 nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
 	Vector3 farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
 	ray.position = Vector3(nearPoint.x, nearPoint.y, nearPoint.z);

@@ -31,9 +31,9 @@ float EdgeFunction(const float2 a, const float2 b, const float2 c)
 
 void RasterTriangle(float3 p0, float3 p1, float3 p2, uint value)
 {
-	float4 csP0 = mul(float4(p0, 1), cView.ViewProjection);
-    float4 csP1 = mul(float4(p1, 1), cView.ViewProjection);
-    float4 csP2 = mul(float4(p2, 1), cView.ViewProjection);
+	float4 csP0 = mul(float4(p0, 1), cView.WorldToClip);
+    float4 csP1 = mul(float4(p1, 1), cView.WorldToClip);
+    float4 csP2 = mul(float4(p2, 1), cView.WorldToClip);
 
     /*
         Perspective divide

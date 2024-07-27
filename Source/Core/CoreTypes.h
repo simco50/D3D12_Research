@@ -75,3 +75,6 @@ using Array = std::vector<T, Allocator>;
 
 template<typename T, size_t Size>
 using StaticArray = std::array<T, Size>;
+
+template<typename T>
+using UniquePtr = std::unique_ptr<T>;

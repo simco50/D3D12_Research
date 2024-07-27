@@ -15,6 +15,13 @@ struct ScratchAllocation
 	{
 		memset(pMappedMemory, value, Size);
 	}
+
+	template<typename T>
+	T& As()
+	{
+		gAssert(sizeof(T) <= Size);
+		return *static_cast<T*>(pMappedMemory);
+	}
 };
 
 class ScratchAllocationManager : public DeviceObject

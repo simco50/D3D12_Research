@@ -33,13 +33,13 @@ void RayGen()
 	float3 N = Octahedral::Unpack(tSceneNormals.SampleLevel(sLinearClamp, uv, 0));
 	float R = tSceneRoughness.SampleLevel(sLinearClamp, uv, 0);
 
-	float3 worldPosition = WorldPositionFromDepth(uv, depth, cView.ViewProjectionInverse);
+	float3 worldPosition = WorldPositionFromDepth(uv, depth, cView.ClipToWorld);
 
 	float reflectivity = R;
 
 	if(depth > 0 && reflectivity > 0.0f)
 	{
-		float3 V = normalize(worldPosition - cView.ViewInverse[3].xyz);
+		float3 V = normalize(worldPosition - cView.ViewToWorld[3].xyz);
 		float3 R = reflect(V, N);
 
 		float3 radiance = 0;

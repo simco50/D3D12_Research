@@ -5,8 +5,9 @@
 #include "RHI/RootSignature.h"
 #include "RHI/CommandContext.h"
 #include "Renderer/Light.h"
+#include "Renderer/Renderer.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Renderer/SceneView.h"
+#include "Scene/World.h"
 
 struct DebugSphere
 {

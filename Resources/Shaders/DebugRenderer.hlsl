@@ -16,7 +16,7 @@ void VSMain(
 	out float4 outColor : COLOR)
 {
 	DebugVertex v = tVertices[vertexID];
-	outPosition = mul(float4(v.Position, 1.0f), cView.ViewProjection);
+	outPosition = mul(float4(v.Position, 1.0f), cView.WorldToClipUnjittered);
 	outColor = RGBA8_UNORM::Unpack(v.Color);
 }
 

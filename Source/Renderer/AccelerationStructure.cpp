@@ -1,31 +1,20 @@
 #include "stdafx.h"
 #include "AccelerationStructure.h"
+#include "Core/Profiler.h"
+#include "Core/ConsoleVariables.h"
 #include "RHI/Device.h"
 #include "RHI/CommandContext.h"
 #include "RHI/Buffer.h"
-#include "SceneView.h"
-#include "Mesh.h"
-#include "Core/Profiler.h"
-#include "Core/ConsoleVariables.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
+#include "Renderer/Mesh.h"
+#include "Renderer/RenderTypes.h"
 
-namespace Tweakables
-{
-	static const uint32 gMaxNumBLASVerticesPerFrame = 100'000;
-	static const uint32 gMaxNumCompactionsPerFrame = 32;
+static constexpr uint32 sMaxNumBLASVerticesPerFrame = 100'000;
+static constexpr uint32 sMaxNumCompactionsPerFrame = 32;
 
-	extern ConsoleVariable<float> gTLASBoundsThreshold;
-}
-
-
-AccelerationStructure::AccelerationStructure()
-{
-}
-
-AccelerationStructure::~AccelerationStructure()
-{
-}
+AccelerationStructure::AccelerationStructure() = default;
+AccelerationStructure::~AccelerationStructure() = default;
 
 void AccelerationStructure::Init(GraphicsDevice* pDevice)
 {
@@ -39,7 +28,7 @@ void AccelerationStructure::Init(GraphicsDevice* pDevice)
 	m_pUpdateTLASPSO = pDevice->CreateComputePipeline(m_pCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
 }
 
-void AccelerationStructure::Build(CommandContext& context, const RenderWorld& world)
+void AccelerationStructure::Build(CommandContext& context, const RenderView& view, Span<const Batch> batches)
 {
 	PROFILE_CPU_SCOPE();
 
@@ -49,8 +38,6 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 		PROFILE_GPU_SCOPE(context.GetCommandList(), "Build Acceleration Structures");
 
 		ID3D12GraphicsCommandList4* pCmd = context.GetCommandList();
-
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 
 		uint32 numBLASBuiltVertices = 0;
 		uint32 numBuiltBLAS = 0;
@@ -63,13 +50,13 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 			uint32 InstanceMask		: 8;
 		};
 		Array<BLASInstance> blasInstances;
-		blasInstances.reserve(world.Batches.size());
+		blasInstances.reserve(batches.GetSize());
 
-		for (const Batch& batch : world.Batches)
+		for (const Batch& batch : batches)
 		{
 			Mesh* pMesh = const_cast<Mesh*>(batch.pMesh);
 
-			if ((!pMesh->pBLAS || pMesh->IsAnimated()) && numBLASBuiltVertices < Tweakables::gMaxNumBLASVerticesPerFrame)
+			if ((!pMesh->pBLAS || pMesh->IsAnimated()) && numBLASBuiltVertices < sMaxNumBLASVerticesPerFrame)
 			{
 				numBLASBuiltVertices += pMesh->PositionStreamLocation.Elements;
 				++numBuiltBLAS;
@@ -139,7 +126,8 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 
 				pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 
-				m_QueuedRequests.push_back(&pMesh->pBLAS);
+				if (!pMesh->IsAnimated())
+					m_QueuedRequests.push_back(&pMesh->pBLAS);
 			}
 
 			if (pMesh->pBLAS)
@@ -162,9 +150,10 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 
 		{
 			PROFILE_GPU_SCOPE(context.GetCommandList(), "BLAS Compaction");
-			//ProcessCompaction(context);
+			ProcessCompaction(context);
 		}
 
+		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
 		if(!blasInstances.empty() || !m_pTLAS)
 		{
 			PROFILE_GPU_SCOPE(context.GetCommandList(), "TLAS Data Generation");
@@ -205,7 +194,7 @@ void AccelerationStructure::Build(CommandContext& context, const RenderWorld& wo
 				context.SetComputeRootSignature(m_pCommonRS);
 				context.SetPipelineState(m_pUpdateTLASPSO);
 				context.BindRootCBV(0, (uint32)blasInstances.size());
-				context.BindRootCBV(1, world.pMainView->ViewCB);
+				context.BindRootCBV(1, view.ViewCB);
 				context.BindRootUAV(2, m_pBLASInstancesTargetBuffer->GetGpuHandle());
 				context.BindRootSRV(3, m_pBLASInstancesSourceBuffer->GetGpuHandle());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
@@ -267,7 +256,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 	for (Ref<Buffer>* pSourceBLAS : m_QueuedRequests)
 	{
 		m_ActiveRequests.push_back(pSourceBLAS);
-		if (m_ActiveRequests.size() >= Tweakables::gMaxNumCompactionsPerFrame)
+		if (m_ActiveRequests.size() >= sMaxNumCompactionsPerFrame)
 		{
 			break;
 		}
@@ -279,7 +268,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 
 		if (!m_pPostBuildInfoBuffer)
 		{
-			uint32 requiredSize = Tweakables::gMaxNumCompactionsPerFrame * sizeof(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC);
+			uint32 requiredSize = sMaxNumCompactionsPerFrame * sizeof(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE_DESC);
 			m_pPostBuildInfoBuffer = context.GetParent()->CreateBuffer(BufferDesc{ .Size = requiredSize, .Flags = BufferFlag::UnorderedAccess }, "BLASCompaction.PostBuildInfo");
 			m_pPostBuildInfoReadbackBuffer = context.GetParent()->CreateBuffer(BufferDesc::CreateReadback(requiredSize), "BLASCompaction.PostBuildInfoReadback");
 		}

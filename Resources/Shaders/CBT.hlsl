@@ -260,14 +260,14 @@ bool TriangleFrustumIntersect(float3x3 tri)
 	float3 bmin = Min(tri[0], tri[1], tri[2]);
 	float3 bmax = Max(tri[0], tri[1], tri[2]);
 	AABB aabb = AABBFromMinMax(bmin, bmax);
-	FrustumCullData cullData = FrustumCull(aabb.Center.xyz, aabb.Extents.xyz, IDENTITY_MATRIX_4, cView.ViewProjection);
+	FrustumCullData cullData = FrustumCull(aabb.Center.xyz, aabb.Extents.xyz, IDENTITY_MATRIX_4, cView.WorldToClip);
 	return cullData.IsVisible;
 }
 
 float2 TriangleLOD(float3x3 tri)
 {
-	float3 p0 = mul(float4(tri[0], 1), cView.View).xyz;
-	float3 p2 = mul(float4(tri[2], 1), cView.View).xyz;
+	float3 p0 = mul(float4(tri[0], 1), cView.WorldToView).xyz;
+	float3 p2 = mul(float4(tri[2], 1), cView.WorldToView).xyz;
 
 	float3 c = (p0 + p2) * 0.5f;
 	float3 v = (p2 - p0);
@@ -457,7 +457,7 @@ void RenderMS(
 	for(uint i = 0; i < 3; ++i)
 	{
 		uint index = outputIndex * 3 + i;
-		vertices[index].Position = mul(float4(tri[i], 1), cView.ViewProjection);
+		vertices[index].Position = mul(float4(tri[i], 1), cView.WorldToClip);
 	}
 	triangles[outputIndex] = uint3(
 		outputIndex * 3 + 0,
@@ -473,7 +473,7 @@ void RenderVS(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID, out 
 	uint heapIndex = cbt.LeafToHeapIndex(instanceID);
 	float3 tri = GetVertices((heapIndex << GEOMETRY_SUBD_LEVEL) + (vertexID / 3))[vertexID % 3];
 
-	vertex.Position = mul(float4(tri, 1), cView.ViewProjection);
+	vertex.Position = mul(float4(tri, 1), cView.WorldToClip);
 }
 
 struct PSOut
@@ -489,8 +489,8 @@ void ShadePS(
 	out PSOut output)
 {
 	float depth = tDepth.SampleLevel(sPointClamp, uv, 0);
-	float3 viewPos = ViewPositionFromDepth(uv, depth, cView.ProjectionInverse);
-	float3 worldPos = mul(float4(viewPos, 1), cView.ViewInverse).xyz;
+	float3 viewPos = ViewPositionFromDepth(uv, depth, cView.ClipToView);
+	float3 worldPos = mul(float4(viewPos, 1), cView.ViewToWorld).xyz;
 
 	float height;
 	float3 N;

@@ -1,5 +1,7 @@
 #include "stdafx.h"
 #include "ForwardRenderer.h"
+#include "Core/ConsoleVariables.h"
+#include "Core/Profiler.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Buffer.h"
@@ -7,12 +9,10 @@
 #include "RHI/CommandContext.h"
 #include "RHI/Texture.h"
 #include "RHI/ResourceViews.h"
+#include "Renderer/Light.h"
+#include "Renderer/Renderer.h"
 #include "Renderer/Techniques/LightCulling.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Core/Profiler.h"
-#include "Renderer/SceneView.h"
-#include "Renderer/Light.h"
-#include "Core/ConsoleVariables.h"
 
 ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)

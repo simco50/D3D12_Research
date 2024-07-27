@@ -33,7 +33,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	float2 uv = ((float2)threadId.xy + 0.5f) * cView.ViewportDimensionsInv;
 	float depth = tDepthTexture.SampleLevel(sPointClamp, uv, 0);
 	float3 viewNormal = ViewNormalFromDepth(uv, tDepthTexture, NormalReconstructMethod::Taps5);
-	float3 viewPos = ViewPositionFromDepth(uv.xy, depth, cView.ProjectionInverse).xyz;
+	float3 viewPos = ViewPositionFromDepth(uv.xy, depth, cView.ClipToView).xyz;
 
 	uint seed = SeedThread(threadId.xy, cView.ViewportDimensions, cView.FrameIndex);
 	float3 randomVec = float3(Random01(seed), Random01(seed), Random01(seed)) * 2.0f - 1.0f;
@@ -50,7 +50,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 		float pdf;
 		float3 hemispherePoint = HemisphereSampleCosineWeight(u, pdf);
 		float3 vpos = viewPos + mul(hemispherePoint, TBN) * cPass.AoRadius;
-		float4 newTexCoord = mul(float4(vpos, 1), cView.Projection);
+		float4 newTexCoord = mul(float4(vpos, 1), cView.ViewToClip);
 		newTexCoord.xyz /= newTexCoord.w;
 		newTexCoord.xy = newTexCoord.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
 

@@ -5,8 +5,8 @@
 #include "RHI/Device.h"
 #include "RHI/CommandContext.h"
 #include "RHI/Texture.h"
+#include "Renderer/Renderer.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Renderer/SceneView.h"
 
 SSAO::SSAO(GraphicsDevice* pDevice)
 {
@@ -21,7 +21,7 @@ RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 	static float g_AoRadius = 0.3f;
 	static int g_AoSamples = 16;
 
-	if (ImGui::Begin("Parameters"))
+	if (ImGui::Begin("Settings"))
 	{
 		if (ImGui::CollapsingHeader("Ambient Occlusion"))
 		{

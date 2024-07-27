@@ -1,17 +1,18 @@
 #include "stdafx.h"
 #include "ImGuiRenderer.h"
+#include "Core/Paths.h"
+#include "Core/Profiler.h"
 #include "RHI/CommandContext.h"
 #include "RHI/Device.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Texture.h"
-#include "Renderer/SceneView.h"
-#include "Core/Paths.h"
-#include "Core/Profiler.h"
+#include "Renderer/Renderer.h"
 
 #include <IconsFontAwesome4.h>
 #include <imgui_impl_win32.h>
 #include <imgui_internal.h>
+#include <ImGuizmo.h>
 
 namespace ImGui
 {
@@ -364,6 +365,7 @@ void ImGuiRenderer::NewFrame()
 {
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
+	ImGuizmo::BeginFrame();
 }
 
 void ImGuiRenderer::Render(CommandContext& context, Texture* pRenderTarget)

@@ -164,7 +164,7 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 				p.Velocity = reflect(p.Velocity, vertex.Normal) * lerp(0.5f, 0.8f, Random01(seed));
 			}
 #else
-			float4 screenPos = mul(float4(p.Position, 1), cView.ViewProjection);
+			float4 screenPos = mul(float4(p.Position, 1), cView.WorldToClip);
 			screenPos.xyz /= screenPos.w;
 			if(screenPos.x > -1 && screenPos.y < 1 && screenPos.y > -1 && screenPos.y < 1)
 			{
@@ -176,7 +176,7 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 				if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
 				{
 					float3 viewNormal = ViewNormalFromDepth(uv, tSceneDepth);
-					float3 normal = mul(viewNormal, (float3x3)cView.ViewInverse);
+					float3 normal = mul(viewNormal, (float3x3)cView.ViewToWorld);
 					if(dot(normal, p.Velocity) < 0)
 					{
 						uint seed = SeedThread(particleIndex);

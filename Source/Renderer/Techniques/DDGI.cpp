@@ -7,7 +7,8 @@
 #include "RHI/PipelineState.h"
 #include "RHI/ShaderBindingTable.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Renderer/SceneView.h"
+#include "Renderer/Renderer.h"
+#include "Scene/World.h"
 
 DDGI::DDGI(GraphicsDevice* pDevice)
 {

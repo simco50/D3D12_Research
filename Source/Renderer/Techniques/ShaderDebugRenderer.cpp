@@ -1,11 +1,11 @@
 #include "stdafx.h"
 #include "ShaderDebugRenderer.h"
+#include "Core/Image.h"
 #include "RHI/CommandContext.h"
 #include "RHI/Device.h"
 #include "RHI/PipelineState.h"
+#include "Renderer/Renderer.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Core/Image.h"
-#include "Renderer/SceneView.h"
 
 ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 	: m_FontSize(24)

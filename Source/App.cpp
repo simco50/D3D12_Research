@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "App.h"
+
 #include "Core/Input.h"
 #include "Core/Console.h"
 #include "Core/CommandLine.h"
@@ -7,10 +8,12 @@
 #include "Core/ConsoleVariables.h"
 #include "Core/Window.h"
 #include "Core/Profiler.h"
+
 #include "RHI/Device.h"
 #include "RHI/CommandQueue.h"
 #include "RHI/CommandContext.h"
-#include "Renderer/SceneView.h"
+
+#include "Renderer/RenderTypes.h"
 #include "Renderer/Techniques/ImGuiRenderer.h"
 
 #ifdef _DEBUG

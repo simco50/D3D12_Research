@@ -53,7 +53,7 @@ VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertex
 
 	VertexAttribute result = (VertexAttribute)0;
 	float3 positionWS = mul(float4(vertex.Position, 1.0f), world).xyz;
-	result.Position = mul(float4(positionWS, 1.0f), cView.ViewProjection);
+	result.Position = mul(float4(positionWS, 1.0f), cView.WorldToClip);
 #if ALPHA_MASK
 	result.UV = vertex.UV;
 #endif

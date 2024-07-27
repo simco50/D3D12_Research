@@ -1,82 +1,39 @@
 #pragma once
-
 #include "RHI/RHI.h"
-#include "RHI/ScratchAllocator.h"
 #include "Core/BitField.h"
-#include "ShaderInterop.h"
-#include "AccelerationStructure.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
-#include "Techniques/ShaderDebugRenderer.h"
 
-#include "entt.hpp"
+#include "ShaderInterop.h"
 
-class LoadedScene;
-struct Mesh;
-class Image;
+class Renderer;
+struct World;
 struct Material;
+struct Mesh;
 struct Light;
-struct Skeleton;
-struct Animation;
+class Image;
 
 enum class StencilBit : uint8
 {
-	None				= 0,
+	None = 0,
 
-	VisibilityBuffer	= 1 << 0,
-	Terrain				= 1 << 1,
+	VisibilityBuffer = 1 << 0,
+	Terrain = 1 << 1,
 
-	SurfaceTypeMask		= VisibilityBuffer | Terrain,
+	SurfaceTypeMask = VisibilityBuffer | Terrain,
 };
 DECLARE_BITMASK_TYPE(StencilBit);
 
-struct Transform
-{
-	Vector3 Position	= Vector3::Zero;
-	Quaternion Rotation = Quaternion::Identity;
-	Vector3 Scale		= Vector3::One;
-
-	Matrix WorldPrev	= Matrix::Identity;
-	Matrix World		= Matrix::Identity;
-};
-
-struct Identity
-{
-	String Name;
-};
-
-struct World
-{
-	entt::entity CreateEntity(const char* pName)
-	{
-		entt::entity e = Registry.create();
-		Registry.emplace<Identity>(e, pName);
-		return e;
-	}
-
-	template<typename T>
-	T& GetComponent(entt::entity entity) { return Registry.get<T>(entity); }
-
-	Array<Ref<Texture>> Textures;
-	Array<Mesh> Meshes;
-	Array<Material> Materials;
-	Array<Skeleton> Skeletons;
-	Array<Animation> Animations;
-
-	entt::registry Registry;
-	entt::entity Sunlight;
-	entt::entity Camera;
-};
-
-
 struct ViewTransform
 {
-	Matrix Projection;
-	Matrix View;
-	Matrix ViewProjection;
-	Matrix ViewProjectionPrev;
-	Matrix ViewInverse;
-	Matrix ProjectionInverse;
-	Matrix UnjtteredViewProjection;
+	Matrix ViewToClip;
+	Matrix WorldToView;
+	Matrix WorldToClip;
+	Matrix WorldToClipPrev;
+	Matrix ViewToWorld;
+	Matrix ClipToView;
+	Matrix ViewToClipUnjittered;
+	Matrix WorldToClipUnjittered;
+
 	Vector3 Position;
 	Vector3 PositionPrev;
 
@@ -108,7 +65,7 @@ using VisibilityMask = BitField<8192>;
 
 struct RenderView : ViewTransform
 {
-	RenderWorld* pRenderWorld = nullptr;
+	Renderer* pRenderer = nullptr;
 	World* pWorld = nullptr;
 
 	VisibilityMask VisibilityMask;
@@ -141,71 +98,31 @@ struct Batch
 	};
 
 	uint32				InstanceID;
-	const Mesh*			pMesh;
-	const Material*		pMaterial;
+	const Mesh* pMesh;
+	const Material* pMaterial;
 	Matrix				WorldMatrix;
 	BoundingBox			Bounds;
 	float				Radius;
 
-	Blending			BlendMode	= Blending::Opaque;
+	Blending			BlendMode = Blending::Opaque;
 };
 DECLARE_BITMASK_TYPE(Batch::Blending)
 
 
-struct RenderWorld
-{
-	World* pWorld = nullptr;
-	RenderView* pMainView = nullptr;
-	Array<Batch> Batches;
-
-	struct SceneBuffer
-	{
-		uint32 Count;
-		Ref<Buffer> pBuffer;
-	};
-
-	SceneBuffer LightBuffer;
-	SceneBuffer MaterialBuffer;
-	SceneBuffer MeshBuffer;
-	SceneBuffer InstanceBuffer;
-	SceneBuffer DDGIVolumesBuffer;
-	SceneBuffer FogVolumesBuffer;
-	SceneBuffer LightMatricesBuffer;
-	Ref<Texture> pSky;
-	AccelerationStructure AccelerationStructure;
-	GPUDebugRenderData DebugRenderData;
-
-	BoundingBox SceneAABB;
-
-	Array<ShadowView> ShadowViews;
-	Vector4 ShadowCascadeDepths;
-	uint32 NumShadowCascades;
-
-	int FrameIndex = 0;
-};
-
-
 struct SceneTextures
 {
-	RGTexture* pPreviousColor		= nullptr;
-	RGTexture* pRoughness			= nullptr;
-	RGTexture* pColorTarget			= nullptr;
-	RGTexture* pDepth				= nullptr;
-	RGTexture* pNormals				= nullptr;
-	RGTexture* pVelocity			= nullptr;
+	RGTexture* pPreviousColor = nullptr;
+	RGTexture* pRoughness = nullptr;
+	RGTexture* pColorTarget = nullptr;
+	RGTexture* pDepth = nullptr;
+	RGTexture* pNormals = nullptr;
+	RGTexture* pVelocity = nullptr;
 
-	RGTexture* pGBuffer0			= nullptr;
-	RGTexture* pGBuffer1			= nullptr;
-	RGTexture* pGBuffer2			= nullptr;
+	RGTexture* pGBuffer0 = nullptr;
+	RGTexture* pGBuffer1 = nullptr;
+	RGTexture* pGBuffer2 = nullptr;
 };
 
-namespace Renderer
-{
-	void DrawScene(CommandContext& context, const RenderView& view, Batch::Blending blendModes);
-	void DrawScene(CommandContext& context, Span<Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes);
-
-	void UploadSceneData(CommandContext& context, RenderWorld* pWorld);
-}
 
 enum class DefaultTexture
 {
@@ -258,3 +175,13 @@ namespace GraphicsCommon
 	Ref<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName = nullptr);
 	Ref<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName = nullptr);
 }
+
+enum class RenderPath
+{
+	Tiled,
+	Clustered,
+	PathTracing,
+	Visibility,
+	VisibilityDeferred,
+	MAX
+};

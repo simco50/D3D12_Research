@@ -16,11 +16,11 @@ void CSMain(uint3 threadID : SV_DispatchThreadID)
 
 	// Compute world space position from depth
 	float4 posNDC = float4(uv.x * 2.0f - 1.0f, uv.y * -2.0f + 1, depth, 1.0f);
-	float4 posWS = mul(posNDC, cView.ViewProjectionInverse);
+	float4 posWS = mul(posNDC, cView.ClipToWorld);
 	posWS /= posWS.w;
 
 	// Project into last frame's view
-	float4 prevPosNDC = mul(float4(posWS.xyz, 1), cView.ViewProjectionPrev);
+	float4 prevPosNDC = mul(float4(posWS.xyz, 1), cView.WorldToClipPrev);
 	prevPosNDC /= prevPosNDC.w;
 
 	// Velocity is the _from_ current view _to_ last  view

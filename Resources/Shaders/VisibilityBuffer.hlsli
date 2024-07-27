@@ -111,9 +111,9 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 		worldPos[i] = mul(float4(vertices[i].Position, 1), instance.LocalToWorld).xyz;
 	}
 
-	float4 clipPos0 = mul(float4(worldPos[0], 1), cView.ViewProjection);
-	float4 clipPos1 = mul(float4(worldPos[1], 1), cView.ViewProjection);
-	float4 clipPos2 = mul(float4(worldPos[2], 1), cView.ViewProjection);
+	float4 clipPos0 = mul(float4(worldPos[0], 1), cView.WorldToClip);
+	float4 clipPos1 = mul(float4(worldPos[1], 1), cView.WorldToClip);
+	float4 clipPos2 = mul(float4(worldPos[2], 1), cView.WorldToClip);
 	float2 pixelClip = screenUV * 2 - 1;
 	pixelClip.y *= -1;
 	BaryDerivs bary = ComputeBarycentrics(pixelClip, clipPos0, clipPos1, clipPos2);

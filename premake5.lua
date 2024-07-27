@@ -151,6 +151,7 @@ workspace (PROJECT_NAME)
 		compileThirdPartyLibrary("MeshOptimizer")
 		compileThirdPartyLibrary("SimpleMath")
 		compileThirdPartyLibrary("Stb")
+		compileThirdPartyLibrary("ImGuizmo")
 
 newaction {
 	trigger     = "clean",

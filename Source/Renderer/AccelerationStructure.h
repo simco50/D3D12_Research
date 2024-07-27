@@ -3,8 +3,9 @@
 #include "RHI/RHI.h"
 #include "RHI/Fence.h"
 
-struct RenderWorld;
+struct Batch;
 struct SubMesh;
+struct RenderView;
 
 class AccelerationStructure
 {
@@ -13,7 +14,7 @@ public:
 	~AccelerationStructure();
 
 	void Init(GraphicsDevice* pDevice);
-	void Build(CommandContext& context, const RenderWorld& world);
+	void Build(CommandContext& context, const RenderView& view, Span<const Batch> batches);
 	ShaderResourceView* GetSRV() const;
 
 private:

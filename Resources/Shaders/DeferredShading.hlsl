@@ -49,8 +49,8 @@ void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 
 	float2 uv = (texel + 0.5f) * cView.ViewportDimensionsInv;
 	float depth = tDepth[texel];
-	float3 viewPos = ViewPositionFromDepth(uv, depth, cView.ProjectionInverse);
-	float3 worldPos = mul(float4(viewPos, 1), cView.ViewInverse).xyz;
+	float3 viewPos = ViewPositionFromDepth(uv, depth, cView.ClipToView);
+	float3 worldPos = mul(float4(viewPos, 1), cView.ViewToWorld).xyz;
 	float linearDepth = viewPos.z;
 
 	float4 gbuffer0 = tGBuffer0[texel];

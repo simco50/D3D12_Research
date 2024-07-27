@@ -93,7 +93,7 @@ void RenderLineVS(
 	}
 	else
 	{
-		position = mul(float4(wPos, 1), cView.ViewProjection);
+		position = mul(float4(wPos, 1), cView.WorldToClip);
 	}
 }
 

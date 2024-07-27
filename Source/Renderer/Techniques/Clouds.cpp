@@ -7,8 +7,7 @@
 #include "RHI/Texture.h"
 #include "RHI/CommandContext.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Scene/Camera.h"
-
+#include "Renderer/RenderTypes.h"
 
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
@@ -61,7 +60,7 @@ RGTexture* Clouds::Render(RGGraph& graph, const RenderView* pView, RGTexture* pC
 
 	bool isDirty = !m_pShapeNoise || !m_pDetailNoise || !m_pCloudHeightDensityLUT;
 
-	if (ImGui::Begin("Parameters"))
+	if (ImGui::Begin("Settings"))
 	{
 		if (ImGui::CollapsingHeader("Clouds"))
 		{

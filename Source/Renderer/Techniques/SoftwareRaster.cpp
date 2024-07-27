@@ -1,14 +1,14 @@
 #include "stdafx.h"
 #include "SoftwareRaster.h"
-#include "Renderer/Techniques/MeshletRasterizer.h"
+#include "Core/Image.h"
 #include "RHI/Texture.h"
 #include "RHI/Buffer.h"
 #include "RHI/ResourceViews.h"
 #include "RHI/PipelineState.h"
 #include "RHI/Device.h"
+#include "Renderer/Renderer.h"
+#include "Renderer/Techniques/MeshletRasterizer.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Renderer/SceneView.h"
-#include "Core/Image.h"
 
 SoftwareRaster::SoftwareRaster(GraphicsDevice* pDevice)
 {

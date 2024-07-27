@@ -1,16 +1,17 @@
 #include "stdafx.h"
 #include "CBTTessellation.h"
+#include "Core/Profiler.h"
+#include "Core/Input.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Device.h"
 #include "RHI/PipelineState.h"
 #include "RHI/Buffer.h"
 #include "RHI/CommandContext.h"
 #include "RenderGraph/RenderGraph.h"
+#include "Renderer/Techniques/CBT.h"
 #include "Renderer/Techniques/ImGuiRenderer.h"
-#include "Renderer/SceneView.h"
-#include "Core/Profiler.h"
-#include "Core/Input.h"
-#include "CBT.h"
+#include "Renderer/Renderer.h"
+#include "Scene/World.h"
 
 namespace CBTSettings
 {
@@ -130,7 +131,7 @@ struct IndirectDrawArgs
 
 void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const SceneTextures& sceneTextures)
 {
-	if (ImGui::Begin("Parameters"))
+	if (ImGui::Begin("Settings"))
 	{
 		if (ImGui::CollapsingHeader("CBT"))
 		{

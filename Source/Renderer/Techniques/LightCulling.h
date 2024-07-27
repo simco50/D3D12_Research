@@ -1,7 +1,7 @@
 #pragma once
 #include "RHI/RHI.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
-#include "Renderer/SceneView.h"
+#include "Renderer/Renderer.h"
 
 struct RenderView;
 struct SceneTextures;

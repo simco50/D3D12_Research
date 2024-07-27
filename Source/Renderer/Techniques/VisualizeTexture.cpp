@@ -1,13 +1,13 @@
 #include "stdafx.h"
 #include "VisualizeTexture.h"
+#include "Core/Image.h"
 #include "RHI/Device.h"
 #include "RHI/RHI.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
-#include "RenderGraph/RenderGraph.h"
 #include "Renderer/Techniques/ImGuiRenderer.h"
-#include "Renderer/SceneView.h"
-#include "Core/Image.h"
+#include "Renderer/Renderer.h"
+#include "RenderGraph/RenderGraph.h"
 
 #include <imgui_internal.h>
 #include <IconsFontAwesome4.h>

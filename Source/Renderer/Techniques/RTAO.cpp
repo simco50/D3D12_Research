@@ -7,8 +7,8 @@
 #include "RHI/ShaderBindingTable.h"
 #include "RHI/StateObject.h"
 #include "RHI/PipelineState.h"
+#include "Renderer/Renderer.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Renderer/SceneView.h"
 
 RTAO::RTAO(GraphicsDevice* pDevice)
 {
@@ -35,7 +35,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 	static float g_AoRadius = 2.0f;
 	static int32 g_AoSamples = 1;
 
-	if (ImGui::Begin("Parameters"))
+	if (ImGui::Begin("Settings"))
 	{
 		if (ImGui::CollapsingHeader("Ambient Occlusion"))
 		{

@@ -1,5 +1,7 @@
 #include "stdafx.h"
 #include "LightCulling.h"
+#include "Core/Profiler.h"
+#include "Core/ConsoleVariables.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Buffer.h"
@@ -7,11 +9,10 @@
 #include "RHI/CommandContext.h"
 #include "RHI/Texture.h"
 #include "RHI/ResourceViews.h"
-#include "RenderGraph/RenderGraph.h"
-#include "Core/Profiler.h"
-#include "Renderer/SceneView.h"
+#include "Renderer/Renderer.h"
 #include "Renderer/Light.h"
-#include "Core/ConsoleVariables.h"
+#include "RenderGraph/RenderGraph.h"
+#include "Scene/World.h"
 
 // Clustered
 static constexpr int gLightClusterTexelSize = 64;
@@ -44,8 +45,6 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 {
 	RG_GRAPH_SCOPE("Clustered Light Culling", graph);
 
-	const RenderWorld* pWorld = pView->pRenderWorld;
-
 	cullData.ClusterCount.x = Math::DivideAndRoundUp(pView->GetDimensions().x, gLightClusterTexelSize);
 	cullData.ClusterCount.y = Math::DivideAndRoundUp(pView->GetDimensions().y, gLightClusterTexelSize);
 	cullData.ClusterCount.z = gLightClustersNumZ;
@@ -72,9 +71,11 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 		uint32 IsPoint : 1;
 		uint32 IsDirectional : 1;
 	};
-	uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pWorld->LightBuffer.Count;
 
-	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pWorld->LightBuffer.Count, sizeof(PrecomputedLightData)));
+	const Renderer* pRenderer = pView->pRenderer;
+	uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pRenderer->GetNumLights();
+
+	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pRenderer->GetNumLights(), sizeof(PrecomputedLightData)));
 	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
 		.Write(pPrecomputeData)
 		.Bind([=](CommandContext& context, const RGResources& resources)
@@ -82,7 +83,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
-				const Matrix& viewMatrix = pView->View;
+				const Matrix& viewMatrix = pView->WorldToView;
 				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();
 				light_view.each([&](const Transform& transform, const Light& light)
 					{
@@ -157,18 +158,18 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 		float SphereRadius;
 	};
 
-	const RenderWorld* pWorld = pView->pRenderWorld;
+	const Renderer* pRenderer = pView->pRenderer;
 
-	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pWorld->LightBuffer.Count, sizeof(PrecomputedLightData)));
+	RGBuffer* pPrecomputeData = graph.Create("Precompute Light Data", BufferDesc::CreateStructured(pRenderer->GetNumLights(), sizeof(PrecomputedLightData)));
 	graph.AddPass("Precompute Light View Data", RGPassFlag::Copy)
 		.Write(pPrecomputeData)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pWorld->LightBuffer.Count;
+				uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pRenderer->GetNumLights();
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
 				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
 
-				const Matrix& viewMatrix = pView->View;
+				const Matrix& viewMatrix = pView->WorldToView;
 				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();
 				light_view.each([&](const Transform& transform, const Light& light)
 					{
@@ -185,10 +186,16 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 						}
 						else if (light.Type == LightType::Spot)
 						{
-							float cosAngle = cos(light.OuterConeAngle / 2.0f);
-
-							data.SphereRadius = light.Range * 0.5f / powf(cosAngle, 2);
-							data.SphereViewPosition = Vector3::Transform(transform.Position, viewMatrix) + Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, transform.Rotation), viewMatrix) * light.Range;
+							if (light.OuterConeAngle > Math::PI_DIV_2)
+							{
+								data.SphereRadius = light.Range * tanf(light.OuterConeAngle * 0.5f);
+								data.SphereViewPosition = Vector3::Transform(transform.Position + Vector3::TransformNormal(Vector3::Forward * light.Range, Matrix::CreateFromQuaternion(transform.Rotation)), viewMatrix);
+							}
+							else
+							{
+								data.SphereRadius = light.Range * 0.5f / powf(cosf(light.OuterConeAngle * 0.5f), 2.0f);
+								data.SphereViewPosition = Vector3::Transform(transform.Position + Vector3::TransformNormal(Vector3::Forward * data.SphereRadius, Matrix::CreateFromQuaternion(transform.Rotation)), viewMatrix);
+							}
 						}
 					});
 				context.CopyBuffer(allocation.pBackingResource, resources.Get(pPrecomputeData), precomputedLightDataSize, allocation.Offset, 0);

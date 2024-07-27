@@ -280,7 +280,6 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	}
 
 	Ref<IDXGIAdapter4> pAdapter;
-	Ref<ID3D12Device> pDevice;
 	if (!options.UseWarp)
 	{
 		uint32 adapterIndex = 0;
@@ -318,31 +317,15 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		DXGI_ADAPTER_DESC3 desc;
 		pAdapter->GetDesc3(&desc);
 		E_LOG(Info, "Using %s", UNICODE_TO_MULTIBYTE(desc.Description));
-
-		constexpr D3D_FEATURE_LEVEL featureLevels[] =
-		{
-			D3D_FEATURE_LEVEL_12_2,
-			D3D_FEATURE_LEVEL_12_1,
-			D3D_FEATURE_LEVEL_12_0,
-			D3D_FEATURE_LEVEL_11_1,
-			D3D_FEATURE_LEVEL_11_0
-		};
-
-		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(pDevice.GetAddressOf())));
-		D3D12_FEATURE_DATA_FEATURE_LEVELS caps{};
-		caps.pFeatureLevelsRequested = featureLevels;
-		caps.NumFeatureLevels = ARRAYSIZE(featureLevels);
-		VERIFY_HR(pDevice->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &caps, sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)));
-		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), caps.MaxSupportedFeatureLevel, IID_PPV_ARGS(pDevice.ReleaseAndGetAddressOf())));
+		VERIFY_HR(D3D12CreateDevice(pAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(m_pDevice.GetAddressOf())));
 	}
 
-	if (!pDevice)
+	if (!m_pDevice)
 	{
 		E_LOG(Warning, "No D3D12 Adapter selected. Falling back to WARP");
 		m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(pAdapter.GetAddressOf()));
+		VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
 	}
-
-	VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
 
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
 

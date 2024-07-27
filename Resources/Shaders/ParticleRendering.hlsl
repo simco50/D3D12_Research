@@ -33,7 +33,7 @@ InterpolantsVSToPS VSMain(uint instanceId : SV_InstanceID, uint vertexId : SV_Ve
 	float3 p = particle.Size * SPHERE[vertexId].xyz;
 
 	output.PositionWS.xyz = p + particle.Position;
-	output.Position = mul(float4(output.PositionWS, 1.0f), cView.ViewProjection);
+	output.Position = mul(float4(output.PositionWS, 1.0f), cView.WorldToClip);
 	output.Normal = p;
 
 	return output;

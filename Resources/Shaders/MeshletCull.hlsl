@@ -129,7 +129,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
     MeshData mesh = GetMesh(instance.MeshIndex);
 
 	// Frustum test instance against the current view
-	FrustumCullData cullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, cView.ViewProjection);
+	FrustumCullData cullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorld, cView.WorldToClip);
 	bool isVisible = cullData.IsVisible;
 	bool wasOccluded = false;
 
@@ -138,7 +138,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 	{
 #if OCCLUSION_FIRST_PASS
 		// Frustum test instance against the *previous* view to determine if it was visible last frame
-		FrustumCullData prevCullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
+		FrustumCullData prevCullData = FrustumCull(instance.LocalBoundsOrigin, instance.LocalBoundsExtents, instance.LocalToWorldPrev, cView.WorldToClipPrev);
 		if (prevCullData.IsVisible)
 		{
 			// Occlusion test instance against the HZB
@@ -224,7 +224,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 
 		// Frustum test meshlet against the current view
 		Meshlet::Bounds bounds = ByteBufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
-		FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.ViewProjection);
+		FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.WorldToClip);
 		bool isVisible = cullData.IsVisible;
 		bool wasOccluded = false;
 
@@ -233,7 +233,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 		{
 #if OCCLUSION_FIRST_PASS
 			// Frustum test meshlet against the *previous* view to determine if it was visible last frame
-			FrustumCullData prevCullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorldPrev, cView.ViewProjectionPrev);
+			FrustumCullData prevCullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorldPrev, cView.WorldToClipPrev);
 			if(prevCullData.IsVisible)
 			{
 				// Occlusion test meshlet against the HZB

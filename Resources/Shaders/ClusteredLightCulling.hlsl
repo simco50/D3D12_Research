@@ -55,8 +55,8 @@ AABB ComputeAABB(uint3 clusterIndex3D)
 	float2 minPoint_SS = float2(clusterIndex3D.x * cPass.ClusterSize.x, clusterIndex3D.y * cPass.ClusterSize.y);
 	float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cPass.ClusterSize.x, (clusterIndex3D.y + 1) * cPass.ClusterSize.y);
 
-	float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
-	float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
+	float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
+	float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
 
 	float farZ = GetDepthFromSlice(clusterIndex3D.z);
 	float nearZ = GetDepthFromSlice(clusterIndex3D.z + 1);

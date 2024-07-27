@@ -205,10 +205,10 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	float2 texCoord = (threadId.xy + 0.5f) * cView.ViewportDimensionsInv;
 	float4 color = tSceneTexture.SampleLevel(sPointClamp, texCoord, 0);
 	float sceneDepth = tDepthTexture.SampleLevel(sPointClamp, texCoord, 0).r;
-	float3 viewRay = normalize(ViewPositionFromDepth(texCoord, sceneDepth, cView.ProjectionInverse));
+	float3 viewRay = normalize(ViewPositionFromDepth(texCoord, sceneDepth, cView.ClipToView));
 	float linearDepth = sceneDepth == 0 ? 10000000 : length(viewRay);
 	float3 rayOrigin = cView.ViewLocation;
-	float3 rayDirection = mul(viewRay, (float3x3)cView.ViewInverse);
+	float3 rayDirection = mul(viewRay, (float3x3)cView.ViewToWorld);
 
 	float2 planetHit;
 	if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit))

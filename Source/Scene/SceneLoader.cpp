@@ -9,10 +9,11 @@
 #include "Core/Image.h"
 #include "Core/Utils.h"
 #include "ShaderInterop.h"
-#include "Renderer/SceneView.h"
+#include "Renderer/Renderer.h"
 #include "Renderer/Mesh.h"
 #include "Renderer/Light.h"
 #include "Core/Stream.h"
+#include "Scene/World.h"
 
 #pragma warning(push)
 #pragma warning(disable: 4996) //_CRT_SECURE_NO_WARNINGS

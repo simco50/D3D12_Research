@@ -1,5 +1,7 @@
 #include "stdafx.h"
 #include "VolumetricFog.h"
+#include "Core/Profiler.h"
+#include "Core/ConsoleVariables.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "RHI/Buffer.h"
@@ -7,12 +9,11 @@
 #include "RHI/CommandContext.h"
 #include "RHI/Texture.h"
 #include "RHI/ResourceViews.h"
-#include "RenderGraph/RenderGraph.h"
-#include "Core/Profiler.h"
-#include "Renderer/SceneView.h"
-#include "Renderer/Light.h"
 #include "Renderer/Techniques/LightCulling.h"
-#include "Core/ConsoleVariables.h"
+#include "Renderer/Renderer.h"
+#include "Renderer/Light.h"
+#include "RenderGraph/RenderGraph.h"
+#include "Scene/World.h"
 
 static constexpr int gVolumetricFroxelTexelSize = 8;
 static constexpr int gVolumetricNumZSlices = 128;
@@ -93,7 +94,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
 				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
 				constexpr Math::HaltonSequence<32, 2> halton;
-				params.Jitter = halton[pView->pRenderWorld->FrameIndex & 31];
+				params.Jitter = halton[pView->pRenderer->GetFrameIndex() & 31];
 				params.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / lightCullData.ClusterSize;
 				params.LightGridParams = lightCullData.LightGridParams;
 				params.LightClusterDimensions = Vector2i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);

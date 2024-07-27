@@ -116,7 +116,7 @@ InterpolantsVSToPS LoadVertex(MeshData mesh, float4x4 world, uint vertexId)
 	Vertex vertex = LoadVertex(mesh, vertexId);
 	InterpolantsVSToPS result;
 	float3 worldPos = mul(float4(vertex.Position, 1.0f), world).xyz;
-	result.Position = mul(float4(worldPos, 1.0f), cView.ViewProjection);
+	result.Position = mul(float4(worldPos, 1.0f), cView.WorldToClip);
 	result.UV = vertex.UV;
 #ifndef DEPTH_ONLY
 	result.PositionWS = worldPos;
@@ -145,7 +145,7 @@ void ASMain(uint threadId : SV_DispatchThreadID)
 	if (threadId < mesh.MeshletCount)
 	{
 		Meshlet::Bounds bounds = ByteBufferLoad<Meshlet::Bounds>(mesh.BufferIndex, threadId, mesh.MeshletBoundsOffset);
-		FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.ViewProjection);
+		FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.WorldToClip);
 		visible = cullData.IsVisible;
 	}
 

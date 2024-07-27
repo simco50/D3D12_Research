@@ -75,14 +75,14 @@ float LinearDepthToNDC(float z, float4x4 projection)
 float3 ViewPositionFromDepth(float2 uv, float depth, float4x4 projectionInverse)
 {
 	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, 0.0f, 1.0f) * cView.NearZ;
-	float3 viewRay = mul(clip, cView.ProjectionInverse).xyz;
+	float3 viewRay = mul(clip, cView.ClipToView).xyz;
 	return viewRay * LinearizeDepth01(depth);
 }
 
 float3 ViewPositionFromDepth(float2 uv, Texture2D<float> depthTexture)
 {
 	float4 clip = float4(float2(uv.x, 1.0f - uv.y) * 2.0f - 1.0f, 0.0f, 1.0f) * cView.NearZ;
-	float3 viewRay = mul(clip, cView.ProjectionInverse).xyz;
+	float3 viewRay = mul(clip, cView.ClipToView).xyz;
 	float depth = depthTexture.SampleLevel(sPointClamp, uv, 0);
 	return viewRay * LinearizeDepth01(depth);
 }
@@ -105,7 +105,7 @@ float3 ViewNormalFromDepth(float2 uv, Texture2D<float> depthTexture, NormalRecon
 {
 	SamplerState depthSampler = sPointClamp;
 	float2 invDimensions = cView.ViewportDimensionsInv;
-	float4x4 inverseProjection = cView.ProjectionInverse;
+	float4x4 inverseProjection = cView.ClipToView;
 
 	if(method == NormalReconstructMethod::Taps3)
 	{
@@ -144,11 +144,11 @@ float3 ViewNormalFromDepth(float2 uv, Texture2D<float> depthTexture, NormalRecon
 		float depth_d = depthTexture.SampleLevel(depthSampler, uv, 0, int2( 0, -1));
 		float depth_u = depthTexture.SampleLevel(depthSampler, uv, 0, int2( 0,  1));
 
-		float3 posVS_c = ViewPositionFromDepth(uv, depth_c, cView.ProjectionInverse);
-		float3 posVS_l = ViewPositionFromDepth(uv, depth_l, cView.ProjectionInverse);
-		float3 posVS_r = ViewPositionFromDepth(uv, depth_r, cView.ProjectionInverse);
-		float3 posVS_d = ViewPositionFromDepth(uv, depth_d, cView.ProjectionInverse);
-		float3 posVS_u = ViewPositionFromDepth(uv, depth_u, cView.ProjectionInverse);
+		float3 posVS_c = ViewPositionFromDepth(uv, depth_c, cView.ClipToView);
+		float3 posVS_l = ViewPositionFromDepth(uv, depth_l, cView.ClipToView);
+		float3 posVS_r = ViewPositionFromDepth(uv, depth_r, cView.ClipToView);
+		float3 posVS_d = ViewPositionFromDepth(uv, depth_d, cView.ClipToView);
+		float3 posVS_u = ViewPositionFromDepth(uv, depth_u, cView.ClipToView);
 
 		float3 l = posVS_c - posVS_l;
 		float3 r = posVS_r - posVS_c;

@@ -8,8 +8,8 @@
 #include "RHI/DeviceResource.h"
 #include "RHI/Texture.h"
 #include "RHI/ResourceViews.h"
+#include "Renderer/Renderer.h"
 #include "RenderGraph/RenderGraph.h"
-#include "Renderer/SceneView.h"
 
 static bool g_Enabled = false;
 static int32 g_EmitCount = 30;
@@ -68,7 +68,7 @@ struct IndirectArgs
 
 void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* pDepth)
 {
-	if (ImGui::Begin("Parameters"))
+	if (ImGui::Begin("Settings"))
 	{
 		if (ImGui::CollapsingHeader("Particles"))
 		{

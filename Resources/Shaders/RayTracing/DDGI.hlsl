@@ -348,7 +348,7 @@ InterpolantsVSToPS VisualizeIrradianceVS(
 	float3 worldPos = scale * pos + probePosition;
 
 	InterpolantsVSToPS output;
-	output.Position = mul(float4(worldPos, 1), cView.ViewProjection);
+	output.Position = mul(float4(worldPos, 1), cView.WorldToClip);
 	output.Normal = pos;
 	output.ProbeIndex = probeIdx;
 	return output;

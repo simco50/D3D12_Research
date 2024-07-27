@@ -36,8 +36,8 @@ float3 GetWorldPosition(uint3 index, float offset, float3 clusterDimensionsInv, 
 	float2 texelUV = ((float2)index.xy + 0.5f) * clusterDimensionsInv.xy;
 	float z = (float)(index.z + offset) * clusterDimensionsInv.z;
 	linearDepth = cView.FarZ + Square(saturate(z)) * (cView.NearZ - cView.FarZ);
-	float ndcZ = LinearDepthToNDC(linearDepth, cView.Projection);
-	return WorldPositionFromDepth(texelUV, ndcZ, cView.ViewProjectionInverse);
+	float ndcZ = LinearDepthToNDC(linearDepth, cView.ViewToClip);
+	return WorldPositionFromDepth(texelUV, ndcZ, cView.ClipToWorld);
 }
 
 float3 GetWorldPosition(uint3 index, float offset, float3 clusterDimensionsInv)
@@ -68,7 +68,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 
 	// Compute reprojected UVW
 	float3 voxelCenterWS = GetWorldPosition(cellIndex, 0.5f, cInjectParams.InvClusterDimensions);
-	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cView.ViewProjectionPrev);
+	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cView.WorldToClipPrev);
 	reprojNDC.xyz /= reprojNDC.w;
 	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
 	reprojUV.z = LinearizeDepth(reprojUV.z);

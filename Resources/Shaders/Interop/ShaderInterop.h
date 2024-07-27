@@ -149,14 +149,15 @@ struct ViewUniforms
 	PAD;
 	PAD;
 
-	float4x4 View;
-	float4x4 ViewInverse;
-	float4x4 Projection;
-	float4x4 ProjectionInverse;
-	float4x4 ViewProjection;
-	float4x4 ViewProjectionPrev;
-	float4x4 ViewProjectionInverse;
-	float4x4 ReprojectionMatrix;
+	float4x4 WorldToView;
+	float4x4 ViewToWorld;
+	float4x4 ViewToClip;
+	float4x4 ClipToView;
+	float4x4 WorldToClip;
+	float4x4 WorldToClipPrev;
+	float4x4 ClipToWorld;
+	float4x4 UVToPrevUV;
+	float4x4 WorldToClipUnjittered;
 	float3 ViewLocation;
 	PAD;
 	float3 ViewLocationPrev;

@@ -146,14 +146,14 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	if(groupIndex == 0)
 	{
 		float3 viewSpace[8];
-		viewSpace[0] = ScreenToView(float4(groupId.xy * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[4] = ScreenToView(float4(groupId.xy * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
-		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.ViewportDimensionsInv, cView.ProjectionInverse).xyz;
+		viewSpace[0] = ScreenToView(float4(groupId.xy * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
+		viewSpace[1] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
+		viewSpace[2] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
+		viewSpace[3] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMinDepth, 1.0f), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
+		viewSpace[4] = ScreenToView(float4(groupId.xy * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
+		viewSpace[5] = ScreenToView(float4(float2(groupId.x + 1, groupId.y) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
+		viewSpace[6] = ScreenToView(float4(float2(groupId.x, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
+		viewSpace[7] = ScreenToView(float4(float2(groupId.x + 1, groupId.y + 1) * TILED_LIGHTING_TILE_SIZE, fMaxDepth, 1.0f), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
 
 		gsGroupFrustum.Planes[0] = CalculatePlane(float3(0, 0, 0), viewSpace[6], viewSpace[4]);
 		gsGroupFrustum.Planes[1] = CalculatePlane(float3(0, 0, 0), viewSpace[5], viewSpace[7]);

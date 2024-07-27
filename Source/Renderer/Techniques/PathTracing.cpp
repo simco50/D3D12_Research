@@ -5,10 +5,10 @@
 #include "RHI/StateObject.h"
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
-#include "RenderGraph/RenderGraph.h"
 #include "RHI/CommandContext.h"
 #include "RHI/ShaderBindingTable.h"
-#include "Renderer/SceneView.h"
+#include "Renderer/Renderer.h"
+#include "RenderGraph/RenderGraph.h"
 
 PathTracing::PathTracing(GraphicsDevice* pDevice)
 {
@@ -51,7 +51,7 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 	static int32 numSamples = 200;
 
 	bool doReset = false;
-	if (ImGui::Begin("Parameters"))
+	if (ImGui::Begin("Settings"))
 	{
 		if (ImGui::CollapsingHeader("Path Tracing"))
 		{
@@ -72,7 +72,7 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 	}
 	ImGui::End();
 
-	if (pView->UnjtteredViewProjection != m_LastViewProjection)
+	if (pView->WorldToClipUnjittered != m_LastViewProjection)
 		doReset = true;
 
 	if (doReset)
@@ -105,7 +105,7 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 	}
 	else
 	{
-		m_LastViewProjection = pView->UnjtteredViewProjection;
+		m_LastViewProjection = pView->WorldToClipUnjittered;
 		m_NumAccumulatedFrames++;
 
 		graph.AddPass("Path Tracing", RGPassFlag::Compute)

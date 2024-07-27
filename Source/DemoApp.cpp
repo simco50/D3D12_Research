@@ -1,176 +1,80 @@
 #include "stdafx.h"
 #include "DemoApp.h"
-#include "Scene/Camera.h"
-#include "Core/Image.h"
-#include "RHI/Device.h"
-#include "RHI/Texture.h"
-#include "RHI/CommandContext.h"
-#include "RHI/Shader.h"
-#include "RHI/PipelineState.h"
-#include "RHI/ShaderBindingTable.h"
-#include "RHI/StateObject.h"
-#include "RHI/RingBufferAllocator.h"
-#include "RenderGraph/RenderGraph.h"
-#include "Renderer/Techniques/DebugRenderer.h"
-#include "Renderer/Techniques/GpuParticles.h"
-#include "Renderer/Techniques/RTAO.h"
-#include "Renderer/Techniques/ForwardRenderer.h"
-#include "Renderer/Techniques/VolumetricFog.h"
-#include "Renderer/Techniques/RTReflections.h"
-#include "Renderer/Techniques/PathTracing.h"
-#include "Renderer/Techniques/SSAO.h"
-#include "Renderer/Techniques/CBTTessellation.h"
-#include "Renderer/Techniques/Clouds.h"
-#include "Renderer/Techniques/ShaderDebugRenderer.h"
-#include "Renderer/Techniques/MeshletRasterizer.h"
-#include "Renderer/Techniques/VisualizeTexture.h"
-#include "Renderer/Techniques/LightCulling.h"
-#include "Renderer/Techniques/DDGI.h"
-#include "Renderer/Techniques/ImGuiRenderer.h"
-#include "Renderer/Mesh.h"
-#include "Renderer/SceneLoader.h"
-#include "Core/TaskQueue.h"
+
 #include "Core/CommandLine.h"
-#include "Core/Paths.h"
-#include "Core/Input.h"
-#include "Core/ConsoleVariables.h"
-#include "Core/Utils.h"
 #include "Core/Profiler.h"
+#include "Core/ConsoleVariables.h"
+
+#include "Renderer/Renderer.h"
+#include "Renderer/Techniques/DDGI.h"
+#include "Renderer/Techniques/CBTTessellation.h"
+#include "Renderer/Techniques/DebugRenderer.h"
+#include "Renderer/Mesh.h"
+#include "Renderer/Light.h"
+
+#include "Scene/SceneLoader.h"
+#include "Scene/Camera.h"
 
 #include <imgui_internal.h>
 #include <IconsFontAwesome4.h>
+#include <ImGuizmo.h>
 
+bool sScreenshotNextFrame = false;
 
-namespace Tweakables
-{
-	// Post processing
-	ConsoleVariable gWhitePoint("r.Exposure.WhitePoint", 1.0f);
-	ConsoleVariable gMinLogLuminance("r.Exposure.MinLogLuminance", -4.0f);
-	ConsoleVariable gMaxLogLuminance("r.Exposure.MaxLogLuminance", 20.0f);
-	ConsoleVariable gTau("r.Exposure.Tau", 2.0f);
-	ConsoleVariable gDrawHistogram("vis.Histogram", false);
-	ConsoleVariable gToneMapper("r.Tonemapper", 2);
-	ConsoleVariable gTAA("r.Taa", true);
+DemoApp::DemoApp() = default;
 
-	// Shadows
-	ConsoleVariable gSDSM("r.Shadows.SDSM", false);
-	ConsoleVariable gVisualizeShadowCascades("vis.ShadowCascades", false);
-	ConsoleVariable gShadowCascades("r.Shadows.CascadeCount", 4);
-	ConsoleVariable gPSSMFactor("r.Shadow.PSSMFactor", 0.85f);
-	ConsoleVariable gShadowsGPUCull("r.Shadows.GPUCull", true);
-	ConsoleVariable gShadowsOcclusionCulling("r.Shadows.OcclusionCull", true);
-	ConsoleVariable gCullShadowsDebugStats("r.Shadows.CullingStats", -1);
-
-	// Bloom
-	ConsoleVariable gBloom("r.Bloom", true);
-	ConsoleVariable gBloomIntensity("r.Bloom.Intensity", 1.0f);
-	ConsoleVariable gBloomBlendFactor("r.Bloom.BlendFactor", 0.3f);
-	ConsoleVariable gBloomInteralBlendFactor("r.Bloom.InteralBlendFactor", 0.85f);
-
-	// Misc Lighting
-	ConsoleVariable gSky("r.Sky", true);
-	ConsoleVariable gVolumetricFog("r.VolumetricFog", true);
-	ConsoleVariable gClouds("r.Clouds", true);
-	ConsoleVariable gRaytracedAO("r.Raytracing.AO", false);
-	ConsoleVariable gVisualizeLights("vis.Lights", false);
-	ConsoleVariable gVisualizeLightDensity("vis.LightDensity", false);
-	ConsoleVariable gEnableDDGI("r.DDGI", true);
-	ConsoleVariable gVisualizeDDGI("vis.DDGI", false);
-	ConsoleVariable gRenderObjectBounds("r.vis.ObjectBounds", false);
-
-	ConsoleVariable gRaytracedReflections("r.Raytracing.Reflections", false);
-	ConsoleVariable gTLASBoundsThreshold("r.Raytracing.TLASBoundsThreshold", 1.0f * Math::DegreesToRadians);
-	ConsoleVariable gSSRSamples("r.SSRSamples", 8);
-	ConsoleVariable gRenderTerrain("r.Terrain", true);
-	ConsoleVariable gOcclusionCulling("r.OcclusionCulling", true);
-	ConsoleVariable gWorkGraph("r.WorkGraph", false);
-
-	// Misc
-	ConsoleVariable gVisibilityDebugMode("r.Raster.VisibilityDebug", 0);
-	ConsoleVariable gCullDebugStats("r.CullingStats", false);
-
-	// Render Graph
-	ConsoleVariable gRenderGraphJobify("r.RenderGraph.Jobify", true);
-	ConsoleVariable gRenderGraphResourceAliasing("r.RenderGraph.Aliasing", true);
-	ConsoleVariable gRenderGraphPassCulling("r.RenderGraph.PassCulling", true);
-	ConsoleVariable gRenderGraphStateTracking("r.RenderGraph.StateTracking", true);
-	ConsoleVariable gRenderGraphPassGroupSize("r.RenderGraph.PassGroupSize", 10);
-	ConsoleVariable gRenderGraphResourceTracker("r.RenderGraph.ResourceTracker", false);
-	ConsoleVariable gRenderGraphPassView("r.RenderGraph.PassView", false);
-
-	bool gDumpRenderGraphNextFrame = false;
-	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { gDumpRenderGraphNextFrame = true; });
-	bool gScreenshotNextFrame = false;
-	ConsoleCommand<> gScreenshot("Screenshot", []() { gScreenshotNextFrame = true; });
-
-	String VisualizeTextureName = "";
-	ConsoleCommand<const char*> gVisualizeTexture("vis", [](const char* pName) { VisualizeTextureName = pName; });
-}
-
-
-DemoApp::DemoApp()
-{
-}
-
-
-DemoApp::~DemoApp()
-{
-}
+DemoApp::~DemoApp() = default;
 
 void DemoApp::Init()
 {
-	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
-
-	DebugRenderer::Get()->Initialize(m_pDevice);
-
-	m_pShaderDebugRenderer = std::make_unique<ShaderDebugRenderer>(m_pDevice);
-	m_pShaderDebugRenderer->GetGPUData(&m_RenderWorld.DebugRenderData);
-
-	m_pMeshletRasterizer	= std::make_unique<MeshletRasterizer>(m_pDevice);
-	m_pDDGI					= std::make_unique<DDGI>(m_pDevice);
-	m_pClouds				= std::make_unique<Clouds>(m_pDevice);
-	m_pVolumetricFog		= std::make_unique<VolumetricFog>(m_pDevice);
-	m_pLightCulling			= std::make_unique<LightCulling>(m_pDevice);
-	m_pForwardRenderer		= std::make_unique<ForwardRenderer>(m_pDevice);
-	m_pRTReflections		= std::make_unique<RTReflections>(m_pDevice);
-	m_pRTAO					= std::make_unique<RTAO>(m_pDevice);
-	m_pSSAO					= std::make_unique<SSAO>(m_pDevice);
-	m_pParticles			= std::make_unique<GpuParticles>(m_pDevice);
-	m_pPathTracing			= std::make_unique<PathTracing>(m_pDevice);
-	m_pCBTTessellation		= std::make_unique<CBTTessellation>(m_pDevice);
-	m_pCaptureTextureSystem	= std::make_unique<CaptureTextureSystem>(m_pDevice);
-
-	InitializePipelines();
-
-	m_RenderWorld.pWorld = &m_World;
-	m_RenderWorld.pMainView = &m_MainView;
-	m_MainView.pRenderWorld = &m_RenderWorld;
-	m_MainView.pWorld = &m_World;
-	m_RenderWorld.AccelerationStructure.Init(m_pDevice);
-
 	const char* pScene = "Resources/Scenes/Sponza/Sponza.gltf";
 	CommandLine::GetValue("scene", &pScene);
 	SetupScene(pScene);
+
+	m_Renderer.Init(m_pDevice, &m_World);
+}
+
+void DemoApp::Update()
+{
+	DrawImGui();
+
+	{
+		PROFILE_CPU_SCOPE("Update Entity Transforms");
+		auto view = m_World.Registry.view<Transform>();
+		view.each([&](Transform& transform)
+			{
+				transform.WorldPrev = transform.World;
+				transform.World = Matrix::CreateScale(transform.Scale) *
+					Matrix::CreateFromQuaternion(transform.Rotation) *
+					Matrix::CreateTranslation(transform.Position);
+			});
+	}
+
+	if (m_pViewportTexture)
+	{
+		m_Renderer.Render(m_pViewportTexture);
+
+		if (sScreenshotNextFrame)
+		{
+			sScreenshotNextFrame = false;
+			m_Renderer.MakeScreenshot(m_pViewportTexture);
+		}
+	}
 }
 
 void DemoApp::Shutdown()
 {
-	DebugRenderer::Get()->Shutdown();
+	m_Renderer.Shutdown();
 }
 
-void DemoApp::SetupScene(const char* pPath)
+void DemoApp::SetupScene(const char* pFilePath)
 {
-	m_World = {};
-
 	m_World.Camera = m_World.CreateEntity("Main Camera");
 	FreeCamera& camera = m_World.Registry.emplace<FreeCamera>(m_World.Camera);
 	camera.SetPosition(Vector3(-1.3f, 1.4f, -1.5f));
 	camera.SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
 
-	OnResizeViewport(16, 16);
-
-	SceneLoader::Load(pPath, m_pDevice, m_World);
-
+	SceneLoader::Load(pFilePath, m_pDevice, m_World);
 
 	{
 		entt::entity entity = m_World.CreateEntity("Sunlight");
@@ -205,7 +109,7 @@ void DemoApp::SetupScene(const char* pPath)
 			Vector3(-9.5, 3, -3.5),
 		};
 
-		for(Vector3 v : positions)
+		for (Vector3 v : positions)
 		{
 			entt::entity entity = m_World.CreateEntity("Spotlight");
 			Transform& transform = m_World.Registry.emplace<Transform>(entity);
@@ -243,893 +147,22 @@ void DemoApp::SetupScene(const char* pPath)
 		CBTData cbtData = m_World.Registry.emplace<CBTData>(entity);
 	}
 
-
-	m_pLensDirtTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LensDirt.dds", true, "Lens Dirt");
+	auto ddgi_view = m_World.Registry.view<Transform, DDGIVolume>();
 }
 
-void DemoApp::Update()
+
+void DemoApp::DrawImGui()
 {
-	{
-		PROFILE_CPU_SCOPE("Update");
-
-		constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
-		if (m_RenderPath == RenderPath::Visibility)
-			m_RenderPath = m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
-		if (m_RenderPath == RenderPath::PathTracing)
-			m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
-
-		m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
-
-		UpdateImGui();
-
-		m_RenderGraphPool->Tick();
-
-		RenderPath newRenderPath = m_RenderPath;
-		if (!ImGui::IsAnyItemActive())
-		{
-			if (Input::Instance().IsKeyPressed('1'))
-				newRenderPath = RenderPath::Clustered;
-			else if (Input::Instance().IsKeyPressed('2'))
-				newRenderPath = RenderPath::Tiled;
-			else if (Input::Instance().IsKeyPressed('3'))
-				newRenderPath = RenderPath::Visibility;
-			else if (Input::Instance().IsKeyPressed('4'))
-				newRenderPath = RenderPath::VisibilityDeferred;
-			else if (Input::Instance().IsKeyPressed('5'))
-				newRenderPath = RenderPath::PathTracing;
-		}
-		if (newRenderPath == RenderPath::Visibility && !m_pDevice->GetCapabilities().SupportsMeshShading())
-			newRenderPath = RenderPath::Clustered;
-		if (newRenderPath == RenderPath::PathTracing && !m_pDevice->GetCapabilities().SupportsRaytracing())
-			newRenderPath = RenderPath::Clustered;
-		m_RenderPath = newRenderPath;
-
-		Tweakables::gRaytracedAO = m_pDevice->GetCapabilities().SupportsRaytracing() && Tweakables::gRaytracedAO;
-		Tweakables::gRaytracedReflections = m_pDevice->GetCapabilities().SupportsRaytracing() && Tweakables::gRaytracedReflections;
-
-		if (Tweakables::gRenderObjectBounds)
-		{
-			for (const Batch& b : m_RenderWorld.Batches)
-			{
-				DebugRenderer::Get()->AddBoundingBox(b.Bounds, Color(0.2f, 0.2f, 0.9f, 1.0f));
-				DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 5, 5, Color(0.2f, 0.6f, 0.2f, 1.0f));
-			}
-		}
-
-		if (Tweakables::gVisualizeLights)
-		{
-			auto light_view = m_World.Registry.view<const Transform, const Light>();
-			light_view.each([&](const Transform& transform, const Light& light)
-				{
-					DebugRenderer::Get()->AddLight(transform, light);
-				});
-		}
-
-		auto ddgi_view = m_World.Registry.view<Transform, DDGIVolume>();
-		ddgi_view.each([&](Transform& transform, DDGIVolume& volume)
-			{
-				transform.Position = m_RenderWorld.SceneAABB.Center;
-				volume.Extents = 1.1f * Vector3(m_RenderWorld.SceneAABB.Extents);
-			});
-
-		Camera& camera = m_World.GetComponent<FreeCamera>(m_World.Camera);
-		camera.Update();
-
-		bool jitter = Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing;
-		camera.ApplyViewTransform(m_MainView, jitter);
-
-		// Directional light is expected to be at index 0
-		m_World.Registry.sort<Light>([](const Light& a, const Light& b) {
-			return (int)a.Type < (int)b.Type;
-			});
-
-		CreateShadowViews(m_MainView, m_World, m_RenderWorld);
-
-		m_RenderWorld.FrameIndex = m_Frame;
-	}
-	{
-		if (Tweakables::gScreenshotNextFrame)
-		{
-			Tweakables::gScreenshotNextFrame = false;
-			MakeScreenshot();
-		}
-
-		const RenderView* pView = &m_MainView;
-		RenderWorld* pRenderWorld = &m_RenderWorld;
-		World* pWorldMut = &m_World;
-
-		{
-			PROFILE_CPU_SCOPE("Update Entity Transforms");
-			auto view = pWorldMut->Registry.view<Transform>();
-			view.each([&](Transform& transform)
-				{
-					transform.WorldPrev = transform.World;
-					transform.World = Matrix::CreateScale(transform.Scale) *
-						Matrix::CreateFromQuaternion(transform.Rotation) *
-						Matrix::CreateTranslation(transform.Position);
-				});
-		}
-
-		{
-			PROFILE_CPU_SCOPE("Flush GPU uploads");
-			m_pDevice->GetRingBuffer()->Sync();
-		}
-
-		{
-			TaskContext taskContext;
-
-			{
-				PROFILE_CPU_SCOPE("Distance Sort");
-
-				// Sort
-				auto CompareSort = [this](const Batch& a, const Batch& b)
-					{
-						float aDist = Vector3::DistanceSquared(a.Bounds.Center, m_MainView.Position);
-						float bDist = Vector3::DistanceSquared(b.Bounds.Center, m_MainView.Position);
-						if (a.BlendMode != b.BlendMode)
-							return (int)a.BlendMode < (int)b.BlendMode;
-						return EnumHasAnyFlags(a.BlendMode, Batch::Blending::AlphaBlend) ? bDist < aDist : aDist < bDist;
-					};
-				std::sort(m_RenderWorld.Batches.begin(), m_RenderWorld.Batches.end(), CompareSort);
-			}
-
-			// In Visibility Buffer mode, culling is done on the GPU.
-			if (m_RenderPath != RenderPath::Visibility && m_RenderPath != RenderPath::VisibilityDeferred)
-			{
-				TaskQueue::Execute([&](int)
-					{
-						PROFILE_CPU_SCOPE("Frustum Cull Main");
-						m_MainView.VisibilityMask.SetAll();
-						BoundingFrustum frustum = pView->PerspectiveFrustum;
-						for (const Batch& b : m_RenderWorld.Batches)
-						{
-							m_MainView.VisibilityMask.AssignBit(b.InstanceID, frustum.Contains(b.Bounds));
-						}
-					}, taskContext);
-			}
-			if (!Tweakables::gShadowsGPUCull)
-			{
-				TaskQueue::ExecuteMany([&](TaskDistributeArgs args)
-					{
-						PROFILE_CPU_SCOPE("Frustum Cull Shadows");
-						RenderView& shadowView = m_RenderWorld.ShadowViews[args.JobIndex];
-						shadowView.VisibilityMask.SetAll();
-						for (const Batch& b : m_RenderWorld.Batches)
-						{
-							shadowView.VisibilityMask.AssignBit(b.InstanceID, shadowView.IsInFrustum(b.Bounds));
-						}
-					}, taskContext, (uint32)m_RenderWorld.ShadowViews.size(), 1);
-			}
-
-			TaskQueue::Execute([&](int)
-				{
-					PROFILE_CPU_SCOPE("Compute Bounds");
-					bool boundsSet = false;
-					for (const Batch& b : m_RenderWorld.Batches)
-					{
-						if (boundsSet)
-						{
-							BoundingBox::CreateMerged(m_RenderWorld.SceneAABB, m_RenderWorld.SceneAABB, b.Bounds);
-						}
-						else
-						{
-							m_RenderWorld.SceneAABB = b.Bounds;
-							boundsSet = true;
-						}
-					}
-				}, taskContext);
-
-			TaskQueue::Join(taskContext);
-		}
-
-		{
-			CommandContext* pContext = m_pDevice->AllocateCommandContext();
-			Renderer::UploadSceneData(*pContext, pRenderWorld);
-			pContext->Execute();
-		}
-
-		RGGraph graph;
-
-		{
-			RG_GRAPH_SCOPE("GPU Frame", graph);
-			PROFILE_CPU_SCOPE("Record RenderGraph");
-
-			UpdateSkinning(graph);
-
-			graph.AddPass("Build Acceleration Structures", RGPassFlag::Compute | RGPassFlag::NeverCull)
-				.Bind([=](CommandContext& context, const RGResources& resources)
-					{
-						pRenderWorld->AccelerationStructure.Build(context, *pRenderWorld);
-					});
-
-			const Vector2u viewDimensions = pView->GetDimensions();
-
-			SceneTextures sceneTextures;
-			sceneTextures.pDepth = graph.Create("Depth Stencil", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
-			sceneTextures.pColorTarget = graph.Create("Color Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[0]));
-			sceneTextures.pNormals = graph.Create("Normals", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[1]));
-			sceneTextures.pRoughness = graph.Create("Roughness", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[2]));
-			sceneTextures.pVelocity = graph.Create("Velocity", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
-			sceneTextures.pPreviousColor = graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
-
-			sceneTextures.pGBuffer0 = graph.Create("GBuffer 0", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[0]));
-			sceneTextures.pGBuffer1 = graph.Create("GBuffer 1", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[1]));
-			sceneTextures.pGBuffer2 = graph.Create("GBuffer 2", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[2]));
-
-			LightCull2DData lightCull2DData;
-			LightCull3DData lightCull3DData;
-
-			RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
-			if (Tweakables::gSky)
-			{
-				pSky = graph.Create("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
-				graph.AddPass("Compute Sky", RGPassFlag::Compute)
-					.Write(pSky)
-					.Bind([=](CommandContext& context, const RGResources& resources)
-						{
-							Texture* pSkyTexture = resources.Get(pSky);
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-							context.SetPipelineState(m_pRenderSkyPSO);
-
-							struct
-							{
-								Vector2 DimensionsInv;
-							} params;
-							params.DimensionsInv = Vector2(1.0f / pSkyTexture->GetWidth(), 1.0f / pSkyTexture->GetHeight());
-
-							context.BindRootCBV(0, params);
-							context.BindRootCBV(1, pView->ViewCB);
-							context.BindResources(2, pSkyTexture->GetUAV());
-
-							context.Dispatch(ComputeUtils::GetNumThreadGroups(pSkyTexture->GetWidth(), 16, pSkyTexture->GetHeight(), 16, 6));
-						});
-
-				graph.AddPass("Transition Sky", RGPassFlag::Raster | RGPassFlag::NeverCull)
-					.Read(pSky);
-			}
-
-			// Export makes sure the target texture is filled in during pass execution.
-			graph.Export(pSky, &pRenderWorld->pSky, TextureFlag::ShaderResource);
-
-			RasterResult rasterResult;
-			if (m_RenderPath != RenderPath::PathTracing)
-			{
-				{
-					RG_GRAPH_SCOPE("Shadow Depths", graph);
-					for (uint32 i = 0; i < (uint32)pRenderWorld->ShadowViews.size(); ++i)
-					{
-						const ShadowView& shadowView = pRenderWorld->ShadowViews[i];
-						RG_GRAPH_SCOPE(Sprintf("View %d (%s - Cascade %d)", i, gLightTypeStr[(int)shadowView.pLight->Type], shadowView.ViewIndex).c_str(), graph);
-
-						RGTexture* pShadowmap = graph.Import(pRenderWorld->ShadowViews[i].pDepthTexture);
-						if (Tweakables::gShadowsGPUCull)
-						{
-							RasterContext context(graph, pShadowmap, RasterMode::Shadows, &m_ShadowHZBs[i]);
-							context.EnableOcclusionCulling = Tweakables::gShadowsOcclusionCulling;
-							RasterResult result;
-							m_pMeshletRasterizer->Render(graph, &shadowView, context, result);
-							if (Tweakables::gCullShadowsDebugStats == (int)i)
-								m_pMeshletRasterizer->PrintStats(graph, Vector2(400, 20), pView, context);
-						}
-						else
-						{
-							graph.AddPass("Raster", RGPassFlag::Raster)
-								.DepthStencil(pShadowmap, RenderPassDepthFlags::Clear)
-								.Bind([=](CommandContext& context, const RGResources& resources)
-									{
-										context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-										const ShadowView& view = pRenderWorld->ShadowViews[i];
-										context.BindRootCBV(1, view.ViewCB);
-
-										{
-											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
-											context.SetPipelineState(m_pShadowsOpaquePSO);
-											Renderer::DrawScene(context, pRenderWorld->Batches, view.VisibilityMask, Batch::Blending::Opaque);
-										}
-										{
-											PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
-											context.SetPipelineState(m_pShadowsAlphaMaskPSO);
-											Renderer::DrawScene(context, pRenderWorld->Batches, view.VisibilityMask, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
-										}
-									});
-						}
-					}
-				}
-
-				const bool doPrepass = true;
-				const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred;
-
-				if (doPrepass)
-				{
-					if (needVisibilityBuffer)
-					{
-						RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
-						rasterContext.EnableDebug = Tweakables::gVisibilityDebugMode > 0;
-						rasterContext.EnableOcclusionCulling = Tweakables::gOcclusionCulling;
-						rasterContext.WorkGraph = Tweakables::gWorkGraph;
-						m_pMeshletRasterizer->Render(graph, pView, rasterContext, rasterResult);
-						if (Tweakables::gCullDebugStats)
-							m_pMeshletRasterizer->PrintStats(graph, Vector2(20, 20), pView, rasterContext);
-					}
-					else
-					{
-						graph.AddPass("Depth Prepass", RGPassFlag::Raster)
-							.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::Clear)
-							.Bind([=](CommandContext& context, const RGResources& resources)
-								{
-									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-									context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-
-									context.BindRootCBV(1, pView->ViewCB);
-									{
-										PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
-										context.SetPipelineState(m_pDepthPrepassOpaquePSO);
-										Renderer::DrawScene(context, *pView, Batch::Blending::Opaque);
-									}
-									{
-										PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
-										context.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
-										Renderer::DrawScene(context, *pView, Batch::Blending::AlphaMask);
-									}
-								});
-					}
-
-					if (Tweakables::gRenderTerrain.GetBool())
-						m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
-				}
-
-				if (Tweakables::gSDSM)
-				{
-					RG_GRAPH_SCOPE("Depth Reduce", graph);
-
-					Vector2u depthTarget = sceneTextures.pDepth->GetDesc().Size2D();
-					depthTarget.x = Math::Max(depthTarget.x / 16u, 1u);
-					depthTarget.y = Math::Max(depthTarget.y / 16u, 1u);
-					RGTexture* pReductionTarget = graph.Create("Depth Reduction Target", TextureDesc::Create2D(depthTarget.x, depthTarget.y, ResourceFormat::RG32_FLOAT));
-
-					graph.AddPass("Depth Reduce - Setup", RGPassFlag::Compute)
-						.Read(sceneTextures.pDepth)
-						.Write(pReductionTarget)
-						.Bind([=](CommandContext& context, const RGResources& resources)
-							{
-								Texture* pSource = resources.Get(sceneTextures.pDepth);
-								Texture* pTarget = resources.Get(pReductionTarget);
-
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-								context.SetPipelineState(pSource->GetDesc().SampleCount > 1 ? m_pPrepareReduceDepthMsaaPSO : m_pPrepareReduceDepthPSO);
-
-								context.BindRootCBV(1, pView->ViewCB);
-								context.BindResources(2, pTarget->GetUAV());
-								context.BindResources(3, pSource->GetSRV());
-
-								context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
-							});
-
-					for (;;)
-					{
-						RGTexture* pReductionSource = pReductionTarget;
-						pReductionTarget = graph.Create("Depth Reduction Target", TextureDesc::Create2D(depthTarget.x, depthTarget.y, ResourceFormat::RG32_FLOAT));
-
-						graph.AddPass("Depth Reduce - Subpass", RGPassFlag::Compute)
-							.Read(pReductionSource)
-							.Write(pReductionTarget)
-							.Bind([=](CommandContext& context, const RGResources& resources)
-								{
-									Texture* pTarget = resources.Get(pReductionTarget);
-									context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-									context.SetPipelineState(m_pReduceDepthPSO);
-									context.BindResources(2, pTarget->GetUAV());
-									context.BindResources(3, resources.GetSRV(pReductionSource));
-									context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
-								});
-
-						if (depthTarget.x == 1 && depthTarget.y == 1)
-							break;
-
-						depthTarget.x = Math::Max(1u, depthTarget.x / 16);
-						depthTarget.y = Math::Max(1u, depthTarget.y / 16);
-					}
-
-					RGBuffer* pReadbackTarget = RGUtils::CreatePersistent(graph, "SDSM Readback", BufferDesc::CreateTyped(2, ResourceFormat::RG32_FLOAT, BufferFlag::Readback), &m_ReductionReadbackTargets[m_Frame % GraphicsDevice::NUM_BUFFERS], true);
-					graph.AddPass("Readback Copy", RGPassFlag::Copy)
-						.Read(pReductionTarget)
-						.Write(pReadbackTarget)
-						.Bind([=](CommandContext& context, const RGResources& resources)
-							{
-								context.CopyTexture(resources.Get(pReductionTarget), resources.Get(pReadbackTarget), CD3DX12_BOX(0, 1));
-							});
-				}
-
-				m_pParticles->Simulate(graph, pView, sceneTextures.pDepth);
-
-				if (Tweakables::gEnableDDGI)
-				{
-					m_pDDGI->Execute(graph, pView);
-				}
-
-				graph.AddPass("Camera Motion", RGPassFlag::Compute)
-					.Read(sceneTextures.pDepth)
-					.Write(sceneTextures.pVelocity)
-					.Bind([=](CommandContext& context, const RGResources& resources)
-						{
-							Texture* pVelocity = resources.Get(sceneTextures.pVelocity);
-
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-							context.SetPipelineState(m_pCameraMotionPSO);
-
-							context.BindRootCBV(1, pView->ViewCB);
-							context.BindResources(2, pVelocity->GetUAV());
-							context.BindResources(3, resources.GetSRV(sceneTextures.pDepth));
-
-							context.Dispatch(ComputeUtils::GetNumThreadGroups(pVelocity->GetWidth(), 8, pVelocity->GetHeight(), 8));
-						});
-
-				RGTexture* pAO = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::White2D));
-				if (Tweakables::gRaytracedAO)
-					pAO = m_pRTAO->Execute(graph, pView, sceneTextures.pDepth, sceneTextures.pVelocity);
-				else
-					pAO = m_pSSAO->Execute(graph, pView, sceneTextures.pDepth);
-
-				m_pLightCulling->ComputeTiledLightCulling(graph, pView, sceneTextures, lightCull2DData);
-				m_pLightCulling->ComputeClusteredLightCulling(graph, pView, lightCull3DData);
-
-				RGTexture* pFog = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black3D));
-				if (Tweakables::gVolumetricFog)
-					pFog = m_pVolumetricFog->RenderFog(graph, pView, lightCull3DData, m_FogData);
-
-				if (m_RenderPath == RenderPath::Tiled)
-				{
-					m_pForwardRenderer->RenderForwardTiled(graph, pView, sceneTextures, lightCull2DData, pFog, pAO);
-				}
-				else if (m_RenderPath == RenderPath::Clustered)
-				{
-					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, pAO);
-				}
-				else if (m_RenderPath == RenderPath::Visibility)
-				{
-					graph.AddPass("Visibility Shading", RGPassFlag::Raster)
-						.Read({ pFog, rasterResult.pVisibleMeshlets })
-						.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, pAO, sceneTextures.pPreviousColor })
-						.Read({ lightCull2DData.pLightListOpaque })
-						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
-						.RenderTarget(sceneTextures.pColorTarget)
-						.RenderTarget(sceneTextures.pNormals)
-						.RenderTarget(sceneTextures.pRoughness)
-						.Bind([=](CommandContext& context, const RGResources& resources)
-							{
-								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-								context.SetPipelineState(m_pVisibilityShadingGraphicsPSO);
-								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
-								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-								context.BindRootCBV(1, pView->ViewCB);
-								context.BindResources(3, {
-									resources.GetSRV(rasterResult.pVisibilityBuffer),
-									resources.GetSRV(pAO),
-									resources.GetSRV(sceneTextures.pDepth),
-									resources.GetSRV(sceneTextures.pPreviousColor),
-									resources.GetSRV(pFog),
-									resources.GetSRV(rasterResult.pVisibleMeshlets),
-									resources.GetSRV(lightCull2DData.pLightListOpaque),
-									});
-								context.Draw(0, 3);
-							});
-					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, pAO, true);
-				}
-				else if (m_RenderPath == RenderPath::VisibilityDeferred)
-				{
-					graph.AddPass("Build GBuffer", RGPassFlag::Raster)
-						.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, })
-						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
-						.RenderTarget(sceneTextures.pGBuffer0)
-						.RenderTarget(sceneTextures.pGBuffer1)
-						.RenderTarget(sceneTextures.pGBuffer2)
-						.Bind([=](CommandContext& context, const RGResources& resources)
-							{
-								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-								context.SetPipelineState(m_pVisibilityGBufferPSO);
-								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
-								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-								context.BindRootCBV(1, pView->ViewCB);
-								context.BindResources(3, {
-									resources.GetSRV(rasterResult.pVisibilityBuffer),
-									resources.GetSRV(rasterResult.pVisibleMeshlets),
-									});
-								context.Draw(0, 3);
-							});
-
-					graph.AddPass("Deferred Shading", RGPassFlag::Compute)
-						.Read({ pFog })
-						.Read({ sceneTextures.pDepth, pAO, sceneTextures.pPreviousColor })
-						.Read({ lightCull2DData.pLightListOpaque })
-						.Read({ sceneTextures.pGBuffer0, sceneTextures.pGBuffer1, sceneTextures.pGBuffer2 })
-						.Write(sceneTextures.pColorTarget)
-						.Bind([=](CommandContext& context, const RGResources& resources)
-							{
-								Texture* pTarget = resources.Get(sceneTextures.pColorTarget);
-
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-								context.SetPipelineState(m_pDeferredShadePSO);
-
-								context.BindRootCBV(1, pView->ViewCB);
-								context.BindResources(2, resources.GetUAV(sceneTextures.pColorTarget));
-								context.BindResources(3, {
-									resources.GetSRV(sceneTextures.pGBuffer0),
-									resources.GetSRV(sceneTextures.pGBuffer1),
-									resources.GetSRV(sceneTextures.pGBuffer2),
-									resources.GetSRV(sceneTextures.pDepth),
-									resources.GetSRV(sceneTextures.pPreviousColor),
-									resources.GetSRV(pFog),
-									resources.GetSRV(lightCull2DData.pLightListOpaque),
-									resources.GetSRV(pAO),
-									});
-
-								context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
-							});
-
-					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, pAO, true);
-				}
-
-				if (Tweakables::gRenderTerrain.GetBool())
-					m_pCBTTessellation->Shade(graph, pView, sceneTextures, pFog);
-
-				m_pParticles->Render(graph, pView, sceneTextures);
-
-				graph.AddPass("Render Sky", RGPassFlag::Raster)
-					.Read(pSky)
-					.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
-					.RenderTarget(sceneTextures.pColorTarget)
-					.Bind([=](CommandContext& context, const RGResources& resources)
-						{
-							context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-							context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-							context.SetPipelineState(m_pSkyboxPSO);
-
-							context.BindRootCBV(1, pView->ViewCB);
-							context.Draw(0, 36);
-						});
-
-				if (Tweakables::gClouds)
-				{
-					sceneTextures.pColorTarget = m_pClouds->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
-				}
-
-				TextureDesc colorDesc = sceneTextures.pColorTarget->GetDesc();
-				if (colorDesc.SampleCount > 1)
-				{
-					colorDesc.SampleCount = 1;
-					RGTexture* pResolveColor = graph.Create("Resolved Color", colorDesc);
-					RGUtils::AddResolvePass(graph, sceneTextures.pColorTarget, pResolveColor);
-					sceneTextures.pColorTarget = pResolveColor;
-				}
-
-				if (Tweakables::gRaytracedReflections)
-				{
-					m_pRTReflections->Execute(graph, pView, sceneTextures);
-				}
-
-				if (Tweakables::gTAA.Get())
-				{
-					RGTexture* pTaaTarget = graph.Create("TAA Target", sceneTextures.pColorTarget->GetDesc());
-
-					graph.AddPass("Temporal Resolve", RGPassFlag::Compute)
-						.Read({ sceneTextures.pVelocity, sceneTextures.pDepth, sceneTextures.pColorTarget, sceneTextures.pPreviousColor })
-						.Write(pTaaTarget)
-						.Bind([=](CommandContext& context, const RGResources& resources)
-							{
-								Texture* pTarget = resources.Get(pTaaTarget);
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-								context.SetPipelineState(m_pTemporalResolvePSO);
-
-								struct
-								{
-									float MinBlendFactor;
-								} params;
-								params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
-
-								context.BindRootCBV(0, params);
-								context.BindRootCBV(1, pView->ViewCB);
-								context.BindResources(2, pTarget->GetUAV());
-								context.BindResources(3,
-									{
-										resources.GetSRV(sceneTextures.pVelocity),
-										resources.GetSRV(sceneTextures.pPreviousColor),
-										resources.GetSRV(sceneTextures.pColorTarget),
-										resources.GetSRV(sceneTextures.pDepth),
-									});
-
-								context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
-							});
-
-					sceneTextures.pColorTarget = pTaaTarget;
-				}
-				graph.Export(sceneTextures.pColorTarget, &m_pColorHistory, TextureFlag::ShaderResource);
-
-				// Probes contain irradiance data, and need to go through tonemapper.
-				if (Tweakables::gVisualizeDDGI)
-				{
-					m_pDDGI->RenderVisualization(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
-				}
-			}
-			else
-			{
-				m_pPathTracing->Render(graph, pView, sceneTextures.pColorTarget);
-			}
-
-			/*
-				Post Processing
-			*/
-
-			RGBuffer* pAverageLuminance = ComputeExposure(graph, pView, sceneTextures.pColorTarget);
-
-			RGTexture* pBloomTexture = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
-			if (Tweakables::gBloom.Get())
-				pBloomTexture = ComputeBloom(graph, pView, sceneTextures.pColorTarget);
-
-			RGTexture* pTonemapTarget = graph.Create("Tonemap Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA8_UNORM));
-
-			graph.AddPass("Tonemap", RGPassFlag::Compute)
-				.Read({ sceneTextures.pColorTarget, pAverageLuminance, pBloomTexture })
-				.Write(pTonemapTarget)
-				.Bind([=](CommandContext& context, const RGResources& resources)
-					{
-						Texture* pTarget = resources.Get(pTonemapTarget);
-
-						struct
-						{
-							float WhitePoint;
-							uint32 Tonemapper;
-							float BloomIntensity;
-							float BloomBlendFactor;
-							Vector3 LensDirtTint;
-						} parameters;
-						parameters.WhitePoint = Tweakables::gWhitePoint.Get();
-						parameters.Tonemapper = Tweakables::gToneMapper.Get();
-						parameters.BloomIntensity = Tweakables::gBloomIntensity.Get();
-						parameters.BloomBlendFactor = Tweakables::gBloomBlendFactor.Get();
-						parameters.LensDirtTint = m_LensDirtTint;
-
-						context.SetPipelineState(m_pToneMapPSO);
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-
-						context.BindRootCBV(0, parameters);
-						context.BindRootCBV(1, pView->ViewCB);
-						context.BindResources(2, pTarget->GetUAV());
-						context.BindResources(3, {
-							resources.GetSRV(sceneTextures.pColorTarget),
-							resources.GetSRV(pAverageLuminance),
-							resources.GetSRV(pBloomTexture),
-							m_pLensDirtTexture->GetSRV(),
-							});
-						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
-					});
-
-			sceneTextures.pColorTarget = pTonemapTarget;
-
-			/*
-				Debug Views
-			*/
-
-			if (m_RenderPath != RenderPath::PathTracing)
-			{
-				if (Tweakables::gVisualizeLightDensity)
-				{
-					if (m_RenderPath == RenderPath::Clustered)
-						sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull3DData);
-					else if (m_RenderPath == RenderPath::Tiled || m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred)
-						sceneTextures.pColorTarget = m_pLightCulling->VisualizeLightDensity(graph, pView, sceneTextures.pDepth, lightCull2DData);
-				}
-
-				if ((m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred) && Tweakables::gVisibilityDebugMode > 0)
-				{
-					graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
-						.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, rasterResult.pDebugData })
-						.Write({ sceneTextures.pColorTarget })
-						.Bind([=](CommandContext& context, const RGResources& resources)
-							{
-								Texture* pColorTarget = resources.Get(sceneTextures.pColorTarget);
-
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-								context.SetPipelineState(m_pVisibilityDebugRenderPSO);
-
-								uint32 mode = Tweakables::gVisibilityDebugMode;
-								context.BindRootCBV(0, mode);
-								context.BindRootCBV(1, pView->ViewCB);
-								context.BindResources(2, pColorTarget->GetUAV());
-								context.BindResources(3, {
-									resources.GetSRV(rasterResult.pVisibilityBuffer),
-									resources.GetSRV(rasterResult.pVisibleMeshlets),
-									resources.GetSRV(rasterResult.pDebugData),
-									});
-								context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
-							});
-				}
-			}
-
-			DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
-
-			m_pShaderDebugRenderer->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
-
-			if (!Tweakables::VisualizeTextureName.empty())
-			{
-				RGTexture* pVisualizeTexture = graph.FindTexture(Tweakables::VisualizeTextureName.c_str());
-				m_pCaptureTextureSystem->Capture(graph, m_CaptureTextureContext, pVisualizeTexture);
-			}
-
-			graph.Export(sceneTextures.pColorTarget, &m_pColorOutput, TextureFlag::ShaderResource);
-		}
-
-		RGGraphOptions graphOptions;
-		graphOptions.Jobify = Tweakables::gRenderGraphJobify;
-		graphOptions.PassCulling = Tweakables::gRenderGraphPassCulling;
-		graphOptions.ResourceAliasing = Tweakables::gRenderGraphResourceAliasing;
-		graphOptions.StateTracking = Tweakables::gRenderGraphStateTracking;
-		graphOptions.CommandlistGroupSize = Tweakables::gRenderGraphPassGroupSize;
-
-		// Compile graph
-		graph.Compile(*m_RenderGraphPool, graphOptions);
-
-		// Debug options
-		graph.DrawResourceTracker(Tweakables::gRenderGraphResourceTracker.Get());
-		graph.DrawPassView(Tweakables::gRenderGraphPassView.Get());
-
-		if (Tweakables::gDumpRenderGraphNextFrame)
-		{
-			graph.DumpDebugGraph(Sprintf("%sRenderGraph_%s", Paths::SavedDir(), Utils::GetTimeString()).c_str());
-			Tweakables::gDumpRenderGraphNextFrame = false;
-		}
-
-		// Execute
-		graph.Execute(m_pDevice);
-
-	}
-
-	{
-		++m_Frame;
-		m_MainView.CameraCut = false;
-	}
-}
-
-void DemoApp::OnWindowResized(uint32 width, uint32 height)
-{
-}
-
-void DemoApp::OnResizeViewport(uint32 width, uint32 height)
-{
-	E_LOG(Info, "Viewport resized: %dx%d", width, height);
-	m_MainView.Viewport = FloatRect(0, 0, (float)width, (float)height);
-	m_MainView.CameraCut = true;
-}
-
-void DemoApp::InitializePipelines()
-{
-	// Depth-only raster PSOs
-
-	{
-		ShaderDefineHelper defines;
-		defines.Set("DEPTH_ONLY", true);
-
-		{
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
-			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
-			psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
-			psoDesc.SetName("Depth Prepass Opaque");
-			m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
-
-			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			psoDesc.SetName("Depth Prepass Alpha Mask");
-			m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-
-		{
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
-			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
-			psoDesc.SetDepthOnlyTarget(GraphicsCommon::ShadowFormat, 1);
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			psoDesc.SetDepthBias(-10, 0, -4.0f);
-			psoDesc.SetName("Shadow Mapping Opaque");
-			m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
-
-			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
-			psoDesc.SetName("Shadow Mapping Alpha Mask");
-			m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-
-	}
-
-	ShaderDefineHelper tonemapperDefines;
-	tonemapperDefines.Set("NUM_HISTOGRAM_BINS", 256);
-	m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
-	m_pDrawHistogramPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
-	m_pAverageLuminancePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
-	m_pToneMapPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
-	m_pDownsampleColorPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/DownsampleColor.hlsl", "CSMain");
-
-	m_pPrepareReduceDepthPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
-	m_pPrepareReduceDepthMsaaPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth", { "WITH_MSAA" });
-	m_pReduceDepthPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
-
-	m_pCameraMotionPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
-	m_pTemporalResolvePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
-
-
-	//Sky
-	{
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
-		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
-		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, GraphicsCommon::DepthStencilFormat, 1);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetName("Skybox");
-		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ProceduralSky.hlsl", "ComputeSkyCS");
-	}
-
-	//Bloom
-	m_pBloomDownsamplePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
-	m_pBloomDownsampleKarisAveragePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", { "KARIS_AVERAGE=1" });
-	m_pBloomUpsamplePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
-
-	//Visibility Shading
-	{
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
-		psoDesc.SetPixelShader("VisibilityShading.hlsl", "ShadePS");
-		psoDesc.SetRenderTargetFormats(GraphicsCommon::GBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
-		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetDepthEnabled(false);
-		psoDesc.SetName("Visibility Shading");
-		m_pVisibilityShadingGraphicsPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
-
-	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
-
-	{
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
-		psoDesc.SetPixelShader("VisibilityGBuffer.hlsl", "ShadePS");
-		psoDesc.SetRenderTargetFormats(GraphicsCommon::DeferredGBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
-		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetDepthEnabled(false);
-		psoDesc.SetName("Visibility Shading");
-		m_pVisibilityGBufferPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		m_pDeferredShadePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DeferredShading.hlsl", "ShadeCS");
-	}
-
-	{
-		m_pSkinPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "Skinning.hlsl", "CSMain");
-	}
-}
-
-void DemoApp::UpdateImGui()
-{
-	PROFILE_CPU_SCOPE("ImGui Update");
-
 	static ImGuiConsole console;
 	static bool showProfiler = false;
 	static bool showImguiDemo = false;
 	static bool showToolMetrics = false;
+
+	if (showImguiDemo)
+		ImGui::ShowDemoWindow();
+
+	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_P))
+		showProfiler = !showProfiler;
 
 	ImGuiViewport* pViewport = ImGui::GetMainViewport();
 	ImGuiID dockspace = ImGui::DockSpaceOverViewport(pViewport);
@@ -1142,12 +175,14 @@ void DemoApp::UpdateImGui()
 		ImGui::DockBuilderAddNode(dockspace, ImGuiDockNodeFlags_CentralNode);
 		ImGui::DockBuilderSetNodeSize(dockspace, pViewport->Size);
 		ImGui::DockBuilderSplitNode(dockspace, ImGuiDir_Right, 0.2f, &parametersID, &viewportID);
-		ImGui::DockBuilderDockWindow("Parameters", parametersID);
+		ImGui::DockBuilderDockWindow("Settings", parametersID);
 		ImGui::DockBuilderGetNode(viewportID)->LocalFlags |= ImGuiDockNodeFlags_HiddenTabBar;
 		ImGui::DockBuilderGetNode(viewportID)->UpdateMergedFlags();
 		ImGui::DockBuilderDockWindow(ICON_FA_DESKTOP " Viewport", viewportID);
 		ImGui::DockBuilderFinish(dockspace);
 	}
+
+	console.Update();
 
 	if (ImGui::BeginMainMenuBar())
 	{
@@ -1158,7 +193,7 @@ void DemoApp::UpdateImGui()
 				OPENFILENAME ofn{};
 				TCHAR szFile[260]{};
 				ofn.lStructSize = sizeof(ofn);
-				ofn.hwndOwner = m_Window;
+				ofn.hwndOwner = m_Window.GetNativeWindow();
 				ofn.lpstrFile = szFile;
 				ofn.nMaxFile = sizeof(szFile);
 				ofn.lpstrFilter = "Supported files (*.gltf;*.glb;*.dat;*.ldr;*.mpd)\0*.gltf;*.glb;*.dat;*.ldr;*.mpd\0All Files (*.*)\0*.*\0";;
@@ -1183,11 +218,13 @@ void DemoApp::UpdateImGui()
 			}
 			if (ImGui::MenuItem("RenderGraph Resource Tracker", "Ctrl + R"))
 			{
-				Tweakables::gRenderGraphResourceTracker = true;
+				static IConsoleObject* resourceTracker = ConsoleManager::FindConsoleObject("r.RenderGraph.ResourceTracker");
+				resourceTracker->Set("1");
 			}
 			if (ImGui::MenuItem("RenderGraph Pass View", "Ctrl + T"))
 			{
-				Tweakables::gRenderGraphPassView = true;
+				static IConsoleObject* passView = ConsoleManager::FindConsoleObject("r.RenderGraph.PassView");
+				passView->Set("1");
 			}
 			if (ImGui::MenuItem("ImGui Metrics"))
 			{
@@ -1198,9 +235,10 @@ void DemoApp::UpdateImGui()
 			{
 				showConsole = !showConsole;
 			}
-			if (ImGui::MenuItem("Luminance Histogram", 0, &Tweakables::gDrawHistogram.Get()))
+			if (ImGui::MenuItem("Luminance Histogram"))
 			{
-				Tweakables::gDrawHistogram.Set(!Tweakables::gDrawHistogram.GetBool());
+				static IConsoleObject* histogram = ConsoleManager::FindConsoleObject("r.Histogram");
+				histogram->Set("1");
 			}
 
 			ImGui::EndMenu();
@@ -1209,11 +247,12 @@ void DemoApp::UpdateImGui()
 		{
 			if (ImGui::MenuItem("Dump RenderGraph"))
 			{
-				Tweakables::gDumpRenderGraphNextFrame = true;
+				static IConsoleObject* pDumpGraph = ConsoleManager::FindConsoleObject("DumpRenderGraph");
+				pDumpGraph->AsCommand()->Execute(nullptr, 0);
 			}
 			if (ImGui::MenuItem("Screenshot"))
 			{
-				Tweakables::gScreenshotNextFrame = true;
+				sScreenshotNextFrame = true;
 			}
 			if (ImGui::MenuItem("Pix Capture"))
 			{
@@ -1236,187 +275,24 @@ void DemoApp::UpdateImGui()
 		ImGui::ShowMetricsWindow(&showToolMetrics);
 
 	ImGui::Begin(ICON_FA_DESKTOP " Viewport", 0, ImGuiWindowFlags_NoScrollbar);
-	ImDrawList* pDraw = ImGui::GetWindowDrawList();
 	ImVec2 viewportPos = ImGui::GetWindowPos();
 	ImVec2 viewportSize = ImGui::GetWindowSize();
+	FloatRect viewport(viewportPos.x, viewportPos.y, viewportPos.x + viewportSize.x, viewportPos.y + viewportSize.y);
 	ImVec2 imageSize = ImMax(ImGui::GetContentRegionAvail(), ImVec2(16.0f, 16.0f));
-	if (m_pColorOutput)
+	if (!m_pViewportTexture || imageSize.x != m_pViewportTexture->GetWidth() || imageSize.y != m_pViewportTexture->GetHeight())
 	{
-		if (imageSize.x != m_pColorOutput->GetWidth() || imageSize.y != m_pColorOutput->GetHeight())
-		{
-			OnResizeViewport((int)imageSize.x, (int)imageSize.y);
-		}
-		ImGui::Image(m_pColorOutput, imageSize);
+		m_pViewportTexture = m_pDevice->CreateTexture(TextureDesc::Create2D((uint32)imageSize.x, (uint32)imageSize.y, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Viewport");
 	}
+	ImGui::Image(m_pViewportTexture, imageSize);
 	ImVec2 viewportOrigin = ImGui::GetItemRectMin();
 	ImVec2 viewportExtents = ImGui::GetItemRectSize();
+	ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+
 
 	ImGui::End();
 
-	static entt::entity selectedEntity{};
-	if (ImGui::Begin("Outliner"))
-	{
-		auto entity_view = m_World.Registry.view<Identity>();
-		entity_view.each([&](entt::entity entity, Identity& t)
-			{
-				ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-				if (selectedEntity == entity)
-					flags |= ImGuiTreeNodeFlags_Selected;
-				ImGui::TreeNodeEx(Sprintf("%d", (int)entity).c_str(), flags, t.Name.c_str());
-				if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-					selectedEntity = entity;
-			});
-	}
-	ImGui::End();
-
-
-	if (m_World.Registry.valid(selectedEntity))
-	{
-		if (ImGui::Begin("Entity"))
-		{
-			if (Transform* transform = m_World.Registry.try_get<Transform>(selectedEntity))
-			{
-				if (ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen))
-				{
-					ImGui::InputFloat3("Position", &transform->Position.x);
-					ImGui::InputFloat3("Scale", &transform->Scale.x);
-					ImGui::InputFloat4("Rotation", &transform->Rotation.x);
-					ImGui::TreePop();
-				}
-			}
-			if (Light* light = m_World.Registry.try_get<Light>(selectedEntity))
-			{
-				if (ImGui::TreeNodeEx("Light", ImGuiTreeNodeFlags_DefaultOpen))
-				{
-					ImGui::ColorEdit4("Color", &light->Colour.x);
-					ImGui::InputFloat("Intensity", &light->Intensity);
-					ImGui::InputFloat("Range", &light->Range);
-					ImGui::Checkbox("Cast Shadows", &light->CastShadows);
-					ImGui::Checkbox("Volumetric Lighting", &light->VolumetricLighting);
-					ImGui::TreePop();
-				}
-			}
-			if (DDGIVolume* ddgi = m_World.Registry.try_get<DDGIVolume>(selectedEntity))
-			{
-				if (ImGui::TreeNodeEx("DDGI", ImGuiTreeNodeFlags_DefaultOpen))
-				{
-					ImGui::SliderFloat3("Extents", &ddgi->Extents.x, -100, 100);
-					ImGui::SliderInt3("Probe Count", &ddgi->NumProbes.x, 1, 100);
-					ImGui::SliderInt("Max Num Rays", &ddgi->MaxNumRays, 1, 500);
-					ImGui::SliderInt("Num Rays", &ddgi->NumRays, 1, 500);
-					ImGui::TreePop();
-				}
-			}
-			if (FogVolume* fog = m_World.Registry.try_get<FogVolume>(selectedEntity))
-			{
-				if (ImGui::TreeNodeEx("Fog Volume", ImGuiTreeNodeFlags_DefaultOpen))
-				{
-					ImGui::SliderFloat3("Extents", &fog->Extents.x, 0, 20);
-					ImGui::SliderFloat("Density Base", &fog->DensityBase, 0, 1);
-					ImGui::SliderFloat("Density Change", &fog->DensityChange, 0, 1);
-					ImGui::ColorEdit3("Color", &fog->Color.x);
-					ImGui::TreePop();
-				}
-			}
-			if (Model* pModel = m_World.Registry.try_get<Model>(selectedEntity))
-			{
-				if (ImGui::TreeNodeEx("Mesh", ImGuiTreeNodeFlags_DefaultOpen))
-				{
-
-					if (pModel->AnimationIndex != -1)
-					{
-						ImGui::Combo("Animation", &pModel->AnimationIndex, [](void* pUserData, int index)
-							{
-								const World* pWorld = (World*)pUserData;
-								return pWorld->Animations[index].Name.c_str();
-							}, &m_World, (int)m_World.Animations.size());
-					}
-					ImGui::TreePop();
-				}
-			}
-		}
-		ImGui::End();
-	}
-
-	if (m_pCaptureTextureSystem)
-		m_pCaptureTextureSystem->RenderUI(m_CaptureTextureContext, viewportOrigin, viewportExtents);
-
-	console.Update();
-
-	if (showImguiDemo)
-	{
-		ImGui::ShowDemoWindow();
-	}
-
-	if (Tweakables::gDrawHistogram && m_pDebugHistogramTexture)
-	{
-		ImGui::Begin("Luminance Histogram");
-		ImVec2 cursor = ImGui::GetCursorPos();
-		ImVec2 size = ImGui::GetAutoSize(ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
-		ImGui::Image(m_pDebugHistogramTexture, size);
-		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::gMinLogLuminance.Get()).c_str());
-		ImGui::End();
-	}
-
-	if (Tweakables::gVisualizeShadowCascades)
-	{
-		float cascadeImageSize = 256.0f;
-		ImVec2 cursor = viewportOrigin + ImVec2(5, viewportExtents.y - cascadeImageSize - 5);
-
-		const Light& sunLight = m_World.Registry.get<Light>(m_World.Sunlight);
-		for (int i = 0; i < Tweakables::gShadowCascades; ++i)
-		{
-			if (i < sunLight.ShadowMaps.size())
-			{
-				const RenderView& shadowView = m_RenderWorld.ShadowViews[sunLight.MatrixIndex + i];
-				const Matrix& lightViewProj = shadowView.ViewProjection;
-
-				const ViewTransform& viewTransform = m_MainView;
-				BoundingFrustum frustum = Math::CreateBoundingFrustum(Math::CreatePerspectiveMatrix(viewTransform.FoV, viewTransform.Viewport.GetAspect(), viewTransform.FarPlane, (&m_RenderWorld.ShadowCascadeDepths.x)[i]), viewTransform.View);
-				DirectX::XMFLOAT3 frustumCorners[8];
-				frustum.GetCorners(frustumCorners);
-
-				ImVec2 corners[8];
-				for (int c = 0; c < 8; ++c)
-				{
-					Vector4 corner;
-					corner = Vector4::Transform(Vector4(frustumCorners[c].x, frustumCorners[c].y, frustumCorners[c].z, 1), lightViewProj);
-					corner.x /= corner.w;
-					corner.y /= corner.w;
-					corner.x = corner.x * 0.5f + 0.5f;
-					corner.y = -corner.y * 0.5f + 0.5f;
-					corners[c] = ImVec2(corner.x, corner.y) * cascadeImageSize;
-				}
-
-				pDraw->AddImage(sunLight.ShadowMaps[i], cursor, cursor + ImVec2(cascadeImageSize, cascadeImageSize));
-
-				ImColor clr(0.7f, 1.0f, 1.0f, 0.5f);
-				pDraw->AddLine(cursor + corners[0], cursor + corners[4], clr);
-				pDraw->AddLine(cursor + corners[1], cursor + corners[5], clr);
-				pDraw->AddLine(cursor + corners[2], cursor + corners[6], clr);
-				pDraw->AddLine(cursor + corners[3], cursor + corners[7], clr);
-
-				pDraw->AddLine(cursor + corners[0], cursor + corners[1], clr);
-				pDraw->AddLine(cursor + corners[1], cursor + corners[2], clr);
-				pDraw->AddLine(cursor + corners[2], cursor + corners[3], clr);
-				pDraw->AddLine(cursor + corners[3], cursor + corners[0], clr);
-
-				pDraw->AddLine(cursor + corners[4], cursor + corners[5], clr);
-				pDraw->AddLine(cursor + corners[5], cursor + corners[6], clr);
-				pDraw->AddLine(cursor + corners[6], cursor + corners[7], clr);
-				pDraw->AddLine(cursor + corners[7], cursor + corners[4], clr);
-				cursor.x += cascadeImageSize + 5;
-			}
-		}
-	}
-
-	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_P))
-		showProfiler = !showProfiler;
-	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_R))
-		Tweakables::gRenderGraphResourceTracker = !Tweakables::gRenderGraphResourceTracker;
-	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_T))
-		Tweakables::gRenderGraphPassView = !Tweakables::gRenderGraphPassView;
-
+	ImGuizmo::SetRect(viewportOrigin.x, viewportOrigin.y, viewportExtents.x, viewportExtents.y);
+	DrawOutliner();
 
 	if (showProfiler)
 	{
@@ -1433,63 +309,8 @@ void DemoApp::UpdateImGui()
 		gGPUProfiler.SetPaused(true);
 	}
 
-	if (ImGui::Begin("Parameters"))
+	if (ImGui::Begin("Settings"))
 	{
-		if (ImGui::CollapsingHeader("General"))
-		{
-			static constexpr const char* pPathNames[] =
-			{
-				"Tiled",
-				"Clustered",
-				"Path Tracing",
-				"Visibility",
-				"Visibility Deferred",
-			};
-			ImGui::Combo("Render Path", (int*)&m_RenderPath, pPathNames, ARRAYSIZE(pPathNames));
-
-			if (m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred)
-			{
-				ImGui::Checkbox("Freeze Culling", &m_MainView.RequestFreezeCull);
-				ImGui::Checkbox("Occlusion Culling", &Tweakables::gOcclusionCulling.Get());
-				static constexpr const char* pDebugViewNames[] =
-				{
-					"Off",
-					"InstanceID",
-					"MeshletID",
-					"PrimitiveID",
-					"Overdraw",
-				};
-				ImGui::Combo("VisBuffer Debug View", &Tweakables::gVisibilityDebugMode.Get(), pDebugViewNames, ARRAYSIZE(pDebugViewNames));
-
-				ImGui::Checkbox("Cull statistics", &Tweakables::gCullDebugStats.Get());
-				ImGui::Checkbox("Work Graph", &Tweakables::gWorkGraph.Get());
-			}
-
-			{
-				ViewTransform& view = m_MainView;
-				ImGui::Text("Camera");
-				ImGui::Text("Location: [%.2f, %.2f, %.2f]", view.Position.x, view.Position.y, view.Position.z);
-				float fov = view.FoV;
-				if (ImGui::SliderAngle("Field of View", &fov, 10, 120))
-					view.FoV = fov;
-				Vector2 farNear(view.FarPlane, view.NearPlane);
-				if (ImGui::DragFloatRange2("Near/Far", &farNear.x, &farNear.y, 1, 0.1f, 100))
-				{
-					view.FarPlane = farNear.x;
-					view.NearPlane = farNear.y;
-				}
-			}
-		}
-
-		if (ImGui::CollapsingHeader("Render Graph"))
-		{
-			ImGui::Checkbox("RenderGraph Jobify", &Tweakables::gRenderGraphJobify.Get());
-			ImGui::Checkbox("RenderGraph Aliasing", &Tweakables::gRenderGraphResourceAliasing.Get());
-			ImGui::Checkbox("RenderGraph Pass Culling", &Tweakables::gRenderGraphPassCulling.Get());
-			ImGui::Checkbox("RenderGraph State Tracking", &Tweakables::gRenderGraphStateTracking.Get());
-			ImGui::SliderInt("RenderGraph Pass Group Size", &Tweakables::gRenderGraphPassGroupSize.Get(), 5, 50);
-		}
-
 		if (ImGui::CollapsingHeader("Swapchain"))
 		{
 			bool vsync = m_pSwapchain->GetVSync();
@@ -1505,653 +326,142 @@ void DemoApp::UpdateImGui()
 			if (ImGui::SliderInt("Max Frame Latency", &frameLatency, 1, 5))
 				m_pSwapchain->SetMaxFrameLatency(frameLatency);
 		}
-
-		if (ImGui::CollapsingHeader("Atmosphere"))
-		{
-			if (m_World.Registry.valid(m_World.Sunlight))
-			{
-				Light& sunLight = m_World.Registry.get<Light>(m_World.Sunlight);
-				Transform& sunTransform = m_World.Registry.get<Transform>(m_World.Sunlight);
-				Vector3 euler = sunTransform.Rotation.ToEuler();
-
-				if (ImGui::SliderFloat("Sun Orientation", &euler.y, -Math::PI, Math::PI))
-					sunTransform.Rotation = Quaternion::CreateFromYawPitchRoll(euler);
-				if (ImGui::SliderFloat("Sun Inclination", &euler.x, 0, Math::PI / 2))
-					sunTransform.Rotation = Quaternion::CreateFromYawPitchRoll(euler);
-				ImGui::SliderFloat("Sun Intensity", &sunLight.Intensity, 0, 30);
-			}
-
-			ImGui::Checkbox("Sky", &Tweakables::gSky.Get());
-			ImGui::Checkbox("Volumetric Fog", &Tweakables::gVolumetricFog.Get());
-			ImGui::Checkbox("Clouds", &Tweakables::gClouds.Get());
-		}
-
-		if (ImGui::CollapsingHeader("Shadows"))
-		{
-			ImGui::SliderInt("Shadow Cascades", &Tweakables::gShadowCascades.Get(), 1, 4);
-			ImGui::Checkbox("SDSM", &Tweakables::gSDSM.Get());
-			ImGui::SliderFloat("PSSM Factor", &Tweakables::gPSSMFactor.Get(), 0, 1);
-			ImGui::Checkbox("Visualize Cascades", &Tweakables::gVisualizeShadowCascades.Get());
-			ImGui::Checkbox("GPU Cull", &Tweakables::gShadowsGPUCull.Get());
-			if (Tweakables::gShadowsGPUCull)
-			{
-				ImGui::Checkbox("GPU Occlusion Cull", &Tweakables::gShadowsOcclusionCulling.Get());
-				ImGui::SliderInt("GPU Cull Stats", &Tweakables::gCullShadowsDebugStats.Get(), -1, (int)m_RenderWorld.ShadowViews.size() - 1);
-			}
-		}
-		if (ImGui::CollapsingHeader("Bloom"))
-		{
-			ImGui::Checkbox("Enabled", &Tweakables::gBloom.Get());
-			ImGui::SliderFloat("Intensity", &Tweakables::gBloomIntensity.Get(), 0.0f, 4.0f);
-			ImGui::SliderFloat("Blend Factor", &Tweakables::gBloomBlendFactor.Get(), 0.0f, 1.0f);
-			ImGui::SliderFloat("Internal Blend Factor", &Tweakables::gBloomInteralBlendFactor.Get(), 0.0f, 1.0f);
-			ImGui::ColorEdit3("Lens Dirt Tint", &m_LensDirtTint.x, ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
-		}
-		if (ImGui::CollapsingHeader("Exposure/Tonemapping"))
-		{
-			ImGui::DragFloatRange2("Log Luminance", &Tweakables::gMinLogLuminance.Get(), &Tweakables::gMaxLogLuminance.Get(), 1.0f, -100, 50);
-			ImGui::Checkbox("Draw Exposure Histogram", &Tweakables::gDrawHistogram.Get());
-			ImGui::SliderFloat("White Point", &Tweakables::gWhitePoint.Get(), 0, 20);
-			ImGui::SliderFloat("Tau", &Tweakables::gTau.Get(), 0, 5);
-
-			static constexpr const char* pTonemapperNames[] = {
-				"Reinhard",
-				"Reinhard Extended",
-				"ACES Fast",
-				"Unreal 3",
-				"Uncharted 2",
-			};
-			ImGui::Combo("Tonemapper", (int*)&Tweakables::gToneMapper.Get(), pTonemapperNames, ARRAYSIZE(pTonemapperNames));
-		}
-
-		if (ImGui::CollapsingHeader("Misc"))
-		{
-			ImGui::Checkbox("TAA", &Tweakables::gTAA.Get());
-			ImGui::Checkbox("Debug Render Lights", &Tweakables::gVisualizeLights.Get());
-			ImGui::Checkbox("Visualize Light Density", &Tweakables::gVisualizeLightDensity.Get());
-			ImGui::SliderInt("SSR Samples", &Tweakables::gSSRSamples.Get(), 0, 32);
-			ImGui::Checkbox("Object Bounds", &Tweakables::gRenderObjectBounds.Get());
-			ImGui::Checkbox("Render Terrain", &Tweakables::gRenderTerrain.Get());
-		}
-
-		if (ImGui::CollapsingHeader("Raytracing"))
-		{
-			if (m_pDevice->GetCapabilities().SupportsRaytracing())
-			{
-				ImGui::Checkbox("Raytraced AO", &Tweakables::gRaytracedAO.Get());
-				ImGui::Checkbox("Raytraced Reflections", &Tweakables::gRaytracedReflections.Get());
-				ImGui::Checkbox("DDGI", &Tweakables::gEnableDDGI.Get());
-				ImGui::Checkbox("Visualize DDGI", &Tweakables::gVisualizeDDGI.Get());
-				ImGui::SliderAngle("TLAS Bounds Threshold", &Tweakables::gTLASBoundsThreshold.Get(), 0, 40);
-			}
-		}
 	}
 	ImGui::End();
+
+	m_Renderer.DrawImGui(viewport);
 }
 
-void DemoApp::UpdateSkinning(RGGraph& graph)
+
+void DemoApp::DrawOutliner()
 {
-	struct SkinningUpdateInfo
+	static entt::entity selectedEntity{};
+	if (ImGui::Begin("Outliner"))
 	{
-		uint32 SkinMatrixOffset;
-		uint32 PositionsOffset;
-		uint32 NormalsOffset;
-		uint32 JointsOffset;
-		uint32 WeightsOffset;
-		uint32 SkinnedPositionsOffset;
-		uint32 SkinnedNormalsOffset;
-		uint32 NumVertices;
-	};
-	Array<SkinningUpdateInfo> skinDatas;
-	Array<Matrix> skinningTransforms;
-	Array<Mesh*> meshes;
-
-	auto view = m_World.Registry.view<const Model>();
-	view.each([&](const Model& model)
-		{
-			if (model.SkeletonIndex != -1)
+		auto entity_view = m_World.Registry.view<Identity>();
+		entity_view.each([&](entt::entity entity, Identity& t)
 			{
-				SkinningUpdateInfo& skinData = skinDatas.emplace_back();
-
-				Mesh& mesh = m_World.Meshes[model.MeshIndex];
-				meshes.push_back(&mesh);
-				skinData.SkinMatrixOffset			= (uint32)skinningTransforms.size();
-				skinData.SkinnedPositionsOffset		= mesh.SkinnedPositionStreamLocation.OffsetFromStart;
-				skinData.SkinnedNormalsOffset		= mesh.SkinnedNormalStreamLocation.OffsetFromStart;
-				skinData.PositionsOffset			= mesh.PositionStreamLocation.OffsetFromStart;
-				skinData.NormalsOffset				= mesh.NormalStreamLocation.OffsetFromStart;
-				skinData.JointsOffset				= mesh.JointsStreamLocation.OffsetFromStart;
-				skinData.WeightsOffset				= mesh.WeightsStreamLocation.OffsetFromStart;
-				skinData.NumVertices				= mesh.PositionStreamLocation.Elements;
-
-				const Animation& anim = m_World.Animations[model.AnimationIndex];
-				const Skeleton& skeleton = m_World.Skeletons[model.SkeletonIndex];
-				skinningTransforms.resize(skinningTransforms.size() + skeleton.NumJoints());
-				Matrix* pSkinMatrices = &skinningTransforms[skinData.SkinMatrixOffset];
-
-				float t = fmod(Time::TotalTime(), anim.TimeEnd - anim.TimeStart);
-				float time = t + anim.TimeStart;
-
-				Array<Transform> animTransforms(skeleton.NumJoints());
-				for (const AnimationChannel& channel : anim.Channels)
-				{
-					Transform& jointTransform = animTransforms[skeleton.GetJoint(channel.Target)];
-					if (channel.Path == AnimationChannel::PathType::Translation)
-						jointTransform.Position = Vector3(channel.Evaluate(time));
-					else if (channel.Path == AnimationChannel::PathType::Rotation)
-						jointTransform.Rotation = channel.Evaluate(time);
-					else if (channel.Path == AnimationChannel::PathType::Scale)
-						jointTransform.Scale = Vector3(channel.Evaluate(time));
-				}
-
-				for (Transform& jointTransform : animTransforms)
-				{
-					jointTransform.WorldPrev = jointTransform.World;
-					jointTransform.World = Matrix::CreateScale(jointTransform.Scale) *
-						Matrix::CreateFromQuaternion(jointTransform.Rotation) *
-						Matrix::CreateTranslation(jointTransform.Position);
-				}
-
-				for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
-				{
-					// Update joints in an order so that parent joints are always computed before any children
-					Skeleton::JointIndex jointIndex = skeleton.JointUpdateOrder[i];
-					Matrix& jointTransform = pSkinMatrices[jointIndex];
-
-					jointTransform = animTransforms[jointIndex].World;
-					Skeleton::JointIndex parentJointIndex = skeleton.ParentIndices[jointIndex];
-					if (parentJointIndex != Skeleton::InvalidJoint)
-						jointTransform *= pSkinMatrices[parentJointIndex];
-				}
-
-				// Compute final skin transforms
-				for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
-					pSkinMatrices[i] = skeleton.InverseBindMatrices[i] * pSkinMatrices[i];
-			}
-		});
-
-	if (skinningTransforms.empty())
-		return;
-
-	RGBuffer* pSkinningMatrices = graph.Create("Skinning Matrices", BufferDesc::CreateStructured((uint32)skinningTransforms.size(), sizeof(Matrix)));
-	RGUtils::DoUpload(graph, pSkinningMatrices, skinningTransforms.data(), (uint32)skinningTransforms.size() * sizeof(Matrix));
-
-	graph.AddPass("GPU Skinning", RGPassFlag::Compute | RGPassFlag::NeverCull)
-		.Read(pSkinningMatrices)
-		.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-				context.SetPipelineState(m_pSkinPSO);
-
-				context.BindResources(3, resources.GetSRV(pSkinningMatrices));
-
-				for(int i = 0; i < (int)skinDatas.size(); ++i)
-				{
-					context.InsertResourceBarrier(meshes[i]->pBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-					context.BindRootCBV(1, skinDatas[i]);
-					context.BindResources(2, { meshes[i]->pBuffer->GetUAV() });
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(meshes[i]->PositionStreamLocation.Elements, 64));
-
-					context.InsertResourceBarrier(meshes[i]->pBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-				}
+				ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+				if (selectedEntity == entity)
+					flags |= ImGuiTreeNodeFlags_Selected;
+				ImGui::TreeNodeEx(Sprintf("%d", (int)entity).c_str(), flags, t.Name.c_str());
+				if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+					selectedEntity = entity;
 			});
-}
+	}
+	ImGui::End();
 
-RGTexture* DemoApp::ComputeBloom(RGGraph& graph, const RenderView* pView, RGTexture* pColor)
-{
-	RG_GRAPH_SCOPE("Bloom", graph);
+	if (!m_World.Registry.valid(selectedEntity))
+		selectedEntity = entt::null;
 
-	auto ComputeNumMips = [](uint32 width, uint32 height) -> uint32
-		{
-			return (uint32)Math::Floor(log2f((float)Math::Max(width, height))) + 1u;
-		};
-
-	Vector2u bloomDimensions = Vector2u(pColor->GetDesc().Width >> 1, pColor->GetDesc().Height >> 1);
-	const uint32 mipBias = 3;
-	uint32 numMips = ComputeNumMips(bloomDimensions.x, bloomDimensions.y) - mipBias;
-	RGTexture* pDownscaleTarget = graph.Create("Downscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, numMips));
-
-	RGTexture* pSourceTexture = pColor;
-	for (uint32 i = 0; i < numMips; ++i)
+	if (selectedEntity != entt::null)
 	{
-		Vector2u targetDimensions(Math::Max(1u, bloomDimensions.x >> i), Math::Max(1u, bloomDimensions.y >> i));
-		graph.AddPass(Sprintf("Downsample %d [%dx%d > %dx%d]", i, targetDimensions.x << 1, targetDimensions.y << 1, targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
-			.Read(i == 0 ? pSourceTexture : nullptr)
-			.Write(pDownscaleTarget)
-			.Bind([=](CommandContext& context, const RGResources& resources)
+		if (ImGui::Begin("Entity"))
+		{
+			if (Transform* transform = m_World.Registry.try_get<Transform>(selectedEntity))
+			{
+				Transform& t = *transform;
+				if (ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen))
 				{
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-					context.SetPipelineState(i == 0 ? m_pBloomDownsampleKarisAveragePSO : m_pBloomDownsamplePSO);
-					struct
+					static ImGuizmo::OPERATION gizmoOperation(ImGuizmo::ROTATE);
+					static ImGuizmo::MODE gizmoMode(ImGuizmo::WORLD);
+					if (ImGui::IsKeyPressed(ImGuiKey_W))
+						gizmoOperation = ImGuizmo::TRANSLATE;
+					if (ImGui::IsKeyPressed(ImGuiKey_E))
+						gizmoOperation = ImGuizmo::ROTATE;
+					if (ImGui::IsKeyPressed(ImGuiKey_R))
+						gizmoOperation = ImGuizmo::SCALE;
+
+					ImGui::InputFloat3("Translation", &t.Position.x);
+					ImGui::InputFloat4("Rotation", &t.Rotation.x);
+					ImGui::InputFloat3("Scale", &t.Scale.x);
+
+					if (gizmoOperation != ImGuizmo::SCALE)
 					{
-						Vector2 TargetDimensionsInv;
-						uint32 SourceMip;
-					} parameters;
-					parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
-					parameters.SourceMip = i == 0 ? 0 : i - 1;
+						if (ImGui::RadioButton("Local", gizmoMode == ImGuizmo::LOCAL))
+							gizmoMode = ImGuizmo::LOCAL;
+						ImGui::SameLine();
+						if (ImGui::RadioButton("World", gizmoMode == ImGuizmo::WORLD))
+							gizmoMode = ImGuizmo::WORLD;
+					}
 
-					context.BindRootCBV(0, parameters);
-					context.BindResources(2, resources.GetUAV(pDownscaleTarget, i));
-					context.BindResources(3, static_cast<Texture*>(resources.GetResourceUnsafe(pSourceTexture))->GetSRV());
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
-					context.InsertUAVBarrier();
-				});
+					Matrix worldTransform = Matrix::CreateScale(t.Scale) * Matrix::CreateFromQuaternion(t.Rotation) * Matrix::CreateTranslation(t.Position);
+					if (ImGuizmo::Manipulate(&m_Renderer.GetMainView().WorldToView.m[0][0], &m_Renderer.GetMainView().ViewToClipUnjittered.m[0][0], gizmoOperation, gizmoMode, &worldTransform.m[0][0], nullptr, nullptr, nullptr, nullptr))
+						worldTransform.Decompose(t.Scale, t.Rotation, t.Position);
 
-		pSourceTexture = pDownscaleTarget;
-	}
-
-	numMips = Math::Max(2u, numMips);
-	RGTexture* pUpscaleTarget = graph.Create("Upscale Target", TextureDesc::Create2D(bloomDimensions.x, bloomDimensions.y, ResourceFormat::RGBA16_FLOAT, numMips - 1));
-	RGTexture* pPreviousSource = pDownscaleTarget;
-
-	for (int32 i = numMips - 2; i >= 0; --i)
-	{
-		Vector2u targetDimensions(Math::Max(1u, bloomDimensions.x >> i), Math::Max(1u, bloomDimensions.y >> i));
-		graph.AddPass(Sprintf("UpsampleCombine %d [%dx%d > %dx%d]", numMips - 2 - i, Math::Max(1u, targetDimensions.x >> 1), Math::Max(1u, targetDimensions.y >> 1), targetDimensions.x, targetDimensions.y).c_str(), RGPassFlag::Compute)
-			.Read(pDownscaleTarget)
-			.Write(pUpscaleTarget)
-			.Bind([=](CommandContext& context, const RGResources& resources)
-				{
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-					context.SetPipelineState(m_pBloomUpsamplePSO);
-					struct
-					{
-						Vector2 TargetDimensionsInv;
-						uint32 SourceCurrentMip;
-						uint32 SourcePreviousMip;
-						float Radius;
-					} parameters;
-					parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
-					parameters.SourceCurrentMip = i;
-					parameters.SourcePreviousMip = i + 1;
-					parameters.Radius = Tweakables::gBloomInteralBlendFactor;
-
-					context.BindRootCBV(0, parameters);
-					context.BindResources(2, resources.Get(pUpscaleTarget)->GetUAV(i));
-					context.BindResources(3, {
-						resources.GetSRV(pDownscaleTarget),
-						resources.Get(pPreviousSource)->GetSRV(),
-						});
-					context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
-					context.InsertUAVBarrier();
-				});
-
-		pPreviousSource = pUpscaleTarget;
-	}
-
-	return pUpscaleTarget;
-}
-
-RGBuffer* DemoApp::ComputeExposure(RGGraph& graph, const RenderView* pView, RGTexture* pColor)
-{
-	RG_GRAPH_SCOPE("Auto Exposure", graph);
-	RGBuffer* pAverageLuminance = RGUtils::CreatePersistent(graph, "Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)), &m_pAverageLuminance, true);
-
-	TextureDesc sourceDesc = pColor->GetDesc();
-	sourceDesc.Width = Math::DivideAndRoundUp(sourceDesc.Width, 4);
-	sourceDesc.Height = Math::DivideAndRoundUp(sourceDesc.Height, 4);
-	RGTexture* pDownscaleTarget = graph.Create("Downscaled HDR Target", sourceDesc);
-
-	graph.AddPass("Downsample Color", RGPassFlag::Compute)
-		.Read(pColor)
-		.Write(pDownscaleTarget)
-		.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				Texture* pTarget = resources.Get(pDownscaleTarget);
-
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-				context.SetPipelineState(m_pDownsampleColorPSO);
-
-				struct
-				{
-					Vector2i TargetDimensions;
-					Vector2 TargetDimensionsInv;
-				} parameters;
-				parameters.TargetDimensions.x = pTarget->GetWidth();
-				parameters.TargetDimensions.y = pTarget->GetHeight();
-				parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
-
-				context.BindRootCBV(0, parameters);
-				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, resources.GetSRV(pColor));
-
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.TargetDimensions.x, 8, parameters.TargetDimensions.y, 8));
-			});
-
-	RGBuffer* pLuminanceHistogram = graph.Create("Luminance Histogram", BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
-	graph.AddPass("Luminance Histogram", RGPassFlag::Compute)
-		.Read(pDownscaleTarget)
-		.Write(pLuminanceHistogram)
-		.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				Texture* pColorSource = resources.Get(pDownscaleTarget);
-				Buffer* pHistogram = resources.Get(pLuminanceHistogram);
-
-				context.ClearUAVu(pHistogram->GetUAV());
-
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-				context.SetPipelineState(m_pLuminanceHistogramPSO);
-
-				struct
-				{
-					uint32 Width;
-					uint32 Height;
-					float MinLogLuminance;
-					float OneOverLogLuminanceRange;
-				} parameters;
-				parameters.Width = pColorSource->GetWidth();
-				parameters.Height = pColorSource->GetHeight();
-				parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
-				parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get());
-
-				context.BindRootCBV(0, parameters);
-				context.BindResources(2, pHistogram->GetUAV());
-				context.BindResources(3, pColorSource->GetSRV());
-
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorSource->GetWidth(), 16, pColorSource->GetHeight(), 16));
-			});
-
-	uint32 numPixels = sourceDesc.Width * sourceDesc.Height;
-
-	graph.AddPass("Average Luminance", RGPassFlag::Compute)
-		.Read(pLuminanceHistogram)
-		.Write(pAverageLuminance)
-		.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-				context.SetPipelineState(m_pAverageLuminancePSO);
-
-				struct
-				{
-					int32 PixelCount;
-					float MinLogLuminance;
-					float LogLuminanceRange;
-					float TimeDelta;
-					float Tau;
-				} parameters;
-
-				parameters.PixelCount = numPixels;
-				parameters.MinLogLuminance = Tweakables::gMinLogLuminance;
-				parameters.LogLuminanceRange = Tweakables::gMaxLogLuminance - Tweakables::gMinLogLuminance;
-				parameters.TimeDelta = Time::DeltaTime();
-				parameters.Tau = Tweakables::gTau.Get();
-
-				context.BindRootCBV(0, parameters);
-				context.BindResources(2, resources.GetUAV(pAverageLuminance));
-				context.BindResources(3, resources.GetSRV(pLuminanceHistogram));
-
-				context.Dispatch(1);
-			});
-
-	if (Tweakables::gDrawHistogram.Get())
-	{
-		RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_pDebugHistogramTexture, true);
-		graph.AddPass("Draw Histogram", RGPassFlag::Compute)
-			.Read({ pLuminanceHistogram, pAverageLuminance })
-			.Write(pHistogramDebugTexture)
-			.Bind([=](CommandContext& context, const RGResources& resources)
-				{
-					context.ClearUAVf(resources.GetUAV(pHistogramDebugTexture));
-
-					context.SetPipelineState(m_pDrawHistogramPSO);
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-
-					struct
-					{
-						float MinLogLuminance;
-						float InverseLogLuminanceRange;
-						Vector2 InvTextureDimensions;
-					} parameters;
-
-					parameters.MinLogLuminance = Tweakables::gMinLogLuminance;
-					parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance - Tweakables::gMinLogLuminance);
-					parameters.InvTextureDimensions.x = 1.0f / pHistogramDebugTexture->GetDesc().Width;
-					parameters.InvTextureDimensions.y = 1.0f / pHistogramDebugTexture->GetDesc().Height;
-
-					context.BindRootCBV(0, parameters);
-					context.BindResources(2, resources.GetUAV(pHistogramDebugTexture));
-					context.BindResources(3, {
-						resources.GetSRV(pLuminanceHistogram),
-						resources.GetSRV(pAverageLuminance),
-						});
-
-					context.Dispatch(1, resources.Get(pLuminanceHistogram)->GetNumElements());
-				});
-	}
-	return pAverageLuminance;
-}
-
-void DemoApp::MakeScreenshot()
-{
-	TaskContext taskContext;
-	TaskQueue::Execute([this](uint32)
-		{
-			CommandContext* pScreenshotContext = m_pDevice->AllocateCommandContext();
-			Ref<Texture> pSource = m_pColorOutput;
-			uint32 width = pSource->GetWidth();
-			uint32 height = pSource->GetHeight();
-
-			D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {};
-			D3D12_RESOURCE_DESC resourceDesc = pSource->GetResource()->GetDesc();
-			m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
-			Ref<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
-			pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_COPY_SOURCE);
-			pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
-
-			SyncPoint fence = pScreenshotContext->Execute();
-			fence.Wait();
-
-			char* pData = (char*)pScreenshotBuffer->GetMappedData();
-			Image img(width, height, 1, ResourceFormat::RGBA8_UNORM, 1);
-			uint32 imageRowPitch = width * 4;
-			uint32 targetOffset = 0;
-			for (uint32 i = 0; i < height; ++i)
-			{
-				img.SetData((uint32*)pData, targetOffset, imageRowPitch);
-				pData += textureFootprint.Footprint.RowPitch;
-				targetOffset += imageRowPitch;
-			}
-
-			Paths::CreateDirectoryTree(Paths::ScreenshotDir());
-			img.Save(Sprintf("%sScreenshot_%s.jpg", Paths::ScreenshotDir().c_str(), Utils::GetTimeString().c_str()).c_str());
-		}, taskContext);
-}
-
-
-void DemoApp::CreateShadowViews(const RenderView& mainView, World& world, RenderWorld& renderWorld)
-{
-	PROFILE_CPU_SCOPE("Shadow Setup");
-
-	float minPoint = 0;
-	float maxPoint = 1;
-
-	const uint32 numCascades = Tweakables::gShadowCascades;
-	const float pssmLambda = Tweakables::gPSSMFactor;
-	renderWorld.NumShadowCascades = numCascades;
-
-	if (Tweakables::gSDSM)
-	{
-		Buffer* pSourceBuffer = m_ReductionReadbackTargets[(m_Frame + 1) % GraphicsDevice::NUM_BUFFERS];
-		if (pSourceBuffer)
-		{
-			Vector2* pData = (Vector2*)pSourceBuffer->GetMappedData();
-			minPoint = pData->x;
-			maxPoint = pData->y;
-		}
-	}
-
-	const ViewTransform& viewTransform = mainView;
-	float n = viewTransform.NearPlane;
-	float f = viewTransform.FarPlane;
-	float nearPlane = Math::Min(n, f);
-	float farPlane = Math::Max(n, f);
-	float clipPlaneRange = farPlane - nearPlane;
-
-	float minZ = nearPlane + minPoint * clipPlaneRange;
-	float maxZ = nearPlane + maxPoint * clipPlaneRange;
-
-	constexpr uint32 MAX_CASCADES = 4;
-	StaticArray<float, MAX_CASCADES> cascadeSplits{};
-
-	for (uint32 i = 0; i < numCascades; ++i)
-	{
-		float p = (i + 1) / (float)numCascades;
-		float log = minZ * std::pow(maxZ / minZ, p);
-		float uniform = minZ + (maxZ - minZ) * p;
-		float d = pssmLambda * (log - uniform) + uniform;
-		cascadeSplits[i] = (d - nearPlane) / clipPlaneRange;
-	}
-
-	int32 shadowIndex = 0;
-	renderWorld.ShadowViews.clear();
-	auto AddShadowView = [&](Light& light, ShadowView shadowView, uint32 resolution, uint32 shadowMapLightIndex)
-	{
-		if (shadowMapLightIndex == 0)
-			light.MatrixIndex = shadowIndex;
-		if (shadowIndex >= (int32)m_ShadowMaps.size())
-			m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::Create2D(resolution, resolution, GraphicsCommon::ShadowFormat, 1, TextureFlag::DepthStencil | TextureFlag::ShaderResource, ClearBinding(0.0f, 0)), Sprintf("Shadow Map %d", (uint32)m_ShadowMaps.size()).c_str()));
-		Ref<Texture> pTarget = m_ShadowMaps[shadowIndex];
-
-		light.ShadowMaps.resize(Math::Max(shadowMapLightIndex + 1, (uint32)light.ShadowMaps.size()));
-		light.ShadowMaps[shadowMapLightIndex] = pTarget;
-		light.ShadowMapSize = resolution;
-		shadowView.pDepthTexture = pTarget;
-		shadowView.pLight = &light;
-		shadowView.ViewIndex = shadowMapLightIndex;
-		shadowView.Viewport = FloatRect(0, 0, (float)resolution, (float)resolution);
-		shadowView.pWorld = renderWorld.pWorld;
-		shadowView.pRenderWorld = &renderWorld;
-		renderWorld.ShadowViews.push_back(shadowView);
-		shadowIndex++;
-	};
-
-	auto light_view = world.Registry.view<const Transform, Light>();
-	light_view.each([&](const Transform& transform, Light& light)
-	{
-		light.ShadowMaps.clear();
-
-		if (!light.CastShadows)
-			return;
-
-		if (light.Type == LightType::Directional)
-		{
-			// Frustum corners in world space
-			const Matrix vpInverse = viewTransform.ViewProjection.Invert();
-			const Vector3 frustumCornersWS[] = {
-				Vector3::Transform(Vector3(-1, -1, 1), vpInverse),
-				Vector3::Transform(Vector3(-1, -1, 0), vpInverse),
-				Vector3::Transform(Vector3(-1, 1, 1), vpInverse),
-				Vector3::Transform(Vector3(-1, 1, 0), vpInverse),
-				Vector3::Transform(Vector3(1, 1, 1), vpInverse),
-				Vector3::Transform(Vector3(1, 1, 0), vpInverse),
-				Vector3::Transform(Vector3(1, -1, 1), vpInverse),
-				Vector3::Transform(Vector3(1, -1, 0), vpInverse),
-			};
-
-			const Matrix lightView = transform.World.Invert();
-			for (int i = 0; i < Tweakables::gShadowCascades; ++i)
-			{
-				float previousCascadeSplit = i == 0 ? minPoint : cascadeSplits[i - 1];
-				float currentCascadeSplit = cascadeSplits[i];
-
-				// Compute the frustum corners for the cascade in view space
-				const Vector3 cornersVS[] = {
-					Vector3::Transform(Vector3::Lerp(frustumCornersWS[0], frustumCornersWS[1], previousCascadeSplit), lightView),
-					Vector3::Transform(Vector3::Lerp(frustumCornersWS[0], frustumCornersWS[1], currentCascadeSplit), lightView),
-					Vector3::Transform(Vector3::Lerp(frustumCornersWS[2], frustumCornersWS[3], previousCascadeSplit), lightView),
-					Vector3::Transform(Vector3::Lerp(frustumCornersWS[2], frustumCornersWS[3], currentCascadeSplit), lightView),
-					Vector3::Transform(Vector3::Lerp(frustumCornersWS[4], frustumCornersWS[5], previousCascadeSplit), lightView),
-					Vector3::Transform(Vector3::Lerp(frustumCornersWS[4], frustumCornersWS[5], currentCascadeSplit), lightView),
-					Vector3::Transform(Vector3::Lerp(frustumCornersWS[6], frustumCornersWS[7], previousCascadeSplit), lightView),
-					Vector3::Transform(Vector3::Lerp(frustumCornersWS[6], frustumCornersWS[7], currentCascadeSplit), lightView),
-				};
-
-				Vector3 center = Vector3::Zero;
-				for (const Vector3& corner : cornersVS)
-					center += corner;
-				center /= ARRAYSIZE(cornersVS);
-
-				//Create a bounding sphere to maintain aspect in projection to avoid flickering when rotating
-				float radius = 0;
-				for (const Vector3& corner : cornersVS)
-				{
-					float dist = Vector3::Distance(center, corner);
-					radius = Math::Max(dist, radius);
+					ImGui::TreePop();
 				}
-				Vector3 minExtents = center - Vector3(radius);
-				Vector3 maxExtents = center + Vector3(radius);
-
-				// Snap the cascade to the resolution of the shadowmap
-				Vector3 extents = maxExtents - minExtents;
-				Vector3 texelSize = extents / 2048;
-				minExtents = Math::Floor(minExtents / texelSize) * texelSize;
-				maxExtents = Math::Floor(maxExtents / texelSize) * texelSize;
-				center = (minExtents + maxExtents) * 0.5f;
-
-				// Extent the Z bounds
-				float extentsZ = fabs(center.z - minExtents.z);
-				extentsZ = Math::Max(extentsZ, Math::Min(1500.0f, farPlane) * 0.5f);
-				minExtents.z = center.z - extentsZ;
-				maxExtents.z = center.z + extentsZ;
-
-				Matrix projectionMatrix = Math::CreateOrthographicOffCenterMatrix(minExtents.x, maxExtents.x, minExtents.y, maxExtents.y, maxExtents.z, minExtents.z);
-
-				ShadowView shadowView;
-				shadowView.IsPerspective = false;
-				shadowView.ViewProjection = lightView * projectionMatrix;
-				shadowView.ViewProjectionPrev = shadowView.ViewProjection;
-				shadowView.OrthographicFrustum.Center = center;
-				shadowView.OrthographicFrustum.Extents = maxExtents - minExtents;
-				shadowView.OrthographicFrustum.Extents.z *= 10;
-				shadowView.OrthographicFrustum.Orientation = Quaternion::CreateFromRotationMatrix(lightView.Invert());
-				(&renderWorld.ShadowCascadeDepths.x)[i] = nearPlane + currentCascadeSplit * (farPlane - nearPlane);
-				AddShadowView(light, shadowView, 2048, i);
 			}
-		}
-		else if (light.Type == LightType::Spot)
-		{
-			BoundingBox box(transform.Position, Vector3(light.Range));
-			if (!viewTransform.PerspectiveFrustum.Contains(box))
-				return;
-
-			const Matrix projection = Math::CreatePerspectiveMatrix(light.OuterConeAngle, 1.0f, light.Range, 0.01f);
-			const Matrix lightView = transform.World.Invert();
-
-			ShadowView shadowView;
-			shadowView.IsPerspective = true;
-			shadowView.ViewProjection = lightView * projection;
-			shadowView.ViewProjectionPrev = shadowView.ViewProjection;
-			shadowView.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, lightView);
-			AddShadowView(light, shadowView, 512, 0);
-		}
-		else if (light.Type == LightType::Point)
-		{
-			BoundingSphere sphere(transform.Position, light.Range);
-			if (!viewTransform.PerspectiveFrustum.Contains(sphere))
-				return;
-
-			Matrix viewMatrices[] = {
-				Math::CreateLookToMatrix(transform.Position, Vector3::Right,	Vector3::Up),
-				Math::CreateLookToMatrix(transform.Position, Vector3::Left,		Vector3::Up),
-				Math::CreateLookToMatrix(transform.Position, Vector3::Up,		Vector3::Forward),
-				Math::CreateLookToMatrix(transform.Position, Vector3::Down,		Vector3::Backward),
-				Math::CreateLookToMatrix(transform.Position, Vector3::Backward, Vector3::Up),
-				Math::CreateLookToMatrix(transform.Position, Vector3::Forward,	Vector3::Up),
-			};
-			Matrix projection = Math::CreatePerspectiveMatrix(Math::PI_DIV_2, 1, light.Range, 0.01f);
-
-			for (int i = 0; i < ARRAYSIZE(viewMatrices); ++i)
+			if (Light* light = m_World.Registry.try_get<Light>(selectedEntity))
 			{
-				ShadowView shadowView;
-				shadowView.IsPerspective = true;
-				shadowView.ViewProjection = viewMatrices[i] * projection;
-				shadowView.ViewProjectionPrev = shadowView.ViewProjection;
-				shadowView.PerspectiveFrustum = Math::CreateBoundingFrustum(projection, viewMatrices[i]);
-				AddShadowView(light, shadowView, 512, i);
+				Transform& t = m_World.Registry.get<Transform>(selectedEntity);
+				DebugRenderer::Get()->AddLight(t, *light, Colors::Yellow);
+				if (ImGui::TreeNodeEx("Light", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::Combo("Type", (int*)&light->Type, gLightTypeStr, (int)LightType::MAX);
+					if (light->Type == LightType::Point)
+					{
+						ImGui::InputFloat("Radius", &light->Range);
+					}
+					else if (light->Type == LightType::Spot)
+					{
+						ImGui::InputFloat("Range", &light->Range);
+						if (ImGui::SliderAngle("Inner Angle", &light->InnerConeAngle, 0, 179))
+							light->OuterConeAngle = Math::Max(light->OuterConeAngle, light->InnerConeAngle);
+						if(ImGui::SliderAngle("Outer Angle", &light->OuterConeAngle, 0, 179))
+							light->InnerConeAngle = Math::Min(light->OuterConeAngle, light->InnerConeAngle);
+					}
+					ImGui::ColorEdit3("Color", &light->Colour.x);
+					ImGui::InputFloat("Intensity", &light->Intensity);
+					ImGui::Checkbox("Cast Shadows", &light->CastShadows);
+					ImGui::Checkbox("Volumetric Lighting", &light->VolumetricLighting);
+					ImGui::TreePop();
+				}
+			}
+			if (DDGIVolume* ddgi = m_World.Registry.try_get<DDGIVolume>(selectedEntity))
+			{
+				Transform& t = m_World.Registry.get<Transform>(selectedEntity);
+				DebugRenderer::Get()->AddBoundingBox(BoundingBox(Vector3::Zero, ddgi->Extents), t.World, Colors::White);
+				if (ImGui::TreeNodeEx("DDGI", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::SliderFloat3("Extents", &ddgi->Extents.x, -100, 100);
+					ImGui::SliderInt3("Probe Count", &ddgi->NumProbes.x, 1, 100);
+					ImGui::SliderInt("Max Num Rays", &ddgi->MaxNumRays, 1, 500);
+					ImGui::SliderInt("Num Rays", &ddgi->NumRays, 1, 500);
+					ImGui::TreePop();
+				}
+			}
+			if (FogVolume* fog = m_World.Registry.try_get<FogVolume>(selectedEntity))
+			{
+				Transform& t = m_World.Registry.get<Transform>(selectedEntity);
+				DebugRenderer::Get()->AddBoundingBox(BoundingBox(Vector3::Zero, fog->Extents), t.World, Colors::White);
+				if (ImGui::TreeNodeEx("Fog Volume", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					ImGui::SliderFloat3("Extents", &fog->Extents.x, 0, 20);
+					ImGui::SliderFloat("Density Base", &fog->DensityBase, 0, 1);
+					ImGui::SliderFloat("Density Change", &fog->DensityChange, 0, 1);
+					ImGui::ColorEdit3("Color", &fog->Color.x);
+					ImGui::TreePop();
+				}
+			}
+			if (Model* pModel = m_World.Registry.try_get<Model>(selectedEntity))
+			{
+				Transform& t = m_World.Registry.get<Transform>(selectedEntity);
+				DebugRenderer::Get()->AddBoundingBox(m_World.Meshes[pModel->MeshIndex].Bounds, t.World, Colors::White);
+				if (ImGui::TreeNodeEx("Mesh", ImGuiTreeNodeFlags_DefaultOpen))
+				{
+					if (pModel->AnimationIndex != -1)
+					{
+						ImGui::Combo("Animation", &pModel->AnimationIndex, [](void* pUserData, int index)
+							{
+								const World* pWorld = (World*)pUserData;
+								return pWorld->Animations[index].Name.c_str();
+							}, &m_World, (int)m_World.Animations.size());
+					}
+					ImGui::TreePop();
+				}
 			}
 		}
-	});
-
-	m_ShadowHZBs.resize(shadowIndex);
+		ImGui::End();
+	}
 }

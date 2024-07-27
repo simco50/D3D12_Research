@@ -1,14 +1,14 @@
 #include "stdafx.h"
 #include "MeshletRasterizer.h"
 #include "Core/ConsoleVariables.h"
+#include "Core/Profiler.h"
 #include "RHI/Device.h"
 #include "RHI/PipelineState.h"
 #include "RHI/StateObject.h"
 #include "RHI/RootSignature.h"
-#include "RenderGraph/RenderGraph.h"
-#include "Core/Profiler.h"
 #include "Renderer/Mesh.h"
-#include "Renderer/SceneView.h"
+#include "Renderer/Renderer.h"
+#include "RenderGraph/RenderGraph.h"
 
 #define A_CPU 1
 #include "SPD/ffx_a.h"
@@ -334,7 +334,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					pCullWorkGraphSO->GetStateObject()->QueryInterface(pProps.GetAddressOf());
 
 					const char* pEntryPoint = rasterPhase == RasterPhase::Phase1 ? "CullInstancesCS" : "KickPhase2NodesCS";
-					uint32 gridSize = rasterPhase == RasterPhase::Phase1 ? Math::DivideAndRoundUp((uint32)pView->pRenderWorld->Batches.size(), Tweakables::CullInstanceThreadGroupSize) : 1;
+					uint32 gridSize = rasterPhase == RasterPhase::Phase1 ? Math::DivideAndRoundUp((uint32)pView->pRenderer->GetBatches().GetSize(), Tweakables::CullInstanceThreadGroupSize) : 1;
 
 					D3D12_DISPATCH_GRAPH_DESC graphDesc{
 						.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT,
@@ -405,7 +405,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 						context.BindResources(3, resources.GetSRV(pSourceHZB), 2);
 
 					if (rasterPhase == RasterPhase::Phase1)
-						context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->pRenderWorld->Batches.size(), Tweakables::CullInstanceThreadGroupSize));
+						context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)pView->pRenderer->GetBatches().GetSize(), Tweakables::CullInstanceThreadGroupSize));
 					else
 						context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pInstanceCullArgs));
 						});
@@ -640,12 +640,11 @@ void MeshletRasterizer::Render(RGGraph& graph, const RenderView* pView, RasterCo
 	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
 
 #if _DEBUG
-	const RenderWorld* pWorld = pView->pRenderWorld;
 	// Validate that we don't have more meshlets/instances than allowed.
 	uint32 numMeshlets = 0;
-	for (const Batch& b : pWorld->Batches)
+	for (const Batch& b : pView->pRenderer->GetBatches())
 		numMeshlets += b.pMesh->NumMeshlets;
-	gAssert(pWorld->Batches.size() <= Tweakables::MaxNumInstances);
+	gAssert(pView->pRenderer->GetBatches().GetSize() <= Tweakables::MaxNumInstances);
 	gAssert(numMeshlets <= Tweakables::MaxNumMeshlets);
 #endif
 

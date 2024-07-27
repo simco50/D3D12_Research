@@ -264,7 +264,7 @@ void RayGen()
 	pixel += lerp(-0.5f.xx, 0.5f.xx, offset);
 
 	pixel = (((pixel + 0.5f) / resolution) * 2.0f - 1.0f);
-	RayDesc ray = GeneratePinholeCameraRay(pixel, cView.ViewInverse, cView.Projection);
+	RayDesc ray = GeneratePinholeCameraRay(pixel, cView.ViewToWorld, cView.ViewToClip);
 
 	float3 radiance = 0;
 	float3 throughput = 1;
