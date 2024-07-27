@@ -37,7 +37,7 @@ void AccelerationStructure::Build(CommandContext& context, const RenderView& vie
 	{
 		PROFILE_GPU_SCOPE(context.GetCommandList(), "Build Acceleration Structures");
 
-		ID3D12GraphicsCommandList4* pCmd = context.GetCommandList();
+		ID3D12GraphicsCommandListX* pCmd = context.GetCommandList();
 
 		uint32 numBLASBuiltVertices = 0;
 		uint32 numBuiltBLAS = 0;

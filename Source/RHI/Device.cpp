@@ -570,7 +570,7 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 
 	D3D12_RESOURCE_DESC resourceDesc = GetResourceDesc(desc);
 
-	ID3D12Resource* pResource;
+	ID3D12ResourceX* pResource;
 	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 
 	if (pHeap)
@@ -654,7 +654,7 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 	return pTexture;
 }
 
-Ref<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index)
+Ref<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12ResourceX* pSwapchainResource, uint32 index)
 {
 	D3D12_RESOURCE_DESC resourceDesc = pSwapchainResource->GetDesc();
 	TextureDesc desc{
@@ -716,7 +716,7 @@ Ref<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHe
 		initialState = D3D12_RESOURCE_STATE_COMMON;
 	}
 
-	ID3D12Resource* pResource;
+	ID3D12ResourceX* pResource;
 	D3D12_HEAP_PROPERTIES properties = CD3DX12_HEAP_PROPERTIES(heapType);
 
 	if (pHeap)
@@ -1265,7 +1265,7 @@ void SwapChain::OnResizeOrMove(uint32 width, uint32 height)
 		//Recreate the render target views
 		for (uint32 i = 0; i < (uint32)m_Backbuffers.size(); ++i)
 		{
-			ID3D12Resource* pResource = nullptr;
+			ID3D12ResourceX* pResource = nullptr;
 			VERIFY_HR(m_pSwapchain->GetBuffer(i, IID_PPV_ARGS(&pResource)));
 			m_Backbuffers[i] = GetParent()->CreateTextureForSwapchain(pResource, i);
 		}

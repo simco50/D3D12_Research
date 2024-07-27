@@ -62,7 +62,7 @@ private:
 class DeviceResource : public DeviceObject
 {
 public:
-	DeviceResource(GraphicsDevice* pParent, ID3D12Resource* pResource);
+	DeviceResource(GraphicsDevice* pParent, ID3D12ResourceX* pResource);
 	~DeviceResource();
 
 	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
@@ -72,7 +72,7 @@ public:
 
 	bool UseStateTracking() const { return m_NeedsStateTracking; }
 
-	ID3D12Resource* GetResource() const { return m_pResource; }
+	ID3D12ResourceX* GetResource() const { return m_pResource; }
 	D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
 
 	void SetResourceState(D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES) { m_ResourceState.Set(state, subResource); }
@@ -81,7 +81,7 @@ public:
 protected:
 	String m_Name;
 	bool m_ImmediateDelete = false;
-	ID3D12Resource* m_pResource = nullptr;
+	ID3D12ResourceX* m_pResource = nullptr;
 	ResourceState m_ResourceState;
 	bool m_NeedsStateTracking = false;
 };

@@ -2,7 +2,7 @@
 #include "Buffer.h"
 #include "ResourceViews.h"
 
-Buffer::Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12Resource* pResource)
+Buffer::Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12ResourceX* pResource)
 	: DeviceResource(pParent, pResource), m_Desc(desc)
 {
 }

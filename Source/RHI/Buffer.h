@@ -101,7 +101,7 @@ class Buffer : public DeviceResource
 public:
 	friend class GraphicsDevice;
 
-	Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12Resource* pResource);
+	Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12ResourceX* pResource);
 
 	inline uint64 GetSize() const { return m_Desc.Size; }
 	inline uint32 GetNumElements() const { return m_Desc.NumElements(); }

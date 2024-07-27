@@ -154,7 +154,7 @@ public:
 
 	Ref<Texture> CreateTexture(const TextureDesc& desc, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
 	Ref<Texture> CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
-	Ref<Texture> CreateTextureForSwapchain(ID3D12Resource* pSwapchainResource, uint32 index);
+	Ref<Texture> CreateTextureForSwapchain(ID3D12ResourceX* pSwapchainResource, uint32 index);
 	Ref<Buffer> CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData = nullptr);
 	Ref<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
 	void DeferReleaseObject(ID3D12Object* pObject);
@@ -194,8 +194,8 @@ private:
 
 	GraphicsCapabilities m_Capabilities;
 
-	Ref<IDXGIFactory6> m_pFactory;
-	Ref<ID3D12Device5> m_pDevice;
+	Ref<IDXGIFactoryX> m_pFactory;
+	Ref<ID3D12DeviceX> m_pDevice;
 
 	class DRED
 	{

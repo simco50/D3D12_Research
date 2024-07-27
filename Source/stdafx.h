@@ -6,6 +6,12 @@
 #define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "d3dx12/d3dx12.h"
 
+using ID3D12DeviceX					= ID3D12Device14;
+using ID3D12GraphicsCommandListX	= ID3D12GraphicsCommandList10;
+using ID3D12ResourceX				= ID3D12Resource2;
+
+using IDXGIFactoryX					= IDXGIFactory7;
+
 #include <imgui.h>
 
 #include "Core/CoreTypes.h"

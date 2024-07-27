@@ -3,7 +3,7 @@
 #include "ResourceViews.h"
 #include "Device.h"
 
-DeviceResource::DeviceResource(GraphicsDevice* pParent, ID3D12Resource* pResource)
+DeviceResource::DeviceResource(GraphicsDevice* pParent, ID3D12ResourceX* pResource)
 	: DeviceObject(pParent), m_pResource(pResource)
 {
 }
