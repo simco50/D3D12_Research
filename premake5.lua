@@ -142,6 +142,13 @@ workspace (PROJECT_NAME)
 			editandcontinue "Off"
 		end
 
+		-- Superluminal
+		superluminal_path = "C:/Program Files/Superluminal/Performance/API"
+		if os.isdir(superluminal_path) then
+			includedirs (superluminal_path .. "/include")
+			defines ("SUPERLUMINAL_PATH=L\"" .. superluminal_path .. "/dll/x64/PerformanceAPI.dll\"")
+		end
+
 		compileThirdPartyLibrary("ankerl")
 		compileThirdPartyLibrary("cgltf")
 		compileThirdPartyLibrary("EnTT")

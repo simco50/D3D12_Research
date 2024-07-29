@@ -25,7 +25,6 @@
 
 #ifdef LIVE_PP_PATH
 #include "LPP_API_x64_CPP.h"
-#define LIVE_PP() LivePPAgent livePP;
 struct LivePPAgent
 {
 	LivePPAgent()
@@ -51,16 +50,33 @@ struct LivePPAgent
 
 	lpp::LppDefaultAgent Agent;
 };
-#else
-#define LIVE_PP()
+static LivePPAgent sLivePPAgent;
+#endif
+
+#ifdef SUPERLUMINAL_PATH
+#include "Superluminal/PerformanceAPI_capi.h"
+#include "Superluminal/PerformanceAPI_loader.h"
+struct SuperluminalAPI
+{
+	SuperluminalAPI()
+	{
+		Module = PerformanceAPI_LoadFrom(SUPERLUMINAL_PATH, &Functions);
+	}
+	~SuperluminalAPI()
+	{
+		PerformanceAPI_Free(&Module);
+	}
+
+	PerformanceAPI_ModuleHandle Module;
+	PerformanceAPI_Functions Functions;
+};
+static SuperluminalAPI sSuperluminal;
 #endif
 
 
 
 int App::Run()
 {
-	LIVE_PP();
-
 	Init_Internal();
 	while (m_Window.PollMessages())
 	{
@@ -82,12 +98,26 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 
 	gCPUProfiler.Initialize(frameHistory, maxEvents);
 
-#if ENABLE_PIX
 	CPUProfilerCallbacks cpuCallbacks;
-	cpuCallbacks.OnEventBegin = [](const char* pName, void*) { ::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName)); };
-	cpuCallbacks.OnEventEnd = [](void*) { ::PIXEndEvent(); };
-	gCPUProfiler.SetEventCallback(cpuCallbacks);
+	cpuCallbacks.OnEventBegin = [](const char* pName, void*)
+		{
+#if ENABLE_PIX
+			::PIXBeginEvent(0, MULTIBYTE_TO_UNICODE(pName));
 #endif
+#ifdef SUPERLUMINAL_PATH
+			sSuperluminal.Functions.BeginEvent(pName, nullptr, 0xFFFFFFFF);
+#endif
+		};
+	cpuCallbacks.OnEventEnd = [](void*)
+		{
+#if ENABLE_PIX
+			::PIXEndEvent();
+#endif
+#ifdef SUPERLUMINAL_PATH
+			sSuperluminal.Functions.EndEvent();
+#endif
+		};
+	gCPUProfiler.SetEventCallback(cpuCallbacks);
 
 	ID3D12CommandQueue* pQueues[] =
 	{
