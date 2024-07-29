@@ -104,6 +104,9 @@ static void BuildMeshData(MeshData& meshData)
 
 		// Encode triangles and get rid of 4 byte padding
 		unsigned char* pSourceTriangles = meshletTriangles.data() + meshlet.triangle_offset;
+
+		meshopt_optimizeMeshlet(&meshData.MeshletVertices[meshlet.vertex_offset], pSourceTriangles, meshlet.triangle_count, meshlet.vertex_count);
+
 		for (uint32 triIdx = 0; triIdx < meshlet.triangle_count; ++triIdx)
 		{
 			ShaderInterop::Meshlet::Triangle& tri = meshData.MeshletTriangles[triIdx + triangleOffset];

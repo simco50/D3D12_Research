@@ -51,6 +51,18 @@
     {
       "Id": "19524aa9-eb3e-4cf0-9936-ef814e45c7d6",
       "Command": "-noconsole"
+    },
+    {
+      "Id": "6a98ac2e-dfe5-4141-b5d2-4c967b22e595",
+      "Command": "-scene=\"D:\\Repositories\\glTF-Sample-Models\\2.0\\CesiumMan\\glTF\\CesiumMan.gltf\""
+    },
+    {
+      "Id": "8223f7ec-150b-4a2d-9bf4-18c8bd3065a6",
+      "Command": "-scene=\"D:\\Data\\Downloads\\geometry_panic__factory\\export\\scene.gltf\""
+    },
+    {
+      "Id": "d2261885-2845-41b1-a3e4-94e7a33f75b5",
+      "Command": "-scene=\"D:\\References\\ldraw\\10270_bookstore_v2.ldr\""
     }
   ]
 }
