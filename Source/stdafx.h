@@ -11,6 +11,7 @@ using ID3D12GraphicsCommandListX	= ID3D12GraphicsCommandList10;
 using ID3D12ResourceX				= ID3D12Resource2;
 
 using IDXGIFactoryX					= IDXGIFactory7;
+using IDXGISwapChainX				= IDXGISwapChain4;
 
 #include <imgui.h>
 

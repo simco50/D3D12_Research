@@ -149,7 +149,7 @@ void Renderer::Shutdown()
 	DebugRenderer::Get()->Shutdown();
 }
 
-void Renderer::Render(Texture* pTarget)
+void Renderer::Render(const Camera& camera, Texture* pTarget)
 {
 	uint32 w = pTarget->GetWidth();
 	uint32 h = pTarget->GetHeight();
@@ -204,9 +204,6 @@ void Renderer::Render(Texture* pTarget)
 				DebugRenderer::Get()->AddSphere(b.Bounds.Center, b.Radius, 5, 5, Color(0.2f, 0.6f, 0.2f, 1.0f));
 			}
 		}
-
-		Camera& camera = m_pWorld->GetComponent<FreeCamera>(m_pWorld->Camera);
-		camera.Update();
 
 		bool jitter = Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing;
 		camera.ApplyViewTransform(m_MainView, jitter);

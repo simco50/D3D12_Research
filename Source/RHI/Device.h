@@ -69,7 +69,7 @@ public:
 	bool DisplaySupportsHDR() const;
 
 	Vector2i GetViewport() const;
-	IDXGISwapChain4* GetSwapChain() const { return m_pSwapchain.Get(); }
+	IDXGISwapChainX* GetSwapChain() const { return m_pSwapchain.Get(); }
 	Texture* GetBackBuffer() const { return m_Backbuffers[m_CurrentImage]; }
 	Texture* GetBackBuffer(uint32 index) const { return m_Backbuffers[index]; }
 	uint32 GetBackbufferIndex() const { return m_CurrentImage; }
@@ -83,7 +83,7 @@ private:
 	DisplayMode m_DesiredDisplayMode;
 	Ref<Fence> m_pPresentFence;
 	Array<Ref<Texture>> m_Backbuffers;
-	Ref<IDXGISwapChain4> m_pSwapchain;
+	Ref<IDXGISwapChainX> m_pSwapchain;
 	ResourceFormat m_Format;
 	uint32 m_CurrentImage;
 	uint32 m_Width = 0;

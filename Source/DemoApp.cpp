@@ -38,6 +38,9 @@ void DemoApp::Update()
 {
 	DrawImGui();
 
+	Camera& camera = m_World.GetComponent<FreeCamera>(m_World.Camera);
+	camera.Update();
+
 	{
 		PROFILE_CPU_SCOPE("Update Entity Transforms");
 		auto view = m_World.Registry.view<Transform>();
@@ -52,7 +55,7 @@ void DemoApp::Update()
 
 	if (m_pViewportTexture)
 	{
-		m_Renderer.Render(m_pViewportTexture);
+		m_Renderer.Render(camera, m_pViewportTexture);
 
 		if (sScreenshotNextFrame)
 		{
