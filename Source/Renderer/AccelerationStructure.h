@@ -20,7 +20,6 @@ public:
 private:
 	void ProcessCompaction(CommandContext& context);
 
-	Ref<RootSignature> m_pCommonRS;
 	Ref<PipelineState> m_pUpdateTLASPSO;
 
 	Ref<Buffer> m_pTLAS;

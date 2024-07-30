@@ -18,14 +18,7 @@ AccelerationStructure::~AccelerationStructure() = default;
 
 void AccelerationStructure::Init(GraphicsDevice* pDevice)
 {
-	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddRootConstants(0, 1, ShaderBindingSpace::Default);
-	m_pCommonRS->AddRootCBV(0, ShaderBindingSpace::View);
-	m_pCommonRS->AddRootUAV(0, ShaderBindingSpace::Default);
-	m_pCommonRS->AddRootSRV(0, ShaderBindingSpace::Default);
-	m_pCommonRS->Finalize("Update TLAS");
-
-	m_pUpdateTLASPSO = pDevice->CreateComputePipeline(m_pCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
+	m_pUpdateTLASPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
 }
 
 void AccelerationStructure::Build(CommandContext& context, const RenderView& view, Span<const Batch> batches)
@@ -176,7 +169,7 @@ void AccelerationStructure::Build(CommandContext& context, const RenderView& vie
 			uint32 numInstances = Math::AlignUp(Math::Max(1u, (uint32)blasInstances.size()), 128u);
 			if (!m_pBLASInstancesSourceBuffer || m_pBLASInstancesSourceBuffer->GetNumElements() < numInstances)
 			{
-				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::UnorderedAccess), "TLAS.BLASInstanceSourceDescs");
+				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::ShaderResource), "TLAS.BLASInstanceSourceDescs");
 				m_pBLASInstancesTargetBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::UnorderedAccess), "TLAS.BLASInstanceTargetDescs");
 			}
 
@@ -191,12 +184,12 @@ void AccelerationStructure::Build(CommandContext& context, const RenderView& vie
 				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pUpdateTLASPSO);
 				context.BindRootCBV(0, (uint32)blasInstances.size());
 				context.BindRootCBV(1, view.ViewCB);
-				context.BindRootUAV(2, m_pBLASInstancesTargetBuffer->GetGpuHandle());
-				context.BindRootSRV(3, m_pBLASInstancesSourceBuffer->GetGpuHandle());
+				context.BindResources(2, m_pBLASInstancesTargetBuffer->GetUAV());
+				context.BindResources(3, m_pBLASInstancesSourceBuffer->GetSRV());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
 			}
 		}
