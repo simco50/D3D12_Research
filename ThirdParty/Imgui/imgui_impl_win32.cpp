@@ -17,30 +17,13 @@
 // - Documentation        https://dearimgui.com/docs (same as your local docs/ folder).
 // - Introduction, links and more at the top of imgui.cpp
 
-#include "imgui.h"
-#ifndef IMGUI_DISABLE
-#include "imgui_impl_win32.h"
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#include <windowsx.h> // GET_X_LPARAM(), GET_Y_LPARAM()
-#include <tchar.h>
-#include <dwmapi.h>
-
-// Configuration flags to add in your imconfig.h file:
+// Configuration flags to add in your imconfig file:
 //#define IMGUI_IMPL_WIN32_DISABLE_GAMEPAD              // Disable gamepad support. This was meaningful before <1.81 but we now load XInput dynamically so the option is now less relevant.
-
-// Using XInput for gamepad (will load DLL dynamically)
-#ifndef IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
-#include <xinput.h>
-typedef DWORD (WINAPI *PFN_XInputGetCapabilities)(DWORD, DWORD, XINPUT_CAPABILITIES*);
-typedef DWORD (WINAPI *PFN_XInputGetState)(DWORD, XINPUT_STATE*);
-#endif
 
 // CHANGELOG
 // (minor and older changes stripped away, please see git history for details)
 //  2024-XX-XX: Platform: Added support for multiple windows via the ImGuiPlatformIO interface.
+//  2024-07-08: Inputs: Fixed ImGuiMod_Super being mapped to VK_APPS instead of VK_LWIN||VK_RWIN. (#7768)
 //  2023-10-05: Inputs: Added support for extra ImGuiKey values: F13 to F24 function keys, app back/forward keys.
 //  2023-09-25: Inputs: Synthesize key-down event on key-up for VK_SNAPSHOT / ImGuiKey_PrintScreen as Windows doesn't emit it (same behavior as GLFW/SDL).
 //  2023-09-07: Inputs: Added support for keyboard codepage conversion for when application is compiled in MBCS mode and using a non-Unicode window.
@@ -93,8 +76,37 @@ typedef DWORD (WINAPI *PFN_XInputGetState)(DWORD, XINPUT_STATE*);
 //  2017-10-23: Inputs: Using Win32 ::SetCapture/::GetCapture() to retrieve mouse positions outside the client area when dragging.
 //  2016-11-12: Inputs: Only call Win32 ::SetCursor(nullptr) when io.MouseDrawCursor is set.
 
+#include "imgui.h"
+#ifndef IMGUI_DISABLE
+#include "imgui_impl_win32.h"
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <windowsx.h> // GET_X_LPARAM(), GET_Y_LPARAM()
+#include <tchar.h>
+#include <dwmapi.h>
+
+// Using XInput for gamepad (will load DLL dynamically)
+#ifndef IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
+#include <xinput.h>
+typedef DWORD(WINAPI* PFN_XInputGetCapabilities)(DWORD, DWORD, XINPUT_CAPABILITIES*);
+typedef DWORD(WINAPI* PFN_XInputGetState)(DWORD, XINPUT_STATE*);
+#endif
+
+// Clang/GCC warnings with -Weverything
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-function-type"     // warning: cast between incompatible function types (for loader)
+#endif
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"                  // warning: unknown option after '#pragma GCC diagnostic' kind
+#pragma GCC diagnostic ignored "-Wcast-function-type"       // warning: cast between incompatible function types (for loader)
+#endif
+
 // Forward Declarations
-static void ImGui_ImplWin32_InitPlatformInterface(bool platformHasOwnDC);
+static void ImGui_ImplWin32_InitPlatformInterface(bool platform_has_own_dc);
 static void ImGui_ImplWin32_ShutdownPlatformInterface();
 static void ImGui_ImplWin32_UpdateMonitors();
 
@@ -144,6 +156,7 @@ static void ImGui_ImplWin32_UpdateKeyboardCodePage()
 static bool ImGui_ImplWin32_InitEx(void* hwnd, bool platform_has_own_dc)
 {
     ImGuiIO& io = ImGui::GetIO();
+    IMGUI_CHECKVERSION();
     IM_ASSERT(io.BackendPlatformUserData == nullptr && "Already initialized a platform backend!");
 
     INT64 perf_frequency, perf_counter;
@@ -296,7 +309,7 @@ static void ImGui_ImplWin32_UpdateKeyModifiers()
     io.AddKeyEvent(ImGuiMod_Ctrl, IsVkDown(VK_CONTROL));
     io.AddKeyEvent(ImGuiMod_Shift, IsVkDown(VK_SHIFT));
     io.AddKeyEvent(ImGuiMod_Alt, IsVkDown(VK_MENU));
-    io.AddKeyEvent(ImGuiMod_Super, IsVkDown(VK_APPS));
+    io.AddKeyEvent(ImGuiMod_Super, IsVkDown(VK_LWIN) || IsVkDown(VK_RWIN));
 }
 
 // This code supports multi-viewports (multiple OS Windows mapped into different Dear ImGui viewports)
@@ -442,9 +455,9 @@ static void ImGui_ImplWin32_UpdateMonitors()
 
 void    ImGui_ImplWin32_NewFrame()
 {
-    ImGuiIO& io = ImGui::GetIO();
     ImGui_ImplWin32_Data* bd = ImGui_ImplWin32_GetBackendData();
-    IM_ASSERT(bd != nullptr && "Did you call ImGui_ImplWin32_Init()?");
+    IM_ASSERT(bd != nullptr && "Context or backend not initialized? Did you call ImGui_ImplWin32_Init()?");
+    ImGuiIO& io = ImGui::GetIO();
 
     // Setup display size (every frame to accommodate for window resizing)
     RECT rect = { 0, 0, 0, 0 };
@@ -642,11 +655,12 @@ static ImGuiMouseSource GetMouseSourceFromMessageExtraInfo()
 
 IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    if (ImGui::GetCurrentContext() == nullptr)
-        return 0;
-
-    ImGuiIO& io = ImGui::GetIO();
+    // Most backends don't have silent checks like this one, but we need it because WndProc are called early in CreateWindow().
+    // We silently allow both context or just only backend data to be nullptr.
     ImGui_ImplWin32_Data* bd = ImGui_ImplWin32_GetBackendData();
+    if (bd == nullptr)
+        return 0;
+    ImGuiIO& io = ImGui::GetIO();
 
     switch (msg)
     {
@@ -674,7 +688,7 @@ IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARA
             ::ScreenToClient(hwnd, &mouse_pos);
         io.AddMouseSourceEvent(mouse_source);
         io.AddMousePosEvent((float)mouse_pos.x, (float)mouse_pos.y);
-        break;
+        return 0;
     }
     case WM_MOUSELEAVE:
     case WM_NCMOUSELEAVE:
@@ -687,7 +701,7 @@ IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hwnd, UINT msg, WPARA
             bd->MouseTrackedArea = 0;
             io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
         }
-        break;
+        return 0;
     }
     case WM_LBUTTONDOWN: case WM_LBUTTONDBLCLK:
     case WM_RBUTTONDOWN: case WM_RBUTTONDBLCLK:
@@ -1042,6 +1056,9 @@ static void ImGui_ImplWin32_CreateWindow(ImGuiViewport* viewport)
     vd->HwndOwned = true;
     viewport->PlatformRequestResize = false;
     viewport->PlatformHandle = viewport->PlatformHandleRaw = vd->Hwnd;
+
+    // Secondary viewports store their imgui context
+    ::SetPropA(vd->Hwnd, "IMGUI_CONTEXT", ImGui::GetCurrentContext());
 }
 
 static void ImGui_ImplWin32_DestroyWindow(ImGuiViewport* viewport)
@@ -1244,16 +1261,22 @@ static void ImGui_ImplWin32_OnChangedViewport(ImGuiViewport* viewport)
 
 static LRESULT CALLBACK ImGui_ImplWin32_WndProcHandler_PlatformWindow(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
-        return true;
+    // Allow secondary viewport WndProc to be called regardless of current context
+    ImGuiContext* hwnd_ctx = (ImGuiContext*)::GetPropA(hWnd, "IMGUI_CONTEXT");
+    ImGuiContext* prev_ctx = ImGui::GetCurrentContext();
+    if (hwnd_ctx != prev_ctx && hwnd_ctx != NULL)
+        ImGui::SetCurrentContext(hwnd_ctx);
 
-    if (ImGuiViewport* viewport = ImGui::FindViewportByPlatformHandle((void*)hWnd))
+    LRESULT result = 0;
+    if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
+        result = true;
+    else if (ImGuiViewport* viewport = ImGui::FindViewportByPlatformHandle((void*)hWnd))
     {
         switch (msg)
         {
         case WM_CLOSE:
             viewport->PlatformRequestClose = true;
-            return 0;
+            break;
         case WM_MOVE:
             viewport->PlatformRequestMove = true;
             break;
@@ -1262,7 +1285,7 @@ static LRESULT CALLBACK ImGui_ImplWin32_WndProcHandler_PlatformWindow(HWND hWnd,
             break;
         case WM_MOUSEACTIVATE:
             if (viewport->Flags & ImGuiViewportFlags_NoFocusOnClick)
-                return MA_NOACTIVATE;
+                result = MA_NOACTIVATE;
             break;
         case WM_NCHITTEST:
             // Let mouse pass-through the window. This will allow the backend to call io.AddMouseViewportEvent() correctly. (which is optional).
@@ -1270,12 +1293,15 @@ static LRESULT CALLBACK ImGui_ImplWin32_WndProcHandler_PlatformWindow(HWND hWnd,
             // If you cannot easily access those viewport flags from your windowing/event code: you may manually synchronize its state e.g. in
             // your main loop after calling UpdatePlatformWindows(). Iterate all viewports/platform windows and pass the flag to your windowing system.
             if (viewport->Flags & ImGuiViewportFlags_NoInputs)
-                return HTTRANSPARENT;
+                result = HTTRANSPARENT;
             break;
         }
     }
-
-    return DefWindowProc(hWnd, msg, wParam, lParam);
+    if (result == 0)
+        result = DefWindowProc(hWnd, msg, wParam, lParam);
+    if (hwnd_ctx != prev_ctx && hwnd_ctx != NULL)
+        ImGui::SetCurrentContext(prev_ctx);
+    return result;
 }
 
 static void ImGui_ImplWin32_InitPlatformInterface(bool platform_has_own_dc)
@@ -1333,5 +1359,12 @@ static void ImGui_ImplWin32_ShutdownPlatformInterface()
 }
 
 //---------------------------------------------------------------------------------------------------------
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 #endif // #ifndef IMGUI_DISABLE

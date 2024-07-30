@@ -135,15 +135,20 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 		if (ImGui::BeginTable("Resource Tracker", (int)m_Passes.size() + 1, ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImGui::GetContentRegionAvail()))
 		{
+			Array<ImGuiTableHeaderData> tableHeaderData(m_Passes.size() + 1);
 			float column_width = 20.0f;
 			ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthFixed, 250.0f);
-			for (const RGPass* pPass : m_Passes)
+			ImU32 col_header_bg = ImGui::GetColorU32(ImGuiCol_TableHeaderBg);
+			ImU32 col_text = ImGui::GetColorU32(ImGuiCol_Text);
+			for(uint32 i = 0; i < (uint32)m_Passes.size(); ++i)
 			{
+				const RGPass* pPass = m_Passes[i];
 				ImGui::TableSetupColumn(pPass->GetName(), ImGuiTableColumnFlags_AngledHeader | ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoClip, column_width);
+				tableHeaderData[i + 1] = { (ImGuiTableColumnIdx)i, col_text, col_header_bg, 0 };
 			}
 			ImGui::TableSetupScrollFreeze(1, 3);
 
-			ImGui::TableAngledHeadersRowEx(40.0f * Math::DegreesToRadians, 180);
+			ImGui::TableAngledHeadersRowEx(ImGui::GetID("##AngledHeaders"), Math::DegreesToRadians * 40, 200, tableHeaderData.data(), (uint32)tableHeaderData.size());
 
 			// Event bars
 			const float row_height = ImGui::GetTextLineHeight();

@@ -277,7 +277,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 					ImRect minRangeHandleBB(ImVec2(minRangePosX - triangleSize, item_bb.Min.y), ImVec2(minRangePosX + triangleSize, item_bb.Min.y + triangleSize * 2));
 					ImGui::ItemAdd(minRangeHandleBB, minRangeHandleID);
 					const bool hovered = ImGui::ItemHoverable(minRangeHandleBB, minRangeHandleID, ImGuiItemFlags_None);
-					const bool clicked = hovered && ImGui::IsMouseClicked(0, minRangeHandleID);
+					const bool clicked = hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left, ImGuiInputFlags_None, minRangeHandleID);
 					if (clicked || g.NavActivateId == minRangeHandleID)
 					{
 						if (clicked)
@@ -297,7 +297,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 					ImRect maxRangeHandleBB(ImVec2(maxRangePosX - triangleSize, item_bb.Max.y - triangleSize * 2), ImVec2(maxRangePosX + triangleSize, item_bb.Max.y));
 					ImGui::ItemAdd(maxRangeHandleBB, maxRangeHandleID);
 					const bool hovered = ImGui::ItemHoverable(maxRangeHandleBB, maxRangeHandleID, ImGuiItemFlags_None);
-					const bool clicked = hovered && ImGui::IsMouseClicked(0, maxRangeHandleID);
+					const bool clicked = hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left, ImGuiInputFlags_None, maxRangeHandleID);
 					if (clicked || g.NavActivateId == maxRangeHandleID)
 					{
 						if (clicked)

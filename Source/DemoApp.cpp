@@ -168,7 +168,7 @@ void DemoApp::DrawImGui()
 		showProfiler = !showProfiler;
 
 	ImGuiViewport* pViewport = ImGui::GetMainViewport();
-	ImGuiID dockspace = ImGui::DockSpaceOverViewport(pViewport);
+	ImGuiID dockspace = ImGui::DockSpaceOverViewport(ImGui::GetID("Dockspace"), pViewport);
 
 	if (!ImGui::FindWindowSettingsByID(ImHashStr("ViewportSettings")))
 	{

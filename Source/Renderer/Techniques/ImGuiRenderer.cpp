@@ -110,9 +110,9 @@ void ApplyImGuiStyle()
 	colors[ImGuiCol_ResizeGripActive] =				ImVec4(1.00f, 1.00f, 1.00f, 0.95f);
 	colors[ImGuiCol_Tab] =							ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
 	colors[ImGuiCol_TabHovered] =					ImVec4(0.37f, 0.37f, 0.37f, 0.80f);
-	colors[ImGuiCol_TabActive] =					ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-	colors[ImGuiCol_TabUnfocused] =					ImVec4(0.11f, 0.15f, 0.17f, 1.00f);
-	colors[ImGuiCol_TabUnfocusedActive] =			ImVec4(0.11f, 0.15f, 0.17f, 1.00f);
+	colors[ImGuiCol_TabSelected] =					ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
+	colors[ImGuiCol_TabDimmed] =					ImVec4(0.11f, 0.15f, 0.17f, 1.00f);
+	colors[ImGuiCol_TabDimmedSelected] =			ImVec4(0.11f, 0.15f, 0.17f, 1.00f);
 	colors[ImGuiCol_DockingPreview] =				ImVec4(0.26f, 0.59f, 0.98f, 0.70f);
 	colors[ImGuiCol_DockingEmptyBg] =				ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
 	colors[ImGuiCol_PlotLines] =					ImVec4(0.73f, 0.29f, 0.29f, 1.00f);
