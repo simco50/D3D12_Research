@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "RenderGraph.h"
 #include "Core/Stream.h"
-#include "Renderer/Techniques/ImGuiRenderer.h"
 #include "Core/Profiler.h"
 
 #include <imgui_internal.h>
