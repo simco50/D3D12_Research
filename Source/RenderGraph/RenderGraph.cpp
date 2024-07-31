@@ -466,12 +466,12 @@ void RGGraph::ExecutePass(const RGPass* pPass, CommandContext& context) const
 	for (RGEventID eventIndex : pPass->EventsToStart)
 	{
 		const RGEvent& event = m_Events[eventIndex.GetIndex()];
-		gGPUProfiler.BeginEvent(context.GetCommandList(), event.pName, event.pFilePath, event.LineNumber);
+		gGPUProfiler.BeginEvent(context.GetCommandList(), event.pName, 0, event.pFilePath, event.LineNumber);
 	}
 	for (RGEventID eventIndex : pPass->CPUEventsToStart)
 	{
 		const RGEvent& event = m_Events[eventIndex.GetIndex()];
-		gCPUProfiler.BeginEvent(event.pName, event.pFilePath, event.LineNumber);
+		gCPUProfiler.BeginEvent(event.pName, 0, event.pFilePath, event.LineNumber);
 	}
 
 	{

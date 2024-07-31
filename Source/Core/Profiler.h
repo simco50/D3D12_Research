@@ -176,23 +176,25 @@ public:
 		const char* pFilePath	= nullptr;	// File path of location where event was started
 		uint64		TicksBegin	= 0;		// Begin CPU ticks
 		uint64		TicksEnd	= 0;		// End CPU ticks
-		uint32		LineNumber	: 16;		// Line number of file where event was started
+		uint32		Color		: 24;		// Color
 		uint32		Depth		: 8;		// Stack depth of event
+		uint32		LineNumber	: 16;		// Line number of file where event was started
 		uint32		ThreadIndex : 8;		// Index of thread this event is started on
 		uint32		QueueIndex	: 8;		// GPU Queue Index (GPU-specific)
-		uint32					: 24;		// Padding
+
+		uint32 GetColor() const { return Color | (0xFF << 24); }
 	};
 
-	Span<const Event> GetEvents() const { return Span<const Event>(Events.data(), NumEvents); }
-	Span<const Event> GetEvents(uint32 groupIndex) const { return groupIndex < GroupedEvents.size() ? GroupedEvents[groupIndex] : Span<const Event>(); }
+	Span<const Event> GetEvents() const						{ return Span<const Event>(Events.data(), NumEvents); }
+	Span<const Event> GetEvents(uint32 trackIndex) const	{ return trackIndex < EventsPerTrack.size() ? EventsPerTrack[trackIndex] : Span<const Event>(); }
 
 private:
 	friend class CPUProfiler;
 	friend class GPUProfiler;
 
 	LinearAllocator					Allocator;			// Scratch allocator for frame
-	Array<Span<const Event>>	GroupedEvents;		// Span of events for each group
-	Array<Event>				Events;				// Event storage for frame
+	Array<Span<const Event>>		EventsPerTrack;		// Span of events for each track
+	Array<Event>					Events;				// Event storage for frame
 	uint32							NumEvents = 0;		// Total number of recorded events
 };
 
@@ -229,7 +231,10 @@ public:
 	void Shutdown();
 
 	// Allocate and record a GPU event on the commandlist
-	void BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName, const char* pFilePath = "", uint32 lineNumber = 0);
+	void BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName, uint32 color, const char* pFilePath, uint32 lineNumber);
+
+	// Allocate and record a GPU event on the commandlist
+	void BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName, uint32 color = 0) { BeginEvent(pCmd, pName, color, "", 0); }
 
 	// Record a GPU event end on the commandlist
 	void EndEvent(ID3D12GraphicsCommandList* pCmd);
@@ -320,7 +325,7 @@ private:
 		ID3D12QueryHeap* GetHeap() const	{ return m_pQueryHeap; }
 
 	private:
-		Array<ID3D12CommandAllocator*>	m_CommandAllocators;				// CommandAlloctors to resolve queries. 1 per frame
+		Array<ID3D12CommandAllocator*>			m_CommandAllocators;				// CommandAlloctors to resolve queries. 1 per frame
 		uint32									m_MaxNumQueries			= 0;		// Max number of event queries
 		uint32									m_FrameLatency			= 0;		// Number of GPU frame latency
 		std::atomic<uint32>						m_QueryIndex			= 0;		// Current index of queries
@@ -406,8 +411,8 @@ private:
 		}
 
 	private:
-		SRWLOCK											m_CommandListMapLock{};
-		HashMap<ID3D12CommandList*, uint32>	m_CommandListMap;
+		SRWLOCK									m_CommandListMapLock{};
+		HashMap<ID3D12CommandList*, uint32>		m_CommandListMap;
 		Array<Data>								m_CommandListData;
 	};
 
@@ -421,14 +426,14 @@ private:
 
 	CommandListData				m_CommandListData{};
 
-	ProfilerEventData* m_pEventData = nullptr;		// Data containing all resulting events. 1 per frame history
-	uint32						m_EventHistorySize = 0;			// Number of frames to keep track of
+	ProfilerEventData*			m_pEventData = nullptr;		// Data containing all resulting events. 1 per frame history
+	uint32						m_EventHistorySize = 0;		// Number of frames to keep track of
 	std::atomic<uint32>			m_EventIndex = 0;			// Current event index
 
-	QueryData* m_pQueryData = nullptr;		// Data containing all intermediate query event data. 1 per frame latency
+	QueryData*					m_pQueryData = nullptr;		// Data containing all intermediate query event data. 1 per frame latency
 	uint32						m_FrameLatency = 0;			// Max number of in-flight GPU frames
 
-	uint32						m_FrameToReadback = 0;			// Next frame to readback from
+	uint32						m_FrameToReadback = 0;		// Next frame to readback from
 	uint32						m_FrameIndex = 0;			// Current frame index
 
 	QueryHeap					m_MainHeap;
@@ -437,10 +442,10 @@ private:
 
 	static constexpr uint32 MAX_EVENT_DEPTH = 32;
 	using ActiveEventStack = FixedStack<uint32, MAX_EVENT_DEPTH>;
-	Array<ActiveEventStack>						m_QueueEventStack;	// Stack of active events for each command queue
+	Array<ActiveEventStack>							m_QueueEventStack;	// Stack of active events for each command queue
 	Array<QueueInfo>								m_Queues;			// All registered queues
-	HashMap<ID3D12CommandQueue*, uint32>		m_QueueIndexMap;	// Map from command queue to index
-	GPUProfilerCallbacks								m_EventCallback;
+	HashMap<ID3D12CommandQueue*, uint32>			m_QueueIndexMap;	// Map from command queue to index
+	GPUProfilerCallbacks							m_EventCallback;
 
 	bool						m_IsInitialized			= false;
 	bool						m_IsPaused				= false;
@@ -454,13 +459,13 @@ struct GPUProfileScope
 	GPUProfileScope(const char* pFunction, const char* pFilePath, uint32 lineNumber, ID3D12GraphicsCommandList* pCmd, const char* pName)
 		: pCmd(pCmd)
 	{
-		gGPUProfiler.BeginEvent(pCmd, pName, pFilePath, lineNumber);
+		gGPUProfiler.BeginEvent(pCmd, pName, 0, pFilePath, lineNumber);
 	}
 
 	GPUProfileScope(const char* pFunction, const char* pFilePath, uint32 lineNumber, ID3D12GraphicsCommandList* pCmd)
 		: pCmd(pCmd)
 	{
-		gGPUProfiler.BeginEvent(pCmd, pFunction, pFilePath, lineNumber);
+		gGPUProfiler.BeginEvent(pCmd, pFunction, 0, pFilePath, lineNumber);
 	}
 
 	~GPUProfileScope()
@@ -503,7 +508,10 @@ public:
 	void Shutdown();
 
 	// Start and push an event on the current thread
-	void BeginEvent(const char* pName, const char* pFilePath = nullptr, uint32 lineNumber = 0);
+	void BeginEvent(const char* pName, uint32 color, const char* pFilePath, uint32 lineNumber);
+
+	// Start and push an event on the current thread
+	void BeginEvent(const char* pName, uint32 color = 0) { BeginEvent(pName, color, "", 0); }
 
 	// End and pop the last pushed event on the current thread
 	void EndEvent();
@@ -578,7 +586,7 @@ private:
 	CPUProfilerCallbacks m_EventCallback;
 
 	std::mutex				m_ThreadDataLock;				// Mutex for accesing thread data
-	Array<ThreadData> m_ThreadData;					// Data describing each registered thread
+	Array<ThreadData>		m_ThreadData;					// Data describing each registered thread
 
 	ProfilerEventData*		m_pEventData		= nullptr;	// Per-frame data
 	uint32					m_HistorySize		= 0;		// History size
@@ -595,12 +603,12 @@ struct CPUProfileScope
 {
 	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName)
 	{
-		gCPUProfiler.BeginEvent(pName, pFilePath, lineNumber);
+		gCPUProfiler.BeginEvent(pName, 0, pFilePath, lineNumber);
 	}
 
 	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber)
 	{
-		gCPUProfiler.BeginEvent(pFunctionName, pFilePath, lineNumber);
+		gCPUProfiler.BeginEvent(pFunctionName, 0, pFilePath, lineNumber);
 	}
 
 	~CPUProfileScope()

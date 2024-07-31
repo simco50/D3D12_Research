@@ -7,6 +7,25 @@
 CPUProfiler gCPUProfiler;
 GPUProfiler gGPUProfiler;
 
+static uint32 ColorFromString(const char* pStr)
+{
+	const float saturation = 0.5f;
+	const float value = 0.6f;
+	float hue = (float)std::hash<std::string>{}(pStr) / std::numeric_limits<size_t>::max();
+	float R = std::max(std::min(fabs(hue * 6 - 3) - 1, 1.0f), 0.0f);
+	float G = std::max(std::min(2 - fabs(hue * 6 - 2), 1.0f), 0.0f);
+	float B = std::max(std::min(2 - fabs(hue * 6 - 4), 1.0f), 0.0f);
+
+	R = ((R - 1) * saturation + 1) * value;
+	G = ((G - 1) * saturation + 1) * value;
+	B = ((B - 1) * saturation + 1) * value;
+
+	return
+		((uint8)roundf(R * 255.0f) << 0) |
+		((uint8)roundf(G * 255.0f) << 8) |
+		((uint8)roundf(B * 255.0f) << 16);
+}
+
 //-----------------------------------------------------------------------------
 // [SECTION] GPU Profiler
 //-----------------------------------------------------------------------------
@@ -66,7 +85,7 @@ void GPUProfiler::Initialize(
 	{
 		ProfilerEventData& eventData = m_pEventData[i];
 		eventData.Events.resize(maxNumEvents + maxNumCopyEvents);
-		eventData.GroupedEvents.resize(queues.GetSize());
+		eventData.EventsPerTrack.resize(queues.GetSize());
 	}
 
 	m_pQueryData = new QueryData[frameLatency];
@@ -88,8 +107,7 @@ void GPUProfiler::Shutdown()
 	m_MainHeap.Shutdown();
 }
 
-
-void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName, const char* pFilePath, uint32 lineNumber)
+void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName, uint32 color, const char* pFilePath, uint32 lineNumber)
 {
 	if (!m_IsInitialized)
 		return;
@@ -126,6 +144,7 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 	event.pName						= eventData.Allocator.String(pName);
 	event.pFilePath					= pFilePath;
 	event.LineNumber				= lineNumber;
+	event.Color						= color == 0 ? ColorFromString(pName) : color;
 }
 
 
@@ -207,7 +226,7 @@ void GPUProfiler::Tick()
 			while (events[eventRange.End].QueueIndex == queueIndex && eventRange.End < eventData.NumEvents)
 				++eventRange.End;
 
-			eventData.GroupedEvents[queueIndex] = Span<const ProfilerEventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
+			eventData.EventsPerTrack[queueIndex] = Span<const ProfilerEventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
 			eventRange.Begin = eventRange.End;
 		}
 
@@ -235,7 +254,7 @@ void GPUProfiler::Tick()
 		eventFrame.NumEvents = 0;
 		eventFrame.Allocator.Reset();
 		for (uint32 i = 0; i < (uint32)m_Queues.size(); ++i)
-			eventFrame.GroupedEvents[i] = {};
+			eventFrame.EventsPerTrack[i] = {};
 	}
 }
 
@@ -394,7 +413,7 @@ void CPUProfiler::Shutdown()
 }
 
 
-void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint32 lineNumber)
+void CPUProfiler::BeginEvent(const char* pName, uint32 color, const char* pFilePath, uint32 lineNumber)
 {
 	if (!m_IsInitialized)
 		return;
@@ -417,6 +436,7 @@ void CPUProfiler::BeginEvent(const char* pName, const char* pFilePath, uint32 li
 	newEvent.pName = data.Allocator.String(pName);
 	newEvent.pFilePath = pFilePath;
 	newEvent.LineNumber = lineNumber;
+	newEvent.Color = color == 0 ? ColorFromString(pName) : color;
 	QueryPerformanceCounter((LARGE_INTEGER*)(&newEvent.TicksBegin));
 
 	tls.EventStack.Push() = newIndex;
@@ -461,7 +481,7 @@ void CPUProfiler::Tick()
 	ProfilerEventData& data = GetData();
 	data.NumEvents = m_EventIndex;
 	for (uint32 i = 0; i < m_HistorySize; ++i)
-		data.GroupedEvents.resize(m_ThreadData.size());
+		data.EventsPerTrack.resize(m_ThreadData.size());
 
 	// Sort events by thread and make groups per thread for fast per-thread event iteration.
 	// This is _much_ faster than iterating all event multiple times and filtering
@@ -481,7 +501,7 @@ void CPUProfiler::Tick()
 		while (events[eventRange.End].ThreadIndex == threadIndex && eventRange.End < frame.NumEvents)
 			++eventRange.End;
 
-		frame.GroupedEvents[threadIndex] = Span<const ProfilerEventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
+		frame.EventsPerTrack[threadIndex] = Span<const ProfilerEventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
 		eventRange.Begin = eventRange.End;
 	}
 
