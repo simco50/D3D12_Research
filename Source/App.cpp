@@ -92,11 +92,11 @@ int App::Run()
 static void InitializeProfiler(GraphicsDevice* pDevice)
 {
 	const uint32 frameHistory = 8;
-	const uint32 maxEvents = 2048;
-	const uint32 maxCopyEvents = 2048;
-	const uint32 maxActiveCmdLists = 64;
+	const uint32 maxGPUEvents = 2048;
+	const uint32 maxGPUCopyEvents = 2048;
+	const uint32 maxGPUActiveCmdLists = 64;
 
-	gCPUProfiler.Initialize(frameHistory, maxEvents);
+	gCPUProfiler.Initialize(frameHistory);
 
 	CPUProfilerCallbacks cpuCallbacks;
 	cpuCallbacks.OnEventBegin = [](const char* pName, void*)
@@ -125,7 +125,7 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
 		//pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
 	};
-	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, frameHistory, 3, maxEvents, maxCopyEvents, maxActiveCmdLists);
+	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, frameHistory, 3, maxGPUEvents, maxGPUCopyEvents, maxGPUActiveCmdLists);
 
 #if ENABLE_PIX
 	GPUProfilerCallbacks gpuCallbacks;

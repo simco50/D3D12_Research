@@ -186,14 +186,20 @@ public:
 	{}
 
 	Span<const ProfilerEvent> GetEvents() const						{ return Span<const ProfilerEvent>(Events.data(), NumEvents); }
-	Span<const ProfilerEvent> GetEvents(uint32 trackIndex) const	{ return trackIndex < EventsPerTrack.size() ? EventsPerTrack[trackIndex] : Span<const ProfilerEvent>(); }
+	Span<const ProfilerEvent> GetEvents(uint32 trackIndex) const	{ return trackIndex < EventOffsetAndCountPerTrack.size() ? Span<const ProfilerEvent>(&Events[EventOffsetAndCountPerTrack[trackIndex].Offset], EventOffsetAndCountPerTrack[trackIndex].Size) : Span<const ProfilerEvent>(); }
 
 private:
 	friend class CPUProfiler;
 	friend class GPUProfiler;
 
+	struct OffsetAndSize
+	{
+		uint32 Offset;
+		uint32 Size;
+	};
+
 	LinearAllocator						Allocator;			// Scratch allocator for frame
-	Array<Span<const ProfilerEvent>>	EventsPerTrack;		// Span of events for each track
+	Array<OffsetAndSize>				EventOffsetAndCountPerTrack;		// Span of events for each track
 	Array<ProfilerEvent>				Events;				// Event storage for frame
 	uint32								NumEvents = 0;		// Total number of recorded events
 };
@@ -427,15 +433,15 @@ private:
 
 	CommandListData				m_CommandListData{};
 
-	ProfilerEventData*			m_pEventData = nullptr;		// Data containing all resulting events. 1 per frame history
-	uint32						m_EventHistorySize = 0;		// Number of frames to keep track of
-	std::atomic<uint32>			m_EventIndex = 0;			// Current event index
+	ProfilerEventData*			m_pEventData		= nullptr;		// Data containing all resulting events. 1 per frame history
+	uint32						m_EventHistorySize	= 0;			// Number of frames to keep track of
+	std::atomic<uint32>			m_EventIndex		= 0;			// Current event index
 
-	QueryData*					m_pQueryData = nullptr;		// Data containing all intermediate query event data. 1 per frame latency
-	uint32						m_FrameLatency = 0;			// Max number of in-flight GPU frames
+	QueryData*					m_pQueryData		= nullptr;		// Data containing all intermediate query event data. 1 per frame latency
+	uint32						m_FrameLatency		= 0;			// Max number of in-flight GPU frames
 
-	uint32						m_FrameToReadback = 0;		// Next frame to readback from
-	uint32						m_FrameIndex = 0;			// Current frame index
+	uint32						m_FrameToReadback	= 0;			// Next frame to readback from
+	uint32						m_FrameIndex		= 0;			// Current frame index
 
 	QueryHeap					m_MainHeap;
 	QueryHeap					m_CopyHeap;
@@ -505,7 +511,7 @@ struct CPUProfilerCallbacks
 class CPUProfiler
 {
 public:
-	void Initialize(uint32 historySize, uint32 maxEvents);
+	void Initialize(uint32 historySize);
 	void Shutdown();
 
 	// Start and push an event on the current thread
@@ -532,6 +538,7 @@ public:
 		FixedStack<uint32, MAX_STACK_DEPTH> EventStack;
 		uint32								ThreadIndex		= 0;
 		bool								IsInitialized	= false;
+		Array<ProfilerEvent>				Events;
 	};
 
 	// Structure describing a registered thread
@@ -540,7 +547,7 @@ public:
 		char		Name[128]	{};
 		uint32		ThreadID	= 0;
 		uint32		Index		= 0;
-		const TLS*	pTLS		= nullptr;
+		TLS*		pTLS		= nullptr;
 	};
 
 	URange GetFrameRange() const
@@ -558,9 +565,9 @@ public:
 
 	Span<const ThreadData> GetThreads() const { return m_ThreadData; }
 
-	void SetEventCallback(const CPUProfilerCallbacks& inCallbacks) { m_EventCallback = inCallbacks;	}
-	void SetPaused(bool paused) { m_QueuedPaused = paused; }
-	bool IsPaused() const { return m_Paused; }
+	void SetEventCallback(const CPUProfilerCallbacks& inCallbacks)	{ m_EventCallback = inCallbacks; }
+	void SetPaused(bool paused)										{ m_QueuedPaused = paused; }
+	bool IsPaused() const											{ return m_Paused; }
 
 private:
 	// Retrieve thread-local storage without initialization
@@ -584,7 +591,7 @@ private:
 	ProfilerEventData& GetData(uint32 frameIndex)				{ return m_pEventData[frameIndex % m_HistorySize]; }
 	const ProfilerEventData& GetData(uint32 frameIndex)	const	{ return m_pEventData[frameIndex % m_HistorySize]; }
 
-	CPUProfilerCallbacks m_EventCallback;
+	CPUProfilerCallbacks	m_EventCallback;
 
 	std::mutex				m_ThreadDataLock;				// Mutex for accesing thread data
 	Array<ThreadData>		m_ThreadData;					// Data describing each registered thread
@@ -592,7 +599,6 @@ private:
 	ProfilerEventData*		m_pEventData		= nullptr;	// Per-frame data
 	uint32					m_HistorySize		= 0;		// History size
 	uint32					m_FrameIndex		= 0;		// The current frame index
-	std::atomic<uint32>		m_EventIndex		= 0;		// The current event index
 	bool					m_Paused			= false;	// The current pause state
 	bool					m_QueuedPaused		= false;	// The queued pause state
 	bool					m_IsInitialized		= false;

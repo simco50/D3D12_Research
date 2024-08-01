@@ -85,7 +85,7 @@ void GPUProfiler::Initialize(
 	{
 		ProfilerEventData& eventData = m_pEventData[i];
 		eventData.Events.resize(maxNumEvents + maxNumCopyEvents);
-		eventData.EventsPerTrack.resize(queues.GetSize());
+		eventData.EventOffsetAndCountPerTrack.resize(queues.GetSize());
 	}
 
 	m_pQueryData = new QueryData[frameLatency];
@@ -224,7 +224,7 @@ void GPUProfiler::Tick()
 			while (events[eventRange.End].QueueIndex == queueIndex && eventRange.End < eventData.NumEvents)
 				++eventRange.End;
 
-			eventData.EventsPerTrack[queueIndex] = Span<const ProfilerEvent>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
+			eventData.EventOffsetAndCountPerTrack[queueIndex] = ProfilerEventData::OffsetAndSize(eventRange.Begin, eventRange.End - eventRange.Begin);
 			eventRange.Begin = eventRange.End;
 		}
 
@@ -252,7 +252,7 @@ void GPUProfiler::Tick()
 		eventFrame.NumEvents = 0;
 		eventFrame.Allocator.Reset();
 		for (uint32 i = 0; i < (uint32)m_Queues.size(); ++i)
-			eventFrame.EventsPerTrack[i] = {};
+			eventFrame.EventOffsetAndCountPerTrack[i] = {};
 	}
 }
 
@@ -389,17 +389,10 @@ void GPUProfiler::QueryHeap::Reset(uint32 frameIndex)
 //-----------------------------------------------------------------------------
 
 
-void CPUProfiler::Initialize(uint32 historySize, uint32 maxEvents)
+void CPUProfiler::Initialize(uint32 historySize)
 {
-	// Event indices are 16 bit, so max 2^16 events
-	gAssert(maxEvents < (1 << 16));
-
 	m_pEventData = new ProfilerEventData[historySize];
 	m_HistorySize = historySize;
-
-	for (uint32 i = 0; i < historySize; ++i)
-		m_pEventData[i].Events.resize(maxEvents);
-
 	m_IsInitialized = true;
 }
 
@@ -421,22 +414,18 @@ void CPUProfiler::BeginEvent(const char* pName, uint32 color, const char* pFileP
 	if (m_Paused)
 		return;
 
-	ProfilerEventData& data = GetData();
-	uint32 newIndex = m_EventIndex.fetch_add(1);
-	gAssert(newIndex < data.Events.size());
-
 	TLS& tls = GetTLS();
+	tls.EventStack.Push()		= (uint32)tls.Events.size();
 
-	ProfilerEvent& newEvent = data.Events[newIndex];
-	newEvent.Depth = tls.EventStack.GetSize();
-	newEvent.ThreadIndex = tls.ThreadIndex;
-	newEvent.pName = data.Allocator.String(pName);
-	newEvent.pFilePath = pFilePath;
-	newEvent.LineNumber = lineNumber;
-	newEvent.Color = color == 0 ? ColorFromString(pName) : color;
+	ProfilerEvent& newEvent		= tls.Events.emplace_back();
+	newEvent.Depth				= tls.EventStack.GetSize();
+	newEvent.ThreadIndex		= tls.ThreadIndex;
+	newEvent.pName				= GetData().Allocator.String(pName);
+	newEvent.pFilePath			= pFilePath;
+	newEvent.LineNumber			= lineNumber;
+	newEvent.Color				= color == 0 ? ColorFromString(pName) : color;
+
 	QueryPerformanceCounter((LARGE_INTEGER*)(&newEvent.TicksBegin));
-
-	tls.EventStack.Push() = newIndex;
 }
 
 
@@ -452,7 +441,9 @@ void CPUProfiler::EndEvent()
 	if (m_Paused)
 		return;
 
-	ProfilerEvent& event = GetData().Events[GetTLS().EventStack.Pop()];
+	TLS& tls = GetTLS();
+	uint32 eventIndex = tls.EventStack.Pop();
+	ProfilerEvent& event = tls.Events[eventIndex];
 	QueryPerformanceCounter((LARGE_INTEGER*)(&event.TicksEnd));
 }
 
@@ -476,30 +467,17 @@ void CPUProfiler::Tick()
 #endif
 
 	ProfilerEventData& data = GetData();
-	data.NumEvents = m_EventIndex;
+	data.NumEvents = (uint32)data.Events.size();
 	for (uint32 i = 0; i < m_HistorySize; ++i)
-		data.EventsPerTrack.resize(m_ThreadData.size());
+		data.EventOffsetAndCountPerTrack.resize(m_ThreadData.size());
 
-	// Sort events by thread and make groups per thread for fast per-thread event iteration.
-	// This is _much_ faster than iterating all event multiple times and filtering
-	ProfilerEventData& frame = GetData();
-	Array<ProfilerEvent>& events = frame.Events;
-	std::sort(events.begin(), events.begin() + frame.NumEvents, [](const ProfilerEvent& a, const ProfilerEvent& b)
-		{
-			return a.ThreadIndex < b.ThreadIndex;
-		});
-
-	URange eventRange(0, 0);
-	for (uint32 threadIndex = 0; threadIndex < (uint32)m_ThreadData.size() && eventRange.Begin < frame.NumEvents; ++threadIndex)
+	data.Events.clear();
+	for (uint32 threadIndex = 0; threadIndex < (uint32)m_ThreadData.size(); ++threadIndex)
 	{
-		while (threadIndex > events[eventRange.Begin].ThreadIndex)
-			eventRange.Begin++;
-		eventRange.End = eventRange.Begin;
-		while (events[eventRange.End].ThreadIndex == threadIndex && eventRange.End < frame.NumEvents)
-			++eventRange.End;
-
-		frame.EventsPerTrack[threadIndex] = Span<const ProfilerEvent>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
-		eventRange.Begin = eventRange.End;
+		ThreadData& threadData = m_ThreadData[threadIndex];
+		data.EventOffsetAndCountPerTrack[threadIndex] = ProfilerEventData::OffsetAndSize((uint32)data.Events.size(), (uint32)threadData.pTLS->Events.size());
+		data.Events.insert(data.Events.end(), threadData.pTLS->Events.begin(), threadData.pTLS->Events.end());
+		threadData.pTLS->Events.clear();
 	}
 
 	++m_FrameIndex;
@@ -507,7 +485,6 @@ void CPUProfiler::Tick()
 	ProfilerEventData& newData = GetData();
 	newData.Allocator.Reset();
 	newData.NumEvents = 0;
-	m_EventIndex = 0;
 
 	BeginEvent("CPU Frame");
 }
