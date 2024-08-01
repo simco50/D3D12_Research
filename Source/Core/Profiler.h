@@ -186,7 +186,7 @@ public:
 	{}
 
 	Span<const ProfilerEvent> GetEvents() const						{ return Span<const ProfilerEvent>(Events.data(), NumEvents); }
-	Span<const ProfilerEvent> GetEvents(uint32 trackIndex) const	{ return trackIndex < EventOffsetAndCountPerTrack.size() ? Span<const ProfilerEvent>(&Events[EventOffsetAndCountPerTrack[trackIndex].Offset], EventOffsetAndCountPerTrack[trackIndex].Size) : Span<const ProfilerEvent>(); }
+	Span<const ProfilerEvent> GetEvents(uint32 trackIndex) const	{ return trackIndex < EventOffsetAndCountPerTrack.size() && EventOffsetAndCountPerTrack[trackIndex].Size > 0 ? Span<const ProfilerEvent>(&Events[EventOffsetAndCountPerTrack[trackIndex].Offset], EventOffsetAndCountPerTrack[trackIndex].Size) : Span<const ProfilerEvent>(); }
 
 private:
 	friend class CPUProfiler;
@@ -263,7 +263,7 @@ public:
 		uint64					CPUCalibrationTicks		= 0;		// The number of CPU ticks when the calibration was done
 		uint64					GPUFrequency			= 0;		// The GPU tick frequency
 		uint32					Index					= 0;		// Index of queue
-		bool					IsCopyQueue				= false;	// True if queue is a copy queue
+		uint32					QueryHeapIndex			= 0;		// Query Heap index (Copy vs. Other queues)
 	};
 
 	Span<const QueueInfo> GetQueues() const { return m_Queues; }
@@ -429,7 +429,7 @@ private:
 		return queue.CPUCalibrationTicks + (gpuTicks - queue.GPUCalibrationTicks) * m_CPUTickFrequency / queue.GPUFrequency;
 	}
 
-	QueryHeap& GetHeap(D3D12_COMMAND_LIST_TYPE type) { return type == D3D12_COMMAND_LIST_TYPE_COPY ? m_CopyHeap : m_MainHeap; }
+	QueryHeap& GetHeap(D3D12_COMMAND_LIST_TYPE type) { return type == D3D12_COMMAND_LIST_TYPE_COPY ? m_QueryHeaps[1] : m_QueryHeaps[0]; }
 
 	CommandListData				m_CommandListData{};
 
@@ -443,8 +443,7 @@ private:
 	uint32						m_FrameToReadback	= 0;			// Next frame to readback from
 	uint32						m_FrameIndex		= 0;			// Current frame index
 
-	QueryHeap					m_MainHeap;
-	QueryHeap					m_CopyHeap;
+	StaticArray<QueryHeap, 2>	m_QueryHeaps;
 	uint64						m_CPUTickFrequency = 0;
 
 	static constexpr uint32 MAX_EVENT_DEPTH = 32;

@@ -7,11 +7,12 @@
 CPUProfiler gCPUProfiler;
 GPUProfiler gGPUProfiler;
 
-static uint32 ColorFromString(const char* pStr)
+static uint32 ColorFromString(const char* pStr, float hueMin, float hueMax)
 {
 	const float saturation = 0.5f;
 	const float value = 0.6f;
 	float hue = (float)std::hash<std::string>{}(pStr) / std::numeric_limits<size_t>::max();
+	hue = hueMin + hue * (hueMax - hueMin);
 	float R = std::max(std::min(fabs(hue * 6 - 3) - 1, 1.0f), 0.0f);
 	float G = std::max(std::min(2 - fabs(hue * 6 - 2), 1.0f), 0.0f);
 	float B = std::max(std::min(2 - fabs(hue * 6 - 4), 1.0f), 0.0f);
@@ -26,6 +27,7 @@ static uint32 ColorFromString(const char* pStr)
 		((uint8)roundf(B * 255.0f) << 16);
 }
 
+
 //-----------------------------------------------------------------------------
 // [SECTION] GPU Profiler
 //-----------------------------------------------------------------------------
@@ -39,11 +41,11 @@ void GPUProfiler::Initialize(
 	uint32						maxNumCopyEvents,
 	uint32						maxNumActiveCommandLists)
 {
-	// Event indices are 15 bit, so max 2^15 events
-	gAssert(maxNumEvents + maxNumCopyEvents < (1 << 15));
+	// Event indices are 16 bit, so max 2^16 events
+	gAssert(maxNumEvents + maxNumCopyEvents < (1 << 16));
 
-	m_FrameLatency = frameLatency;
-	m_EventHistorySize = sampleHistory;
+	m_FrameLatency		= frameLatency;
+	m_EventHistorySize	= sampleHistory;
 
 	m_CommandListData.Setup(maxNumActiveCommandLists);
 	m_QueueEventStack.resize(queues.GetSize());
@@ -57,26 +59,26 @@ void GPUProfiler::Initialize(
 		uint32 size = ARRAYSIZE(queueInfo.Name);
 		if(FAILED(pQueue->GetPrivateData(WKPDID_D3DDebugObjectName, &size, queueInfo.Name)))
 		{
-			if (desc.Type == D3D12_COMMAND_LIST_TYPE_DIRECT)
-				strcpy_s(queueInfo.Name, "Direct Queue");
-			else if (desc.Type == D3D12_COMMAND_LIST_TYPE_COMPUTE)
-				strcpy_s(queueInfo.Name, "Compute Queue");
-			else if (desc.Type == D3D12_COMMAND_LIST_TYPE_COPY)
-				strcpy_s(queueInfo.Name, "Copy Queue");
-			else
-				strcpy_s(queueInfo.Name, "??? Queue");
+			switch (desc.Type)
+			{
+			case D3D12_COMMAND_LIST_TYPE_DIRECT:		strcpy_s(queueInfo.Name, "Direct Queue");			break;
+			case D3D12_COMMAND_LIST_TYPE_COMPUTE:		strcpy_s(queueInfo.Name, "Compute Queue");			break;
+			case D3D12_COMMAND_LIST_TYPE_COPY:			strcpy_s(queueInfo.Name, "Copy Queue");				break;
+			case D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE:	strcpy_s(queueInfo.Name, "Video Decode Queue");		break;
+			case D3D12_COMMAND_LIST_TYPE_VIDEO_ENCODE:	strcpy_s(queueInfo.Name, "Video Encode Queue");		break;
+			case D3D12_COMMAND_LIST_TYPE_VIDEO_PROCESS:	strcpy_s(queueInfo.Name, "Video Process Queue");	break;
+			default:									strcpy_s(queueInfo.Name, "Unknown Queue");			break;
+			}
 		}
 
-		queueInfo.pQueue = pQueue;
-		queueInfo.Index = queueIndex;
-		queueInfo.IsCopyQueue = desc.Type == D3D12_COMMAND_LIST_TYPE_COPY;
+		queueInfo.pQueue			= pQueue;
+		queueInfo.Index				= queueIndex;
+		queueInfo.QueryHeapIndex	= desc.Type == D3D12_COMMAND_LIST_TYPE_COPY ? 1 : 0;
 		pQueue->GetClockCalibration(&queueInfo.GPUCalibrationTicks, &queueInfo.CPUCalibrationTicks);
 		pQueue->GetTimestampFrequency(&queueInfo.GPUFrequency);
 
-		if (desc.Type == D3D12_COMMAND_LIST_TYPE_COPY && !m_CopyHeap.IsInitialized())
-			m_CopyHeap.Initialize(pDevice, pQueue, 2 * maxNumCopyEvents, frameLatency);
-		else if (desc.Type != D3D12_COMMAND_LIST_TYPE_COPY && !m_MainHeap.IsInitialized())
-			m_MainHeap.Initialize(pDevice, pQueue, 2 * maxNumEvents, frameLatency);
+		if (!GetHeap(desc.Type).IsInitialized())
+			GetHeap(desc.Type).Initialize(pDevice, pQueue, 2 * maxNumCopyEvents, frameLatency);
 	}
 	QueryPerformanceFrequency((LARGE_INTEGER*)&m_CPUTickFrequency);
 
@@ -103,8 +105,8 @@ void GPUProfiler::Shutdown()
 	delete[] m_pEventData;
 	delete[] m_pQueryData;
 
-	m_CopyHeap.Shutdown();
-	m_MainHeap.Shutdown();
+	for (QueryHeap& heap : m_QueryHeaps)
+		heap.Shutdown();
 }
 
 void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName, uint32 color, const char* pFilePath, uint32 lineNumber)
@@ -143,7 +145,7 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 	event.pName				= eventData.Allocator.String(pName);
 	event.pFilePath			= pFilePath;
 	event.LineNumber		= lineNumber;
-	event.Color				= color == 0 ? ColorFromString(pName) : color;
+	event.Color				= color == 0 ? ColorFromString(pName, 0.0f, 0.5f) : color;
 }
 
 
@@ -173,34 +175,36 @@ void GPUProfiler::Tick()
 #if ENABLE_ASSERTS
 	for (ActiveEventStack& stack : m_QueueEventStack)
 	{
-		gAssert(stack.GetSize() == 0, "Forgot to End %d Events", stack.GetSize());
+		gAssert(stack.GetSize() == 0, "EventStack for the CommandQueue should be empty. Forgot to `End()` %d Events", stack.GetSize());
 	}
 #endif
 
 	// If the next frame is not finished resolving, wait for it here so the data can be read from before it's being reset
-	m_CopyHeap.WaitFrame(m_FrameIndex);
-	m_MainHeap.WaitFrame(m_FrameIndex);
+	for (QueryHeap& heap : m_QueryHeaps)
+		heap.WaitFrame(m_FrameIndex);
 
 	GetSampleFrame(m_FrameIndex).NumEvents = m_EventIndex;
 	m_EventIndex = 0;
 
+	// Poll query heap and populate event timings
 	while (m_FrameToReadback < m_FrameIndex)
 	{
-		QueryData& queryData = GetQueryData(m_FrameToReadback);
-		ProfilerEventData& eventData = GetSampleFrame(m_FrameToReadback);
-		if (!m_MainHeap.IsFrameComplete(m_FrameToReadback) || !m_CopyHeap.IsFrameComplete(m_FrameToReadback))
+		// Wait for all query heaps to have finished resolving the queries for the readback frame
+		bool allHeapsReady = true;
+		for (QueryHeap& heap : m_QueryHeaps)
+			allHeapsReady &= heap.IsFrameComplete(m_FrameToReadback);
+		if (!allHeapsReady)
 			break;
 
-		uint32 numEvents = eventData.NumEvents;
-		Span<const uint64> mainQueries = m_MainHeap.GetQueryData(m_FrameToReadback);
-		Span<const uint64> copyQueries = m_CopyHeap.GetQueryData(m_FrameToReadback);
+		const QueryData& queryData		= GetQueryData(m_FrameToReadback);
+		ProfilerEventData& eventData	= GetSampleFrame(m_FrameToReadback);
 
-		for (uint32 i = 0; i < numEvents; ++i)
+		for (uint32 i = 0; i < eventData.NumEvents; ++i)
 		{
-			QueryData::QueryRange&	queryRange	= queryData.Ranges[i];
-			ProfilerEvent&			event		= eventData.Events[i];
-			const QueueInfo&		queue		= m_Queues[event.QueueIndex];
-			Span<const uint64>		queries		= queue.IsCopyQueue ? copyQueries : mainQueries;
+			const QueryData::QueryRange& queryRange = queryData.Ranges[i];
+			ProfilerEvent& event					= eventData.Events[i];
+			const QueueInfo& queue					= m_Queues[event.QueueIndex];
+			Span<const uint64>		queries			= m_QueryHeaps[queue.QueryHeapIndex].GetQueryData(m_FrameToReadback);
 
 			// Convert to CPU ticks and assign to event
 			event.TicksBegin = ConvertToCPUTicks(queue, queries[queryRange.QueryIndexBegin]);
@@ -210,7 +214,7 @@ void GPUProfiler::Tick()
 		// Sort events by queue and make groups per queue for fast per-queue event iteration.
 		// This is _much_ faster than iterating all event multiple times and filtering
 		Array<ProfilerEvent>& events = eventData.Events;
-		std::sort(events.begin(), events.begin() + numEvents, [](const ProfilerEvent& a, const ProfilerEvent& b)
+		std::sort(events.begin(), events.begin() + eventData.NumEvents, [](const ProfilerEvent& a, const ProfilerEvent& b)
 			{
 				return a.QueueIndex < b.QueueIndex;
 			});
@@ -237,16 +241,14 @@ void GPUProfiler::Tick()
 
 	m_CommandListData.Reset();
 
-	{
-		m_MainHeap.Resolve(m_FrameIndex);
-		m_CopyHeap.Resolve(m_FrameIndex);
-	}
+	for(QueryHeap& heap : m_QueryHeaps)
+		heap.Resolve(m_FrameIndex);
 
 	++m_FrameIndex;
 
 	{
-		m_MainHeap.Reset(m_FrameIndex);
-		m_CopyHeap.Reset(m_FrameIndex);
+		for (QueryHeap& heap : m_QueryHeaps)
+			heap.Reset(m_FrameIndex);
 
 		ProfilerEventData& eventFrame = GetSampleFrame();
 		eventFrame.NumEvents = 0;
@@ -423,7 +425,7 @@ void CPUProfiler::BeginEvent(const char* pName, uint32 color, const char* pFileP
 	newEvent.pName				= GetData().Allocator.String(pName);
 	newEvent.pFilePath			= pFilePath;
 	newEvent.LineNumber			= lineNumber;
-	newEvent.Color				= color == 0 ? ColorFromString(pName) : color;
+	newEvent.Color				= color == 0 ? ColorFromString(pName, 0.5f, 1.0f) : color;
 
 	QueryPerformanceCounter((LARGE_INTEGER*)(&newEvent.TicksBegin));
 }
