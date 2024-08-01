@@ -160,6 +160,22 @@ private:
 
 void DrawProfilerHUD();
 
+// Single event
+struct ProfilerEvent
+{
+	const char* pName		= nullptr;	// Name of event
+	const char* pFilePath	= nullptr;	// File path of location where event was started
+	uint32		Color		: 24;		// Color
+	uint32		Depth		: 8;		// Stack depth of event
+	uint32		LineNumber	: 18;		// Line number of file where event was started
+	uint32		ThreadIndex : 8;		// Index of thread this event is started on
+	uint32		QueueIndex	: 6;		// GPU Queue Index (GPU-specific)
+
+	uint64		TicksBegin	= 0;		// Begin CPU ticks
+	uint64		TicksEnd	= 0;		// End CPU ticks
+
+	uint32 GetColor() const { return Color | (0xFF << 24); }
+};
 
 // Data for a single frame of profiling events. On for each history frame
 class ProfilerEventData
@@ -169,33 +185,17 @@ public:
 		: Allocator(1 << 16)
 	{}
 
-	// Single event
-	struct Event
-	{
-		const char* pName		= nullptr;	// Name of event
-		const char* pFilePath	= nullptr;	// File path of location where event was started
-		uint64		TicksBegin	= 0;		// Begin CPU ticks
-		uint64		TicksEnd	= 0;		// End CPU ticks
-		uint32		Color		: 24;		// Color
-		uint32		Depth		: 8;		// Stack depth of event
-		uint32		LineNumber	: 16;		// Line number of file where event was started
-		uint32		ThreadIndex : 8;		// Index of thread this event is started on
-		uint32		QueueIndex	: 8;		// GPU Queue Index (GPU-specific)
-
-		uint32 GetColor() const { return Color | (0xFF << 24); }
-	};
-
-	Span<const Event> GetEvents() const						{ return Span<const Event>(Events.data(), NumEvents); }
-	Span<const Event> GetEvents(uint32 trackIndex) const	{ return trackIndex < EventsPerTrack.size() ? EventsPerTrack[trackIndex] : Span<const Event>(); }
+	Span<const ProfilerEvent> GetEvents() const						{ return Span<const ProfilerEvent>(Events.data(), NumEvents); }
+	Span<const ProfilerEvent> GetEvents(uint32 trackIndex) const	{ return trackIndex < EventsPerTrack.size() ? EventsPerTrack[trackIndex] : Span<const ProfilerEvent>(); }
 
 private:
 	friend class CPUProfiler;
 	friend class GPUProfiler;
 
-	LinearAllocator					Allocator;			// Scratch allocator for frame
-	Array<Span<const Event>>		EventsPerTrack;		// Span of events for each track
-	Array<Event>					Events;				// Event storage for frame
-	uint32							NumEvents = 0;		// Total number of recorded events
+	LinearAllocator						Allocator;			// Scratch allocator for frame
+	Array<Span<const ProfilerEvent>>	EventsPerTrack;		// Span of events for each track
+	Array<ProfilerEvent>				Events;				// Event storage for frame
+	uint32								NumEvents = 0;		// Total number of recorded events
 };
 
 
@@ -366,8 +366,9 @@ private:
 			struct Query
 			{
 				uint32 QueryIndex	: 16;
-				uint32 RangeIndex	: 15;
-				uint32 IsBegin		: 1;
+				uint32 RangeIndex	: 16;
+
+				static constexpr uint32 EndRangeIndex = 0xFFFF;
 			};
 			static_assert(sizeof(Query) == sizeof(uint32));
 			Array<Query> Queries;

@@ -133,18 +133,17 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 	CommandListData::Data::Query& cmdListQuery	= pCmdData->Queries.emplace_back();
 	cmdListQuery.QueryIndex						= queryIndex;
 	cmdListQuery.RangeIndex						= eventIndex;
-	cmdListQuery.IsBegin						= true;
 
 	// Allocate a query range in the query frame
 	QueryData::QueryRange& range	= queryData.Ranges[eventIndex];
 	range.QueryIndexBegin			= queryIndex;
 
 	// Allocate an event in the sample history
-	ProfilerEventData::Event& event	= eventData.Events[eventIndex];
-	event.pName						= eventData.Allocator.String(pName);
-	event.pFilePath					= pFilePath;
-	event.LineNumber				= lineNumber;
-	event.Color						= color == 0 ? ColorFromString(pName) : color;
+	ProfilerEvent& event	= eventData.Events[eventIndex];
+	event.pName				= eventData.Allocator.String(pName);
+	event.pFilePath			= pFilePath;
+	event.LineNumber		= lineNumber;
+	event.Color				= color == 0 ? ColorFromString(pName) : color;
 }
 
 
@@ -163,8 +162,7 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 	CommandListData::Data* pCmdData		= m_CommandListData.Get(pCmd, true);
 	CommandListData::Data::Query& query = pCmdData->Queries.emplace_back();
 	query.QueryIndex					= GetHeap(pCmd->GetType()).RecordQuery(pCmd);
-	query.RangeIndex					= 0x7FFF; // Range index is only required for 'Begin' events
-	query.IsBegin						= false;
+	query.RangeIndex					= CommandListData::Data::Query::EndRangeIndex; // Range index is 0xFFFF to indicate this is an 'End' query
 }
 
 void GPUProfiler::Tick()
@@ -199,20 +197,20 @@ void GPUProfiler::Tick()
 
 		for (uint32 i = 0; i < numEvents; ++i)
 		{
-			QueryData::QueryRange&		queryRange	= queryData.Ranges[i];
-			ProfilerEventData::Event&	event		= eventData.Events[i];
-			const QueueInfo&			queue		= m_Queues[event.QueueIndex];
-			Span<const uint64>			queries		= queue.IsCopyQueue ? copyQueries : mainQueries;
+			QueryData::QueryRange&	queryRange	= queryData.Ranges[i];
+			ProfilerEvent&			event		= eventData.Events[i];
+			const QueueInfo&		queue		= m_Queues[event.QueueIndex];
+			Span<const uint64>		queries		= queue.IsCopyQueue ? copyQueries : mainQueries;
 
 			// Convert to CPU ticks and assign to event
-			event.TicksBegin					= ConvertToCPUTicks(queue, queries[queryRange.QueryIndexBegin]);
-			event.TicksEnd						= ConvertToCPUTicks(queue, queries[queryRange.QueryIndexEnd]);
+			event.TicksBegin = ConvertToCPUTicks(queue, queries[queryRange.QueryIndexBegin]);
+			event.TicksEnd = ConvertToCPUTicks(queue, queries[queryRange.QueryIndexEnd]);
 		}
 
 		// Sort events by queue and make groups per queue for fast per-queue event iteration.
 		// This is _much_ faster than iterating all event multiple times and filtering
-		Array<ProfilerEventData::Event>& events = eventData.Events;
-		std::sort(events.begin(), events.begin() + numEvents, [](const ProfilerEventData::Event& a, const ProfilerEventData::Event& b)
+		Array<ProfilerEvent>& events = eventData.Events;
+		std::sort(events.begin(), events.begin() + numEvents, [](const ProfilerEvent& a, const ProfilerEvent& b)
 			{
 				return a.QueueIndex < b.QueueIndex;
 			});
@@ -226,7 +224,7 @@ void GPUProfiler::Tick()
 			while (events[eventRange.End].QueueIndex == queueIndex && eventRange.End < eventData.NumEvents)
 				++eventRange.End;
 
-			eventData.EventsPerTrack[queueIndex] = Span<const ProfilerEventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
+			eventData.EventsPerTrack[queueIndex] = Span<const ProfilerEvent>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
 			eventRange.Begin = eventRange.End;
 		}
 
@@ -282,23 +280,22 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 		{
 			for (CommandListData::Data::Query& query : pEventData->Queries)
 			{
-				if (query.IsBegin)
+				if (query.RangeIndex != CommandListData::Data::Query::EndRangeIndex)
 				{
 					eventStack.Push() = query.RangeIndex;
-					ProfilerEventData::Event& sampleEvent = sampleFrame.Events[query.RangeIndex];
+					ProfilerEvent& sampleEvent = sampleFrame.Events[query.RangeIndex];
 					sampleEvent.QueueIndex = queueIndex;
 				}
 				else
 				{
 					gAssert(eventStack.GetSize() > 0, "Event Begin/End mismatch");
-					gAssert(query.RangeIndex == 0x7FFF);
 					uint32 queryRangeIndex = eventStack.Pop();
 
-					QueryData::QueryRange& queryRange		= queryData.Ranges[queryRangeIndex];
-					ProfilerEventData::Event& sampleEvent	= sampleFrame.Events[queryRangeIndex];
+					QueryData::QueryRange& queryRange = queryData.Ranges[queryRangeIndex];
+					ProfilerEvent& sampleEvent = sampleFrame.Events[queryRangeIndex];
 
-					queryRange.QueryIndexEnd	= query.QueryIndex;
-					sampleEvent.Depth			= eventStack.GetSize();
+					queryRange.QueryIndexEnd = query.QueryIndex;
+					sampleEvent.Depth = eventStack.GetSize();
 					gAssert(sampleEvent.QueueIndex == queueIndex, "Begin/EndEvent must be recorded on the same queue");
 				}
 			}
@@ -418,7 +415,7 @@ void CPUProfiler::BeginEvent(const char* pName, uint32 color, const char* pFileP
 	if (!m_IsInitialized)
 		return;
 
-	if(m_EventCallback.OnEventBegin)
+	if (m_EventCallback.OnEventBegin)
 		m_EventCallback.OnEventBegin(pName, m_EventCallback.pUserData);
 
 	if (m_Paused)
@@ -430,7 +427,7 @@ void CPUProfiler::BeginEvent(const char* pName, uint32 color, const char* pFileP
 
 	TLS& tls = GetTLS();
 
-	ProfilerEventData::Event& newEvent = data.Events[newIndex];
+	ProfilerEvent& newEvent = data.Events[newIndex];
 	newEvent.Depth = tls.EventStack.GetSize();
 	newEvent.ThreadIndex = tls.ThreadIndex;
 	newEvent.pName = data.Allocator.String(pName);
@@ -455,7 +452,7 @@ void CPUProfiler::EndEvent()
 	if (m_Paused)
 		return;
 
-	ProfilerEventData::Event& event = GetData().Events[GetTLS().EventStack.Pop()];
+	ProfilerEvent& event = GetData().Events[GetTLS().EventStack.Pop()];
 	QueryPerformanceCounter((LARGE_INTEGER*)(&event.TicksEnd));
 }
 
@@ -486,8 +483,8 @@ void CPUProfiler::Tick()
 	// Sort events by thread and make groups per thread for fast per-thread event iteration.
 	// This is _much_ faster than iterating all event multiple times and filtering
 	ProfilerEventData& frame = GetData();
-	Array<ProfilerEventData::Event>& events = frame.Events;
-	std::sort(events.begin(), events.begin() + frame.NumEvents, [](const ProfilerEventData::Event& a, const ProfilerEventData::Event& b)
+	Array<ProfilerEvent>& events = frame.Events;
+	std::sort(events.begin(), events.begin() + frame.NumEvents, [](const ProfilerEvent& a, const ProfilerEvent& b)
 		{
 			return a.ThreadIndex < b.ThreadIndex;
 		});
@@ -501,7 +498,7 @@ void CPUProfiler::Tick()
 		while (events[eventRange.End].ThreadIndex == threadIndex && eventRange.End < frame.NumEvents)
 			++eventRange.End;
 
-		frame.EventsPerTrack[threadIndex] = Span<const ProfilerEventData::Event>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
+		frame.EventsPerTrack[threadIndex] = Span<const ProfilerEvent>(&events[eventRange.Begin], eventRange.End - eventRange.Begin);
 		eventRange.Begin = eventRange.End;
 	}
 

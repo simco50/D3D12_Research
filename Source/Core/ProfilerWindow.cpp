@@ -67,7 +67,7 @@ static void EditStyle(StyleOptions& style)
 	ImGui::PopItemWidth();
 }
 
-static StringHash GetEventHash(const ProfilerEventData::Event& event)
+static StringHash GetEventHash(const ProfilerEvent& event)
 {
 	StringHash hash;
 	hash.Combine(StringHash(event.pName));
@@ -153,7 +153,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		int frameNr = 0;
 		for (uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
 		{
-			Span<const ProfilerEventData::Event> events = gCPUProfiler.GetEventData(i).GetEvents();
+			Span<const ProfilerEvent> events = gCPUProfiler.GetEventData(i).GetEvents();
 			if (events.GetSize() > 0 && frameNr++ % 2 == 0)
 			{
 				float beginOffset = (events[0].TicksBegin - beginAnchor) * TicksToPixels;
@@ -171,9 +171,9 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			[=== SomeFunction (1.2 ms) ===]
 		*/
 		bool anyHovered = false;
-		auto DrawTrack = [&](Span<const ProfilerEventData::Event> events, uint32 frameIndex, uint32& outTrackDepth)
+		auto DrawTrack = [&](Span<const ProfilerEvent> events, uint32 frameIndex, uint32& outTrackDepth)
 			{
-				for (const ProfilerEventData::Event& event : events)
+				for (const ProfilerEvent& event : events)
 				{
 					// Skip events above the max depth
 					if (event.Depth >= (uint32)style.MaxDepth)
@@ -517,7 +517,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 				for (uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
 				{
 					const ProfilerEventData& eventData = gCPUProfiler.GetEventData(i);
-					for (const ProfilerEventData::Event& event : eventData.GetEvents())
+					for (const ProfilerEvent& event : eventData.GetEvents())
 					{
 						if (GetEventHash(event) == context.SelectedEventHash)
 						{
@@ -535,7 +535,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 				for (uint32 i = gpuRange.Begin; i < gpuRange.End; ++i)
 				{
 					const ProfilerEventData& eventData = gGPUProfiler.GetEventData(i);
-					for (const ProfilerEventData::Event& event : eventData.GetEvents())
+					for (const ProfilerEvent& event : eventData.GetEvents())
 					{
 						if (GetEventHash(event) == context.SelectedEventHash)
 						{
