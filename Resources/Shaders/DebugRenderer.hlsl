@@ -3,21 +3,20 @@
 
 struct DebugVertex
 {
-	float3 Position;
-	uint Color;
+	float3 Position	: POSITION;
+	float4 Color	: COLOR;
 };
 
 StructuredBuffer<DebugVertex> tVertices : register(t0);
 Texture2D<float> tDepth : register(t1);
 
 void VSMain(
-	uint vertexID : SV_VertexID,
+	DebugVertex v,
 	out float4 outPosition : SV_Position,
 	out float4 outColor : COLOR)
 {
-	DebugVertex v = tVertices[vertexID];
 	outPosition = mul(float4(v.Position, 1.0f), cView.WorldToClipUnjittered);
-	outColor = RGBA8_UNORM::Unpack(v.Color);
+	outColor = v.Color;
 }
 
 void PSMain(

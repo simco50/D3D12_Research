@@ -42,15 +42,19 @@ DebugRenderer* DebugRenderer::Get()
 void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
 	m_pRS = new RootSignature(pDevice);
-	m_pRS->AddRootSRV(0, ShaderBindingSpace::Default);
+	m_pRS->AddRootCBV(0, ShaderBindingSpace::Default);
 	m_pRS->AddRootCBV(0, ShaderBindingSpace::View);
 	m_pRS->AddDescriptorTable(1, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
-	m_pRS->Finalize("Primitive Debug Render");
+	m_pRS->Finalize("Primitive Debug Render", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetRootSignature(m_pRS);
 	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
 	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
+	psoDesc.SetInputLayout({
+			{ "POSITION", ResourceFormat::RGB32_FLOAT },
+			{ "COLOR", ResourceFormat::RGBA8_UNORM },
+		});
 	psoDesc.SetDepthEnabled(false);
 	psoDesc.SetBlendMode(BlendMode::Alpha, false);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
@@ -92,9 +96,7 @@ void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* p
 				if (numLines != 0)
 				{
 					uint32 numVertices = numLines * 2;
-					ScratchAllocation allocation = context.AllocateScratch(numVertices * VertexStride);
-					memcpy(allocation.pMappedMemory, m_Lines, numVertices * VertexStride);
-					context.BindRootSRV(0, allocation.GpuHandle);
+					context.BindDynamicVertexBuffer(0, numVertices, VertexStride, m_Lines);
 					context.SetPipelineState(m_pLinesPSO);
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 					context.Draw(0, numVertices);
@@ -102,9 +104,7 @@ void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* p
 				if (numTriangles != 0)
 				{
 					uint32 numVertices = numTriangles * 2;
-					ScratchAllocation allocation = context.AllocateScratch(numVertices * VertexStride);
-					memcpy(allocation.pMappedMemory, m_Triangles, numVertices * VertexStride);
-					context.BindRootSRV(0, allocation.GpuHandle);
+					context.BindDynamicVertexBuffer(0, numVertices, VertexStride, m_Triangles);
 					context.SetPipelineState(m_pTrianglesPSO);
 					context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 					context.Draw(0, numVertices);
