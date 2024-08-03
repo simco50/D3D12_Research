@@ -132,8 +132,8 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 					bindingTable.BindMissShader("OcclusionMS", 1);
 					bindingTable.BindHitGroup("MaterialHG", 0);
 
+					Renderer::BindViewUniforms(context, *pView);
 					context.BindRootCBV(BindingSlot::PerInstance, parameters);
-					context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 					context.BindResources(BindingSlot::UAV, {
 						pRTTarget->GetUAV(),
 						resources.GetUAV(pAccumulationTexture),

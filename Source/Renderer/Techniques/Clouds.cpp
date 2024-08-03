@@ -8,6 +8,7 @@
 #include "RHI/CommandContext.h"
 #include "RenderGraph/RenderGraph.h"
 #include "Renderer/RenderTypes.h"
+#include "Renderer/Renderer.h"
 
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
@@ -214,8 +215,8 @@ RGTexture* Clouds::Render(RGGraph& graph, const RenderView* pView, RGTexture* pC
 				constants.WindSpeed = parameters.WindSpeed;
 				constants.TopSkew = parameters.CloudTopSkew;
 
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindRootCBV(BindingSlot::PerInstance, constants);
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
 				context.BindResources(BindingSlot::SRV,
 					{

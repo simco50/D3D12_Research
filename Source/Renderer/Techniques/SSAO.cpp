@@ -61,8 +61,8 @@ RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				shaderParameters.Threshold = g_AoThreshold;
 				shaderParameters.Samples = g_AoSamples;
 
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindRootCBV(BindingSlot::PerInstance, shaderParameters);
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
 				context.BindResources(BindingSlot::SRV, resources.GetSRV(pDepth));
 

@@ -200,6 +200,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 						{
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
+							Renderer::BindViewUniforms(context, *pView);
 							struct
 							{
 								float ScreenSizeBias;
@@ -212,7 +213,6 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 
 							context.BindRootCBV(BindingSlot::PerInstance, updateParams);
 							context.BindRootCBV(BindingSlot::PerPass, commonArgs);
-							context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 							context.BindResources(BindingSlot::UAV, {
 								resources.GetUAV(pCBTBuffer),
 								});
@@ -232,6 +232,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 					{
 						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
+						Renderer::BindViewUniforms(context, *pView);
 						struct
 						{
 							uint32 Depth;
@@ -242,7 +243,6 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 						reductionArgs.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
 						reductionArgs.Depth = currentDepth;
 						context.BindRootCBV(BindingSlot::PerInstance, reductionArgs);
-						context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 						context.BindResources(BindingSlot::UAV, {
 							resources.GetUAV(pCBTBuffer),
 							});
@@ -257,7 +257,9 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
 						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-						context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+
+						Renderer::BindViewUniforms(context, *pView);
+
 						context.BindResources(BindingSlot::UAV, {
 							resources.GetUAV(pCBTBuffer),
 							});
@@ -286,15 +288,17 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 				.Write({ pCBTBuffer, pIndirectArgs })
 				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+
+						Renderer::BindViewUniforms(context, *pView);
+
 						struct
 						{
 							uint32 NumCBTElements;
 						} params;
 						params.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
 
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 						context.BindRootCBV(BindingSlot::PerInstance, params);
-						context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 						context.BindResources(BindingSlot::UAV, {
 							resources.GetUAV(pCBTBuffer),
 							resources.GetUAV(pIndirectArgs),
@@ -316,6 +320,8 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 						context.SetStencilRef((uint32)StencilBit::Terrain);
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+						Renderer::BindViewUniforms(context, *pView);
+
 						struct
 						{
 							float ScreenSizeBias;
@@ -328,7 +334,6 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 
 						context.BindRootCBV(BindingSlot::PerInstance, updateParams);
 						context.BindRootCBV(BindingSlot::PerPass, commonArgs);
-						context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 						context.BindResources(BindingSlot::UAV, {
 							resources.GetUAV(pCBTBuffer),
 							});
@@ -360,6 +365,8 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 							context.SetPipelineState(m_pCBTDebugVisualizePSO);
 							context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+							Renderer::BindViewUniforms(context, *pView);
+
 							struct
 							{
 								uint32 NumCBTElements;
@@ -367,7 +374,6 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 							params.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
 
 							context.BindRootCBV(BindingSlot::PerInstance, params);
-							context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 							context.BindResources(BindingSlot::UAV, {
 								resources.GetUAV(pCBTBuffer),
 								});
@@ -403,8 +409,9 @@ void CBTTessellation::Shade(RGGraph& graph, const RenderView* pView, const Scene
 				context.SetPipelineState(m_pCBTShadePSO);
 				context.SetStencilRef((uint32)StencilBit::Terrain);
 
+				Renderer::BindViewUniforms(context, *pView);
+
 				context.BindRootCBV(BindingSlot::PerPass, commonArgs);
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(sceneTextures.pDepth),
 					resources.GetSRV(pFog),

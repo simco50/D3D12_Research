@@ -94,8 +94,8 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 				params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
 				params.NumFogVolumes = pFogVolumes->GetDesc().NumElements();
 
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindRootCBV(BindingSlot::PerInstance, params);
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
 				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pFogVolumes),
@@ -133,8 +133,8 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
 				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
 
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindRootCBV(BindingSlot::PerInstance, params);
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 				context.BindResources(BindingSlot::UAV, pFinalFog->GetUAV());
 				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pTargetVolume),

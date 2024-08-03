@@ -105,7 +105,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 				context.SetPipelineState(m_pRenderLinesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindResources(BindingSlot::SRV, {
 					m_pFontAtlas->GetSRV(),
 					m_pGlyphData->GetSRV(),

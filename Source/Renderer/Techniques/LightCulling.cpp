@@ -112,6 +112,8 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 				Buffer* pLightGrid = resources.Get(cullData.pLightGrid);
 				context.ClearUAVu(pLightGrid->GetUAV());
 
+				Renderer::BindViewUniforms(context, *pView);
+
 				struct
 				{
 					Vector4i ClusterDimensions;
@@ -124,7 +126,6 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 
 				context.BindRootCBV(BindingSlot::PerInstance, constantBuffer);
 
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 				context.BindResources(BindingSlot::UAV, {
 					resources.GetUAV(cullData.pLightGrid),
 					});
@@ -211,7 +212,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledCullPSO);
 
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				Renderer::BindViewUniforms(context, *pView);
 
 				context.BindResources(BindingSlot::UAV, {
 					resources.GetUAV(cullResources.pLightListOpaque),
@@ -243,7 +244,7 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledVisualizeLightsPSO);
 
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
 				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pSceneDepth),
@@ -287,8 +288,8 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pClusteredVisualizeLightsPSO);
 
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindRootCBV(BindingSlot::PerInstance, constantBuffer);
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
 				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pSceneDepth),

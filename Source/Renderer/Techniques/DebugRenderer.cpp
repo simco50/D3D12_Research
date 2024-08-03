@@ -83,7 +83,7 @@ void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* p
 			{
 				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSWithIA);
 
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindResources(BindingSlot::UAV, resources.GetSRV(pDepth));
 
 				if (numLines != 0)

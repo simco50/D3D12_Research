@@ -8,6 +8,7 @@
 #include "RHI/PipelineState.h"
 #include "RHI/RootSignature.h"
 #include "Renderer/Mesh.h"
+#include "Renderer/Renderer.h"
 #include "Renderer/RenderTypes.h"
 
 static constexpr uint32 sMaxNumBLASVerticesPerFrame = 100'000;
@@ -186,8 +187,8 @@ void AccelerationStructure::Build(CommandContext& context, const RenderView& vie
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pUpdateTLASPSO);
+				Renderer::BindViewUniforms(context, view);
 				context.BindRootCBV(BindingSlot::PerInstance, (uint32)blasInstances.size());
-				context.BindRootCBV(BindingSlot::PerView, view.ViewCB);
 				context.BindResources(BindingSlot::UAV, m_pBLASInstancesTargetBuffer->GetUAV());
 				context.BindResources(BindingSlot::SRV, m_pBLASInstancesSourceBuffer->GetSRV());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));

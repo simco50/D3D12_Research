@@ -46,7 +46,7 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterPSO);
 
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindResources(BindingSlot::UAV, resources.GetUAV(pRasterOutput));
 				context.BindResources(BindingSlot::SRV, {
 						resources.GetSRV(rasterContext.pVisibleMeshlets),
@@ -65,7 +65,7 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterVisualizePSO);
 
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindResources(BindingSlot::UAV, resources.GetUAV(pDebug));
 				context.BindResources(BindingSlot::SRV, resources.GetSRV(pRasterOutput));
 

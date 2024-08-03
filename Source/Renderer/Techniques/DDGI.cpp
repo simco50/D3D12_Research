@@ -111,8 +111,8 @@ void DDGI::Execute(RGGraph& graph, const RenderView* pView)
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGITraceRaysSO);
 
+							Renderer::BindViewUniforms(context, *pView);
 							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 							context.BindResources(BindingSlot::UAV, resources.GetUAV(pRayBuffer));
 
 							ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
@@ -133,8 +133,8 @@ void DDGI::Execute(RGGraph& graph, const RenderView* pView)
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
 
+							Renderer::BindViewUniforms(context, *pView);
 							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 							context.BindResources(BindingSlot::UAV, resources.GetUAV(pIrradianceTarget));
 							context.BindResources(BindingSlot::SRV, {
 								resources.GetSRV(pRayBuffer),
@@ -152,8 +152,8 @@ void DDGI::Execute(RGGraph& graph, const RenderView* pView)
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
 
+							Renderer::BindViewUniforms(context, *pView);
 							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 							context.BindResources(BindingSlot::UAV, {
 								resources.GetUAV(pDepthTarget),
 								});
@@ -173,8 +173,8 @@ void DDGI::Execute(RGGraph& graph, const RenderView* pView)
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
 
+							Renderer::BindViewUniforms(context, *pView);
 							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 							context.BindResources(BindingSlot::UAV, {
 								resources.GetUAV(pProbeStates),
 								resources.GetUAV(pProbeOffsets),
@@ -207,6 +207,8 @@ void DDGI::RenderVisualization(RGGraph& graph, const RenderView* pView, RGTextur
 						context.SetPipelineState(m_pDDGIVisualizePSO);
 						context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+						Renderer::BindViewUniforms(context, *pView);
+
 						struct
 						{
 							uint32 VolumeIndex;
@@ -214,7 +216,6 @@ void DDGI::RenderVisualization(RGGraph& graph, const RenderView* pView, RGTextur
 						parameters.VolumeIndex = i;
 
 						context.BindRootCBV(BindingSlot::PerInstance, parameters);
-						context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 						context.Draw(0, 2880, volume.NumProbes.x* volume.NumProbes.y* volume.NumProbes.z);
 					});
 			++i;

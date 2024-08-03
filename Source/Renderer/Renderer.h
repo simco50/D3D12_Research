@@ -41,6 +41,8 @@ public:
 
 	static void DrawScene(CommandContext& context, const RenderView& view, Batch::Blending blendModes);
 	static void DrawScene(CommandContext& context, Span<const Batch> batches, const VisibilityMask& visibility, Batch::Blending blendModes);
+	static void BindViewUniforms(CommandContext& context, const RenderView& view);
+	static void BindCullViewUniforms(CommandContext& context, const RenderView& view);
 
 	uint32 GetNumLights() const { return m_LightBuffer.Count; }
 	uint32 GetFrameIndex() const { return m_Frame; }
@@ -49,6 +51,8 @@ public:
 
 private:
 	void InitializePipelines();
+
+	void GetViewUniforms(const RenderView& view, ShaderInterop::ViewUniforms& outUniforms);
 
 	void UploadViewUniforms(CommandContext& context, RenderView& view);
 	void UploadSceneData(CommandContext& context);

@@ -436,8 +436,8 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 							} params;
 							params.DimensionsInv = Vector2(1.0f / pSkyTexture->GetWidth(), 1.0f / pSkyTexture->GetHeight());
 
+							Renderer::BindViewUniforms(context, *pView);
 							context.BindRootCBV(BindingSlot::PerInstance, params);
-							context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 							context.BindResources(BindingSlot::UAV, pSkyTexture->GetUAV());
 
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pSkyTexture->GetWidth(), 16, pSkyTexture->GetHeight(), 16, 6));
@@ -521,7 +521,7 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 									context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
-									context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+									Renderer::BindViewUniforms(context, *pView);
 									{
 										PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
 										context.SetPipelineState(m_pDepthPrepassOpaquePSO);
@@ -559,7 +559,7 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pPrepareReduceDepthPSO);
 
-								context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+								Renderer::BindViewUniforms(context, *pView);
 								context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
 								context.BindResources(BindingSlot::SRV, pSource->GetSRV());
 
@@ -618,7 +618,7 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pCameraMotionPSO);
 
-							context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+							Renderer::BindViewUniforms(context, *pView);
 							context.BindResources(BindingSlot::UAV, pVelocity->GetUAV());
 							context.BindResources(BindingSlot::SRV, resources.GetSRV(sceneTextures.pDepth));
 
@@ -663,7 +663,7 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-								context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+								Renderer::BindViewUniforms(context, *pView);
 								context.BindResources(BindingSlot::SRV, {
 									resources.GetSRV(rasterResult.pVisibilityBuffer),
 									resources.GetSRV(pAO),
@@ -692,7 +692,7 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-								context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+								Renderer::BindViewUniforms(context, *pView);
 								context.BindResources(BindingSlot::SRV, {
 									resources.GetSRV(rasterResult.pVisibilityBuffer),
 									resources.GetSRV(rasterResult.pVisibleMeshlets),
@@ -713,7 +713,7 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pDeferredShadePSO);
 
-								context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+								Renderer::BindViewUniforms(context, *pView);
 								context.BindResources(BindingSlot::UAV, resources.GetUAV(sceneTextures.pColorTarget));
 								context.BindResources(BindingSlot::SRV, {
 									resources.GetSRV(sceneTextures.pGBuffer0),
@@ -747,7 +747,7 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 							context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pSkyboxPSO);
 
-							context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+							Renderer::BindViewUniforms(context, *pView);
 							context.Draw(0, 36);
 						});
 
@@ -780,8 +780,8 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 								} params;
 								params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
 
+								Renderer::BindViewUniforms(context, *pView);
 								context.BindRootCBV(BindingSlot::PerInstance, params);
-								context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 								context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
 								context.BindResources(BindingSlot::SRV,
 									{
@@ -1064,8 +1064,8 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 						context.SetPipelineState(m_pToneMapPSO);
 						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
+						Renderer::BindViewUniforms(context, *pView);
 						context.BindRootCBV(BindingSlot::PerInstance, parameters);
-						context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 						context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
 						context.BindResources(BindingSlot::SRV, {
 							resources.GetSRV(sceneTextures.pColorTarget),
@@ -1104,9 +1104,10 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pVisibilityDebugRenderPSO);
 
+								Renderer::BindViewUniforms(context, *pView);
+
 								uint32 mode = Tweakables::gVisibilityDebugMode;
 								context.BindRootCBV(BindingSlot::PerInstance, mode);
-								context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 								context.BindResources(BindingSlot::UAV, pColorTarget->GetUAV());
 								context.BindResources(BindingSlot::SRV, {
 									resources.GetSRV(rasterResult.pVisibilityBuffer),
@@ -1281,21 +1282,18 @@ void Renderer::InitializePipelines()
 }
 
 
-void Renderer::UploadViewUniforms(CommandContext& context, RenderView& view)
+void Renderer::GetViewUniforms(const RenderView& view, ShaderInterop::ViewUniforms& outUniforms)
 {
-	ScratchAllocation alloc = context.AllocateScratch(sizeof(ShaderInterop::ViewUniforms));
-	ShaderInterop::ViewUniforms& parameters = alloc.As<ShaderInterop::ViewUniforms>();
+	outUniforms.WorldToView				= view.WorldToView;
+	outUniforms.ViewToWorld				= view.ViewToWorld;
+	outUniforms.ViewToClip				= view.ViewToClip;
+	outUniforms.ClipToView				= view.ClipToView;
+	outUniforms.WorldToClip				= view.WorldToClip;
+	outUniforms.WorldToClipPrev			= view.WorldToClipPrev;
+	outUniforms.ClipToWorld				= view.ClipToView * view.ViewToWorld;
+	outUniforms.WorldToClipUnjittered	= view.WorldToClipUnjittered;
 
-	parameters.WorldToView				= view.WorldToView;
-	parameters.ViewToWorld				= view.ViewToWorld;
-	parameters.ViewToClip				= view.ViewToClip;
-	parameters.ClipToView				= view.ClipToView;
-	parameters.WorldToClip				= view.WorldToClip;
-	parameters.WorldToClipPrev			= view.WorldToClipPrev;
-	parameters.ClipToWorld				= view.ClipToView * view.ViewToWorld;
-	parameters.WorldToClipUnjittered	= view.WorldToClipUnjittered;
-
-	Matrix reprojectionMatrix = parameters.ClipToWorld * parameters.WorldToClipPrev;
+	Matrix reprojectionMatrix = outUniforms.ClipToWorld * outUniforms.WorldToClipPrev;
 	// Transform from uv to clip space: texcoord * 2 - 1
 	Matrix premult = {
 		2.0f, 0, 0, 0,
@@ -1310,40 +1308,50 @@ void Renderer::UploadViewUniforms(CommandContext& context, RenderView& view)
 		0, 0, 1, 0,
 		0.5f, 0.5f, 0, 1
 	};
-	parameters.UVToPrevUV				= premult * reprojectionMatrix * postmult;
-	parameters.ViewLocation				= view.Position;
-	parameters.ViewLocationPrev			= view.PositionPrev;
+	outUniforms.UVToPrevUV				= premult * reprojectionMatrix * postmult;
+	outUniforms.ViewLocation				= view.Position;
+	outUniforms.ViewLocationPrev			= view.PositionPrev;
 
-	parameters.ViewportDimensions		= Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
-	parameters.ViewportDimensionsInv	= Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
-	parameters.ViewJitter				= view.Jitter;
-	parameters.ViewJitterPrev			= view.JitterPrev;
-	parameters.NearZ					= view.NearPlane;
-	parameters.FarZ						= view.FarPlane;
-	parameters.FoV						= view.FoV;
+	outUniforms.ViewportDimensions		= Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
+	outUniforms.ViewportDimensionsInv	= Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
+	outUniforms.ViewJitter				= view.Jitter;
+	outUniforms.ViewJitterPrev			= view.JitterPrev;
+	outUniforms.NearZ					= view.NearPlane;
+	outUniforms.FarZ					= view.FarPlane;
+	outUniforms.FoV						= view.FoV;
 
-	parameters.FrameIndex				= m_Frame;
-	parameters.DeltaTime				= Time::DeltaTime();
+	outUniforms.FrameIndex				= m_Frame;
+	outUniforms.DeltaTime				= Time::DeltaTime();
 
-	parameters.NumInstances				= (uint32)m_Batches.size();
-	parameters.SsrSamples				= Tweakables::gSSRSamples.Get();
-	parameters.LightCount				= m_LightBuffer.Count;
-	parameters.CascadeDepths			= m_ShadowCascadeDepths;
-	parameters.NumCascades				= m_NumShadowCascades;
+	outUniforms.NumInstances			= (uint32)m_Batches.size();
+	outUniforms.SsrSamples				= Tweakables::gSSRSamples.Get();
+	outUniforms.LightCount				= m_LightBuffer.Count;
+	outUniforms.CascadeDepths			= m_ShadowCascadeDepths;
+	outUniforms.NumCascades				= m_NumShadowCascades;
 
-	parameters.TLASIndex				= m_AccelerationStructure.GetSRV() ? m_AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-	parameters.MeshesIndex				= m_MeshBuffer.pBuffer->GetSRVIndex();
-	parameters.MaterialsIndex			= m_MaterialBuffer.pBuffer->GetSRVIndex();
-	parameters.InstancesIndex			= m_InstanceBuffer.pBuffer->GetSRVIndex();
-	parameters.LightsIndex				= m_LightBuffer.pBuffer->GetSRVIndex();
-	parameters.LightMatricesIndex		= m_LightMatricesBuffer.pBuffer->GetSRVIndex();
-	parameters.SkyIndex					= m_pSky ? m_pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-	parameters.DDGIVolumesIndex			= m_DDGIVolumesBuffer.pBuffer->GetSRVIndex();
-	parameters.NumDDGIVolumes			= m_DDGIVolumesBuffer.Count;
+	outUniforms.TLASIndex				= m_AccelerationStructure.GetSRV() ? m_AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
+	outUniforms.MeshesIndex				= m_MeshBuffer.pBuffer->GetSRVIndex();
+	outUniforms.MaterialsIndex			= m_MaterialBuffer.pBuffer->GetSRVIndex();
+	outUniforms.InstancesIndex			= m_InstanceBuffer.pBuffer->GetSRVIndex();
+	outUniforms.LightsIndex				= m_LightBuffer.pBuffer->GetSRVIndex();
+	outUniforms.LightMatricesIndex		= m_LightMatricesBuffer.pBuffer->GetSRVIndex();
+	outUniforms.SkyIndex				= m_pSky ? m_pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+	outUniforms.DDGIVolumesIndex		= m_DDGIVolumesBuffer.pBuffer->GetSRVIndex();
+	outUniforms.NumDDGIVolumes			= m_DDGIVolumesBuffer.Count;
 
-	parameters.FontDataIndex			= m_DebugRenderData.FontDataSRV;
-	parameters.DebugRenderDataIndex		= m_DebugRenderData.RenderDataUAV;
-	parameters.FontSize					= m_DebugRenderData.FontSize;
+	outUniforms.FontDataIndex			= m_DebugRenderData.FontDataSRV;
+	outUniforms.DebugRenderDataIndex	= m_DebugRenderData.RenderDataUAV;
+	outUniforms.FontSize				= m_DebugRenderData.FontSize;
+}
+
+
+void Renderer::UploadViewUniforms(CommandContext& context, RenderView& view)
+{
+	PROFILE_CPU_SCOPE();
+
+	ScratchAllocation alloc = context.AllocateScratch(sizeof(ShaderInterop::ViewUniforms));
+	ShaderInterop::ViewUniforms& parameters = alloc.As<ShaderInterop::ViewUniforms>();
+	GetViewUniforms(view, parameters);
 
 	if (!view.ViewCB)
 		view.ViewCB = context.GetParent()->CreateBuffer(BufferDesc{ .Size = sizeof(ShaderInterop::ViewUniforms), .ElementSize = sizeof(ShaderInterop::ViewUniforms) }, "ViewUniforms");
@@ -1543,8 +1551,6 @@ void Renderer::UploadSceneData(CommandContext& context)
 	// View Uniform Buffers
 	{
 		Renderer::UploadViewUniforms(context, m_MainView);
-		for (RenderView& view : m_ShadowViews)
-			Renderer::UploadViewUniforms(context, view);
 	}
 }
 
@@ -1572,7 +1578,33 @@ void Renderer::DrawScene(CommandContext& context, Span<const Batch> batches, con
 	}
 }
 
+void Renderer::BindViewUniforms(CommandContext& context, const RenderView& view)
+{
+	if (view.ViewCB)
+	{
+		context.BindRootCBV(BindingSlot::PerView, view.ViewCB);
+	}
+	else
+	{
+		ShaderInterop::ViewUniforms viewUniforms;
+		view.pRenderer->GetViewUniforms(view, viewUniforms);
+		context.BindRootCBV(BindingSlot::PerView, viewUniforms);
+	}
+}
 
+void Renderer::BindCullViewUniforms(CommandContext& context, const RenderView& view)
+{
+	if (view.CullViewCB)
+	{
+		context.BindRootCBV(BindingSlot::PerView, view.CullViewCB);
+	}
+	else
+	{
+		ShaderInterop::ViewUniforms viewUniforms;
+		view.pRenderer->GetViewUniforms(view, viewUniforms);
+		context.BindRootCBV(BindingSlot::PerView, viewUniforms);
+	}
+}
 
 void Renderer::MakeScreenshot(Texture* pSource)
 {

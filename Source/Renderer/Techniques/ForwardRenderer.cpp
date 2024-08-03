@@ -104,8 +104,8 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const RenderView* p
 				frameData.ClusterSize = Vector2i(lightCullData.ClusterSize, lightCullData.ClusterSize);
 				frameData.LightGridParams = lightCullData.LightGridParams;
 
+				Renderer::BindViewUniforms(context, *pView);
 				context.BindRootCBV(BindingSlot::PerPass, frameData);
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 
 				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pAO),
@@ -151,7 +151,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
-				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				Renderer::BindViewUniforms(context, *pView);
 
 				{
 					context.BindResources(BindingSlot::SRV, {
