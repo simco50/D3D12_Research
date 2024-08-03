@@ -149,7 +149,7 @@ void Renderer::Shutdown()
 	DebugRenderer::Get()->Shutdown();
 }
 
-void Renderer::Render(const Camera& camera, Texture* pTarget)
+void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Texture* pTarget)
 {
 	uint32 w = pTarget->GetWidth();
 	uint32 h = pTarget->GetHeight();
@@ -205,8 +205,45 @@ void Renderer::Render(const Camera& camera, Texture* pTarget)
 			}
 		}
 
-		bool jitter = Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing;
-		camera.ApplyViewTransform(m_MainView, jitter);
+		{
+			bool jitter = Tweakables::gTAA && m_RenderPath != RenderPath::PathTracing;
+			ViewTransform& transform = m_MainView;
+
+			// Update previous data
+			transform.FoV				= camera.FOV;
+			transform.PositionPrev		= transform.Position;
+			transform.WorldToClipPrev	= transform.WorldToClip;
+			transform.JitterPrev		= transform.Jitter;
+
+			// Update current data
+			transform.ViewToWorld = Matrix::CreateFromQuaternion(cameraTransform.Rotation) * Matrix::CreateTranslation(cameraTransform.Position);
+			transform.ViewToWorld.Invert(transform.WorldToView);
+			float aspect = transform.Viewport.GetWidth() / transform.Viewport.GetHeight();
+			transform.ViewToClip				= Math::CreatePerspectiveMatrix(transform.FoV, aspect, transform.NearPlane, transform.FarPlane);
+			transform.WorldToClipUnjittered		= transform.WorldToView * transform.ViewToClip;
+			transform.ViewToClipUnjittered		= transform.ViewToClip;
+
+			if (jitter)
+			{
+				constexpr Math::HaltonSequence<16, 2> x;
+				constexpr Math::HaltonSequence<16, 3> y;
+
+				transform.Jitter.x = (x[transform.JitterIndex] * 2.0f - 1.0f) / transform.Viewport.GetWidth();
+				transform.Jitter.y = (y[transform.JitterIndex] * 2.0f - 1.0f) / transform.Viewport.GetHeight();
+				transform.ViewToClip.m[2][0] += transform.Jitter.x;
+				transform.ViewToClip.m[2][1] += transform.Jitter.y;
+				++transform.JitterIndex;
+			}
+			else
+			{
+				transform.Jitter = Vector2::Zero;
+			}
+
+			transform.ViewToClip.Invert(transform.ClipToView);
+			transform.WorldToClip			= transform.WorldToView * transform.ViewToClip;
+			transform.PerspectiveFrustum	= Math::CreateBoundingFrustum(transform.ViewToClip, transform.WorldToView);
+			transform.Position				= cameraTransform.Position;
+		}
 
 		// Directional light is expected to be at index 0
 		m_pWorld->Registry.sort<Light>([](const Light& a, const Light& b) {

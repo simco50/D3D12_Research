@@ -38,8 +38,9 @@ void DemoApp::Update()
 {
 	DrawImGui();
 
-	Camera& camera = m_World.GetComponent<FreeCamera>(m_World.Camera);
-	camera.Update();
+	Camera& camera = m_World.GetComponent<Camera>(m_World.Camera);
+	Transform& cameraTransform = m_World.GetComponent<Transform>(m_World.Camera);
+	Camera::UpdateMovement(cameraTransform, camera);
 
 	{
 		PROFILE_CPU_SCOPE("Update Entity Transforms");
@@ -55,7 +56,7 @@ void DemoApp::Update()
 
 	if (m_pViewportTexture)
 	{
-		m_Renderer.Render(camera, m_pViewportTexture);
+		m_Renderer.Render(cameraTransform, camera, m_pViewportTexture);
 
 		if (sScreenshotNextFrame)
 		{
@@ -73,9 +74,11 @@ void DemoApp::Shutdown()
 void DemoApp::SetupScene(const char* pFilePath)
 {
 	m_World.Camera = m_World.CreateEntity("Main Camera");
-	FreeCamera& camera = m_World.Registry.emplace<FreeCamera>(m_World.Camera);
-	camera.SetPosition(Vector3(-1.3f, 1.4f, -1.5f));
-	camera.SetRotation(Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0));
+	Camera& camera = m_World.Registry.emplace<Camera>(m_World.Camera);
+	camera.FOV = 60.0f * Math::PI / 180;
+	Transform& cameraTransform = m_World.Registry.emplace<Transform>(m_World.Camera);
+	cameraTransform.Position = Vector3(-1.3f, 1.4f, -1.5f);
+	cameraTransform.Rotation = Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0);
 
 	SceneLoader::Load(pFilePath, m_pDevice, m_World);
 
@@ -118,7 +121,7 @@ void DemoApp::SetupScene(const char* pFilePath)
 			Transform& transform = m_World.Registry.emplace<Transform>(entity);
 			transform.Rotation = Quaternion::LookRotation(Vector3::Down, Vector3::Right);
 			transform.Position = v;
-			m_World.Registry.emplace<Light>(entity, spot);;
+			m_World.Registry.emplace<Light>(entity, spot);
 		}
 	}
 	{
@@ -338,7 +341,7 @@ void DemoApp::DrawImGui()
 
 void DemoApp::DrawOutliner()
 {
-	static entt::entity selectedEntity{};
+	static entt::entity selectedEntity = entt::null;
 	if (ImGui::Begin("Outliner"))
 	{
 		auto entity_view = m_World.Registry.view<Identity>();
@@ -463,6 +466,10 @@ void DemoApp::DrawOutliner()
 					}
 					ImGui::TreePop();
 				}
+			}
+			if (Camera* pCamera = m_World.Registry.try_get<Camera>(selectedEntity))
+			{
+				ImGui::SliderAngle("Field of View", &pCamera->FOV, 10, 170);
 			}
 		}
 		ImGui::End();

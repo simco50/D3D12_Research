@@ -106,7 +106,7 @@ workspace (PROJECT_NAME)
 		filter ("files:" .. THIRD_PARTY_DIR .. "**")
 			flags { "NoPCH" }
 			removeflags "FatalWarnings"
-			warnings "Default"
+			warnings "Off"
 		filter {}
 
 		includedirs "$(SolutionDir)Resources/Shaders/Interop"

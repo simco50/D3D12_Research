@@ -11,6 +11,7 @@
 #include "RenderGraph/RenderGraphDefinitions.h"
 #include "RenderGraph/RenderGraph.h"
 
+struct Transform;
 class Camera;
 class RTAO;
 class RTReflections;
@@ -35,7 +36,7 @@ public:
 	void Init(GraphicsDevice* pDevice, World* pWorld);
 	void Shutdown();
 
-	void Render(const Camera& camera, Texture* pTarget);
+	void Render(const Transform& cameraTransform, const Camera& camera, Texture* pTarget);
 	void DrawImGui(FloatRect viewport);
 	void MakeScreenshot(Texture* pSource);
 

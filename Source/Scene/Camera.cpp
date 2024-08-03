@@ -1,45 +1,9 @@
 #include "stdafx.h"
 #include "Camera.h"
 #include "Core/Input.h"
+#include "Scene/World.h"
 
-void Camera::ApplyViewTransform(ViewTransform& transform, bool jitter) const
-{
-	// Update previous data
-	transform.PositionPrev = transform.Position;
-	transform.WorldToClipPrev = transform.WorldToClip;
-	transform.JitterPrev = transform.Jitter;
-
-	// Update current data
-	transform.ViewToWorld = Matrix::CreateFromQuaternion(m_Rotation) * Matrix::CreateTranslation(m_Position);
-	transform.ViewToWorld.Invert(transform.WorldToView);
-	float aspect = transform.Viewport.GetWidth() / transform.Viewport.GetHeight();
-	transform.ViewToClip = Math::CreatePerspectiveMatrix(transform.FoV, aspect, transform.NearPlane, transform.FarPlane);
-	transform.WorldToClipUnjittered = transform.WorldToView * transform.ViewToClip;
-	transform.ViewToClipUnjittered = transform.ViewToClip;
-
-	if (jitter)
-	{
-		constexpr Math::HaltonSequence<16, 2> x;
-		constexpr Math::HaltonSequence<16, 3> y;
-
-		transform.Jitter.x = (x[transform.JitterIndex] * 2.0f - 1.0f) / transform.Viewport.GetWidth();
-		transform.Jitter.y = (y[transform.JitterIndex] * 2.0f - 1.0f) / transform.Viewport.GetHeight();
-		transform.ViewToClip.m[2][0] += transform.Jitter.x;
-		transform.ViewToClip.m[2][1] += transform.Jitter.y;
-		++transform.JitterIndex;
-	}
-	else
-	{
-		transform.Jitter = Vector2::Zero;
-	}
-
-	transform.ViewToClip.Invert(transform.ClipToView);
-	transform.WorldToClip = transform.WorldToView * transform.ViewToClip;
-	transform.PerspectiveFrustum = Math::CreateBoundingFrustum(transform.ViewToClip, transform.WorldToView);
-	transform.Position = m_Position;
-}
-
-void FreeCamera::Update()
+void Camera::UpdateMovement(Transform& transform, Camera& camera)
 {
 	Vector3 movement;
 	if (Input::Instance().IsMouseDown(VK_RBUTTON))
@@ -49,7 +13,7 @@ void FreeCamera::Update()
 			Vector2 mouseDelta = Input::Instance().GetMouseDelta();
 			Quaternion yr = Quaternion::CreateFromYawPitchRoll(0, mouseDelta.y * Time::DeltaTime() * 0.1f, 0);
 			Quaternion pr = Quaternion::CreateFromYawPitchRoll(mouseDelta.x * Time::DeltaTime() * 0.1f, 0, 0);
-			m_Rotation = yr * m_Rotation * pr;
+			transform.Rotation = yr * transform.Rotation * pr;
 		}
 
 		movement.x -= (int)Input::Instance().IsKeyDown('A');
@@ -58,16 +22,14 @@ void FreeCamera::Update()
 		movement.z += (int)Input::Instance().IsKeyDown('W');
 		movement.y -= (int)Input::Instance().IsKeyDown('Q');
 		movement.y += (int)Input::Instance().IsKeyDown('E');
-		movement = Vector3::Transform(movement, m_Rotation);
+		movement = Vector3::Transform(movement, transform.Rotation);
 	}
-	m_Velocity = Vector3::SmoothStep(m_Velocity, movement, 0.2f);
+	camera.Velocity = Vector3::SmoothStep(camera.Velocity, movement, 0.2f);
 
-	m_Position += m_Velocity * Time::DeltaTime() * 4.0f;
-
-	Camera::Update();
+	transform.Position += camera.Velocity * Time::DeltaTime() * 4.0f;
 }
 
-Ray Camera::GetMouseRay(const FloatRect& viewport) const
+Ray Camera::GetMouseRay(const FloatRect& viewport, const Matrix& clipToWorld)
 {
 	Ray ray;
 	Vector2 mousePos = Input::Instance().GetMousePosition();
@@ -77,13 +39,8 @@ Ray Camera::GetMouseRay(const FloatRect& viewport) const
 	ndc.x = (mousePos.x - hw) / hw;
 	ndc.y = (hh - mousePos.y) / hh;
 
-	ViewTransform transform;
-	ApplyViewTransform(transform, false);
-
-	Matrix viewProjInverse;
-	transform.WorldToClip.Invert(viewProjInverse);
-	Vector3 nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), viewProjInverse);
-	Vector3 farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), viewProjInverse);
+	Vector3 nearPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 1), clipToWorld);
+	Vector3 farPoint = Vector3::Transform(Vector3(ndc.x, ndc.y, 0), clipToWorld);
 	ray.position = Vector3(nearPoint.x, nearPoint.y, nearPoint.z);
 
 	ray.direction = farPoint - nearPoint;
