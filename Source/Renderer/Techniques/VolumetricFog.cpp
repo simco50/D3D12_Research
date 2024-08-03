@@ -21,15 +21,8 @@ static constexpr int gVolumetricNumZSlices = 128;
 VolumetricFog::VolumetricFog(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	m_pCommonRS = new RootSignature(pDevice);
-	m_pCommonRS->AddRootCBV(0, ShaderBindingSpace::Default);
-	m_pCommonRS->AddRootCBV(0, ShaderBindingSpace::View);
-	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ShaderBindingSpace::Default);
-	m_pCommonRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
-	m_pCommonRS->Finalize("Light Density Visualization");
-
-	m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
-	m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(m_pCommonRS, "VolumetricFog.hlsl", "AccumulateFogCS");
+	m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
+	m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VolumetricFog.hlsl", "AccumulateFogCS");
 }
 
 VolumetricFog::~VolumetricFog()
@@ -76,7 +69,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 			{
 				Texture* pTarget = resources.Get(pTargetVolume);
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
 				struct
@@ -101,10 +94,10 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 				params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
 				params.NumFogVolumes = pFogVolumes->GetDesc().NumElements();
 
-				context.BindRootCBV(0, params);
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerInstance, params);
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pFogVolumes),
 					resources.GetSRV(lightCullData.pLightGrid),
 					resources.GetSRV(pSourceVolume),
@@ -127,7 +120,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 			{
 				Texture* pFinalFog = resources.Get(pFinalVolumeFog);
 
-				context.SetComputeRootSignature(m_pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
 				struct
@@ -140,10 +133,10 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
 				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
 
-				context.BindRootCBV(0, params);
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, pFinalFog->GetUAV());
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerInstance, params);
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, pFinalFog->GetUAV());
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pTargetVolume),
 					}, 2);
 

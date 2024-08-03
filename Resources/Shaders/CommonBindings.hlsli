@@ -5,7 +5,7 @@
 #include "Packing.hlsli"
 
 //CBVs
-ConstantBuffer<ViewUniforms> cView : 						register(b0, space1);
+ConstantBuffer<ViewUniforms> cView : 						register(b2);
 
 //Static samplers
 SamplerState sLinearWrap :								  	register(s0,  space1);

@@ -88,7 +88,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBuildIndirectDrawArgsPSO);
 
-				context.BindResources(2, {
+				context.BindResources(BindingSlot::UAV, {
 					resources.GetUAV(pRenderData),
 					resources.GetUAV(pDrawArgs),
 					});
@@ -105,8 +105,8 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 				context.SetPipelineState(m_pRenderLinesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::SRV, {
 					m_pFontAtlas->GetSRV(),
 					m_pGlyphData->GetSRV(),
 					resources.GetSRV(pRenderData),
@@ -131,8 +131,8 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 				} parameters;
 				parameters.AtlasDimensionsInv = Vector2::One / Vector2(m_pFontAtlas->GetDesc().Size2D());
 				parameters.TargetDimensionsInv = Vector2::One / Vector2(pTarget->GetDesc().Size2D());
-				context.BindRootCBV(0, parameters);
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerInstance, parameters);
+				context.BindResources(BindingSlot::SRV, {
 					m_pFontAtlas->GetSRV(),
 					m_pGlyphData->GetSRV(),
 					resources.GetSRV(pRenderData)

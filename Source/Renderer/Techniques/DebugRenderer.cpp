@@ -41,14 +41,8 @@ DebugRenderer* DebugRenderer::Get()
 
 void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
-	m_pRS = new RootSignature(pDevice);
-	m_pRS->AddRootCBV(0, ShaderBindingSpace::Default);
-	m_pRS->AddRootCBV(0, ShaderBindingSpace::View);
-	m_pRS->AddDescriptorTable(1, 1, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
-	m_pRS->Finalize("Primitive Debug Render", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
 	PipelineStateInitializer psoDesc;
-	psoDesc.SetRootSignature(m_pRS);
+	psoDesc.SetRootSignature(GraphicsCommon::pCommonRSWithIA);
 	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
 	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
 	psoDesc.SetInputLayout({
@@ -71,7 +65,6 @@ void DebugRenderer::Shutdown()
 {
 	m_pTrianglesPSO.Reset();
 	m_pLinesPSO.Reset();
-	m_pRS.Reset();
 }
 
 void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTarget, RGTexture* pDepth)
@@ -88,10 +81,10 @@ void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* p
 		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetGraphicsRootSignature(m_pRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSWithIA);
 
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, resources.GetSRV(pDepth));
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, resources.GetSRV(pDepth));
 
 				if (numLines != 0)
 				{

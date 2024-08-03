@@ -43,5 +43,4 @@ public:
 
 private:
 	Ref<PipelineState> m_pVisualizePSO;
-	Ref<RootSignature> m_pVisualizeRS;
 };

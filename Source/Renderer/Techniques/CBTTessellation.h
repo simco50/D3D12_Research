@@ -30,7 +30,6 @@ private:
 
 	GraphicsDevice* m_pDevice;
 
-	Ref<RootSignature> m_pCBTRS;
 	Ref<PipelineState> m_pCBTIndirectArgsPSO;
 	Ref<PipelineState> m_pCBTCacheBitfieldPSO;
 	Ref<PipelineState> m_pCBTSumReductionPSO;

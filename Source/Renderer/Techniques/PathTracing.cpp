@@ -97,9 +97,9 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 					parameters.NumBounces = numBounces;
 					parameters.AccumulatedFrames = m_NumAccumulatedFrames;
 
-					context.BindRootCBV(0, parameters);
-					context.BindResources(2, resources.GetUAV(pTarget));
-					context.BindResources(3, resources.GetSRV(pAccumulationTexture));
+					context.BindRootCBV(BindingSlot::PerInstance, parameters);
+					context.BindResources(BindingSlot::UAV, resources.GetUAV(pTarget));
+					context.BindResources(BindingSlot::SRV, resources.GetSRV(pAccumulationTexture));
 					context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetDesc().Width, 8, pTarget->GetDesc().Height, 8));
 				});
 	}
@@ -132,9 +132,9 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 					bindingTable.BindMissShader("OcclusionMS", 1);
 					bindingTable.BindHitGroup("MaterialHG", 0);
 
-					context.BindRootCBV(0, parameters);
-					context.BindRootCBV(1, pView->ViewCB);
-					context.BindResources(2, {
+					context.BindRootCBV(BindingSlot::PerInstance, parameters);
+					context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+					context.BindResources(BindingSlot::UAV, {
 						pRTTarget->GetUAV(),
 						resources.GetUAV(pAccumulationTexture),
 						});

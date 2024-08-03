@@ -17,18 +17,11 @@
 ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	m_pForwardRS = new RootSignature(pDevice);
-	m_pForwardRS->AddRootConstants(0, 6, ShaderBindingSpace::Default);
-	m_pForwardRS->AddRootCBV(1, ShaderBindingSpace::Default);
-	m_pForwardRS->AddRootCBV(0, ShaderBindingSpace::View);
-	m_pForwardRS->AddDescriptorTable(0, 8, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
-	m_pForwardRS->Finalize("Forward");
-
 	// Clustered
 	{
 		//Opaque
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pForwardRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetBlendMode(BlendMode::Replace, false);
 		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "CLUSTERED_FORWARD" });
 		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "CLUSTERED_FORWARD" });
@@ -56,7 +49,7 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	{
 		//Opaque
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(m_pForwardRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "TILED_FORWARD" });
 		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "TILED_FORWARD" });
 		psoDesc.SetPixelShader("ForwardShading.hlsl", "ShadePS", { "TILED_FORWARD" });
@@ -98,7 +91,7 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const RenderView* p
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(m_pForwardRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 				struct
 				{
@@ -111,10 +104,10 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const RenderView* p
 				frameData.ClusterSize = Vector2i(lightCullData.ClusterSize, lightCullData.ClusterSize);
 				frameData.LightGridParams = lightCullData.LightGridParams;
 
-				context.BindRootCBV(1, frameData);
-				context.BindRootCBV(2, pView->ViewCB);
+				context.BindRootCBV(BindingSlot::PerPass, frameData);
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 
-				context.BindResources(3, {
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pAO),
 					resources.GetSRV(sceneTextures.pDepth),
 					resources.GetSRV(sceneTextures.pPreviousColor),
@@ -156,12 +149,12 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(m_pForwardRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
-				context.BindRootCBV(2, pView->ViewCB);
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 
 				{
-					context.BindResources(3, {
+					context.BindResources(BindingSlot::SRV, {
 						resources.GetSRV(pAO),
 						resources.GetSRV(sceneTextures.pDepth),
 						resources.GetSRV(sceneTextures.pPreviousColor),
@@ -183,7 +176,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 				}
 
 				{
-					context.BindResources(3, {
+					context.BindResources(BindingSlot::SRV, {
 						resources.GetSRV(pAO),
 						resources.GetSRV(sceneTextures.pDepth),
 						resources.GetSRV(sceneTextures.pPreviousColor),

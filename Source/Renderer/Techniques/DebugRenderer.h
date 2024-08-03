@@ -78,6 +78,5 @@ private:
 
 	Ref<PipelineState> m_pTrianglesPSO;
 	Ref<PipelineState> m_pLinesPSO;
-	Ref<RootSignature> m_pRS;
 	DebugRenderer() = default;
 };

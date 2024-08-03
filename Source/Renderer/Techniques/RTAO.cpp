@@ -75,10 +75,10 @@ RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				bindingTable.BindRayGenShader("RayGen");
 				bindingTable.BindMissShader("OcclusionMS", {});
 
-				context.BindRootCBV(0, parameters);
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerInstance, parameters);
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pDepth),
 					});
 
@@ -97,10 +97,10 @@ RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pDenoisePSO);
 
-				//context.BindRootCBV(0, parameters);
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, {
+				//context.BindRootCBV(BindingSlot::PerInstance, parameters);
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pDepth),
 					resources.GetSRV(pAOHistory),
 					resources.GetSRV(pRayTraceTarget),
@@ -131,9 +131,9 @@ RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				shaderParameters.Horizontal = 1;
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 
-				context.BindRootCBV(0, shaderParameters);
-				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerInstance, shaderParameters);
+				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pDepth),
 					resources.GetSRV(pDenoiseTarget)
 					});
@@ -162,9 +162,9 @@ RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 				shaderParameters.Horizontal = 0;
 
-				context.BindRootCBV(0, shaderParameters);
-				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerInstance, shaderParameters);
+				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pDepth),
 					resources.GetSRV(pRayTraceTarget)
 					});

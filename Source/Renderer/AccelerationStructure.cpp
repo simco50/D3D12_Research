@@ -186,10 +186,10 @@ void AccelerationStructure::Build(CommandContext& context, const RenderView& vie
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pUpdateTLASPSO);
-				context.BindRootCBV(0, (uint32)blasInstances.size());
-				context.BindRootCBV(1, view.ViewCB);
-				context.BindResources(2, m_pBLASInstancesTargetBuffer->GetUAV());
-				context.BindResources(3, m_pBLASInstancesSourceBuffer->GetSRV());
+				context.BindRootCBV(BindingSlot::PerInstance, (uint32)blasInstances.size());
+				context.BindRootCBV(BindingSlot::PerView, view.ViewCB);
+				context.BindResources(BindingSlot::UAV, m_pBLASInstancesTargetBuffer->GetUAV());
+				context.BindResources(BindingSlot::SRV, m_pBLASInstancesSourceBuffer->GetSRV());
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
 			}
 		}

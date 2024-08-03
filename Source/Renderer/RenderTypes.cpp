@@ -17,6 +17,7 @@ namespace GraphicsCommon
 	Ref<CommandSignature> pIndirectDispatchSignature;
 	Ref<CommandSignature> pIndirectDispatchMeshSignature;
 	Ref<RootSignature> pCommonRS;
+	Ref<RootSignature> pCommonRSWithIA;
 
 	void Create(GraphicsDevice* pDevice)
 	{
@@ -76,13 +77,21 @@ namespace GraphicsCommon
 			pIndirectDispatchMeshSignature = pDevice->CreateCommandSignature(sigDesc, "Default Indirect Dispatch Mesh");
 		}
 
-		// Common Root Signature - Make it 12 DWORDs as is often recommended by IHVs
 		pCommonRS = new RootSignature(pDevice);
-		pCommonRS->AddRootConstants(0, 8, ShaderBindingSpace::Default);
-		pCommonRS->AddRootCBV(0, ShaderBindingSpace::View);
-		pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ShaderBindingSpace::Default);
-		pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, ShaderBindingSpace::Default);
+		pCommonRS->AddRootCBV(0, 0);
+		pCommonRS->AddRootCBV(1, 0);
+		pCommonRS->AddRootCBV(2, 0);
+		pCommonRS->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0);
+		pCommonRS->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0);
 		pCommonRS->Finalize("Common");
+
+		pCommonRSWithIA = new RootSignature(pDevice);
+		pCommonRSWithIA->AddRootCBV(0, 0);
+		pCommonRSWithIA->AddRootCBV(1, 0);
+		pCommonRSWithIA->AddRootCBV(2, 0);
+		pCommonRSWithIA->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0);
+		pCommonRSWithIA->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0);
+		pCommonRSWithIA->Finalize("Common with IA", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 	}
 
 	void Destroy()
@@ -96,6 +105,7 @@ namespace GraphicsCommon
 		pIndirectDrawSignature.Reset();
 		pIndirectDispatchMeshSignature.Reset();
 		pCommonRS.Reset();
+		pCommonRSWithIA.Reset();
 	}
 
 	Texture* GetDefaultTexture(DefaultTexture type)

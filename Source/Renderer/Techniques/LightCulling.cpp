@@ -122,13 +122,13 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
 				constantBuffer.ClusterDimensions = Vector4i(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
 
-				context.BindRootCBV(0, constantBuffer);
+				context.BindRootCBV(BindingSlot::PerInstance, constantBuffer);
 
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, {
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, {
 					resources.GetUAV(cullData.pLightGrid),
 					});
-				context.BindResources(3, {
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pPrecomputeData)
 					});
 
@@ -211,13 +211,13 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledCullPSO);
 
-				context.BindRootCBV(1, pView->ViewCB);
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
 
-				context.BindResources(2, {
+				context.BindResources(BindingSlot::UAV, {
 					resources.GetUAV(cullResources.pLightListOpaque),
 					resources.GetUAV(cullResources.pLightListTransparent),
 					});
-				context.BindResources(3, {
+				context.BindResources(BindingSlot::SRV, {
 					pDepth->GetSRV(),
 					resources.GetSRV(pPrecomputeData),
 					});
@@ -243,9 +243,9 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledVisualizeLightsPSO);
 
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pSceneDepth),
 					resources.GetSRV(lightCullData.pLightListOpaque),
 					});
@@ -287,10 +287,10 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pClusteredVisualizeLightsPSO);
 
-				context.BindRootCBV(0, constantBuffer);
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerInstance, constantBuffer);
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pSceneDepth),
 					resources.GetSRV(pLightGrid),
 					});

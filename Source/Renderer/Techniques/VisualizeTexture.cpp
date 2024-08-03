@@ -20,11 +20,7 @@ struct PickingData
 
 CaptureTextureSystem::CaptureTextureSystem(GraphicsDevice* pDevice)
 {
-	m_pVisualizeRS = new RootSignature(pDevice);
-	m_pVisualizeRS->AddRootCBV(0, ShaderBindingSpace::Default);
-	m_pVisualizeRS->AddDescriptorTable(0, 1, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, ShaderBindingSpace::Default);
-	m_pVisualizeRS->Finalize("Common");
-	m_pVisualizePSO = pDevice->CreateComputePipeline(m_pVisualizeRS, "ImageVisualize.hlsl", "CSMain");
+	m_pVisualizePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ImageVisualize.hlsl", "CSMain");
 }
 
 
@@ -48,7 +44,7 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 		.Write({ pTarget, pPickingBuffer })
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetComputeRootSignature(m_pVisualizeRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pVisualizePSO);
 
 				struct ConstantsData
@@ -83,7 +79,7 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 				constants.Slice = (uint32)captureContext.Slice;
 				constants.IsIntegerFormat = formatInfo.Type == FormatType::Integer;
 
-				context.BindRootCBV(0, constants);
+				context.BindRootCBV(BindingSlot::PerInstance, constants);
 				context.BindResources(1, resources.GetUAV(pPickingBuffer));
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 8, desc.Height, 8));

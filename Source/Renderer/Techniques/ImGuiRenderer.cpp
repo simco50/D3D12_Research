@@ -133,23 +133,27 @@ void ApplyImGuiStyle()
 }
 
 static GlobalResource<PipelineState> gImGuiPSO;
-static GlobalResource<RootSignature> gImGuiRS;
 static GlobalResource<Texture> gFontTexture;
 
 static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 {
-	context.SetGraphicsRootSignature(gImGuiRS);
+	context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSWithIA);
 	context.SetPipelineState(gImGuiPSO);
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	context.SetViewport(FloatRect(0.0f, 0.0f, pDrawData->DisplaySize.x, pDrawData->DisplaySize.y));
 
-	Vector4 scaleOffset = Vector4(
+	struct
+	{
+		Vector4 ScaleOffset;
+		uint32 mTextureIndex;
+	} params;
+
+	params.ScaleOffset = Vector4(
 		2.0f / pDrawData->DisplaySize.x,
 		-2.0f / pDrawData->DisplaySize.y,
 		-(pDrawData->DisplayPos.x + pDrawData->DisplayPos.x + pDrawData->DisplaySize.x) / pDrawData->DisplaySize.x,
 		(pDrawData->DisplayPos.y + pDrawData->DisplayPos.y + pDrawData->DisplaySize.y) / pDrawData->DisplaySize.y);
-	context.BindRootCBV(1, scaleOffset);
 
 	uint32 vertexOffset = 0;
 	ScratchAllocation vertexData = context.AllocateScratch(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
@@ -190,7 +194,9 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 
 				gAssert(pTexture->GetSRV());
 
-				context.BindRootCBV(0, pTexture->GetSRVIndex());
+				params.mTextureIndex = pTexture->GetSRVIndex();
+
+				context.BindRootCBV(BindingSlot::PerInstance, params);
 				context.SetScissorRect(FloatRect(clip_min.x, clip_min.y, clip_max.x, clip_max.y));
 				context.DrawIndexedInstanced(pCmd->ElemCount, pCmd->IdxOffset + indexOffset, 1, pCmd->VtxOffset + vertexOffset, 0);
 			}
@@ -328,18 +334,13 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	data.SlicePitch = RHI::GetSlicePitch(pixelFormat, width, height);
 	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, pixelFormat, 1, TextureFlag::ShaderResource), "ImGui Font", data);
 
-	gImGuiRS = new RootSignature(pDevice);
-	gImGuiRS->AddRootConstants<uint32>(0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
-	gImGuiRS->AddRootConstants<Vector4>(0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
-	gImGuiRS->Finalize("ImGui RS", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetInputLayout({
 		{ "POSITION", ResourceFormat::RG32_FLOAT },
 		{ "TEXCOORD", ResourceFormat::RG32_FLOAT },
 		{ "COLOR", ResourceFormat::RGBA8_UNORM },
 		});
-	psoDesc.SetRootSignature(gImGuiRS);
+	psoDesc.SetRootSignature(GraphicsCommon::pCommonRSWithIA);
 	psoDesc.SetVertexShader("ImGui.hlsl", "VSMain");
 	psoDesc.SetPixelShader("ImGui.hlsl", "PSMain");
 	psoDesc.SetBlendMode(BlendMode::Alpha, false);

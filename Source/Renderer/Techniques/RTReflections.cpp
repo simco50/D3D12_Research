@@ -57,10 +57,10 @@ void RTReflections::Execute(RGGraph& graph, const RenderView* pView, SceneTextur
 				bindingTable.BindMissShader("OcclusionMS", 1);
 				bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
-				context.BindRootCBV(0, parameters);
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, pTarget->GetUAV());
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerInstance, parameters);
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(sceneTextures.pDepth),
 					resources.GetSRV(sceneTextures.pColorTarget),
 					resources.GetSRV(sceneTextures.pNormals),

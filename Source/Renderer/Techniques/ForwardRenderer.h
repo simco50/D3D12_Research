@@ -18,7 +18,6 @@ public:
 
 private:
 	GraphicsDevice* m_pDevice;
-	Ref<RootSignature> m_pForwardRS;
 
 	// Clustered
 	Ref<PipelineState> m_pClusteredForwardPSO;

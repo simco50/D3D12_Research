@@ -30,8 +30,6 @@ public:
 private:
 	GraphicsDevice* m_pDevice;
 
-	Ref<RootSignature> m_pCommonRS;
-
 	//Volumetric Fog
 	Ref<PipelineState> m_pInjectVolumeLightPSO;
 	Ref<PipelineState> m_pAccumulateVolumeLightPSO;

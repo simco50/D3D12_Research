@@ -30,8 +30,8 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBuildRasterArgsPSO);
 
-				context.BindResources(2, resources.GetUAV(pRasterArgs));
-				context.BindResources(3, resources.GetUAV(rasterContext.pVisibleMeshletsCounter));
+				context.BindResources(BindingSlot::UAV, resources.GetUAV(pRasterArgs));
+				context.BindResources(BindingSlot::SRV, resources.GetUAV(rasterContext.pVisibleMeshletsCounter));
 				context.Dispatch(1);
 			});
 
@@ -46,9 +46,9 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterPSO);
 
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, resources.GetUAV(pRasterOutput));
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, resources.GetUAV(pRasterOutput));
+				context.BindResources(BindingSlot::SRV, {
 						resources.GetSRV(rasterContext.pVisibleMeshlets),
 					});
 
@@ -65,9 +65,9 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterVisualizePSO);
 
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, resources.GetUAV(pDebug));
-				context.BindResources(3, resources.GetSRV(pRasterOutput));
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, resources.GetUAV(pDebug));
+				context.BindResources(BindingSlot::SRV, resources.GetSRV(pRasterOutput));
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pDebug->GetDesc().Width, 16, pDebug->GetDesc().Height, 16));
 			});

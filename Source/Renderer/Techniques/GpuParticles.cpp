@@ -116,8 +116,8 @@ void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* 
 					} params;
 					params.MaxNumParticles = cMaxParticleCount;
 
-					context.BindRootCBV(0, params);
-					context.BindResources(2, {
+					context.BindRootCBV(BindingSlot::PerInstance, params);
+					context.BindResources(BindingSlot::UAV, {
 						resources.GetUAV(pCountersBuffer),
 						resources.GetUAV(pDeadList),
 						});
@@ -145,9 +145,9 @@ void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* 
 					parameters.EmitCount = (int32)Math::Floor(m_ParticlesToSpawn);
 					m_ParticlesToSpawn -= parameters.EmitCount;
 
-					context.BindRootCBV(0, parameters);
-					context.BindResources(2, resources.GetUAV(pCountersBuffer), 0);
-					context.BindResources(2, resources.GetUAV(pIndirectArgs), 5);
+					context.BindRootCBV(BindingSlot::PerInstance, parameters);
+					context.BindResources(BindingSlot::UAV, resources.GetUAV(pCountersBuffer), 0);
+					context.BindResources(BindingSlot::UAV, resources.GetUAV(pIndirectArgs), 5);
 
 					context.Dispatch(1);
 					context.InsertUAVBarrier();
@@ -168,12 +168,12 @@ void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* 
 
 					parameters.Origin = Vector3(1, 1, 0);
 
-					context.BindRootCBV(0, parameters);
-					context.BindRootCBV(1, pView->ViewCB);
-					context.BindResources(2, resources.GetUAV(pCountersBuffer), 0);
-					context.BindResources(2, resources.GetUAV(pCurrentAliveList), 2);
-					context.BindResources(2, resources.GetUAV(pParticlesBuffer), 4);
-					context.BindResources(3, resources.GetSRV(pDeadList), 1);
+					context.BindRootCBV(BindingSlot::PerInstance, parameters);
+					context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+					context.BindResources(BindingSlot::UAV, resources.GetUAV(pCountersBuffer), 0);
+					context.BindResources(BindingSlot::UAV, resources.GetUAV(pCurrentAliveList), 2);
+					context.BindResources(BindingSlot::UAV, resources.GetUAV(pParticlesBuffer), 4);
+					context.BindResources(BindingSlot::SRV, resources.GetSRV(pDeadList), 1);
 
 					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pIndirectArgs), nullptr, offsetof(IndirectArgs, EmitArgs));
 					context.InsertUAVBarrier();
@@ -193,18 +193,18 @@ void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* 
 					} parameters;
 					parameters.ParticleLifeTime = g_LifeTime;
 
-					context.BindRootCBV(0, parameters);
-					context.BindRootCBV(1, pView->ViewCB);
-					context.BindResources(2, {
+					context.BindRootCBV(BindingSlot::PerInstance, parameters);
+					context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+					context.BindResources(BindingSlot::UAV, {
 						resources.GetUAV(pCountersBuffer),
 						resources.GetUAV(pDeadList)
 						}, 0);
-					context.BindResources(2, {
+					context.BindResources(BindingSlot::UAV, {
 						resources.GetUAV(pNewAliveList),
 						resources.GetUAV(pParticlesBuffer),
 						}, 3);
 
-					context.BindResources(3, {
+					context.BindResources(BindingSlot::SRV, {
 						resources.GetSRV(pCurrentAliveList),
 						resources.GetSRV(pDepth),
 						}, 2);
@@ -221,11 +221,11 @@ void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSimulateEndPS);
 
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(2, {
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::UAV, {
 					resources.GetUAV(pIndirectArgs),
 					}, 5);
-				context.BindResources(3, {
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pCountersBuffer),
 					});
 
@@ -258,8 +258,8 @@ void GpuParticles::Render(RGGraph& graph, const RenderView* pView, SceneTextures
 				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.BindRootCBV(1, pView->ViewCB);
-				context.BindResources(3, {
+				context.BindRootCBV(BindingSlot::PerView, pView->ViewCB);
+				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pData->pParticlesBuffer),
 					resources.GetSRV(pData->pAliveList)
 					});
