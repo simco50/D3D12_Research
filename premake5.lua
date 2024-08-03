@@ -115,10 +115,12 @@ workspace (PROJECT_NAME)
 		includedirs "$(SolutionDir)ThirdParty/D3D12/include"
 		runtimeDependency("D3D12/bin/D3D12Core.dll", "D3D12")
 		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll", "D3D12")
-		runtimeDependency("D3D12/bin/d3d10warp.dll", "")
 		links {	"d3d12.lib", "dxgi", "dxguid" }
 
-		-- Pix
+		-- D3D12 Warp
+		runtimeDependency("D3D12Warp/bin/d3d10warp.dll", "")
+
+		-- PIX
 		includedirs "$(SolutionDir)ThirdParty/Pix/include"
 		libdirs "$(SolutionDir)ThirdParty/Pix/lib"
 		runtimeDependency("Pix/bin/WinPixEventRuntime.dll", "")

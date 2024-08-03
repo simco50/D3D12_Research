@@ -607,14 +607,14 @@ private:
 // Helper RAII-style structure to push and pop a CPU sample region
 struct CPUProfileScope
 {
-	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName)
+	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, const char* pName, uint32 color = 0)
 	{
-		gCPUProfiler.BeginEvent(pName, 0, pFilePath, lineNumber);
+		gCPUProfiler.BeginEvent(pName, color, pFilePath, lineNumber);
 	}
 
-	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber)
+	CPUProfileScope(const char* pFunctionName, const char* pFilePath, uint32 lineNumber, uint32 color = 0)
 	{
-		gCPUProfiler.BeginEvent(pFunctionName, 0, pFilePath, lineNumber);
+		gCPUProfiler.BeginEvent(pFunctionName, color, pFilePath, lineNumber);
 	}
 
 	~CPUProfileScope()
