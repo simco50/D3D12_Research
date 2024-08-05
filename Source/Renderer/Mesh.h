@@ -3,6 +3,13 @@
 #include "RHI/RHI.h"
 #include "RHI/Buffer.h"
 
+struct JointTransform
+{
+	Vector3 Translation;
+	Vector3 Scale;
+	Quaternion Rotation;
+};
+
 struct Skeleton
 {
 	using JointIndex = uint16;

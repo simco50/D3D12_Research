@@ -349,58 +349,64 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 							Mesh& mesh = m_pWorld->Meshes[model.MeshIndex];
 							meshes.push_back(&mesh);
-							skinData.SkinMatrixOffset = (uint32)skinningTransforms.size();
-							skinData.SkinnedPositionsOffset = mesh.SkinnedPositionStreamLocation.OffsetFromStart;
-							skinData.SkinnedNormalsOffset = mesh.SkinnedNormalStreamLocation.OffsetFromStart;
-							skinData.PositionsOffset = mesh.PositionStreamLocation.OffsetFromStart;
-							skinData.NormalsOffset = mesh.NormalStreamLocation.OffsetFromStart;
-							skinData.JointsOffset = mesh.JointsStreamLocation.OffsetFromStart;
-							skinData.WeightsOffset = mesh.WeightsStreamLocation.OffsetFromStart;
-							skinData.NumVertices = mesh.PositionStreamLocation.Elements;
+							skinData.SkinMatrixOffset		= (uint32)skinningTransforms.size();
+							skinData.SkinnedPositionsOffset	= mesh.SkinnedPositionStreamLocation.OffsetFromStart;
+							skinData.SkinnedNormalsOffset	= mesh.SkinnedNormalStreamLocation.OffsetFromStart;
+							skinData.PositionsOffset		= mesh.PositionStreamLocation.OffsetFromStart;
+							skinData.NormalsOffset			= mesh.NormalStreamLocation.OffsetFromStart;
+							skinData.JointsOffset			= mesh.JointsStreamLocation.OffsetFromStart;
+							skinData.WeightsOffset			= mesh.WeightsStreamLocation.OffsetFromStart;
+							skinData.NumVertices			= mesh.PositionStreamLocation.Elements;
 
 							const Animation& anim = m_pWorld->Animations[model.AnimationIndex];
 							const Skeleton& skeleton = m_pWorld->Skeletons[model.SkeletonIndex];
-							skinningTransforms.resize(skinningTransforms.size() + skeleton.NumJoints());
-							Matrix* pSkinMatrices = &skinningTransforms[skinData.SkinMatrixOffset];
 
 							float t = fmod(Time::TotalTime(), anim.TimeEnd - anim.TimeStart);
 							float time = t + anim.TimeStart;
 
-							Array<Transform> animTransforms(skeleton.NumJoints());
+							Array<JointTransform> jointTransforms(skeleton.NumJoints());
 							for (const AnimationChannel& channel : anim.Channels)
 							{
-								Transform& jointTransform = animTransforms[skeleton.GetJoint(channel.Target)];
+								JointTransform& jointTransform = jointTransforms[skeleton.GetJoint(channel.Target)];
 								if (channel.Path == AnimationChannel::PathType::Translation)
-									jointTransform.Position = Vector3(channel.Evaluate(time));
+									jointTransform.Translation = Vector3(channel.Evaluate(time));
 								else if (channel.Path == AnimationChannel::PathType::Rotation)
 									jointTransform.Rotation = channel.Evaluate(time);
 								else if (channel.Path == AnimationChannel::PathType::Scale)
 									jointTransform.Scale = Vector3(channel.Evaluate(time));
 							}
 
-							for (Transform& jointTransform : animTransforms)
-							{
-								jointTransform.WorldPrev = jointTransform.World;
-								jointTransform.World = Matrix::CreateScale(jointTransform.Scale) *
-									Matrix::CreateFromQuaternion(jointTransform.Rotation) *
-									Matrix::CreateTranslation(jointTransform.Position);
-							}
-
 							for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
 							{
 								// Update joints in an order so that parent joints are always computed before any children
 								Skeleton::JointIndex jointIndex = skeleton.JointUpdateOrder[i];
-								Matrix& jointTransform = pSkinMatrices[jointIndex];
-
-								jointTransform = animTransforms[jointIndex].World;
 								Skeleton::JointIndex parentJointIndex = skeleton.ParentIndices[jointIndex];
+
 								if (parentJointIndex != Skeleton::InvalidJoint)
-									jointTransform *= pSkinMatrices[parentJointIndex];
+								{
+									JointTransform& transform = jointTransforms[jointIndex];
+									const JointTransform& parentTransform = jointTransforms[parentJointIndex];
+
+									JointTransform newTransform;
+									newTransform.Translation	= parentTransform.Translation + Vector3::Transform(parentTransform.Scale * transform.Translation, parentTransform.Rotation);
+									newTransform.Rotation		= transform.Rotation * parentTransform.Rotation;
+									newTransform.Scale			= transform.Scale * parentTransform.Scale;
+
+									transform = newTransform;
+								}
 							}
 
 							// Compute final skin transforms
+							skinningTransforms.resize(skinningTransforms.size() + skeleton.NumJoints());
+							Matrix* pSkinMatrices = &skinningTransforms[skinData.SkinMatrixOffset];
 							for (int i = 0; i < (int)skeleton.NumJoints(); ++i)
-								pSkinMatrices[i] = skeleton.InverseBindMatrices[i] * pSkinMatrices[i];
+							{
+								const JointTransform& transform = jointTransforms[i];
+								Matrix jointMatrix = Matrix::CreateScale(transform.Scale) *
+														Matrix::CreateFromQuaternion(transform.Rotation) *
+														Matrix::CreateTranslation(transform.Translation);
+								pSkinMatrices[i] = skeleton.InverseBindMatrices[i] * jointMatrix;
+							}
 						}
 					});
 
