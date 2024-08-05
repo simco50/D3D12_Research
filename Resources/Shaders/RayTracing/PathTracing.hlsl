@@ -23,24 +23,20 @@ ConstantBuffer<PassParameters> cPass : register(b0);
 
 Texture2D<float4> tAccumulation : register(t0);
 
-LightResult EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, BrdfData brdfData)
+float3 EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, BrdfData brdfData)
 {
-	LightResult result = (LightResult)0;
 	float3 L;
 	float attenuation = GetAttenuation(light, worldPos, L);
 	if(attenuation <= 0.0f)
-		return result;
+		return 0.0f;
 
 	RayDesc rayDesc = CreateLightOcclusionRay(light, worldPos);
 	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
 	attenuation *= TraceOcclusionRay(rayDesc, tlas);
 	if(attenuation <= 0)
-		return result;
+		return 0.0f;
 
-	result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
-	result.Diffuse *= light.GetColor() * light.Intensity;
-	result.Specular *= light.GetColor() * light.Intensity;
-	return result;
+	return DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L) * attenuation;
 }
 
 // Compute the probability of a specular ray depending on Fresnel term
@@ -310,8 +306,8 @@ void RayGen()
 		float lightWeight = 0.0f;
 		if(SampleLightRIS(seed, hitLocation, N, lightIndex, lightWeight))
 		{
-			LightResult result = EvaluateLight(GetLight(lightIndex), hitLocation, V, N, geometryNormal, brdfData);
-			radiance += throughput * (result.Diffuse + result.Specular) * lightWeight;
+			float3 lighting = EvaluateLight(GetLight(lightIndex), hitLocation, V, N, geometryNormal, brdfData);
+			radiance += throughput * lighting * lightWeight;
 		}
 
 		// If we're at the last bounce, no point in computing the next ray

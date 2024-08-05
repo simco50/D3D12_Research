@@ -47,13 +47,13 @@ uint GetSliceFromDepth(float depth)
 
 #if TILED_FORWARD
 
-LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
+float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	uint2 tileIndex = uint2(floor(pixel / TILED_LIGHTING_TILE_SIZE));
 	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.ViewportDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
 	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
 
-	LightResult totalResult = (LightResult)0;
+	float3 lighting = 0.0f;
 	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
 		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
@@ -64,21 +64,21 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 
 			uint lightIndex = bitIndex + bucketIndex * 32;
 			Light light = GetLight(lightIndex);
-			totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+			lighting += DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 		}
 	}
-	return totalResult;
+	return lighting;
 }
 
 #elif CLUSTERED_FORWARD
 
-LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
+float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
 	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xy);
 	uint lightGridOffset = tileIndex * CLUSTERED_LIGHTING_NUM_BUCKETS;
 
-	LightResult totalResult = (LightResult)0;
+	float3 lighting = 0.0f;
 	for(uint bucketIndex = 0; bucketIndex < CLUSTERED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
 		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
@@ -89,23 +89,23 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 
 			uint lightIndex = bitIndex + bucketIndex * 32;
 			Light light = GetLight(lightIndex);
-			totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+			lighting += DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 		}
 	}
-	return totalResult;
+	return lighting;
 }
 
 #else
 
-LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
+float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
-	LightResult totalResult = (LightResult)0;
+	float3 lighting = (float3)0;
 	for(uint lightIndex = 0; lightIndex < cView.LightCount; ++lightIndex)
 	{
 		Light light = GetLight(lightIndex);
-		totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+		lighting += DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 	}
-	return totalResult;
+	return lighting;
 }
 
 #endif
@@ -270,11 +270,9 @@ void ShadePS(InterpolantsVSToPS input, out PSOut output)
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(input.PositionWS, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
 
-	LightResult lighting = DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, input.PositionWS, input.Position.xy, linearDepth, dither);
-
 	float3 outRadiance = 0;
+	outRadiance += DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, input.PositionWS, input.Position.xy, linearDepth, dither);
 	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(input.PositionWS, surface.Normal, -V);
-	outRadiance += lighting.Diffuse + lighting.Specular;
 	outRadiance += ssr * ambientOcclusion;
 	outRadiance += surface.Emissive;
 

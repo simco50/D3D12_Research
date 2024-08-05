@@ -309,14 +309,12 @@ float3 GetSky(float3 rayDir)
 	return skyTexture.SampleLevel(sLinearWrap, uv, 0).rgb;
 }
 
-LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, float3 N, float3 V, float3 worldPosition, float linearDepth, float dither)
+float3 DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, float3 N, float3 V, float3 worldPosition, float linearDepth, float dither)
 {
-	LightResult result = (LightResult)0;
-
 	float3 L;
 	float attenuation = GetAttenuation(light, worldPosition, L);
 	if(attenuation <= 0.0f)
-		return result;
+		return 0;
 
 	if(light.CastShadows)
 	{
@@ -347,22 +345,14 @@ LightResult DoLight(Light light, float3 specularColor, float3 diffuseColor, floa
 				color = float3(1, 0, 1);
 				color *= 3.0f * saturate(0.2f + modulate * 0.2f);
 			}
-			result.Specular = 0;
-			result.Diffuse = 0.1f * color;
-			return result;
+			return 0.1f * color;
 		}
 #endif
 
 		attenuation *= Shadow3x3PCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMapIndex + shadowIndex, light.InvShadowSize);
 		if(attenuation <= 0)
-			return result;
+			return 0;
 	}
 
-	result = DefaultLitBxDF(specularColor, R, diffuseColor, N, V, L, attenuation);
-
-	float3 color = light.GetColor();
-	result.Diffuse *= color * light.Intensity;
-	result.Specular *= color * light.Intensity;
-
-	return result;
+	return DefaultLitBxDF(specularColor, R, diffuseColor, N, V, L) * attenuation * light.GetColor() * light.Intensity;
 }

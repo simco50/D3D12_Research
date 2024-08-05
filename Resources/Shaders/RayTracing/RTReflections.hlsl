@@ -82,9 +82,7 @@ void RayGen()
 				if(attenuation <= 0.0f)
 					continue;
 
-				LightResult result = DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L, attenuation);
-				radiance += result.Diffuse * light.GetColor() * light.Intensity;
-				radiance += result.Specular * light.GetColor() * light.Intensity;
+				radiance += DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L) * attenuation;
 			}
 
 			radiance += surface.Emissive;

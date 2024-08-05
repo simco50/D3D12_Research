@@ -16,13 +16,13 @@ Texture2D<float> tAO						: register(t7);
 
 RWTexture2D<float4> uOutput 				: register(u0);
 
-LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
+float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	uint2 tileIndex = uint2(floor(pixel / TILED_LIGHTING_TILE_SIZE));
 	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.ViewportDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
 	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
 
-	LightResult totalResult = (LightResult)0;
+	float3 lighting = 0.0f;
 	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
 		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
@@ -33,10 +33,10 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 
 			uint lightIndex = bitIndex + bucketIndex * 32;
 			Light light = GetLight(lightIndex);
-			totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+			lighting += DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 		}
 	}
-	return totalResult;
+	return lighting;
 }
 
 
@@ -71,17 +71,15 @@ void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(worldPos, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
 
-	LightResult result = DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, worldPos, texel, linearDepth, dither);
-
-	float3 outRadiance = 0;
-	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(worldPos, surface.Normal, -V);
-	outRadiance += result.Diffuse + result.Specular;
-	outRadiance += ssr;
-	outRadiance += surface.Emissive;
+	float3 lighting = 0;
+	lighting += DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, worldPos, texel, linearDepth, dither);
+	lighting += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(worldPos, surface.Normal, -V);
+	lighting += ssr;
+	lighting += surface.Emissive;
 
 	float fogSlice = sqrt((linearDepth - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 scatteringTransmittance = tFog.SampleLevel(sLinearClamp, float3(uv, fogSlice), 0);
-	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
+	lighting = lighting * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	uOutput[texel] = float4(outRadiance, surface.Opacity);
+	uOutput[texel] = float4(lighting, surface.Opacity);
 }

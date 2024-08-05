@@ -115,7 +115,6 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 		uint tileIndex = GetLightCluster(threadId.xy, z);
 		uint lightGridOffset = tileIndex * CLUSTERED_LIGHTING_NUM_BUCKETS;
 
-		LightResult totalResult = (LightResult)0;
 		for(uint bucketIndex = 0; bucketIndex < CLUSTERED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 		{
 			uint bucket = tLightGrid[lightGridOffset + bucketIndex];

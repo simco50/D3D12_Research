@@ -13,13 +13,13 @@ Texture3D<float4> tFog : register(t4);
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t5);
 StructuredBuffer<uint> tLightGrid : register(t6);
 
-LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
+float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
 	uint2 tileIndex = uint2(floor(pixel / TILED_LIGHTING_TILE_SIZE));
 	uint tileIndex1D = tileIndex.x + DivideAndRoundUp(cView.ViewportDimensions.x, TILED_LIGHTING_TILE_SIZE) * tileIndex.y;
 	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
 
-	LightResult totalResult = (LightResult)0;
+	float3 lighting = 0;
 	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
 		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
@@ -30,10 +30,10 @@ LightResult DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N
 
 			uint lightIndex = bitIndex + bucketIndex * 32;
 			Light light = GetLight(lightIndex);
-			totalResult = totalResult + DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
+			lighting += DoLight(light, specularColor, diffuseColor, R, N, V, worldPos, linearDepth, dither);
 		}
 	}
-	return totalResult;
+	return lighting;
 }
 
 struct PSOut
@@ -69,11 +69,9 @@ bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 	float ssrWeight = 0;
 	float3 ssr = ScreenSpaceReflections(vertex.Position, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
 
-	LightResult result = DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, vertex.Position, texel, linearDepth, dither);
-
 	float3 outRadiance = 0;
+	outRadiance += DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, vertex.Position, texel, linearDepth, dither);
 	outRadiance += ambientOcclusion * Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(vertex.Position, surface.Normal, -V);
-	outRadiance += result.Diffuse + result.Specular;
 	outRadiance += ssr;
 	outRadiance += surface.Emissive;
 

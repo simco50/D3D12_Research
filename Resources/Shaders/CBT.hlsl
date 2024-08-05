@@ -511,25 +511,20 @@ void ShadePS(
 
 	float dither = InterleavedGradientNoise(position.xy);
 
-	LightResult totalResult = (LightResult)0;
+	float3 lighting = 0.0f;
 	for(uint i = 0; i < cView.LightCount; ++i)
 	{
 		Light light = GetLight(i);
-		LightResult result = DoLight(light, brdfData.Specular, brdfData.Diffuse, brdfData.Roughness, surface.Normal, V, worldPos, viewPos.z, dither);
-		totalResult.Diffuse += result.Diffuse;
-		totalResult.Specular += result.Specular;
+		lighting += DoLight(light, brdfData.Specular, brdfData.Diffuse, brdfData.Roughness, surface.Normal, V, worldPos, viewPos.z, dither);
 	}
 
-	float3 outRadiance = 0;
-	outRadiance += totalResult.Diffuse;
-	outRadiance += totalResult.Specular;
-	outRadiance += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(worldPos, N, -V);
+	lighting += Diffuse_Lambert(brdfData.Diffuse) * SampleDDGIIrradiance(worldPos, N, -V);
 
 	float fogSlice = sqrt((viewPos.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 scatteringTransmittance = tFog.SampleLevel(sLinearClamp, float3(uv, fogSlice), 0);
-	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
+	lighting = lighting * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	output.Color = float4(outRadiance, 1);
+	output.Color = float4(lighting, 1);
 	output.Normal = Octahedral::Pack(surface.Normal);
 	output.Roughness = brdfData.Roughness;
 }
