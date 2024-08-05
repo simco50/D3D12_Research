@@ -12,7 +12,7 @@ struct SkinnedMeshData
     uint NumVertices;
 };
 
-ConstantBuffer<SkinnedMeshData>   cMeshInfo             : register(b0, space1);
+ConstantBuffer<SkinnedMeshData>   cMeshInfo             : register(b0);
 RWByteAddressBuffer               uMeshData             : register(u0);
 StructuredBuffer<float4x4>        tSkinMatrices         : register(t0);
 
