@@ -161,7 +161,7 @@ float4 RenderClouds(uint2 pixel, float3 rayOrigin, float3 rayDirection, float ma
 	float transmittance = 1.0f;
 
 	float3 ambientColor = GetSky(normalize(float3(0, 1.0f, 0)));
-	float3 sunColor = light.Intensity * light.GetColor().rgb;
+	float3 sunColor = light.GetColor();
 
 	for(float t = minT; t <= maxT; t += stepSize)
 	{

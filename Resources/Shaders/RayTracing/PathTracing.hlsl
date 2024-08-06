@@ -36,7 +36,7 @@ float3 EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 ge
 	if(attenuation <= 0)
 		return 0.0f;
 
-	return DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L) * attenuation;
+	return DefaultLitBxDF(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, N, V, L) * attenuation * light.GetColor();
 }
 
 // Compute the probability of a specular ray depending on Fresnel term

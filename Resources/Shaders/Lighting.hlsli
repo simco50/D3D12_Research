@@ -353,5 +353,5 @@ float3 DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, 
 			return 0;
 	}
 
-	return DefaultLitBxDF(specularColor, R, diffuseColor, N, V, L) * attenuation * light.GetColor() * light.Intensity;
+	return DefaultLitBxDF(specularColor, R, diffuseColor, N, V, L) * attenuation * light.GetColor();
 }

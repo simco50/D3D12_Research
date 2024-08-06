@@ -80,7 +80,7 @@ void TraceRaysRGS()
 					continue;
 
 				float3 diffuse = (attenuation * saturate(dot(N, L))) * Diffuse_Lambert(brdfData.Diffuse);
-				radiance += diffuse * light.GetColor() * light.Intensity;
+				radiance += diffuse * light.GetColor();
 			}
 
 			radiance += surface.Emissive;

@@ -114,7 +114,7 @@ struct Light
 	uint CastShadows : 1;
 
 #ifndef __cplusplus
-	float3 GetColor() { return unpack_u8u32(Color).rgb / 255.0f; }
+	float3 GetColor() { return unpack_u8u32(Color).rgb / 255.0f * Intensity; }
 #endif
 };
 

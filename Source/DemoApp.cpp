@@ -73,6 +73,9 @@ void DemoApp::Shutdown()
 
 void DemoApp::SetupScene(const char* pFilePath)
 {
+	Material& defaultMaterial = m_World.Materials.emplace_back();
+	defaultMaterial.BaseColorFactor = Vector4(0.7f, 0.7f, 0.7f, 1.0f);
+
 	m_World.Camera = m_World.CreateEntity("Main Camera");
 	Camera& camera = m_World.Registry.emplace<Camera>(m_World.Camera);
 	camera.FOV = 60.0f * Math::PI / 180;
