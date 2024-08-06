@@ -168,7 +168,7 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 			screenPos.xyz /= screenPos.w;
 			if(screenPos.x > -1 && screenPos.y < 1 && screenPos.y > -1 && screenPos.y < 1)
 			{
-				float2 uv = screenPos.xy * float2(0.5f, -0.5f) + 0.5f;
+				float2 uv = ClipToUV(screenPos.xy);
 				float depth = tSceneDepth.SampleLevel(sPointClamp, uv, 0);
 				float linearDepth = LinearizeDepth(depth);
 				const float thickness = 1;

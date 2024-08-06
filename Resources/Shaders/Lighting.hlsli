@@ -196,7 +196,7 @@ float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<
 	for(uint i = 0; i < stepCount; ++i)
 	{
 		float3 rayPos = rayStartPS.xyz + n * rayStep;
-		float depth = depthTexture.SampleLevel(sPointClamp, rayPos.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f), 0).r;
+		float depth = depthTexture.SampleLevel(sPointClamp, ClipToUV(rayPos.xy), 0).r;
 		float diff = rayPos.z - depth;
 
 		bool hit = abs(diff + tolerance) < tolerance;
@@ -206,8 +206,7 @@ float ScreenSpaceShadows(float3 worldPosition, float3 lightDirection, Texture2D<
 	if(hitStep > 0.0f)
 	{
 		float2 hitUV = rayStartPS.xy + n * rayStep.xy;
-		hitUV = hitUV * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
-		occlusion = ScreenFade(hitUV);
+		occlusion = ScreenFade(ClipToUV(hitUV));
 	}
 	return 1.0f - occlusion;
 }

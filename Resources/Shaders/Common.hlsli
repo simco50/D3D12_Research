@@ -196,6 +196,16 @@ float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
 	return ViewPositionFromDepth(screenNormalized, screen.z, projectionInverse);
 }
 
+float2 ClipToUV(float2 clip)
+{
+	return clip * float2(0.5f, -0.5f) + 0.5f;
+}
+
+float2 UVToClip(float2 uv)
+{
+	return (uv - 0.5f) * float2(2.0f, -2.0f);
+}
+
 AABB AABBFromMinMax(float3 minimum, float3 maximum)
 {
 	AABB aabb;

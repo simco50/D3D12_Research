@@ -15,7 +15,7 @@ void CSMain(uint3 threadID : SV_DispatchThreadID)
 	float2 uv = posSS * cView.ViewportDimensionsInv;
 
 	// Compute world space position from depth
-	float4 posNDC = float4(uv.x * 2.0f - 1.0f, uv.y * -2.0f + 1, depth, 1.0f);
+	float4 posNDC = float4(UVToClip(uv), depth, 1.0f);
 	float4 posWS = mul(posNDC, cView.ClipToWorld);
 	posWS /= posWS.w;
 
@@ -29,6 +29,6 @@ void CSMain(uint3 threadID : SV_DispatchThreadID)
 	// Remove jitter
 	velocity += cView.ViewJitter - cView.ViewJitterPrev;
 	
-	// NDC to UV
+	// NDC to UV offset
 	uVelocity[threadID.xy] = velocity * float2(0.5f, -0.5f);
 }

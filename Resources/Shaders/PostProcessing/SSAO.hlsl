@@ -52,7 +52,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 		float3 vpos = viewPos + mul(hemispherePoint, TBN) * cPass.AoRadius;
 		float4 newTexCoord = mul(float4(vpos, 1), cView.ViewToClip);
 		newTexCoord.xyz /= newTexCoord.w;
-		newTexCoord.xy = newTexCoord.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
+		newTexCoord.xy = ClipToUV(newTexCoord.xy);
 
 		// Make sure we're not sampling outside the screen
 		if(all(newTexCoord.xy >= 0) && all(newTexCoord.xy <= 1))
