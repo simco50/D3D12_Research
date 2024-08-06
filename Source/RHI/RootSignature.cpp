@@ -43,7 +43,7 @@ void RootSignature::AddDescriptorTable(uint32 shaderRegister, uint32 numDescript
 	parameter.Data.InitAsDescriptorTable(1, &parameter.Range, visibility);
 }
 
-void RootSignature::AddStaticSampler(uint32 registerSlot, D3D12_FILTER filter, D3D12_TEXTURE_ADDRESS_MODE wrapMode, D3D12_COMPARISON_FUNC compareFunc)
+void RootSignature::AddStaticSampler(uint32 registerSlot, uint32 space, D3D12_FILTER filter, D3D12_TEXTURE_ADDRESS_MODE wrapMode, D3D12_COMPARISON_FUNC compareFunc)
 {
 	D3D12_STATIC_SAMPLER_DESC desc{};
 	desc.AddressU = wrapMode;
@@ -55,7 +55,7 @@ void RootSignature::AddStaticSampler(uint32 registerSlot, D3D12_FILTER filter, D
 	desc.MaxAnisotropy = 8;
 	desc.MaxLOD = FLT_MAX;
 	desc.MinLOD = 0.0f;
-	desc.RegisterSpace = 1;
+	desc.RegisterSpace = space;
 	desc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 	desc.ShaderRegister = registerSlot;
 	desc.MipLODBias = 0.0f;
@@ -76,23 +76,6 @@ void RootSignature::Finalize(const char* pName, D3D12_ROOT_SIGNATURE_FLAGS flags
 		visibilityFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS;
 		visibilityFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
 	}
-
-	int staticSamplerRegisterSlot = 0;
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
-
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
-
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
-
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_COMPARISON_FUNC_GREATER);
-	AddStaticSampler(staticSamplerRegisterSlot++, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_COMPARISON_FUNC_GREATER);
 
 	StaticArray<D3D12_ROOT_PARAMETER1, sMaxNumParameters> rootParameters;
 	for (size_t i = 0; i < m_NumParameters; ++i)
