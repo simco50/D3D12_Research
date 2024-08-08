@@ -22,7 +22,7 @@ void AccelerationStructure::Init(GraphicsDevice* pDevice)
 	m_pUpdateTLASPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
 }
 
-void AccelerationStructure::Build(CommandContext& context, const RenderView& view, Span<const Batch> batches)
+void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstancesBuffer, Span<const Batch> batches)
 {
 	PROFILE_CPU_SCOPE();
 
@@ -187,10 +187,13 @@ void AccelerationStructure::Build(CommandContext& context, const RenderView& vie
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pUpdateTLASPSO);
-				Renderer::BindViewUniforms(context, view);
 				context.BindRootCBV(BindingSlot::PerInstance, (uint32)blasInstances.size());
 				context.BindResources(BindingSlot::UAV, m_pBLASInstancesTargetBuffer->GetUAV());
-				context.BindResources(BindingSlot::SRV, m_pBLASInstancesSourceBuffer->GetSRV());
+				context.BindResources(BindingSlot::SRV,
+					{
+						pInstancesBuffer->GetSRV(),
+						m_pBLASInstancesSourceBuffer->GetSRV(),
+					});
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
 			}
 		}

@@ -51,7 +51,7 @@ namespace ShaderCompiler
 		uint64 ShaderHash[2];
 		bool IsDebug;
 
-		bool Success() const { return pBlob.Get() && ErrorMessage.length() == 0; }
+		bool Success() const { return pBlob.Get(); }
 	};
 
 	constexpr const char* GetShaderTarget(ShaderType type)

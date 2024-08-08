@@ -80,7 +80,7 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 				constants.IsIntegerFormat = formatInfo.Type == FormatType::Integer;
 
 				context.BindRootCBV(BindingSlot::PerInstance, constants);
-				context.BindResources(1, resources.GetUAV(pPickingBuffer));
+				context.BindResources(BindingSlot::UAV, resources.GetUAV(pPickingBuffer));
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 8, desc.Height, 8));
 			});

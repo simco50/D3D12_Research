@@ -15,7 +15,8 @@ struct BLASInstance
 };
 
 ConstantBuffer<PassParameters> cPass : register(b0);
-StructuredBuffer<BLASInstance> tInputInstances : register(t0);
+StructuredBuffer<InstanceData> tInstanceData : register(t0);
+StructuredBuffer<BLASInstance> tInputInstances : register(t1);
 RWStructuredBuffer<D3D12_RAYTRACING_INSTANCE_DESC> uOutputInstances : register(u0);
 
 [numthreads(32, 1, 1)]
@@ -30,7 +31,7 @@ void UpdateTLASCS(uint threadID : SV_DispatchThreadID)
 		output.InstanceContributionToHitGroupIndex = 0;
 		output.Flags = blasDesc.Flags;
 		output.AccelerationStructure = blasDesc.AccelerationStructure;
-		InstanceData instance = GetInstance(blasDesc.InstanceID);
+		InstanceData instance = tInstanceData[blasDesc.InstanceID];
 		output.Transform = (float3x4)transpose(instance.LocalToWorld);
 		uOutputInstances[threadID] = output;
 	}

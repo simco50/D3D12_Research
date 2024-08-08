@@ -14,7 +14,7 @@ public:
 	~AccelerationStructure();
 
 	void Init(GraphicsDevice* pDevice);
-	void Build(CommandContext& context, const RenderView& view, Span<const Batch> batches);
+	void Build(CommandContext& context, const Buffer* pInstancesBuffer, Span<const Batch> batches);
 	ShaderResourceView* GetSRV() const;
 
 private:

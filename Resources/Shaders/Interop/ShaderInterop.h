@@ -82,13 +82,12 @@ struct InstanceData
 	float4x4 LocalToWorld;
 	float4x4 LocalToWorldPrev;
 	float3 LocalBoundsOrigin;
-	PAD;
+	uint pad0;
 	float3 LocalBoundsExtents;
 	uint ID;
 	uint MaterialIndex;
 	uint MeshIndex;
-	PAD;
-	PAD;
+	uint2 pad2;
 };
 
 struct Light
@@ -129,7 +128,7 @@ struct DDGIVolume
 	uint DepthIndex;
 	uint ProbeOffsetIndex;
 	uint ProbeStatesIndex;
-	PAD;
+	uint pad0;
 };
 
 struct FogVolume
@@ -145,9 +144,7 @@ struct ViewUniforms
 {
 	float4 CascadeDepths;
 	uint NumCascades;
-	PAD;
-	PAD;
-	PAD;
+	uint3 pad0;
 
 	float4x4 WorldToView;
 	float4x4 ViewToWorld;
@@ -159,9 +156,9 @@ struct ViewUniforms
 	float4x4 UVToPrevUV;
 	float4x4 WorldToClipUnjittered;
 	float3 ViewLocation;
-	PAD;
+	uint pad1;
 	float3 ViewLocationPrev;
-	PAD;
+	uint pad2;
 	float2 ViewportDimensions;
 	float2 ViewportDimensionsInv;
 	float2 ViewJitter;

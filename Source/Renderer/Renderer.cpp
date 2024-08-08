@@ -311,7 +311,16 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 		{
 			CommandContext* pContext = m_pDevice->AllocateCommandContext();
+
+			// Upload GPU scene data
 			UploadSceneData(*pContext);
+
+			// Build RTAS
+			//m_AccelerationStructure.Build(*pContext, m_InstanceBuffer.pBuffer, m_Batches);
+
+			// Upload PerView uniforms
+			Renderer::UploadViewUniforms(*pContext, m_MainView);
+
 			pContext->Execute();
 		}
 
@@ -437,12 +446,6 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 							});
 				}
 			}
-
-			graph.AddPass("Build Acceleration Structures", RGPassFlag::Compute | RGPassFlag::NeverCull)
-				.Bind([=](CommandContext& context, const RGResources& resources)
-					{
-						m_AccelerationStructure.Build(context, m_MainView, m_Batches);
-					});
 
 			const Vector2u viewDimensions = pView->GetDimensions();
 

@@ -84,7 +84,7 @@ LineInstance UnpackLineInstance(PackedLineInstance p)
 
 static const uint MAX_NUM_COUNTERS = 4;
 static const uint MAX_NUM_TEXT = 8192;
-static const uint MAX_NUM_LINES = 8192;
+static const uint MAX_NUM_LINES = 32768;
 
 static const uint TEXT_COUNTER_OFFSET = 0;
 static const uint LINE_COUNTER_OFFSET = 4;

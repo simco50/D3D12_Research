@@ -87,7 +87,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
 
-	if(cPassData.BloomIntensity >= 0)
+	if(cPassData.BloomIntensity > 0)
 	{
 		float3 lensDirt = tLensDirt.SampleLevel(sLinearClamp, float2(uv.x, 1.0f - uv.y), 0).rgb * cPassData.LensDirtTint;
 		float3 bloom = tBloom.SampleLevel(sLinearClamp, uv, 0).rgb * cPassData.BloomIntensity;
