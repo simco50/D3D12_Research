@@ -17,7 +17,7 @@
 #include "Core/Commandline.h"
 
 // Setup the Agility D3D12 SDK
-extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
+extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = 715; }
 extern "C" { _declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
 
 GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
@@ -232,6 +232,11 @@ GraphicsDevice::LiveObjectReporter::~LiveObjectReporter()
 GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	: DeviceObject(this), m_DeleteQueue(this)
 {
+	// Enable experimental D3D12 features for mesh nodes
+	std::array<UUID, 2> meshNodesExperimentalFeatures = { D3D12ExperimentalShaderModels, D3D12StateObjectsExperiment };
+	VERIFY_HR(D3D12EnableExperimentalFeatures(static_cast<UINT>(meshNodesExperimentalFeatures.size()), meshNodesExperimentalFeatures.data(), nullptr, nullptr));
+
+
 	if (options.LoadPIX)
 	{
 		if (PIXLoadLatestWinPixGpuCapturerLibrary())
@@ -339,9 +344,9 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	Ref<ID3D12InfoQueue> pInfoQueue;
 	if (SUCCEEDED(m_pDevice->QueryInterface(IID_PPV_ARGS(pInfoQueue.GetAddressOf()))))
 	{
-		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true), GetDevice());
-		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
-		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
+		//VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true), GetDevice());
+		//VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true), GetDevice());
+		//VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
 		E_LOG(Warning, "D3D Validation Break on Severity Enabled");
 
 		Ref<ID3D12InfoQueue1> pInfoQueue1;

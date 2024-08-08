@@ -50,11 +50,19 @@ uint64 StateObject::GetWorkgraphBufferSize() const
 {
 	gAssert(m_Desc.Type == D3D12_STATE_OBJECT_TYPE_EXECUTABLE);
 
-	Ref<ID3D12WorkGraphProperties> pProps;
+	Ref<ID3D12WorkGraphProperties1> pProps;
 	m_pStateObject->QueryInterface(pProps.GetAddressOf());
+	pProps->SetMaximumInputRecords(0, 1, 1);
 	D3D12_WORK_GRAPH_MEMORY_REQUIREMENTS reqs{};
 	pProps->GetWorkGraphMemoryRequirements(0, &reqs);
 	return reqs.MaxSizeInBytes;
+}
+
+void StateObject::Create(ID3D12StateObject* pStateObject)
+{
+	m_pStateObject = pStateObject;
+	VERIFY_HR(m_pStateObject->QueryInterface(m_pStateObjectProperties.ReleaseAndGetAddressOf()));
+	m_Desc.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
 }
 
 void StateObject::CreateInternal()

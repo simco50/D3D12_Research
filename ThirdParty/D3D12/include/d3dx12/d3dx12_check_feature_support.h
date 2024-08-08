@@ -236,6 +236,10 @@ public: // Function declaration
     D3D12_WORK_GRAPHS_TIER WorkGraphsTier() const noexcept;
 #endif
 
+#if defined(D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 614)
+    BOOL TightAlignmentSupported() const noexcept;
+#endif
+
 private: // Private structs and helpers declaration
     struct ProtectedResourceSessionTypesLocal : D3D12_FEATURE_DATA_PROTECTED_RESOURCE_SESSION_TYPES
     {
@@ -324,6 +328,9 @@ private: // Member data
 #endif
 #if defined(D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 612)
     D3D12_FEATURE_DATA_D3D12_OPTIONS21 m_dOptions21;
+#endif
+#if defined(D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 614)
+    D3D12_FEATURE_DATA_D3D12_OPTIONS22 m_dOptions22;
 #endif
 };
 
@@ -418,6 +425,9 @@ inline CD3DX12FeatureSupport::CD3DX12FeatureSupport() noexcept
 #endif
 #if defined (D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 612)
 , m_dOptions21{}
+#endif
+#if defined (D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 614)
+, m_dOptions22{}
 #endif
 {}
 
@@ -591,6 +601,13 @@ inline HRESULT CD3DX12FeatureSupport::Init(ID3D12Device* pDevice)
     if (FAILED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS21, &m_dOptions21, sizeof(m_dOptions21))))
     {
         m_dOptions21 = {};
+    }
+#endif
+
+#if defined(D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 614)
+    if (FAILED(m_pDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS22, &m_dOptions22, sizeof(m_dOptions22))))
+    {
+        m_dOptions22 = {};
     }
 #endif
 
@@ -970,6 +987,11 @@ FEATURE_SUPPORT_GET(BOOL, m_dOptions20, ComputeOnlyWriteWatchSupported);
 // 50: Options21
 FEATURE_SUPPORT_GET(D3D12_EXECUTE_INDIRECT_TIER, m_dOptions21, ExecuteIndirectTier);
 FEATURE_SUPPORT_GET(D3D12_WORK_GRAPHS_TIER, m_dOptions21, WorkGraphsTier);
+#endif
+
+#if defined(D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 614)
+// 51: Options22
+FEATURE_SUPPORT_GET(BOOL, m_dOptions22, TightAlignmentSupported);
 #endif
 
 // Helper function to decide the highest shader model supported by the system

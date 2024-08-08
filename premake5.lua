@@ -129,7 +129,7 @@ workspace (PROJECT_NAME)
 		-- DXC
 		includedirs "$(SolutionDir)ThirdParty/Dxc/include"
 		runtimeDependency ("Dxc/bin/dxcompiler.dll", "")
-		runtimeDependency ("Dxc/bin/dxil.dll", "")
+		--runtimeDependency ("Dxc/bin/dxil.dll", "")
 
 		-- DirectXMath
 		includedirs "$(SolutionDir)ThirdParty/DirectXMath/include"

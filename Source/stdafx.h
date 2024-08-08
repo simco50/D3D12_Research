@@ -3,7 +3,6 @@
 #include "Core/MinWindows.h"
 #include "d3d12.h"
 #include <dxgi1_6.h>
-#define D3DX12_NO_STATE_OBJECT_HELPERS
 #include "d3dx12/d3dx12.h"
 
 using ID3D12DeviceX					= ID3D12Device14;

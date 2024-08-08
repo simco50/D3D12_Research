@@ -19,7 +19,7 @@ namespace CBTSettings
 	static bool FreezeCamera = false;
 	static bool DebugVisualize = false;
 	static bool CpuDemo = false;
-	static bool MeshShader = true;
+	static bool MeshShader = false;
 	static float ScreenSizeBias = 10.5f;
 	static float HeightmapVarianceBias = 0.1f;
 	static float HeightScale = 10.0f;

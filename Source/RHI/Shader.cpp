@@ -370,6 +370,7 @@ namespace ShaderCompiler
 
 		arguments.AddArgument(DXC_ARG_DEBUG);
 		arguments.AddArgument("-Qembed_debug");
+		arguments.AddArgument("-select-validator", "internal");
 
 		if (compileJob.EnableDebugMode)
 			arguments.AddArgument(DXC_ARG_SKIP_OPTIMIZATIONS);
@@ -476,6 +477,7 @@ namespace ShaderCompiler
 		}
 
 		//Validation
+#if 0
 		{
 			Ref<IDxcOperationResult> pResult;
 			VERIFY_HR(pValidator->Validate((IDxcBlob*)result.pBlob.Get(), DxcValidatorFlags_InPlaceEdit, pResult.GetAddressOf()));
@@ -491,6 +493,7 @@ namespace ShaderCompiler
 				return result;
 			}
 		}
+#endif
 
 		// Hash
 		{
@@ -650,7 +653,7 @@ ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shader
 	job.FilePath = pShaderPath;
 	job.IncludeDirs = m_IncludeDirs;
 	job.MajVersion = m_ShaderModelMajor;
-	job.MinVersion = m_ShaderModelMinor;
+	job.MinVersion = shaderType == ShaderType::MAX ? 9 : m_ShaderModelMinor;
 	job.Target = ShaderCompiler::GetShaderTarget(shaderType);
 	job.EnableDebugMode = CommandLine::GetBool("debugshaders");
 

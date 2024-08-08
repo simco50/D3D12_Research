@@ -54,9 +54,10 @@ namespace Tweakables
 	ConsoleVariable gTau("r.Exposure.Tau", 2.0f);
 	ConsoleVariable gDrawHistogram("r.Histogram", false);
 	ConsoleVariable gToneMapper("r.Tonemapper", 2);
-	ConsoleVariable gTAA("r.Taa", true);
+	ConsoleVariable gTAA("r.Taa", false);
 
 	// Shadows
+	ConsoleVariable gSSAO("r.SSAO", false);
 	ConsoleVariable gSDSM("r.Shadows.SDSM", false);
 	ConsoleVariable gVisualizeShadowCascades("vis.ShadowCascades", false);
 	ConsoleVariable gShadowCascades("r.Shadows.CascadeCount", 4);
@@ -66,29 +67,29 @@ namespace Tweakables
 	ConsoleVariable gCullShadowsDebugStats("r.Shadows.CullingStats", -1);
 
 	// Bloom
-	ConsoleVariable gBloom("r.Bloom", true);
+	ConsoleVariable gBloom("r.Bloom", false);
 	ConsoleVariable gBloomIntensity("r.Bloom.Intensity", 1.0f);
 	ConsoleVariable gBloomBlendFactor("r.Bloom.BlendFactor", 0.3f);
 	ConsoleVariable gBloomInteralBlendFactor("r.Bloom.InteralBlendFactor", 0.85f);
 
 	// Misc Lighting
-	ConsoleVariable gSky("r.Sky", true);
-	ConsoleVariable gVolumetricFog("r.VolumetricFog", true);
-	ConsoleVariable gClouds("r.Clouds", true);
+	ConsoleVariable gSky("r.Sky", false);
+	ConsoleVariable gVolumetricFog("r.VolumetricFog", false);
+	ConsoleVariable gClouds("r.Clouds", false);
 	ConsoleVariable gRaytracedAO("r.Raytracing.AO", false);
 	ConsoleVariable gVisualizeLightDensity("vis.LightDensity", false);
-	ConsoleVariable gEnableDDGI("r.DDGI", true);
+	ConsoleVariable gEnableDDGI("r.DDGI", false);
 	ConsoleVariable gVisualizeDDGI("vis.DDGI", false);
 	ConsoleVariable gRenderObjectBounds("r.vis.ObjectBounds", false);
 
 	ConsoleVariable gRaytracedReflections("r.Raytracing.Reflections", false);
 	ConsoleVariable gSSRSamples("r.SSRSamples", 8);
-	ConsoleVariable gRenderTerrain("r.Terrain", true);
+	ConsoleVariable gRenderTerrain("r.Terrain", false);
 	ConsoleVariable gOcclusionCulling("r.OcclusionCulling", true);
-	ConsoleVariable gWorkGraph("r.WorkGraph", false);
+	ConsoleVariable gWorkGraph("r.WorkGraph", true);
 
 	// Misc
-	ConsoleVariable gVisibilityDebugMode("r.Raster.VisibilityDebug", 0);
+	ConsoleVariable gVisibilityDebugMode("r.Raster.VisibilityDebug", 2);
 	ConsoleVariable gCullDebugStats("r.CullingStats", false);
 
 	// Render Graph
@@ -499,6 +500,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			RasterResult rasterResult;
 			if (m_RenderPath != RenderPath::PathTracing)
 			{
+#if 0
 				{
 					RG_GRAPH_SCOPE("Shadow Depths", graph);
 					for (uint32 i = 0; i < (uint32)m_ShadowViews.size(); ++i)
@@ -542,6 +544,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						}
 					}
 				}
+#endif
 
 				const bool doPrepass = true;
 				const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred;
@@ -672,10 +675,13 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						});
 
 				RGTexture* pAO = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::White2D));
-				if (Tweakables::gRaytracedAO)
-					pAO = m_pRTAO->Execute(graph, pView, sceneTextures.pDepth, sceneTextures.pVelocity);
-				else
-					pAO = m_pSSAO->Execute(graph, pView, sceneTextures.pDepth);
+				if (Tweakables::gSSAO)
+				{
+					if (Tweakables::gRaytracedAO)
+						pAO = m_pRTAO->Execute(graph, pView, sceneTextures.pDepth, sceneTextures.pVelocity);
+					else
+						pAO = m_pSSAO->Execute(graph, pView, sceneTextures.pDepth);
+				}
 
 				m_pLightCulling->ComputeTiledLightCulling(graph, pView, sceneTextures, lightCull2DData);
 				m_pLightCulling->ComputeClusteredLightCulling(graph, pView, lightCull3DData);
@@ -699,7 +705,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Read({ rasterResult.pVisibilityBuffer, sceneTextures.pDepth, pAO, sceneTextures.pPreviousColor })
 						.Read({ lightCull2DData.pLightListOpaque })
 						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
-						.RenderTarget(sceneTextures.pColorTarget)
+						.RenderTarget(sceneTextures.pColorTarget, RenderPassColorFlags::Clear)
 						.RenderTarget(sceneTextures.pNormals)
 						.RenderTarget(sceneTextures.pRoughness)
 						.Bind([=](CommandContext& context, const RGResources& resources)
@@ -783,19 +789,22 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 				m_pParticles->Render(graph, pView, sceneTextures);
 
-				graph.AddPass("Render Sky", RGPassFlag::Raster)
-					.Read(pSky)
-					.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
-					.RenderTarget(sceneTextures.pColorTarget)
-					.Bind([=](CommandContext& context, const RGResources& resources)
-						{
-							context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-							context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-							context.SetPipelineState(m_pSkyboxPSO);
+				if (Tweakables::gSky)
+				{
+					graph.AddPass("Render Sky", RGPassFlag::Raster)
+						.Read(pSky)
+						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
+						.RenderTarget(sceneTextures.pColorTarget)
+						.Bind([=](CommandContext& context, const RGResources& resources)
+							{
+								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+								context.SetPipelineState(m_pSkyboxPSO);
 
-							Renderer::BindViewUniforms(context, *pView);
-							context.Draw(0, 36);
-						});
+								Renderer::BindViewUniforms(context, *pView);
+								context.Draw(0, 36);
+							});
+				}
 
 				if (Tweakables::gClouds)
 				{
@@ -1103,7 +1112,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						} parameters;
 						parameters.WhitePoint = Tweakables::gWhitePoint.Get();
 						parameters.Tonemapper = Tweakables::gToneMapper.Get();
-						parameters.BloomIntensity = Tweakables::gBloomIntensity.Get();
+						parameters.BloomIntensity = Tweakables::gBloom ? Tweakables::gBloomIntensity : 0.0f;
 						parameters.BloomBlendFactor = Tweakables::gBloomBlendFactor.Get();
 						parameters.LensDirtTint = m_LensDirtTint;
 
@@ -1381,7 +1390,7 @@ void Renderer::GetViewUniforms(const RenderView& view, ShaderInterop::ViewUnifor
 	outUniforms.InstancesIndex			= m_InstanceBuffer.pBuffer->GetSRVIndex();
 	outUniforms.LightsIndex				= m_LightBuffer.pBuffer->GetSRVIndex();
 	outUniforms.LightMatricesIndex		= m_LightMatricesBuffer.pBuffer->GetSRVIndex();
-	outUniforms.SkyIndex				= m_pSky ? m_pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+	outUniforms.SkyIndex				= m_pSky ? m_pSky->GetSRVIndex() : GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube)->GetSRVIndex();
 	outUniforms.DDGIVolumesIndex		= m_DDGIVolumesBuffer.pBuffer->GetSRVIndex();
 	outUniforms.NumDDGIVolumes			= m_DDGIVolumesBuffer.Count;
 
@@ -1593,11 +1602,6 @@ void Renderer::UploadSceneData(CommandContext& context)
 	}
 
 	sceneBatches.swap(m_Batches);
-
-	// View Uniform Buffers
-	{
-		Renderer::UploadViewUniforms(context, m_MainView);
-	}
 }
 
 

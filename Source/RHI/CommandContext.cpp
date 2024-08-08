@@ -633,7 +633,7 @@ void CommandContext::DispatchRays(ShaderBindingTable& table, uint32 width /*= 1*
 
 void CommandContext::DispatchGraph(const D3D12_DISPATCH_GRAPH_DESC& graphDesc)
 {
-	gAssert(m_CurrentCommandContext == CommandListContext::Compute);
+	//gAssert(m_CurrentCommandContext == CommandListContext::Compute);
 	PrepareDraw();
 	m_pCommandList->DispatchGraph(&graphDesc);
 }
