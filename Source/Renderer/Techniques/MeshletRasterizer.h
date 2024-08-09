@@ -14,20 +14,20 @@ struct RasterContext
 {
 	RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, Ref<Texture>* pPreviousHZB);
 
-	RGTexture* pDepth = nullptr;
-	Ref<Texture>* pPreviousHZB = nullptr;
-	bool EnableDebug = false;
-	bool EnableOcclusionCulling = false;
-	bool WorkGraph = false;
 	RasterMode Mode;
+	RGTexture* pDepth			= nullptr;
+	Ref<Texture>* pPreviousHZB	= nullptr;
+	bool EnableDebug			= false;
+	bool EnableOcclusionCulling	= false;
+	bool WorkGraph				= false;
 
-	RGBuffer* pCandidateMeshlets = nullptr;
-	RGBuffer* pCandidateMeshletsCounter = nullptr;
-	RGBuffer* pVisibleMeshlets = nullptr;
-	RGBuffer* pVisibleMeshletsCounter = nullptr;
-	RGBuffer* pOccludedInstances = nullptr;
-	RGBuffer* pOccludedInstancesCounter = nullptr;
-	RGBuffer* pBinnedMeshletOffsetAndCounts[2]{};
+	RGBuffer* pCandidateMeshlets			= nullptr;
+	RGBuffer* pCandidateMeshletsCounter		= nullptr;
+	RGBuffer* pVisibleMeshlets				= nullptr;
+	RGBuffer* pVisibleMeshletsCounter		= nullptr;
+	RGBuffer* pOccludedInstances			= nullptr;
+	RGBuffer* pOccludedInstancesCounter		= nullptr;
+	StaticArray<RGBuffer*, 2> pBinnedMeshletOffsetAndCounts{};
 };
 
 struct RasterResult
@@ -45,6 +45,13 @@ public:
 	void Render(RGGraph& graph, const RenderView* pView, RasterContext& context, RasterResult& outResult);
 	void PrintStats(RGGraph& graph, const Vector2& position, const RenderView* pView, const RasterContext& rasterContext);
 
+	enum class PipelineBin
+	{
+		Opaque,
+		AlphaMasked,
+		Count,
+	};
+
 private:
 	enum class RasterPhase
 	{
@@ -52,18 +59,14 @@ private:
 		Phase2,
 	};
 
-	enum class PipelineBin
-	{
-		Opaque,
-		AlphaMasked,
-		Count,
-	};
 	using PipelineStateBinSet = StaticArray<Ref<PipelineState>, (int)PipelineBin::Count>;
 
-	RGTexture* InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const;
 	void BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB);
 
 	void CullAndRasterize(RGGraph& graph, const RenderView* pView, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
+
+	void CullAndRasterizeDefault(RGGraph& graph, const RenderView* pView, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
+	void CullAndRasterizeWorkGraph(RGGraph& graph, const RenderView* pView, RasterPhase rasterPhase, RasterContext& context, RasterResult& outResult);
 
 	GraphicsDevice* m_pDevice;
 

@@ -70,7 +70,7 @@ public:
 	ID3D12StateObjectProperties1* GetStateObjectProperties() const { return m_pStateObjectProperties.Get(); }
 	uint64 GetWorkgraphBufferSize() const;
 
-	void Create(ID3D12StateObject* pStateObject);
+	void SetStateObject(Ref<ID3D12StateObject> pStateObject);
 
 private:
 	void CreateInternal();

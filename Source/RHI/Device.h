@@ -115,7 +115,8 @@ public:
 	bool SupportsMeshShading() const { return MeshShaderSupport != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED; }
 	bool SupportsVRS() const { return VRSTier != D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED; }
 	bool SupportsSamplerFeedback() const { return SamplerFeedbackSupport != D3D12_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED; }
-	bool SupportsWorkGraphs() const { return m_FeatureSupport.WorkGraphsTier() != D3D12_WORK_GRAPHS_TIER_NOT_SUPPORTED; }
+	bool SupportsWorkGraphs() const { return m_FeatureSupport.WorkGraphsTier() >= D3D12_WORK_GRAPHS_TIER_1_0; }
+	bool SupportsMeshNodes() const { return m_FeatureSupport.WorkGraphsTier() >= D3D12_WORK_GRAPHS_TIER_1_1; }
 	void GetShaderModel(uint8& maj, uint8& min) const { maj = (uint8)(ShaderModel >> 0x4); min = (uint8)(ShaderModel & 0xF); }
 	bool CheckUAVSupport(DXGI_FORMAT format) const;
 

@@ -59,6 +59,36 @@ namespace Tweakables
 	constexpr uint32 CullMeshletThreadGroupSize = 64;
 }
 
+static constexpr const char* sPipelineBinToString[] = {
+	"Opaque",
+	"AlphaMasked"
+};
+static_assert(ARRAYSIZE(sPipelineBinToString) == (int)MeshletRasterizer::PipelineBin::Count);
+
+
+RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, Ref<Texture>* pPreviousHZB)
+	: Mode(mode), pDepth(pDepth), pPreviousHZB(pPreviousHZB)
+{
+	/// Must be kept in sync with shader! See "VisibilityBuffer.hlsli"
+	struct MeshletCandidate
+	{
+		uint32 InstanceID;
+		uint32 MeshletIndex;
+	};
+
+	pCandidateMeshlets			= graph.Create("GPURender.CandidateMeshlets",			BufferDesc::CreateStructured(Tweakables::MaxNumMeshlets, sizeof(MeshletCandidate)));
+	pVisibleMeshlets			= graph.Create("GPURender.VisibleMeshlets",				BufferDesc::CreateStructured(Tweakables::MaxNumMeshlets, sizeof(MeshletCandidate)));
+
+	pOccludedInstances			= graph.Create("GPURender.OccludedInstances",			BufferDesc::CreateStructured(Tweakables::MaxNumInstances, sizeof(uint32)));
+	pOccludedInstancesCounter	= graph.Create("GPURender.OccludedInstances.Counter",	BufferDesc::CreateStructured(1, sizeof(uint32)));
+
+	// 0: Num Total | 1: Num Phase 1 | 2: Num Phase 2
+	pCandidateMeshletsCounter	= graph.Create("GPURender.CandidateMeshlets.Counter",	BufferDesc::CreateStructured(3, sizeof(uint32)));
+	// 0: Num Phase 1 | 1: Num Phase 2
+	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter",		BufferDesc::CreateStructured(2, sizeof(uint32)));
+}
+
+
 MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
@@ -164,14 +194,13 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	// Debug PSOs
 	m_pPrintStatsPSO =				pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
-	if (m_pDevice->GetCapabilities().SupportsWorkGraphs())
+	if (m_pDevice->GetCapabilities().SupportsMeshNodes())
 	{
 		auto MakeWorkGraphSO = [pDevice](ShaderDefineHelper defines, Ref<StateObject>& outStateObject)
 			{
-				Shader* pWorkGraphShader = pDevice->GetLibrary("MeshletCullRasterizeWG.hlsl", *defines).pShader;
-				Shader* pPixelShader = pDevice->GetShader("MeshletCullRasterizeWG.hlsl", ShaderType::Pixel, "PSMain", *defines).pShader;
-
 				CD3DX12_STATE_OBJECT_DESC SODesc;
+
+				
 				SODesc.SetStateObjectType(D3D12_STATE_OBJECT_TYPE_EXECUTABLE);
 
 				// Work graphs with mesh nodes need to use graphics global root arguments
@@ -184,15 +213,10 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 				pGlobalRootSig->SetRootSignature(GraphicsCommon::pCommonRS->GetRootSignature());
 
 				// Add DXIL library with node shaders and local root signature definition
+				Shader* pWorkGraphShaderLibrary = pDevice->GetLibrary("MeshletCullRasterizeWG.hlsl", *defines).pShader;
 				auto pLib = SODesc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-				CD3DX12_SHADER_BYTECODE bcLib(pWorkGraphShader->pByteCode);
+				CD3DX12_SHADER_BYTECODE bcLib(pWorkGraphShaderLibrary->pByteCode);
 				pLib->SetDXILLibrary(&bcLib);
-
-				// Add pixel shaders
-				auto pPS = SODesc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
-				CD3DX12_SHADER_BYTECODE bcPS(pPixelShader->pByteCode);
-				pPS->SetDXILLibrary(&bcPS);
-				pPS->DefineExport(L"PSMain", L"*");
 
 				// Add necessary building block subobjects for the mesh nodes
 				auto pPrimitiveTopology = SODesc.CreateSubobject<CD3DX12_PRIMITIVE_TOPOLOGY_SUBOBJECT>();
@@ -214,13 +238,34 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 				auto pDepthFormat = SODesc.CreateSubobject<CD3DX12_DEPTH_STENCIL_FORMAT_SUBOBJECT>();
 				pDepthFormat->SetDepthStencilFormat(D3D::ConvertFormat(GraphicsCommon::DepthStencilFormat));
 
-				auto pGenericProgram = SODesc.CreateSubobject<CD3DX12_GENERIC_PROGRAM_SUBOBJECT>();
-				pGenericProgram->AddExport(L"MSMain");
-				pGenericProgram->AddExport(L"PSMain");
-				pGenericProgram->AddSubobject(*pPrimitiveTopology);
-				pGenericProgram->AddSubobject(*pRTFormats);
-				pGenericProgram->AddSubobject(*pDSV);
-				pGenericProgram->AddSubobject(*pDepthFormat);
+				// Add mesh node shaders
+				for (uint32 i = 0; i < (uint32)PipelineBin::Count; ++i)
+				{
+					defines.Set("MESH_NODE_INDEX", i);
+					defines.Set("ALPHA_MASK", i == 1);
+
+					Shader* pPixelShader = pDevice->GetShader("MeshletCullRasterizeWG.hlsl", ShaderType::Pixel, "PSMain", *defines).pShader;
+					std::string pixelShaderName = Sprintf("PSMain_%s", sPipelineBinToString[i]);
+					auto pPS = SODesc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
+					CD3DX12_SHADER_BYTECODE bcPS(pPixelShader->pByteCode);
+					pPS->SetDXILLibrary(&bcPS);
+					pPS->DefineExport(MULTIBYTE_TO_UNICODE(pixelShaderName.c_str()), L"PSMain");
+
+					Shader* pMeshShader = pDevice->GetLibrary("MeshletCullRasterizeWG.hlsl", *defines).pShader;
+					std::string meshShaderName = Sprintf("MSMain_%s", sPipelineBinToString[i]);
+					auto pMS = SODesc.CreateSubobject<CD3DX12_DXIL_LIBRARY_SUBOBJECT>();
+					CD3DX12_SHADER_BYTECODE bcMS(pMeshShader->pByteCode);
+					pMS->SetDXILLibrary(&bcMS);
+					pMS->DefineExport(MULTIBYTE_TO_UNICODE(meshShaderName.c_str()), L"MSMain");
+
+					auto pGenericProgram = SODesc.CreateSubobject<CD3DX12_GENERIC_PROGRAM_SUBOBJECT>();
+					pGenericProgram->AddExport(MULTIBYTE_TO_UNICODE(pixelShaderName.c_str()));
+					pGenericProgram->AddExport(MULTIBYTE_TO_UNICODE(meshShaderName.c_str()));
+					pGenericProgram->AddSubobject(*pPrimitiveTopology);
+					pGenericProgram->AddSubobject(*pRTFormats);
+					pGenericProgram->AddSubobject(*pDSV);
+					pGenericProgram->AddSubobject(*pDepthFormat);
+				}
 
 				// Define a work graph
 				auto pWorkGraph = SODesc.CreateSubobject<CD3DX12_WORK_GRAPH_SUBOBJECT>();
@@ -230,7 +275,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 				Ref<ID3D12StateObject> pStateObject;
 				VERIFY_HR(pDevice->GetDevice()->CreateStateObject(SODesc, IID_PPV_ARGS(pStateObject.GetAddressOf())));
 				outStateObject = new StateObject(pDevice, StateObjectInitializer{});
-				outStateObject->Create(pStateObject.Detach());
+				outStateObject->SetStateObject(pStateObject);
 			};
 
 
@@ -245,29 +290,107 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	}
 }
 
-RasterContext::RasterContext(RGGraph& graph, RGTexture* pDepth, RasterMode mode, Ref<Texture>* pPreviousHZB)
-	: Mode(mode), pDepth(pDepth), pPreviousHZB(pPreviousHZB)
-{
-	/// Must be kept in sync with shader! See "VisibilityBuffer.hlsli"
-	struct MeshletCandidate
-	{
-		uint32 InstanceID;
-		uint32 MeshletIndex;
-	};
-
-	pCandidateMeshlets			= graph.Create("GPURender.CandidateMeshlets",			BufferDesc::CreateStructured(Tweakables::MaxNumMeshlets, sizeof(MeshletCandidate)));
-	pVisibleMeshlets			= graph.Create("GPURender.VisibleMeshlets",				BufferDesc::CreateStructured(Tweakables::MaxNumMeshlets, sizeof(MeshletCandidate)));
-
-	pOccludedInstances			= graph.Create("GPURender.OccludedInstances",			BufferDesc::CreateStructured(Tweakables::MaxNumInstances, sizeof(uint32)));
-	pOccludedInstancesCounter	= graph.Create("GPURender.OccludedInstances.Counter",	BufferDesc::CreateStructured(1, sizeof(uint32)));
-
-	// 0: Num Total | 1: Num Phase 1 | 2: Num Phase 2
-	pCandidateMeshletsCounter	= graph.Create("GPURender.CandidateMeshlets.Counter",	BufferDesc::CreateStructured(3, sizeof(uint32)));
-	// 0: Num Phase 1 | 1: Num Phase 2
-	pVisibleMeshletsCounter		= graph.Create("GPURender.VisibleMeshlets.Counter",		BufferDesc::CreateStructured(2, sizeof(uint32)));
-}
 
 void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView, RasterPhase rasterPhase, RasterContext& rasterContext, RasterResult& outResult)
+{
+	if (rasterContext.WorkGraph && m_pDevice->GetCapabilities().SupportsMeshNodes())
+	{
+		RG_GRAPH_SCOPE("Cull Rasterize (Workgraph)", graph);
+		CullAndRasterizeWorkGraph(graph, pView, rasterPhase, rasterContext, outResult);
+	}
+	else
+	{
+		RG_GRAPH_SCOPE("Cull Rasterize", graph);
+		CullAndRasterizeDefault(graph, pView, rasterPhase, rasterContext, outResult);
+	}
+}
+
+
+void MeshletRasterizer::Render(RGGraph& graph, const RenderView* pView, RasterContext& rasterContext, RasterResult& outResult)
+{
+	gAssert(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB");
+
+	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
+
+#if _DEBUG
+	// Validate that we don't have more meshlets/instances than allowed.
+	uint32 numMeshlets = 0;
+	for (const Batch& b : pView->pRenderer->GetBatches())
+		numMeshlets += b.pMesh->NumMeshlets;
+	gAssert(pView->pRenderer->GetBatches().GetSize() <= Tweakables::MaxNumInstances);
+	gAssert(numMeshlets <= Tweakables::MaxNumMeshlets);
+#endif
+
+	Vector2u dimensions = rasterContext.pDepth->GetDesc().Size2D();
+	outResult.pHZB = nullptr;
+	outResult.pVisibilityBuffer = nullptr;
+	if (rasterContext.Mode == RasterMode::VisibilityBuffer)
+		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
+
+	if (rasterContext.EnableOcclusionCulling)
+	{
+		// Create HZB
+		Vector2u hzbDimensions;
+		hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(dimensions.x) >> 1u, 1u);
+		hzbDimensions.y = Math::Max(Math::NextPowerOfTwo(dimensions.y) >> 1u, 1u);
+		uint32 numMips = (uint32)Math::Floor(log2f((float)Math::Max(hzbDimensions.x, hzbDimensions.y)));
+		TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R16_FLOAT, numMips);
+		outResult.pHZB = graph.Create("HZB", desc);
+
+		graph.Export(outResult.pHZB, rasterContext.pPreviousHZB, TextureFlag::ShaderResource);
+	}
+
+	// Debug mode outputs an extra debug buffer containing information for debug statistics/visualization
+	if (rasterContext.EnableDebug)
+		outResult.pDebugData = graph.Create("GPURender.DebugData", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
+
+	// Clear all counters
+	RGPass& clearPass = graph.AddPass("Clear UAVs", RGPassFlag::Compute)
+		.Write({ rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshletsCounter })
+		.Bind([=](CommandContext& context, const RGResources& resources)
+			{
+				if (outResult.pDebugData)
+					context.ClearUAVu(resources.GetUAV(outResult.pDebugData));
+
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetPipelineState(m_pClearCountersPSO);
+
+				context.BindResources(BindingSlot::UAV, resources.GetUAV(rasterContext.pCandidateMeshletsCounter), 1);
+				context.BindResources(BindingSlot::UAV, resources.GetUAV(rasterContext.pOccludedInstancesCounter), 3);
+				context.BindResources(BindingSlot::UAV, resources.GetUAV(rasterContext.pVisibleMeshletsCounter), 5);
+
+				context.Dispatch(1);
+				context.InsertUAVBarrier();
+			});
+	if (outResult.pDebugData)
+		clearPass.Write(outResult.pDebugData);
+
+	{
+		RG_GRAPH_SCOPE("Phase 1", graph);
+		CullAndRasterize(graph, pView, RasterPhase::Phase1, rasterContext, outResult);
+
+		// Build the HZB, this HZB must be persistent across frames for this system to work.
+		// In Phase 1, the HZB is built so it can be used in Phase 2 for accurrate occlusion culling.
+		if (rasterContext.EnableOcclusionCulling && !pView->FreezeCull)
+			BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
+	}
+
+	// If occlusion culling is disabled, phase 1 will already have rendered everything and phase 2 in no longer required.
+	if (rasterContext.EnableOcclusionCulling)
+	{
+		RG_GRAPH_SCOPE("Phase 2", graph);
+		CullAndRasterize(graph, pView, RasterPhase::Phase2, rasterContext, outResult);
+
+		// In Phase 2, the HZB is built to be used by Phase 1 in the next frame.
+		if (rasterContext.EnableOcclusionCulling && !pView->FreezeCull)
+			BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
+	}
+
+	outResult.pVisibleMeshlets = rasterContext.pVisibleMeshlets;
+}
+
+
+void MeshletRasterizer::CullAndRasterizeDefault(RGGraph& graph, const RenderView* pView, RasterPhase rasterPhase, RasterContext& rasterContext, RasterResult& outResult)
 {
 	RGBuffer* pInstanceCullArgs = nullptr;
 
@@ -286,14 +409,12 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 
 	PipelineState* pCullMeshletPSO = m_pCullMeshletsPSO[psoPhaseIndex];
 	PipelineState* pCullInstancePSO = m_pCullInstancesPSO[psoPhaseIndex];
-	StateObject* pCullWorkGraphSO = m_pWorkGraphSO[psoPhaseIndex];
 	PipelineStateBinSet* pRasterPSOs = rasterContext.EnableDebug ? &m_pDrawMeshletsDebugModePSO : &m_pDrawMeshletsPSO;
 
 	if (!rasterContext.EnableOcclusionCulling)
 	{
 		pCullInstancePSO = m_pCullInstancesNoOcclusionPSO;
 		pCullMeshletPSO = m_pCullMeshletsNoOcclusionPSO;
-		pCullWorkGraphSO = m_pWorkGraphNoOcclusionSO;
 	}
 
 	if (rasterContext.Mode == RasterMode::Shadows)
@@ -307,80 +428,6 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 	// Store bin data for debugging
 	rasterContext.pBinnedMeshletOffsetAndCounts[psoPhaseIndex] = pMeshletOffsetAndCounts;
 
-	if (rasterContext.WorkGraph && m_pDevice->GetCapabilities().SupportsWorkGraphs())
-	{
-		//pCullWorkGraphSO->ConditionallyReload();
-		RGBuffer* pWorkGraphBuffer = graph.Create("Work Graph Buffer", BufferDesc{ .Size = pCullWorkGraphSO->GetWorkgraphBufferSize() });
-
-		const RenderPassDepthFlags depthFlags = rasterPhase == RasterPhase::Phase1 ? RenderPassDepthFlags::Clear : RenderPassDepthFlags::None;
-		RGPass& wgPass = graph.AddPass("Work Graph", RGPassFlag::Raster)
-			.Write({ pWorkGraphBuffer })
-			.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter })
-			.Write({ rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter })
-			.Write({ rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
-			.RenderTarget(outResult.pVisibilityBuffer, rasterPhase == RasterPhase::Phase1 ? RenderPassColorFlags::Clear : RenderPassColorFlags::None)
-			.DepthStencil(rasterContext.pDepth, depthFlags)
-			.Bind([=](CommandContext& context, const RGResources& resources)
-				{
-					context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-
-					D3D12_SET_PROGRAM_DESC programDesc{
-						.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH,
-						.WorkGraph {
-							.ProgramIdentifier = pCullWorkGraphSO->GetStateObjectProperties()->GetProgramIdentifier(L"WG"),
-							.Flags = resources.Get(pWorkGraphBuffer) != m_pWorkGraphMemory ? D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE : D3D12_SET_WORK_GRAPH_FLAG_NONE,
-							.BackingMemory = { resources.Get(pWorkGraphBuffer)->GetGpuHandle(), resources.Get(pWorkGraphBuffer)->GetSize() },
-							.NodeLocalRootArgumentsTable = {},
-						}
-					};
-					context.SetProgram(programDesc);
-
-					m_pWorkGraphMemory = resources.Get(pWorkGraphBuffer);
-
-					struct
-					{
-						Vector2u HZBDimensions;
-					} params;
-					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
-
-					Renderer::BindViewUniforms(context, *pView);
-					context.BindRootCBV(BindingSlot::PerInstance, params);
-					context.BindResources(BindingSlot::UAV, {
-						resources.GetUAV(rasterContext.pCandidateMeshlets),
-						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
-						resources.GetUAV(rasterContext.pOccludedInstances),
-						resources.GetUAV(rasterContext.pOccludedInstancesCounter),
-						resources.GetUAV(rasterContext.pVisibleMeshlets),
-						resources.GetUAV(rasterContext.pVisibleMeshletsCounter),
-						});
-
-					if (rasterContext.EnableOcclusionCulling)
-						context.BindResources(BindingSlot::SRV, resources.GetSRV(pSourceHZB));
-
-					Ref<ID3D12WorkGraphProperties> pProps;
-					pCullWorkGraphSO->GetStateObject()->QueryInterface(pProps.GetAddressOf());
-
-					const char* pEntryPoint = rasterPhase == RasterPhase::Phase1 ? "CullInstancesCS" : "KickPhase2NodesCS";
-					uint32 gridSize = rasterPhase == RasterPhase::Phase1 ? Math::DivideAndRoundUp((uint32)pView->pRenderer->GetBatches().GetSize(), Tweakables::CullInstanceThreadGroupSize) : 1;
-
-					D3D12_DISPATCH_GRAPH_DESC graphDesc{
-						.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT,
-						.NodeCPUInput {
-							.EntrypointIndex = pProps->GetEntrypointIndex(0, { MULTIBYTE_TO_UNICODE(pEntryPoint), 0 }),
-							.NumRecords = 1,
-							.pRecords = &gridSize,
-							.RecordStrideInBytes = sizeof(uint32),
-						},
-					};
-
-					context.DispatchGraph(graphDesc);
-					context.InsertUAVBarrier();
-				});
-
-		if (rasterContext.EnableOcclusionCulling)
-			wgPass.Read(pSourceHZB);
-	}
-	else
 	{
 		RG_GRAPH_SCOPE("Instance/Meshlet Culling", graph);
 
@@ -605,130 +652,142 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 		}
 	}
 
-	if (!rasterContext.WorkGraph)
-	{
-		// Finally, using the list of visible meshlets and classification data, rasterize the meshlets.
-		// For each bin, we bind the associated PSO and record an indirect DispatchMesh.
-		const RenderPassDepthFlags depthFlags = rasterPhase == RasterPhase::Phase1 ? RenderPassDepthFlags::Clear : RenderPassDepthFlags::None;
-		RGPass& drawPass = graph.AddPass("Rasterize", RGPassFlag::Raster)
-			.Read({ rasterContext.pVisibleMeshlets, pMeshletOffsetAndCounts, pBinnedMeshlets })
-			.Write(outResult.pDebugData)
-			.DepthStencil(rasterContext.pDepth, depthFlags)
-			.Bind([=](CommandContext& context, const RGResources& resources)
-				{
-					context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-					context.SetStencilRef((uint32)StencilBit::VisibilityBuffer);
-
-					Renderer::BindViewUniforms(context, *pView);
-					if (outResult.pDebugData)
-						context.BindResources(BindingSlot::UAV, resources.GetUAV(outResult.pDebugData));
-					context.BindResources(BindingSlot::SRV, {
-						resources.GetSRV(rasterContext.pVisibleMeshlets),
-						resources.GetSRV(pBinnedMeshlets),
-						resources.GetSRV(pMeshletOffsetAndCounts),
-						});
-
-					static constexpr const char* PipelineBinToString[] = {
-						"Opaque",
-						"Alpha Masked"
-					};
-					static_assert(ARRAYSIZE(PipelineBinToString) == (int)PipelineBin::Count);
-
-					for (uint32 binIndex = 0; binIndex < numBins; ++binIndex)
-					{
-						PROFILE_GPU_SCOPE(context.GetCommandList(), Sprintf("Raster Bin - %s", PipelineBinToString[binIndex]).c_str());
-
-						struct
-						{
-							uint32 BinIndex;
-						} params;
-						params.BinIndex = binIndex;
-						context.BindRootCBV(BindingSlot::PerInstance, params);
-						context.SetPipelineState(pRasterPSOs->at(binIndex));
-						context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, resources.Get(pMeshletOffsetAndCounts), nullptr, sizeof(Vector4u) * binIndex);
-					}
-				});
-
-		if (outResult.pVisibilityBuffer)
-		{
-			const RenderPassColorFlags colorFlags = rasterPhase == RasterPhase::Phase1 ? RenderPassColorFlags::Clear : RenderPassColorFlags::None;
-			drawPass.RenderTarget(outResult.pVisibilityBuffer, colorFlags);
-		}
-	}
-
-	// Build the HZB, this HZB must be persistent across frames for this system to work.
-	// In Phase 1, the HZB is built so it can be used in Phase 2 for accurrate occlusion culling.
-	// In Phase 2, the HZB is built to be used by Phase 1 in the next frame.
-	if (rasterContext.EnableOcclusionCulling && !pView->FreezeCull)
-		BuildHZB(graph, rasterContext.pDepth, outResult.pHZB);
-}
-
-void MeshletRasterizer::Render(RGGraph& graph, const RenderView* pView, RasterContext& rasterContext, RasterResult& outResult)
-{
-	gAssert(!rasterContext.EnableOcclusionCulling || rasterContext.pPreviousHZB, "Occlusion Culling required previous frame's HZB");
-
-	RG_GRAPH_SCOPE("Cull and Rasterize", graph);
-
-#if _DEBUG
-	// Validate that we don't have more meshlets/instances than allowed.
-	uint32 numMeshlets = 0;
-	for (const Batch& b : pView->pRenderer->GetBatches())
-		numMeshlets += b.pMesh->NumMeshlets;
-	gAssert(pView->pRenderer->GetBatches().GetSize() <= Tweakables::MaxNumInstances);
-	gAssert(numMeshlets <= Tweakables::MaxNumMeshlets);
-#endif
-
-	Vector2u dimensions = rasterContext.pDepth->GetDesc().Size2D();
-	outResult.pHZB = nullptr;
-	outResult.pVisibilityBuffer = nullptr;
-	if (rasterContext.Mode == RasterMode::VisibilityBuffer)
-		outResult.pVisibilityBuffer = graph.Create("Visibility", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
-
-	if (rasterContext.EnableOcclusionCulling)
-	{
-		outResult.pHZB = InitHZB(graph, dimensions);
-		graph.Export(outResult.pHZB, rasterContext.pPreviousHZB, TextureFlag::ShaderResource);
-	}
-
-	// Debug mode outputs an extra debug buffer containing information for debug statistics/visualization
-	if (rasterContext.EnableDebug)
-		outResult.pDebugData = graph.Create("GPURender.DebugData", TextureDesc::Create2D(dimensions.x, dimensions.y, ResourceFormat::R32_UINT));
-
-	// Clear all counters
-	RGPass& clearPass = graph.AddPass("Clear UAVs", RGPassFlag::Compute)
-		.Write({ rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstancesCounter, rasterContext.pVisibleMeshletsCounter })
+	// Finally, using the list of visible meshlets and classification data, rasterize the meshlets.
+	// For each bin, we bind the associated PSO and record an indirect DispatchMesh.
+	const RenderPassDepthFlags depthFlags = rasterPhase == RasterPhase::Phase1 ? RenderPassDepthFlags::Clear : RenderPassDepthFlags::None;
+	RGPass& drawPass = graph.AddPass("Rasterize", RGPassFlag::Raster)
+		.Read({ rasterContext.pVisibleMeshlets, pMeshletOffsetAndCounts, pBinnedMeshlets })
+		.Write(outResult.pDebugData)
+		.DepthStencil(rasterContext.pDepth, depthFlags)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+				context.SetStencilRef((uint32)StencilBit::VisibilityBuffer);
+
+				Renderer::BindViewUniforms(context, *pView);
 				if (outResult.pDebugData)
-					context.ClearUAVu(resources.GetUAV(outResult.pDebugData));
+					context.BindResources(BindingSlot::UAV, resources.GetUAV(outResult.pDebugData));
+				context.BindResources(BindingSlot::SRV, {
+					resources.GetSRV(rasterContext.pVisibleMeshlets),
+					resources.GetSRV(pBinnedMeshlets),
+					resources.GetSRV(pMeshletOffsetAndCounts),
+					});
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-				context.SetPipelineState(m_pClearCountersPSO);
+				for (uint32 binIndex = 0; binIndex < numBins; ++binIndex)
+				{
+					PROFILE_GPU_SCOPE(context.GetCommandList(), Sprintf("Raster Bin - %s", sPipelineBinToString[binIndex]).c_str());
 
-				context.BindResources(BindingSlot::UAV, resources.GetUAV(rasterContext.pCandidateMeshletsCounter), 1);
-				context.BindResources(BindingSlot::UAV, resources.GetUAV(rasterContext.pOccludedInstancesCounter), 3);
-				context.BindResources(BindingSlot::UAV, resources.GetUAV(rasterContext.pVisibleMeshletsCounter), 5);
-
-				context.Dispatch(1);
-				context.InsertUAVBarrier();
+					struct
+					{
+						uint32 BinIndex;
+					} params;
+					params.BinIndex = binIndex;
+					context.BindRootCBV(BindingSlot::PerInstance, params);
+					context.SetPipelineState(pRasterPSOs->at(binIndex));
+					context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchMeshSignature, 1, resources.Get(pMeshletOffsetAndCounts), nullptr, sizeof(Vector4u) * binIndex);
+				}
 			});
-	if (outResult.pDebugData)
-		clearPass.Write(outResult.pDebugData);
 
+	if (outResult.pVisibilityBuffer)
 	{
-		RG_GRAPH_SCOPE("Phase 1", graph);
-		CullAndRasterize(graph, pView, RasterPhase::Phase1, rasterContext, outResult);
+		const RenderPassColorFlags colorFlags = rasterPhase == RasterPhase::Phase1 ? RenderPassColorFlags::Clear : RenderPassColorFlags::None;
+		drawPass.RenderTarget(outResult.pVisibilityBuffer, colorFlags);
 	}
+}
 
-	// If occlusion culling is disabled, phase 1 will already have rendered everything and phase 2 in no longer required.
+
+void MeshletRasterizer::CullAndRasterizeWorkGraph(RGGraph& graph, const RenderView* pView, RasterPhase rasterPhase, RasterContext& rasterContext, RasterResult& outResult)
+{
+	// In Phase 1, read from the previous frame's HZB
+	RGTexture* pSourceHZB = nullptr;
 	if (rasterContext.EnableOcclusionCulling)
 	{
-		RG_GRAPH_SCOPE("Phase 2", graph);
-		CullAndRasterize(graph, pView, RasterPhase::Phase2, rasterContext, outResult);
+		if (rasterPhase == RasterPhase::Phase1)
+			pSourceHZB = graph.TryImport(*rasterContext.pPreviousHZB, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
+		else
+			pSourceHZB = outResult.pHZB;
 	}
 
-	outResult.pVisibleMeshlets = rasterContext.pVisibleMeshlets;
+	// PSO index to use based on current phase, if the PSO has permutations
+	const int psoPhaseIndex = rasterPhase == RasterPhase::Phase1 ? 0 : 1;
+	StateObject* pCullWorkGraphSO = m_pWorkGraphSO[psoPhaseIndex];
+
+	if (!rasterContext.EnableOcclusionCulling)
+	{
+		pCullWorkGraphSO = m_pWorkGraphNoOcclusionSO;
+	}
+
+	RGBuffer* pWorkGraphBuffer = graph.Create("Work Graph Buffer", BufferDesc{ .Size = pCullWorkGraphSO->GetWorkgraphBufferSize() });
+
+	const RenderPassDepthFlags depthFlags = rasterPhase == RasterPhase::Phase1 ? RenderPassDepthFlags::Clear : RenderPassDepthFlags::None;
+	RGPass& wgPass = graph.AddPass("Work Graph", RGPassFlag::Raster)
+		.Write({ pWorkGraphBuffer })
+		.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter })
+		.Write({ rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter })
+		.Write({ rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
+		.RenderTarget(outResult.pVisibilityBuffer, rasterPhase == RasterPhase::Phase1 ? RenderPassColorFlags::Clear : RenderPassColorFlags::None)
+		.DepthStencil(rasterContext.pDepth, depthFlags)
+		.Bind([=](CommandContext& context, const RGResources& resources)
+			{
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+
+				D3D12_SET_PROGRAM_DESC programDesc{
+					.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH,
+					.WorkGraph {
+						.ProgramIdentifier = pCullWorkGraphSO->GetStateObjectProperties()->GetProgramIdentifier(L"WG"),
+						.Flags = resources.Get(pWorkGraphBuffer) != m_pWorkGraphMemory ? D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE : D3D12_SET_WORK_GRAPH_FLAG_NONE,
+						.BackingMemory = { resources.Get(pWorkGraphBuffer)->GetGpuHandle(), resources.Get(pWorkGraphBuffer)->GetSize() },
+						.NodeLocalRootArgumentsTable = {},
+					}
+				};
+				context.SetProgram(programDesc);
+
+				m_pWorkGraphMemory = resources.Get(pWorkGraphBuffer);
+
+				struct
+				{
+					Vector2u HZBDimensions;
+				} params;
+				params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
+
+				Renderer::BindViewUniforms(context, *pView);
+				context.BindRootCBV(BindingSlot::PerInstance, params);
+				context.BindResources(BindingSlot::UAV, {
+					resources.GetUAV(rasterContext.pCandidateMeshlets),
+					resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
+					resources.GetUAV(rasterContext.pOccludedInstances),
+					resources.GetUAV(rasterContext.pOccludedInstancesCounter),
+					resources.GetUAV(rasterContext.pVisibleMeshlets),
+					resources.GetUAV(rasterContext.pVisibleMeshletsCounter),
+					});
+
+				if (rasterContext.EnableOcclusionCulling)
+					context.BindResources(BindingSlot::SRV, resources.GetSRV(pSourceHZB));
+
+				Ref<ID3D12WorkGraphProperties> pProps;
+				pCullWorkGraphSO->GetStateObject()->QueryInterface(pProps.GetAddressOf());
+
+				const char* pEntryPoint = rasterPhase == RasterPhase::Phase1 ? "CullInstancesCS" : "KickPhase2NodesCS";
+				uint32 gridSize = rasterPhase == RasterPhase::Phase1 ? Math::DivideAndRoundUp((uint32)pView->pRenderer->GetBatches().GetSize(), Tweakables::CullInstanceThreadGroupSize) : 1;
+
+				D3D12_DISPATCH_GRAPH_DESC graphDesc{
+					.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT,
+					.NodeCPUInput {
+						.EntrypointIndex = pProps->GetEntrypointIndex(0, { MULTIBYTE_TO_UNICODE(pEntryPoint), 0 }),
+						.NumRecords = 1,
+						.pRecords = &gridSize,
+						.RecordStrideInBytes = sizeof(uint32),
+					},
+				};
+
+				context.DispatchGraph(graphDesc);
+				context.InsertUAVBarrier();
+			});
+
+	if (rasterContext.EnableOcclusionCulling)
+		wgPass.Read(pSourceHZB);
 }
+
 
 void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, const RenderView* pView, const RasterContext& rasterContext)
 {
@@ -764,15 +823,6 @@ void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, cons
 			});
 }
 
-RGTexture* MeshletRasterizer::InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const
-{
-	Vector2u hzbDimensions;
-	hzbDimensions.x = Math::Max(Math::NextPowerOfTwo(viewDimensions.x) >> 1u, 1u);
-	hzbDimensions.y = Math::Max(Math::NextPowerOfTwo(viewDimensions.y) >> 1u, 1u);
-	uint32 numMips = (uint32)Math::Floor(log2f((float)Math::Max(hzbDimensions.x, hzbDimensions.y)));
-	TextureDesc desc = TextureDesc::Create2D(hzbDimensions.x, hzbDimensions.y, ResourceFormat::R16_FLOAT, numMips);
-	return graph.Create("HZB", desc);
-}
 
 void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* pHZB)
 {
@@ -841,7 +891,7 @@ void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				context.BindResources(BindingSlot::UAV, resources.GetUAV(pSPDCounter), uavIndex++);
 				if(pHZB->GetDesc().Mips > 6)
 					context.BindResources(BindingSlot::UAV, resources.Get(pHZB)->GetUAV(6), uavIndex++);
-				for (uint8 mipIndex = 0; mipIndex < mips; ++mipIndex)
+				for (uint32 mipIndex = 0; mipIndex < mips; ++mipIndex)
 				{
 					context.BindResources(BindingSlot::UAV, resources.Get(pHZB)->GetUAV(mipIndex), uavIndex++);
 				}

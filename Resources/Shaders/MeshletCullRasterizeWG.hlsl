@@ -239,7 +239,7 @@ void MeshletCull(MeshletCandidate candidate, NodeOutputArray<VisibleMeshletIndex
 
 	// If meshlet is visible and wasn't occluded in the previous frame, submit it
 	MaterialData material = GetMaterial(instance.MaterialIndex);
-	ThreadNodeOutputRecords<VisibleMeshletIndex> meshShaderRecord = meshOutputNodes[0].GetThreadNodeOutputRecords(isVisible ? 1 : 0);
+	ThreadNodeOutputRecords<VisibleMeshletIndex> meshShaderRecord = meshOutputNodes[material.RasterBin].GetThreadNodeOutputRecords(isVisible ? 1 : 0);
 	if(isVisible)
 	{
 		uint visibleIndex;
@@ -257,7 +257,7 @@ void MeshletCull(MeshletCandidate candidate, NodeOutputArray<VisibleMeshletIndex
 [numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsCS(
 	DispatchNodeInputRecord<MeshletCullData> meshletRecords,
-	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(1)] NodeOutputArray<VisibleMeshletIndex> MeshNodes,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<VisibleMeshletIndex> MeshNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	MeshletCandidate candidate;
@@ -274,7 +274,7 @@ void CullMeshletsCS(
 [numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsEntryCS(
 	DispatchNodeInputRecord<EntryRecord> input,
-	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(1)] NodeOutputArray<VisibleMeshletIndex> MeshNodes,
+	[MaxRecords(NUM_CULL_MESHLETS_THREADS)][NodeArraySize(NUM_RASTER_BINS)] NodeOutputArray<VisibleMeshletIndex> MeshNodes,
 	uint threadIndex : SV_DispatchThreadID)
 {
 	uint numMeshlets = uCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];
@@ -315,6 +315,11 @@ void KickPhase2NodesCS(
 
 #endif
 
+#ifndef MESH_NODE_INDEX
+#define MESH_NODE_INDEX -1
+#endif
+
+#if MESH_NODE_INDEX != -1
 
 struct PrimitiveAttribute
 {
@@ -343,9 +348,8 @@ VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertex
 	return result;
 }
 
-
 [Shader("node")]
-[NodeID("MeshNodes", 0)]
+[NodeID("MeshNodes", MESH_NODE_INDEX)]
 [NodeLaunch("mesh")]
 [outputtopology("triangle")]
 [NodeDispatchGrid(1, 1, 1)]
@@ -411,3 +415,5 @@ void PSMain(
 	InterlockedAdd(uDebugData[(uint2)vertexData.Position.xy], 1);
 #endif
 }
+
+#endif
