@@ -39,9 +39,37 @@ struct HUDContext
 	float		PauseThresholdTime		= 100.0f;
 	bool		IsPaused				= false;
 
-	uint32		SelectedEventFrame		= 0;
-	StringHash	SelectedEventHash		= 0;
-	bool		IsSelectedCPUEvent		= true;
+	struct SelectedStatData
+	{
+		uint32 Hash			= 0;
+		bool IsCPUEvent		= 0;
+		uint32 NumSamples	= 0;
+
+		float MovingAverageTime = 0;
+		float MinTime = std::numeric_limits<float>::max();
+		float MaxTime = 0.0f;
+
+		void Set(uint32 hash, bool isCPUEvent)
+		{
+			Hash = hash;
+			IsCPUEvent = isCPUEvent;
+
+			NumSamples = 0;
+			MovingAverageTime = 0;
+			MinTime = std::numeric_limits<float>::max();
+			MaxTime = 0.0f;
+		}
+
+		void AddSample(float newSample)
+		{
+			++NumSamples;
+			MinTime = Math::Min(newSample, MinTime);
+			MaxTime = Math::Max(newSample, MaxTime);
+			MovingAverageTime = MovingAverageTime + (newSample - MovingAverageTime) / NumSamples;
+			NumSamples %= 4096;
+		}
+
+	} SelectedEvent;
 };
 
 static HUDContext gHUDContext;
@@ -171,7 +199,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 			[=== SomeFunction (1.2 ms) ===]
 		*/
 		bool anyHovered = false;
-		auto DrawTrack = [&](Span<const ProfilerEvent> events, uint32 frameIndex, uint32& outTrackDepth)
+		auto DrawTrack = [&](Span<const ProfilerEvent> events, uint32 frameIndex, uint32& outTrackDepth, bool isCPUEvent)
 			{
 				for (const ProfilerEvent& event : events)
 				{
@@ -307,9 +335,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					if (clicked)
 					{
 						StringHash eventHash = GetEventHash(event);
-						context.SelectedEventHash = eventHash;
-						context.IsSelectedCPUEvent = false;
-						context.SelectedEventFrame = frameIndex;
+						context.SelectedEvent.Set(GetEventHash(event), isCPUEvent);
 					}
 				}
 			};
@@ -361,7 +387,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 						|[=============]			|
 						|	[======]				|
 					*/
-					DrawTrack(gGPUProfiler.GetEventData(frameIndex).GetEvents(queue.Index), frameIndex, trackDepth);
+					DrawTrack(gGPUProfiler.GetEventData(frameIndex).GetEvents(queue.Index), frameIndex, trackDepth, false);
 				}
 				cursor.y += trackDepth * style.BarHeight;
 			}
@@ -395,7 +421,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 				*/
 				for (uint32 frameIndex = cpuRange.Begin; frameIndex < cpuRange.End; ++frameIndex)
 				{
-					DrawTrack(gCPUProfiler.GetEventData(frameIndex).GetEvents(thread.Index), frameIndex, trackDepth);
+					DrawTrack(gCPUProfiler.GetEventData(frameIndex).GetEvents(thread.Index), frameIndex, trackDepth, true);
 				}
 				cursor.y += trackDepth * style.BarHeight;
 			}
@@ -507,24 +533,27 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 		// Add extra data to tooltip
 		ImGui::SameLine();
-		if ((uint32)context.SelectedEventHash != 0)
+
+		HUDContext::SelectedStatData& selectedEvent = context.SelectedEvent;
+		if ((uint32)selectedEvent.Hash != 0)
 		{
-			Array<float> eventTimes;
 			const char* pName = "";
 			float eventTime = 0;
-			if (context.IsSelectedCPUEvent)
+			uint32 n = 0;
+			if (selectedEvent.IsCPUEvent)
 			{
 				for (uint32 i = cpuRange.Begin; i < cpuRange.End; ++i)
 				{
 					const ProfilerEventData& eventData = gCPUProfiler.GetEventData(i);
 					for (const ProfilerEvent& event : eventData.GetEvents())
 					{
-						if (GetEventHash(event) == context.SelectedEventHash)
+						if (GetEventHash(event) == selectedEvent.Hash)
 						{
 							float time = TicksToMs * (float)(event.TicksEnd - event.TicksBegin);
-							eventTimes.push_back(time);
+							selectedEvent.AddSample(time);
 							pName = event.pName;
 							eventTime = time;
+							++n;
 						}
 					}
 				}
@@ -537,33 +566,20 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					const ProfilerEventData& eventData = gGPUProfiler.GetEventData(i);
 					for (const ProfilerEvent& event : eventData.GetEvents())
 					{
-						if (GetEventHash(event) == context.SelectedEventHash)
+						if (GetEventHash(event) == context.SelectedEvent.Hash)
 						{
 							float time = TicksToMs * (float)(event.TicksEnd - event.TicksBegin);
-							eventTimes.push_back(time);
+							selectedEvent.AddSample(time);
 							pName = event.pName;
 							eventTime = time;
+							++n;
 						}
 					}
 				}
 			}
 
-			if (eventTimes.size() > 0)
+			if (eventTime)
 			{
-				float total = 0.0f;
-				float min = 10000.0f;
-				float max = 0.0f;
-				for (float t : eventTimes)
-				{
-					total += t;
-					min = Math::Min(t, min);
-					max = Math::Max(t, max);
-				}
-
-				uint32 n = (uint32)eventTimes.size() / 2;
-				std::nth_element(eventTimes.begin(), eventTimes.begin() + n, eventTimes.end());
-				float median = eventTimes[n];
-
 				ImGui::BeginGroup();
 				ImGui::Text(pName);
 				if (ImGui::BeginTable("TooltipTable", 2))
@@ -572,16 +588,13 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 					ImGui::TableNextColumn();	ImGui::Text("%.2f ms", eventTime);
 
 					ImGui::TableNextColumn();	ImGui::Text("Occurances:");
-					ImGui::TableNextColumn();	ImGui::Text("%d", eventTimes.size());
+					ImGui::TableNextColumn();	ImGui::Text("%d", n);
 
-					ImGui::TableNextColumn();	ImGui::Text("Average:");
-					ImGui::TableNextColumn();	ImGui::Text("%.2f ms", total / eventTimes.size());
-
-					ImGui::TableNextColumn();	ImGui::Text("Median:");
-					ImGui::TableNextColumn();	ImGui::Text("%.2f ms", median);
+					ImGui::TableNextColumn();	ImGui::Text("Moving Average:");
+					ImGui::TableNextColumn();	ImGui::Text("%.2f ms", selectedEvent.MovingAverageTime);
 
 					ImGui::TableNextColumn();	ImGui::Text("Min/Max:");
-					ImGui::TableNextColumn();	ImGui::Text("%.2f/%.2f ms", min, max);
+					ImGui::TableNextColumn();	ImGui::Text("%.2f/%.2f ms", selectedEvent.MinTime, selectedEvent.MaxTime);
 
 					ImGui::EndTable();
 				}
