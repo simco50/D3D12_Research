@@ -316,7 +316,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			UploadSceneData(*pContext);
 
 			// Build RTAS
-			//m_AccelerationStructure.Build(*pContext, m_InstanceBuffer.pBuffer, m_Batches);
+			m_AccelerationStructure.Build(*pContext, m_InstanceBuffer.pBuffer, m_Batches);
 
 			// Upload PerView uniforms
 			Renderer::UploadViewUniforms(*pContext, m_MainView);
