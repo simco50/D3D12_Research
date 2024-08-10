@@ -59,7 +59,7 @@ struct RenderPassInfo
 	{
 		RenderTargets[0].Flags = colorFlags;
 		RenderTargets[0].Target = pRenderTarget;
-		DepthStencilTarget.Flags = RenderPassDepthFlags::None;
+		DepthStencilTarget.Flags = depthFlags;
 		DepthStencilTarget.Target = pDepthBuffer;
 	}
 

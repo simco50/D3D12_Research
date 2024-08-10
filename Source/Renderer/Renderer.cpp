@@ -1624,25 +1624,13 @@ void Renderer::DrawScene(CommandContext& context, Span<const Batch> batches, con
 	}
 }
 
-void Renderer::BindViewUniforms(CommandContext& context, const RenderView& view)
+void Renderer::BindViewUniforms(CommandContext& context, const RenderView& view, RenderView::Type type)
 {
-	if (view.ViewCB)
+	// Binding the cull view only works for RenderViews that have a VRAM Buffer
+	const Buffer* pViewBuffer = type == RenderView::Type::Default ? view.ViewCB : view.CullViewCB;
+	if (pViewBuffer)
 	{
-		context.BindRootCBV(BindingSlot::PerView, view.ViewCB);
-	}
-	else
-	{
-		ShaderInterop::ViewUniforms viewUniforms;
-		view.pRenderer->GetViewUniforms(view, viewUniforms);
-		context.BindRootCBV(BindingSlot::PerView, viewUniforms);
-	}
-}
-
-void Renderer::BindCullViewUniforms(CommandContext& context, const RenderView& view)
-{
-	if (view.CullViewCB)
-	{
-		context.BindRootCBV(BindingSlot::PerView, view.CullViewCB);
+		context.BindRootCBV(BindingSlot::PerView, pViewBuffer);
 	}
 	else
 	{

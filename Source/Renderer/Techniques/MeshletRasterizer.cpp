@@ -393,7 +393,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(BindingSlot::PerInstance, params);
-					Renderer::BindCullViewUniforms(context, *pView);
+					Renderer::BindViewUniforms(context, *pView, RenderView::Type::Cull);
 					context.BindResources(BindingSlot::UAV, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),
@@ -448,7 +448,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					params.HZBDimensions = pSourceHZB ? pSourceHZB->GetDesc().Size2D() : Vector2u(0, 0);
 
 					context.BindRootCBV(BindingSlot::PerInstance, params);
-					Renderer::BindCullViewUniforms(context, *pView);
+					Renderer::BindViewUniforms(context, *pView, RenderView::Type::Cull);
 					context.BindResources(BindingSlot::UAV, {
 						resources.GetUAV(rasterContext.pCandidateMeshlets),
 						resources.GetUAV(rasterContext.pCandidateMeshletsCounter),

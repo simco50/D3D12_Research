@@ -65,6 +65,12 @@ using VisibilityMask = BitField<8192>;
 
 struct RenderView : ViewTransform
 {
+	enum class Type
+	{
+		Default,
+		Cull,
+	};
+
 	Renderer* pRenderer = nullptr;
 	World* pWorld = nullptr;
 
