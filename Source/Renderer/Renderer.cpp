@@ -526,7 +526,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 										const ShadowView& view = m_ShadowViews[i];
-										context.BindRootCBV(BindingSlot::PerView, view.ViewCB);
+										Renderer::BindViewUniforms(context, view);
 
 										{
 											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
