@@ -39,6 +39,7 @@ workspace (PROJECT_NAME)
 	warnings "Extra"
 	system "windows"
 	conformancemode "On"
+	editandcontinue "Off"
 	defines { "PLATFORM_WINDOWS=1", "WIN32" }
 	targetdir (TARGET_DIR .. "$(ProjectName)_$(Platform)_$(Configuration)")
 	objdir (TARGET_DIR .. "Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
@@ -52,20 +53,16 @@ workspace (PROJECT_NAME)
 	
 	filter "configurations:Debug"
 		runtime "Debug"
-		defines { "_DEBUG" }
 		optimize "Off"
-		editandcontinue "On"
-		--inlining "Explicit"
+		inlining "Explicit"
 
 	filter "configurations:Release"
  		runtime "Release"
-		defines { "RELEASE" }
 		optimize "Full"
 		flags { "NoIncrementalLink" }
 
 	filter "configurations:DebugASAN"
  		runtime "Debug"
-		defines { "_DEBUG" }
 		optimize "Off"
 		flags { "NoRuntimeChecks", "NoIncrementalLink"}
 		sanitize { "Address" }
