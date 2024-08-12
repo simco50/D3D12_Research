@@ -34,7 +34,8 @@ workspace (PROJECT_NAME)
 	symbols "On"
 	architecture "x64"
 	characterset "MBCS"
-	flags {"MultiProcessorCompile", "ShadowedVariables"}
+	flags {"MultiProcessorCompile", "ShadowedVariables", "NoRuntimeChecks"}
+	justmycode "Off"
 	rtti "Off"
 	warnings "Extra"
 	system "windows"
