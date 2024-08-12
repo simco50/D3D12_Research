@@ -212,11 +212,12 @@ private:
 	StaticArray<uint64, NUM_BUFFERS> m_FrameFenceValues{};
 	uint32 m_FrameIndex = 0;
 
+	StaticArray<Ref<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	ScratchAllocator m_FrameScratchAllocator;
+
 	Ref<GPUDescriptorHeap> m_pGlobalViewHeap;
 	Ref<GPUDescriptorHeap> m_pGlobalSamplerHeap;
 
-	StaticArray<Ref<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
 	StaticArray<Array<Ref<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	StaticArray<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
 

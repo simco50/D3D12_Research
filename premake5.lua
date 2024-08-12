@@ -25,7 +25,7 @@ end
 
 workspace (PROJECT_NAME)
 	basedir (ROOT)
-	configurations { "Debug", "Release", "DebugASAN" }
+	configurations { "Debug", "Release", 'DebugSlow', "DebugASAN" }
     platforms { "x64" }
 	defines { "x64" }
 	language "C++"
@@ -34,7 +34,7 @@ workspace (PROJECT_NAME)
 	symbols "On"
 	architecture "x64"
 	characterset "MBCS"
-	flags {"MultiProcessorCompile", "ShadowedVariables", "NoRuntimeChecks"}
+	flags {"MultiProcessorCompile", "ShadowedVariables"}
 	justmycode "Off"
 	rtti "Off"
 	warnings "Extra"
@@ -51,15 +51,24 @@ workspace (PROJECT_NAME)
 	disablewarnings {"4505"}
 	-- nonstandard extension used: nameless struct/union
 	disablewarnings {"4201"}
-	
-	filter "configurations:Debug"
+
+	filter "configurations:DebugSlow"
 		runtime "Debug"
 		optimize "Off"
+		inlining "Disabled"
+		justmycode "On"
+
+	filter "configurations:Debug"
+		runtime "Debug"
+		optimize "Debug"
+		removeflags "NoRuntimeChecks"
+		defines { "_ITERATOR_DEBUG_LEVEL=0" }
 		inlining "Explicit"
 
 	filter "configurations:Release"
  		runtime "Release"
 		optimize "Full"
+		removeflags "NoRuntimeChecks"
 		flags { "NoIncrementalLink" }
 
 	filter "configurations:DebugASAN"
