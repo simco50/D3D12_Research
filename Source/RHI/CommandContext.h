@@ -217,7 +217,8 @@ private:
 
 	const PipelineState* m_pCurrentPSO = nullptr;
 	const StateObject* m_pCurrentSO = nullptr;
-	const RootSignature* m_pCurrentRS = nullptr;
+	const RootSignature* m_pCurrentComputeRS = nullptr;
+	const RootSignature* m_pCurrentGraphicsRS = nullptr;
 };
 
 class CommandSignatureInitializer

@@ -588,8 +588,6 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 
 	if (initData.GetSize() > 0)
 	{
-		gAssert(initData.GetSize() == desc.DepthOrArraySize * desc.Mips);
-
 		uint64 requiredSize = 0;
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT layouts[16];
 		uint32 numRows[16];

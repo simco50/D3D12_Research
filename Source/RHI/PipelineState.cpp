@@ -298,6 +298,9 @@ void PipelineState::CreateInternal()
 			{
 				ShaderResult result = GetParent()->GetShader(desc.Path.c_str(), (ShaderType)i, desc.EntryPoint.c_str(), desc.Defines);
 				pShader = result.pShader;
+				if (m_pPipelineState)
+					break;
+
 				if (result.Error.length())
 				{
 					bool retry = ::MessageBoxA(GetActiveWindow(), result.Error.c_str(), "Shader Compilation Failed", MB_RETRYCANCEL) == IDRETRY;

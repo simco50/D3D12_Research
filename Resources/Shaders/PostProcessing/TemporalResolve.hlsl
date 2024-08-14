@@ -190,7 +190,7 @@ void CSMain(
 {
 	const float2 dxdy = cView.ViewportDimensionsInv;
 	uint2 pixelIndex = ThreadId.xy;
-	float2 uv = dxdy * ((float2)pixelIndex + 0.5f);
+	float2 uv = TexelToUV(pixelIndex, dxdy);
 	float2 dimensions;
 	tCurrentColor.GetDimensions(dimensions.x, dimensions.y);
 

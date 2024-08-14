@@ -292,18 +292,20 @@ bool Image::LoadDDS(Stream& stream)
 
 			auto ConvertDX10Format = [](DXGI_FORMAT format, ResourceFormat& outFormat, bool& outSRGB)
 				{
-					if (format == DXGI_FORMAT_BC1_UNORM) { outFormat = ResourceFormat::BC1_UNORM;			outSRGB = false;	return; }
-					if (format == DXGI_FORMAT_BC1_UNORM_SRGB) { outFormat = ResourceFormat::BC1_UNORM;			outSRGB = true;		return; }
-					if (format == DXGI_FORMAT_BC2_UNORM) { outFormat = ResourceFormat::BC2_UNORM;			outSRGB = false;	return; }
-					if (format == DXGI_FORMAT_BC2_UNORM_SRGB) { outFormat = ResourceFormat::BC2_UNORM;			outSRGB = true;		return; }
-					if (format == DXGI_FORMAT_BC3_UNORM) { outFormat = ResourceFormat::BC3_UNORM;			outSRGB = false;	return; }
-					if (format == DXGI_FORMAT_BC4_UNORM) { outFormat = ResourceFormat::BC4_UNORM;			outSRGB = false;	return; }
-					if (format == DXGI_FORMAT_BC5_UNORM) { outFormat = ResourceFormat::BC5_UNORM;			outSRGB = false;	return; }
-					if (format == DXGI_FORMAT_BC6H_UF16) { outFormat = ResourceFormat::BC6H_UFLOAT;			outSRGB = false;	return; }
-					if (format == DXGI_FORMAT_BC7_UNORM) { outFormat = ResourceFormat::BC7_UNORM;			outSRGB = false;	return; }
-					if (format == DXGI_FORMAT_BC7_UNORM_SRGB) { outFormat = ResourceFormat::BC7_UNORM;			outSRGB = true;		return; }
-					if (format == DXGI_FORMAT_R32G32B32A32_FLOAT) { outFormat = ResourceFormat::RGBA32_FLOAT;			outSRGB = false;	return; }
-					if (format == DXGI_FORMAT_R32G32_FLOAT) { outFormat = ResourceFormat::RG32_FLOAT;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC1_UNORM) {				outFormat = ResourceFormat::BC1_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC1_UNORM_SRGB) {			outFormat = ResourceFormat::BC1_UNORM;			outSRGB = true;		return; }
+					if (format == DXGI_FORMAT_BC2_UNORM) {				outFormat = ResourceFormat::BC2_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC2_UNORM_SRGB) {			outFormat = ResourceFormat::BC2_UNORM;			outSRGB = true;		return; }
+					if (format == DXGI_FORMAT_BC3_UNORM) {				outFormat = ResourceFormat::BC3_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC4_UNORM) {				outFormat = ResourceFormat::BC4_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC5_UNORM) {				outFormat = ResourceFormat::BC5_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC6H_UF16) {				outFormat = ResourceFormat::BC6H_UFLOAT;		outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC7_UNORM) {				outFormat = ResourceFormat::BC7_UNORM;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_BC7_UNORM_SRGB) {			outFormat = ResourceFormat::BC7_UNORM;			outSRGB = true;		return; }
+					if (format == DXGI_FORMAT_R32G32B32A32_FLOAT) {		outFormat = ResourceFormat::RGBA32_FLOAT;		outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_R32G32_FLOAT) {			outFormat = ResourceFormat::RG32_FLOAT;			outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_R9G9B9E5_SHAREDEXP) {		outFormat = ResourceFormat::R9G9B9E5_SHAREDEXP; outSRGB = false;	return; }
+					gUnreachable();
 				};
 			ConvertDX10Format((DXGI_FORMAT)dx10Header.dxgiFormat, m_Format, m_sRgb);
 		}

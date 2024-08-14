@@ -68,6 +68,8 @@ enum class ResourceFormat : uint8
 	RGBA32_SINT,
 	RGBA32_FLOAT,
 
+	R9G9B9E5_SHAREDEXP,
+
 	BC1_UNORM,
 	BC2_UNORM,
 	BC3_UNORM,

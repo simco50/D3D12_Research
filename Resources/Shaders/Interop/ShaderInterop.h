@@ -142,10 +142,6 @@ struct FogVolume
 
 struct ViewUniforms
 {
-	float4 CascadeDepths;
-	uint NumCascades;
-	uint3 pad0;
-
 	float4x4 WorldToView;
 	float4x4 ViewToWorld;
 	float4x4 ViewToClip;
@@ -155,22 +151,28 @@ struct ViewUniforms
 	float4x4 ClipToWorld;
 	float4x4 UVToPrevUV;
 	float4x4 WorldToClipUnjittered;
+
 	float3 ViewLocation;
-	uint pad1;
+	uint pad0;
 	float3 ViewLocationPrev;
-	uint pad2;
+	uint pad1;
+
 	float2 ViewportDimensions;
 	float2 ViewportDimensionsInv;
 	float2 ViewJitter;
 	float2 ViewJitterPrev;
+
 	float NearZ;
 	float FarZ;
 	float FoV;
+	uint pad2;
 
+	float4 CascadeDepths;
+	uint NumCascades;
 	uint FrameIndex;
 	float DeltaTime;
-
 	uint NumInstances;
+
 	uint SsrSamples;
 	uint LightCount;
 	uint NumDDGIVolumes;

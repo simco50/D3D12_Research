@@ -76,7 +76,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 
 	PickingData data;
 	float4 value;
-	float2 uv = (texel + 0.5f) / cConstants.Dimensions;
+	float2 uv = TexelToUV(texel, rcp(cConstants.Dimensions));
 	if(cConstants.IsIntegerFormat)
 	{
 		data.DataUInt = SampleTexture<uint4>(uv);

@@ -40,7 +40,7 @@ float WorleyFBM(float3 uvw, float frequency)
 [numthreads(8, 8, 8)]
 void CloudShapeNoiseCS(uint3 threadId : SV_DispatchThreadID)
 {
-	float3 uvw = (threadId.xyz + 0.5f) * (float)cPass.ResolutionInv;
+	float3 uvw = TexelToUV(threadId, cPass.ResolutionInv);
 
 	float4 noiseResults = 0;
 	noiseResults.y = WorleyFBM(uvw, cPass.Frequency);
@@ -57,7 +57,7 @@ void CloudShapeNoiseCS(uint3 threadId : SV_DispatchThreadID)
 [numthreads(8, 8, 8)]
 void CloudDetailNoiseCS(uint3 threadId : SV_DispatchThreadID)
 {
-	float3 uvw = (threadId.xyz + 0.5f) * (float)cPass.ResolutionInv;
+	float3 uvw = TexelToUV(threadId, cPass.ResolutionInv);
 
 	float4 noiseResults = 0;
 	noiseResults.x = WorleyFBM(uvw, cPass.Frequency);
@@ -71,7 +71,7 @@ void CloudDetailNoiseCS(uint3 threadId : SV_DispatchThreadID)
 [numthreads(8, 8, 8)]
 void CloudHeightDensityCS(uint3 threadId : SV_DispatchThreadID)
 {
-	float3 uvw = (threadId.xyz + 0.5f) * (float)cPass.ResolutionInv;
+	float3 uvw = TexelToUV(threadId, cPass.ResolutionInv);
 	float cloudType = uvw.x;
 	float height = uvw.y;
 

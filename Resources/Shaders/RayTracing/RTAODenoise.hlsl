@@ -13,7 +13,7 @@ void DenoiseCS(uint3 threadID : SV_DispatchThreadID)
 		return;
 
 	float ao = tAO[threadID.xy];
-	float2 uv = (threadID.xy + 0.5f) * cView.ViewportDimensionsInv;
+	float2 uv = TexelToUV(threadID.xy, cView.ViewportDimensionsInv);
 	float2 velocity = tVelocity.SampleLevel(sLinearClamp, uv, 0);
 	float2 reprojUV = uv + velocity;
 	float prevAO = tHistory.SampleLevel(sLinearClamp, reprojUV, 0);

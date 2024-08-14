@@ -162,19 +162,6 @@ namespace GraphicsCommon
 
 	Texture* GetDefaultTexture(DefaultTexture type);
 
-	constexpr static ResourceFormat ShadowFormat = ResourceFormat::D16_UNORM;
-	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D24S8;
-	constexpr static ResourceFormat GBufferFormat[] = {
-		ResourceFormat::RGBA16_FLOAT,
-		ResourceFormat::RG16_SNORM,
-		ResourceFormat::R8_UNORM
-	};
-	constexpr static ResourceFormat DeferredGBufferFormat[] = {
-			ResourceFormat::RGBA8_UNORM,
-			ResourceFormat::RG16_UNORM,
-			ResourceFormat::RG8_UNORM,
-	};
-
 	extern Ref<CommandSignature> pIndirectDrawSignature;
 	extern Ref<CommandSignature> pIndirectDrawIndexedSignature;
 	extern Ref<CommandSignature> pIndirectDispatchSignature;

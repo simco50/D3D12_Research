@@ -147,6 +147,11 @@ namespace GraphicsCommon
 			desc.Width = Math::Max(desc.Width, 4u);
 			desc.Height = Math::Max(desc.Height, 4u);
 		}
+		if (image.GetDepth() > 1)
+		{
+			desc.DepthOrArraySize = image.GetDepth();
+			desc.Type = TextureType::Texture3D;
+		}
 
 		Array<D3D12_SUBRESOURCE_DATA> subResourceData;
 		const Image* pImg = &image;

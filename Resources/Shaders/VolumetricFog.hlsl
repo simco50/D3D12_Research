@@ -33,7 +33,7 @@ RWTexture3D<float4> uOutLightScattering : register(u0);
 
 float3 GetWorldPosition(uint3 index, float offset, float3 clusterDimensionsInv, out float linearDepth)
 {
-	float2 texelUV = ((float2)index.xy + 0.5f) * clusterDimensionsInv.xy;
+	float2 texelUV = TexelToUV(index.xy, clusterDimensionsInv.xy);
 	float z = (float)(index.z + offset) * clusterDimensionsInv.z;
 	linearDepth = cView.FarZ + Square(saturate(z)) * (cView.NearZ - cView.FarZ);
 	float ndcZ = LinearDepthToNDC(linearDepth, cView.ViewToClip);
@@ -70,7 +70,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	float3 voxelCenterWS = GetWorldPosition(cellIndex, 0.5f, cInjectParams.InvClusterDimensions);
 	float4 reprojNDC = mul(float4(voxelCenterWS, 1), cView.WorldToClipPrev);
 	reprojNDC.xyz /= reprojNDC.w;
-	float3 reprojUV = float3(reprojNDC.x * 0.5f + 0.5f, -reprojNDC.y * 0.5f + 0.5f, reprojNDC.z);
+	float3 reprojUV = float3(ClipToUV(reprojNDC.xy), reprojNDC.z);
 	reprojUV.z = LinearizeDepth(reprojUV.z);
 	reprojUV.z = sqrt((reprojUV.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
 	float4 prevScattering = tLightScattering.SampleLevel(sLinearClamp, reprojUV, 0);

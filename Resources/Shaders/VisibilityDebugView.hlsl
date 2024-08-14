@@ -23,7 +23,7 @@ void DebugRenderCS(uint3 dispatchThreadId : SV_DispatchThreadID)
 		return;
 
 	float3 color = 0;
-	float2 screenUV = ((float2)texel.xy + 0.5f) * cView.ViewportDimensionsInv;
+	float2 screenUV = TexelToUV(texel, cView.ViewportDimensionsInv);
 
 	uint candidateIndex, primitiveID;
 	if(UnpackVisBuffer(tVisibilityTexture[texel], candidateIndex, primitiveID))

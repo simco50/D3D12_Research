@@ -158,12 +158,6 @@ namespace _DelegatesInteral
 
 	static void* (*Alloc)(size_t size) = [](size_t size) { return malloc(size); };
 	static void(*Free)(void* pPtr) = [](void* pPtr) { free(pPtr); };
-	template<typename T>
-	void DelegateDeleteFunc(T* pPtr)
-	{
-		pPtr->~T();
-		DelegateFreeFunc(pPtr);
-	}
 }
 
 namespace Delegates
@@ -1038,7 +1032,7 @@ public:
 		}
 	}
 
-	void Compress(const size_t maxSpace = 0)
+	void Compress(size_t maxSpace = 0)
 	{
 		if (IsLocked() == false)
 		{
@@ -1059,14 +1053,14 @@ public:
 	}
 
 	//Execute all functions that are bound
-	void Broadcast(Args ...args)
+	void Broadcast(Args... args)
 	{
 		Lock();
 		for (size_t i = 0; i < m_Events.size(); ++i)
 		{
 			if (m_Events[i].Handle.IsValid())
 			{
-				m_Events[i].Callback.Execute(std::forward<Args>(args)...);
+				m_Events[i].Callback.Execute(args...);
 			}
 		}
 		Unlock();

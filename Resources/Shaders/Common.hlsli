@@ -206,6 +206,16 @@ float2 UVToClip(float2 uv)
 	return (uv - 0.5f) * float2(2.0f, -2.0f);
 }
 
+float2 TexelToUV(uint2 texel, float2 texelSize)
+{
+	return ((float2)texel + 0.5f) * texelSize;
+}
+
+float3 TexelToUV(uint3 texel, float3 texelSize)
+{
+	return ((float3)texel + 0.5f) * texelSize;
+}
+
 AABB AABBFromMinMax(float3 minimum, float3 maximum)
 {
 	AABB aabb;

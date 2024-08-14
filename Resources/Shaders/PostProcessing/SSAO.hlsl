@@ -30,7 +30,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	if(any(threadId.xy >= cView.ViewportDimensions))
 		return;
 
-	float2 uv = ((float2)threadId.xy + 0.5f) * cView.ViewportDimensionsInv;
+	float2 uv = TexelToUV(threadId.xy, cView.ViewportDimensionsInv);
 	float depth = tDepthTexture.SampleLevel(sPointClamp, uv, 0);
 	float3 viewNormal = ViewNormalFromDepth(uv, tDepthTexture, NormalReconstructMethod::Taps5);
 	float3 viewPos = ViewPositionFromDepth(uv.xy, depth, cView.ClipToView).xyz;

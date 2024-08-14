@@ -28,7 +28,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetVertexShader(pDebugRenderPath, "RenderLineVS");
 		psoDesc.SetPixelShader(pDebugRenderPath, "RenderLinePS");
-		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);

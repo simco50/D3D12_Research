@@ -450,16 +450,16 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			const Vector2u viewDimensions = pView->GetDimensions();
 
 			SceneTextures sceneTextures;
-			sceneTextures.pDepth = graph.Create("Depth Stencil", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
-			sceneTextures.pColorTarget = graph.Create("Color Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[0]));
-			sceneTextures.pNormals = graph.Create("Normals", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[1]));
-			sceneTextures.pRoughness = graph.Create("Roughness", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::GBufferFormat[2]));
+			sceneTextures.pDepth = graph.Create("Depth Stencil", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::DepthStencilFormat, 1, TextureFlag::None, ClearBinding(0.0f, 0)));
+			sceneTextures.pColorTarget = graph.Create("Color Target", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::GBufferFormat[0]));
+			sceneTextures.pNormals = graph.Create("Normals", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::GBufferFormat[1]));
+			sceneTextures.pRoughness = graph.Create("Roughness", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::GBufferFormat[2]));
 			sceneTextures.pVelocity = graph.Create("Velocity", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 			sceneTextures.pPreviousColor = graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
-			sceneTextures.pGBuffer0 = graph.Create("GBuffer 0", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[0]));
-			sceneTextures.pGBuffer1 = graph.Create("GBuffer 1", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[1]));
-			sceneTextures.pGBuffer2 = graph.Create("GBuffer 2", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, GraphicsCommon::DeferredGBufferFormat[2]));
+			sceneTextures.pGBuffer0 = graph.Create("GBuffer 0", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::DeferredGBufferFormat[0]));
+			sceneTextures.pGBuffer1 = graph.Create("GBuffer 1", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::DeferredGBufferFormat[1]));
+			sceneTextures.pGBuffer2 = graph.Create("GBuffer 2", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::DeferredGBufferFormat[2]));
 
 			LightCull2DData lightCull2DData;
 			LightCull3DData lightCull3DData;
@@ -1223,7 +1223,7 @@ void Renderer::InitializePipelines()
 			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
 			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
-			psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
+			psoDesc.SetDepthOnlyTarget(Renderer::DepthStencilFormat, 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
 			psoDesc.SetName("Depth Prepass Opaque");
@@ -1240,7 +1240,7 @@ void Renderer::InitializePipelines()
 			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
 			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
-			psoDesc.SetDepthOnlyTarget(GraphicsCommon::ShadowFormat, 1);
+			psoDesc.SetDepthOnlyTarget(Renderer::ShadowFormat, 1);
 			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			psoDesc.SetDepthBias(-10, 0, -4.0f);
@@ -1275,7 +1275,7 @@ void Renderer::InitializePipelines()
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
 		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
-		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetDepthWrite(false);
 		psoDesc.SetName("Skybox");
@@ -1295,7 +1295,7 @@ void Renderer::InitializePipelines()
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
 		psoDesc.SetPixelShader("VisibilityShading.hlsl", "ShadePS");
-		psoDesc.SetRenderTargetFormats(GraphicsCommon::GBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(Renderer::GBufferFormat, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
 		psoDesc.SetDepthWrite(false);
@@ -1311,7 +1311,7 @@ void Renderer::InitializePipelines()
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
 		psoDesc.SetPixelShader("VisibilityGBuffer.hlsl", "ShadePS");
-		psoDesc.SetRenderTargetFormats(GraphicsCommon::DeferredGBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(Renderer::GBufferFormat, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
 		psoDesc.SetDepthWrite(false);
@@ -1355,8 +1355,8 @@ void Renderer::GetViewUniforms(const RenderView& view, ShaderInterop::ViewUnifor
 		0.5f, 0.5f, 0, 1
 	};
 	outUniforms.UVToPrevUV				= premult * reprojectionMatrix * postmult;
-	outUniforms.ViewLocation				= view.Position;
-	outUniforms.ViewLocationPrev			= view.PositionPrev;
+	outUniforms.ViewLocation			= view.Position;
+	outUniforms.ViewLocationPrev		= view.PositionPrev;
 
 	outUniforms.ViewportDimensions		= Vector2(view.Viewport.GetWidth(), view.Viewport.GetHeight());
 	outUniforms.ViewportDimensionsInv	= Vector2(1.0f / view.Viewport.GetWidth(), 1.0f / view.Viewport.GetHeight());
@@ -1444,6 +1444,7 @@ void Renderer::UploadSceneData(CommandContext& context)
 	// Instances
 	{
 		Array<ShaderInterop::InstanceData> meshInstances;
+		meshInstances.reserve(pWorld->Registry.view<Model>().size());
 
 		auto view = pWorld->Registry.view<Transform, Model>();
 		view.each([&](const Transform& transform, const Model& model)
@@ -1559,6 +1560,7 @@ void Renderer::UploadSceneData(CommandContext& context)
 	// Lights
 	{
 		Array<ShaderInterop::Light> lightData;
+		lightData.reserve(pWorld->Registry.view<Light>().size());
 		auto light_view = pWorld->Registry.view<const Transform, const Light>();
 		light_view.each([&](const Transform& transform, const Light& light)
 			{
@@ -1727,7 +1729,7 @@ void Renderer::CreateShadowViews(const RenderView& mainView)
 			if (shadowMapLightIndex == 0)
 				light.MatrixIndex = shadowIndex;
 			if (shadowIndex >= (int32)m_ShadowMaps.size())
-				m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::Create2D(resolution, resolution, GraphicsCommon::ShadowFormat, 1, TextureFlag::DepthStencil | TextureFlag::ShaderResource, ClearBinding(0.0f, 0)), Sprintf("Shadow Map %d", (uint32)m_ShadowMaps.size()).c_str()));
+				m_ShadowMaps.push_back(m_pDevice->CreateTexture(TextureDesc::Create2D(resolution, resolution, Renderer::ShadowFormat, 1, TextureFlag::DepthStencil | TextureFlag::ShaderResource, ClearBinding(0.0f, 0)), Sprintf("Shadow Map %d", (uint32)m_ShadowMaps.size()).c_str()));
 			Ref<Texture> pTarget = m_ShadowMaps[shadowIndex];
 
 			light.ShadowMaps.resize(Math::Max(shadowMapLightIndex + 1, (uint32)light.ShadowMaps.size()));
@@ -1874,10 +1876,35 @@ void Renderer::CreateShadowViews(const RenderView& mainView)
 }
 
 
-void Renderer::DrawImGui(FloatRect viewport)
+void Renderer::DrawImGui()
 {
-	ImVec2 viewportOrigin(viewport.Left, viewport.Top);
-	ImVec2 viewportExtents(viewport.GetWidth(), viewport.GetHeight());
+	if (ImGui::BeginMainMenuBar())
+	{
+		if (ImGui::BeginMenu(ICON_FA_WINDOW_MAXIMIZE " Windows"))
+		{
+			if (ImGui::MenuItem("RenderGraph Resource Tracker", "Ctrl + R", Tweakables::gRenderGraphResourceTracker))
+				Tweakables::gRenderGraphResourceTracker = !Tweakables::gRenderGraphResourceTracker;
+			if (ImGui::MenuItem("RenderGraph Pass View", "Ctrl + T", Tweakables::gRenderGraphPassView))
+				Tweakables::gRenderGraphPassView = !Tweakables::gRenderGraphPassView;
+			if (ImGui::MenuItem("Luminance Histogram", 0, Tweakables::gDrawHistogram))
+				Tweakables::gDrawHistogram = !Tweakables::gDrawHistogram;
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(ICON_FA_WRENCH " Tools"))
+		{
+			if (ImGui::MenuItem("Dump RenderGraph"))
+				Tweakables::gDumpRenderGraphNextFrame = true;
+			if (ImGui::MenuItem("PIX Capture"))
+				D3D::EnqueuePIXCapture();
+			ImGui::EndMenu();
+		}
+
+		ImGui::EndMainMenuBar();
+	}
+
+	ImGuiWindow* pWindow = ImGui::FindWindowByName(ICON_FA_DESKTOP " Viewport");
+	ImVec2 viewportOrigin = pWindow->WorkRect.Min;
+	ImVec2 viewportExtents = pWindow->WorkRect.GetSize();
 
 	if (m_pCaptureTextureSystem)
 		m_pCaptureTextureSystem->RenderUI(m_CaptureTextureContext, viewportOrigin, viewportExtents);

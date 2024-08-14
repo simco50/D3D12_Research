@@ -96,7 +96,8 @@ void CommandContext::ClearState()
 
 		m_pCurrentPSO = nullptr;
 		m_pCurrentSO = nullptr;
-		m_pCurrentRS = nullptr;
+		m_pCurrentGraphicsRS = nullptr;
+		m_pCurrentComputeRS = nullptr;
 
 		m_pCommandList->ClearState(nullptr);
 
@@ -304,18 +305,24 @@ void CommandContext::ClearUAVf(const UnorderedAccessView* pUAV, const Vector4& v
 
 void CommandContext::SetComputeRootSignature(const RootSignature* pRootSignature)
 {
-	m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
-	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 	m_CurrentCommandContext = CommandListContext::Compute;
-	m_pCurrentRS = pRootSignature;
+	if (pRootSignature != m_pCurrentComputeRS)
+	{
+		m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
+		m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
+		m_pCurrentComputeRS = pRootSignature;
+	}
 }
 
 void CommandContext::SetGraphicsRootSignature(const RootSignature* pRootSignature)
 {
-	m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
-	m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 	m_CurrentCommandContext = CommandListContext::Graphics;
-	m_pCurrentRS = pRootSignature;
+	if (pRootSignature != m_pCurrentGraphicsRS)
+	{
+		m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
+		m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
+		m_pCurrentGraphicsRS = pRootSignature;
+	}
 }
 
 void CommandContext::BindRootSRV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
@@ -342,11 +349,12 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 {
 	gAssert(m_CurrentCommandContext != CommandListContext::Invalid);
 
-	bool isRootConstants = m_pCurrentRS->IsRootConstant(rootIndex);
+	const RootSignature* pRootSignature = m_CurrentCommandContext == CommandListContext::Graphics ? m_pCurrentGraphicsRS : m_pCurrentComputeRS;
+	bool isRootConstants = pRootSignature->IsRootConstant(rootIndex);
 	if (isRootConstants)
 	{
 		gAssert(dataSize % sizeof(uint32) == 0);
-		uint32 rootConstantsSize = m_pCurrentRS->GetNumRootConstants(rootIndex) * sizeof(uint32);
+		uint32 rootConstantsSize = pRootSignature->GetNumRootConstants(rootIndex) * sizeof(uint32);
 		gAssert(dataSize <= rootConstantsSize);
 
 #ifdef _DEBUG
@@ -371,7 +379,7 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 		ScratchAllocation allocation = AllocateScratch(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 		memcpy(allocation.pMappedMemory, pData, dataSize);
 
-		gAssert(!m_pCurrentRS->IsRootConstant(rootIndex));
+		gAssert(!pRootSignature->IsRootConstant(rootIndex));
 		if (m_CurrentCommandContext == CommandListContext::Graphics)
 			m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
 		else
@@ -382,7 +390,11 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 
 void CommandContext::BindRootCBV(uint32 rootIndex, const Buffer* pBuffer)
 {
-	gAssert(!m_pCurrentRS->IsRootConstant(rootIndex));
+#if ENABLE_ASSERTS
+	const RootSignature* pRootSignature = m_CurrentCommandContext == CommandListContext::Graphics ? m_pCurrentGraphicsRS : m_pCurrentComputeRS;
+	gAssert(!pRootSignature->IsRootConstant(rootIndex));
+#endif
+
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
 		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, pBuffer->GetGpuHandle());
 	else

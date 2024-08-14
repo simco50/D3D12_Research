@@ -15,5 +15,5 @@ Texture2D<float4> tInput : register(t0);
 void CSMain(uint3 threadId : SV_DispatchThreadID)
 {
 	if(all(threadId.xy < cPassData.TargetDimensions))
-		uOutput[threadId.xy] = tInput.SampleLevel(sLinearClamp, ((float2)threadId.xy + 0.5f) * cPassData.TargetDimensionsInv, 0);
+		uOutput[threadId.xy] = tInput.SampleLevel(sLinearClamp, TexelToUV(threadId.xy, cPassData.TargetDimensionsInv), 0);
 }

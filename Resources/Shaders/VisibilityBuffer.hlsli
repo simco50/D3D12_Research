@@ -114,8 +114,7 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 	float4 clipPos0 = mul(float4(worldPos[0], 1), cView.WorldToClip);
 	float4 clipPos1 = mul(float4(worldPos[1], 1), cView.WorldToClip);
 	float4 clipPos2 = mul(float4(worldPos[2], 1), cView.WorldToClip);
-	float2 pixelClip = screenUV * 2 - 1;
-	pixelClip.y *= -1;
+	float2 pixelClip = UVToClip(screenUV);
 	BaryDerivs bary = ComputeBarycentrics(pixelClip, clipPos0, clipPos1, clipPos2);
 
 	VisBufferVertexAttribute outVertex;

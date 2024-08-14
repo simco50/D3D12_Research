@@ -35,7 +35,7 @@ ScratchAllocation ScratchAllocator::Allocate(uint64 size, int alignment)
 {
 	uint64 bufferSize = Math::AlignUp<uint64>(size, alignment);
 	ScratchAllocation allocation;
-	allocation.Size = bufferSize;
+	allocation.Size = size;
 
 	if (bufferSize > m_pPageManager->GetPageSize())
 	{

@@ -83,7 +83,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
 		psoDesc.SetName("Meshlet Rasterize (Visibility Buffer)");
 
@@ -116,7 +116,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetDepthOnlyTarget(GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetDepthOnlyTarget(Renderer::DepthStencilFormat, 1);
 		psoDesc.SetDepthBias(-10, 0, -4.0f);
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetName("Meshlet Rasterize (Depth Only)");
@@ -298,15 +298,15 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 					D3D12_SET_PROGRAM_DESC programDesc{
 						.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH,
 						.WorkGraph {
-							.ProgramIdentifier				= pCullWorkGraphSO->GetStateObjectProperties()->GetProgramIdentifier(L"WG"),
-							.Flags							= resources.Get(pWorkGraphBuffer) != m_pWorkGraphMemory ? D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE : D3D12_SET_WORK_GRAPH_FLAG_NONE,
-							.BackingMemory					= { resources.Get(pWorkGraphBuffer)->GetGpuHandle(), resources.Get(pWorkGraphBuffer)->GetSize() },
-							.NodeLocalRootArgumentsTable	= {},
+							.ProgramIdentifier = pCullWorkGraphSO->GetStateObjectProperties()->GetProgramIdentifier(L"WG"),
+							.Flags = resources.Get(pWorkGraphBuffer) != m_pWorkGraphBuffer[psoPhaseIndex] ? D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE : D3D12_SET_WORK_GRAPH_FLAG_NONE,
+							.BackingMemory = { resources.Get(pWorkGraphBuffer)->GetGpuHandle(), resources.Get(pWorkGraphBuffer)->GetSize() },
+							.NodeLocalRootArgumentsTable = {},
 						}
 					};
 					context.SetProgram(programDesc);
 
-					m_pWorkGraphMemory = resources.Get(pWorkGraphBuffer);
+					m_pWorkGraphBuffer[psoPhaseIndex] = resources.Get(pWorkGraphBuffer);
 
 					struct
 					{
@@ -348,7 +348,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 
 					context.DispatchGraph(graphDesc);
 					context.InsertUAVBarrier();
-						});
+				});
 
 		if (rasterContext.EnableOcclusionCulling)
 			wgPass.Read(pSourceHZB);

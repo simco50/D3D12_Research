@@ -111,9 +111,7 @@ float Shadow3x3PCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invSh
 	float4x4 lightViewProjection = GetLightMatrix(lightMatrix);
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
-	lightPos.x = lightPos.x / 2.0f + 0.5f;
-	lightPos.y = lightPos.y / -2.0f + 0.5f;
-	float2 uv = lightPos.xy;
+	float2 uv = ClipToUV(lightPos.xy);
 	Texture2D shadowTexture = ResourceDescriptorHeap[NonUniformResourceIndex(shadowMapIndex)];
 
 	const float dilation = 2.0f;
@@ -140,9 +138,7 @@ float ShadowNoPCF(float3 wPos, int lightMatrix, int shadowMapIndex, float invSha
 	float4x4 lightViewProjection = GetLightMatrix(lightMatrix);
 	float4 lightPos = mul(float4(wPos, 1), lightViewProjection);
 	lightPos.xyz /= lightPos.w;
-	lightPos.x = lightPos.x / 2.0f + 0.5f;
-	lightPos.y = lightPos.y / -2.0f + 0.5f;
-	float2 uv = lightPos.xy;
+	float2 uv = ClipToUV(lightPos.xy);
 	Texture2D shadowTexture = ResourceDescriptorHeap[NonUniformResourceIndex(shadowMapIndex)];
 	return shadowTexture.SampleCmpLevelZero(sLinearClampComparisonGreater, uv, lightPos.z);
 }

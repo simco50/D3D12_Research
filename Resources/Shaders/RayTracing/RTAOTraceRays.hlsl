@@ -29,7 +29,7 @@ void RayGen()
 	float2 dimInv = rcp((float2)launchDim.xy);
 	uint2 launchIndex = DispatchRaysIndex().xy;
 	uint launchIndex1d = launchIndex.x + launchIndex.y * launchDim.x;
-	float2 uv = (launchIndex + 0.5f) * dimInv;
+	float2 uv = TexelToUV(launchIndex, dimInv);
 
 	float3 world = WorldPositionFromDepth(uv, tSceneDepth.SampleLevel(sPointClamp, uv, 0).r, cView.ClipToWorld);
 	float3 viewNormal = ViewNormalFromDepth(uv, tSceneDepth, NormalReconstructMethod::Taps5);

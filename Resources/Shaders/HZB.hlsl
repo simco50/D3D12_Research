@@ -13,7 +13,7 @@ Texture2D<float> tSource : register(t0);
 [numthreads(16, 16, 1)]
 void HZBInitCS(uint3 threadID : SV_DispatchThreadID)
 {
-    float2 uv = ((float2)threadID.xy + 0.5f) * cPass.DimensionsInv;
+    float2 uv = TexelToUV(threadID.xy, cPass.DimensionsInv);
     float4 depths = tSource.Gather(sPointClamp, uv);
     float minDepth = min(min(min(depths.x, depths.y), depths.z), depths.w);
     uHZB[threadID.xy] = minDepth;

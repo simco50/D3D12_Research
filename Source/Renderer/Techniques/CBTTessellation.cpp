@@ -65,7 +65,7 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("CBT.hlsl", "RenderVS", *defines);
-		psoDesc.SetRenderTargetFormats({}, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats({}, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Raster CBT");
 		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
@@ -77,7 +77,7 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
 		psoDesc.SetPixelShader("CBT.hlsl", "ShadePS", *defines);
-		psoDesc.SetRenderTargetFormats(GraphicsCommon::GBufferFormat, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(Renderer::GBufferFormat, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::Terrain, 0x0);
 		psoDesc.SetDepthWrite(false);
@@ -92,7 +92,7 @@ void CBTTessellation::SetupPipelines(GraphicsDevice* pDevice)
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetAmplificationShader("CBT.hlsl", "UpdateAS", *defines);
 		psoDesc.SetMeshShader("CBT.hlsl", "RenderMS", *defines);
-		psoDesc.SetRenderTargetFormats({}, GraphicsCommon::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats({}, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetName("Draw CBT");

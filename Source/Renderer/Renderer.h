@@ -37,7 +37,7 @@ public:
 	void Shutdown();
 
 	void Render(const Transform& cameraTransform, const Camera& camera, Texture* pTarget);
-	void DrawImGui(FloatRect viewport);
+	void DrawImGui();
 	void MakeScreenshot(Texture* pSource);
 
 	static void DrawScene(CommandContext& context, const RenderView& view, Batch::Blending blendModes);
@@ -48,6 +48,19 @@ public:
 	uint32 GetFrameIndex() const { return m_Frame; }
 	Span<const Batch> GetBatches() const { return m_Batches; }
 	const RenderView& GetMainView() const { return m_MainView; }
+
+	constexpr static ResourceFormat ShadowFormat = ResourceFormat::D16_UNORM;
+	constexpr static ResourceFormat DepthStencilFormat = ResourceFormat::D24S8;
+	constexpr static ResourceFormat GBufferFormat[] = {
+		ResourceFormat::RGBA16_FLOAT,
+		ResourceFormat::RG16_SNORM,
+		ResourceFormat::R8_UNORM
+	};
+	constexpr static ResourceFormat DeferredGBufferFormat[] = {
+		ResourceFormat::RGBA8_UNORM,
+		ResourceFormat::RG16_UNORM,
+		ResourceFormat::RG8_UNORM,
+	};
 
 private:
 	void InitializePipelines();

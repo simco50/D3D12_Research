@@ -26,7 +26,7 @@ void RayGen()
 {
 	float2 dimInv = rcp(DispatchRaysDimensions().xy);
 	uint2 launchIndex = DispatchRaysIndex().xy;
-	float2 uv = (float2)(launchIndex + 0.5f) * dimInv;
+	float2 uv = TexelToUV(launchIndex, dimInv);
 
 	float depth = tDepth.SampleLevel(sPointClamp, uv, 0).r;
 	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, uv, 0);

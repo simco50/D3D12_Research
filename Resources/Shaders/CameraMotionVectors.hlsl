@@ -10,9 +10,7 @@ void CSMain(uint3 threadID : SV_DispatchThreadID)
 		return;
 
 	float depth = tDepthTexture[threadID.xy].r;
-
-	float2 posSS = threadID.xy + 0.5f;
-	float2 uv = posSS * cView.ViewportDimensionsInv;
+	float2 uv = TexelToUV(threadID.xy, cView.ViewportDimensionsInv);
 
 	// Compute world space position from depth
 	float4 posNDC = float4(UVToClip(uv), depth, 1.0f);

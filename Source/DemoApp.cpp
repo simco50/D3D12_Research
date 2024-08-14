@@ -222,50 +222,22 @@ void DemoApp::DrawImGui()
 		if (ImGui::BeginMenu(ICON_FA_WINDOW_MAXIMIZE " Windows"))
 		{
 			if (ImGui::MenuItem(ICON_FA_CLOCK_O " Profiler", "Ctrl + P", showProfiler))
-			{
 				showProfiler = !showProfiler;
-			}
-			if (ImGui::MenuItem("RenderGraph Resource Tracker", "Ctrl + R"))
-			{
-				static IConsoleObject* resourceTracker = ConsoleManager::FindConsoleObject("r.RenderGraph.ResourceTracker");
-				resourceTracker->Set("1");
-			}
-			if (ImGui::MenuItem("RenderGraph Pass View", "Ctrl + T"))
-			{
-				static IConsoleObject* passView = ConsoleManager::FindConsoleObject("r.RenderGraph.PassView");
-				passView->Set("1");
-			}
+			
 			if (ImGui::MenuItem("ImGui Metrics"))
-			{
 				showToolMetrics = !showToolMetrics;
-			}
+
 			bool& showConsole = console.IsVisible();
 			if (ImGui::MenuItem("Output Log", "~", showConsole))
-			{
 				showConsole = !showConsole;
-			}
-			if (ImGui::MenuItem("Luminance Histogram"))
-			{
-				static IConsoleObject* histogram = ConsoleManager::FindConsoleObject("r.Histogram");
-				histogram->Set("1");
-			}
 
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu(ICON_FA_WRENCH " Tools"))
 		{
-			if (ImGui::MenuItem("Dump RenderGraph"))
-			{
-				static IConsoleObject* pDumpGraph = ConsoleManager::FindConsoleObject("DumpRenderGraph");
-				pDumpGraph->AsCommand()->Execute(nullptr, 0);
-			}
 			if (ImGui::MenuItem("Screenshot"))
 			{
 				sScreenshotNextFrame = true;
-			}
-			if (ImGui::MenuItem("Pix Capture"))
-			{
-				D3D::EnqueuePIXCapture();
 			}
 			ImGui::EndMenu();
 		}
@@ -296,7 +268,6 @@ void DemoApp::DrawImGui()
 	ImVec2 viewportOrigin = ImGui::GetItemRectMin();
 	ImVec2 viewportExtents = ImGui::GetItemRectSize();
 	ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
-
 
 	ImGui::End();
 
@@ -338,7 +309,7 @@ void DemoApp::DrawImGui()
 	}
 	ImGui::End();
 
-	m_Renderer.DrawImGui(viewport);
+	m_Renderer.DrawImGui();
 }
 
 

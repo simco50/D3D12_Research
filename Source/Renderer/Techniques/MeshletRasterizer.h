@@ -90,7 +90,7 @@ private:
 
 	Ref<PipelineState> m_pClearCountersPSO;
 
-	Buffer* m_pWorkGraphMemory = nullptr;
+	Buffer* m_pWorkGraphBuffer[2]{};
 	Ref<StateObject> m_pWorkGraphSO[2];
 	Ref<StateObject> m_pWorkGraphNoOcclusionSO;
 	Ref<PipelineState> m_pClearRasterBins;

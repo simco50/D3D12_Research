@@ -202,10 +202,10 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	}
 #endif
 
-	float2 texCoord = (threadId.xy + 0.5f) * cView.ViewportDimensionsInv;
-	float4 color = tSceneTexture.SampleLevel(sPointClamp, texCoord, 0);
-	float sceneDepth = tDepthTexture.SampleLevel(sPointClamp, texCoord, 0).r;
-	float3 viewRay = normalize(ViewPositionFromDepth(texCoord, sceneDepth, cView.ClipToView));
+	float2 uv = TexelToUV(threadId.xy, cView.ViewportDimensionsInv);
+	float4 color = tSceneTexture.SampleLevel(sPointClamp, uv, 0);
+	float sceneDepth = tDepthTexture.SampleLevel(sPointClamp, uv, 0).r;
+	float3 viewRay = normalize(ViewPositionFromDepth(uv, sceneDepth, cView.ClipToView));
 	float linearDepth = sceneDepth == 0 ? 10000000 : length(viewRay);
 	float3 rayOrigin = cView.ViewLocation;
 	float3 rayDirection = mul(viewRay, (float3x3)cView.ViewToWorld);
