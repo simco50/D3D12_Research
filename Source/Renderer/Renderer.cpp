@@ -457,9 +457,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			sceneTextures.pVelocity = graph.Create("Velocity", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RG16_FLOAT));
 			sceneTextures.pPreviousColor = graph.TryImport(m_pColorHistory, GraphicsCommon::GetDefaultTexture(DefaultTexture::Black2D));
 
-			sceneTextures.pGBuffer0 = graph.Create("GBuffer 0", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::DeferredGBufferFormat[0]));
-			sceneTextures.pGBuffer1 = graph.Create("GBuffer 1", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::DeferredGBufferFormat[1]));
-			sceneTextures.pGBuffer2 = graph.Create("GBuffer 2", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::DeferredGBufferFormat[2]));
+			sceneTextures.pGBuffer = graph.Create("GBuffer", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, Renderer::DeferredGBufferFormat[0]));
 
 			LightCull2DData lightCull2DData;
 			LightCull3DData lightCull3DData;
@@ -728,9 +726,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 					graph.AddPass("Build GBuffer", RGPassFlag::Raster)
 						.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, })
 						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
-						.RenderTarget(sceneTextures.pGBuffer0)
-						.RenderTarget(sceneTextures.pGBuffer1)
-						.RenderTarget(sceneTextures.pGBuffer2)
+						.RenderTarget(sceneTextures.pGBuffer)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
 								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
@@ -750,7 +746,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Read({ pFog })
 						.Read({ sceneTextures.pDepth, pAO, sceneTextures.pPreviousColor })
 						.Read({ lightCull2DData.pLightListOpaque })
-						.Read({ sceneTextures.pGBuffer0, sceneTextures.pGBuffer1, sceneTextures.pGBuffer2 })
+						.Read({ sceneTextures.pGBuffer })
 						.Write(sceneTextures.pColorTarget)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
@@ -762,9 +758,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								Renderer::BindViewUniforms(context, *pView);
 								context.BindResources(BindingSlot::UAV, resources.GetUAV(sceneTextures.pColorTarget));
 								context.BindResources(BindingSlot::SRV, {
-									resources.GetSRV(sceneTextures.pGBuffer0),
-									resources.GetSRV(sceneTextures.pGBuffer1),
-									resources.GetSRV(sceneTextures.pGBuffer2),
+									resources.GetSRV(sceneTextures.pGBuffer),
 									resources.GetSRV(sceneTextures.pDepth),
 									resources.GetSRV(sceneTextures.pPreviousColor),
 									resources.GetSRV(pFog),
@@ -1311,7 +1305,7 @@ void Renderer::InitializePipelines()
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
 		psoDesc.SetPixelShader("VisibilityGBuffer.hlsl", "ShadePS");
-		psoDesc.SetRenderTargetFormats(Renderer::GBufferFormat, Renderer::DepthStencilFormat, 1);
+		psoDesc.SetRenderTargetFormats(Renderer::DeferredGBufferFormat, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
 		psoDesc.SetDepthWrite(false);

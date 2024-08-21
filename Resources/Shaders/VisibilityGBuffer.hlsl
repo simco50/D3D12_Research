@@ -1,16 +1,14 @@
 #include "Common.hlsli"
 #include "Lighting.hlsli"
 #include "VisibilityBuffer.hlsli"
-#include "DeferredCommon.hlsli"
+#include "GBuffer.hlsli"
 
 Texture2D<uint> tVisibilityTexture : register(t0);
 StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t1);
 
 struct PSOut
 {
- 	float4 GBuffer0 : SV_Target0;
- 	float2 GBuffer1 : SV_Target1;
- 	float2 GBuffer2 : SV_Target2;
+ 	uint4 GBuffer : SV_Target0;
 };
 
 bool VisibilityShadingCommon(uint2 texel, out PSOut output)
@@ -31,9 +29,15 @@ bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, vertex);
 
-	output.GBuffer0 = PackGBuffer0(surface.BaseColor, surface.Specular);
-	output.GBuffer1 = PackGBuffer1(surface.Normal);
-	output.GBuffer2 = PackGBuffer2(surface.Roughness, surface.Metalness);
+	GBufferData gbuffer;
+	gbuffer.BaseColor = surface.BaseColor;
+	gbuffer.Specular = surface.Specular;
+	gbuffer.Normal = surface.Normal;
+	gbuffer.Roughness = surface.Roughness;
+	gbuffer.Metalness = surface.Metalness;
+	gbuffer.Emissive = surface.Emissive;
+
+	output.GBuffer = PackGBuffer(gbuffer);
 
 	return true;
 }

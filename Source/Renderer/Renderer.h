@@ -57,9 +57,7 @@ public:
 		ResourceFormat::R8_UNORM
 	};
 	constexpr static ResourceFormat DeferredGBufferFormat[] = {
-		ResourceFormat::RGBA8_UNORM,
-		ResourceFormat::RG16_UNORM,
-		ResourceFormat::RG8_UNORM,
+		ResourceFormat::RGBA32_UINT,
 	};
 
 private:

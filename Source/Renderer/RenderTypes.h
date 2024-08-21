@@ -124,9 +124,7 @@ struct SceneTextures
 	RGTexture* pNormals = nullptr;
 	RGTexture* pVelocity = nullptr;
 
-	RGTexture* pGBuffer0 = nullptr;
-	RGTexture* pGBuffer1 = nullptr;
-	RGTexture* pGBuffer2 = nullptr;
+	RGTexture* pGBuffer = nullptr;
 };
 
 

@@ -285,7 +285,7 @@ struct RGGraphOptions
 class RGGraph
 {
 public:
-	RGGraph(uint64 allocatorSize = 1024 * 128);
+	RGGraph(uint64 allocatorSize = 1024 * 256);
 	~RGGraph();
 
 	RGGraph(const RGGraph& other) = delete;
