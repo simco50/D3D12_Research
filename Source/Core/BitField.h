@@ -1,17 +1,4 @@
 #pragma once
-#include <stdint.h>
-#include <assert.h>
-#include <type_traits>
-
-using int8 = int8_t;
-using int16 = int16_t;
-using int32 = int32_t;
-using int64 = int64_t;
-
-using uint8 = uint8_t;
-using uint16 = uint16_t;
-using uint32 = uint32_t;
-using uint64 = uint64_t;
 
 namespace BitOperations
 {
@@ -158,19 +145,19 @@ public:
 
 	inline void SetBit(uint32 bit)
 	{
-		assert(bit < Size());
+		gAssert(bit < Size());
 		Data[StorageIndexOfBit(bit)] |= MakeBitmaskForStorage(bit);
 	}
 
 	inline void ClearBit(uint32 bit)
 	{
-		assert(bit < Size());
+		gAssert(bit < Size());
 		Data[StorageIndexOfBit(bit)] &= ~MakeBitmaskForStorage(bit);
 	}
 
 	inline bool GetBit(uint32 bit) const
 	{
-		assert(bit < Size());
+		gAssert(bit < Size());
 		return (Data[StorageIndexOfBit(bit)] & MakeBitmaskForStorage(bit)) != 0;
 	}
 
@@ -181,9 +168,9 @@ public:
 
 	void SetRange(uint32 from, uint32 to, bool set = true)
 	{
-		assert(from < Size());
-		assert(to <= Size());
-		assert(from <= to);
+		gAssert(from < Size());
+		gAssert(to <= Size());
+		gAssert(from <= to);
 		while (from < to)
 		{
 			uint32 fromInStorage = from % BitsPerStorage();
@@ -209,14 +196,14 @@ public:
 
 	void SetBitAndUp(uint32 bit, uint32 count = ~0)
 	{
-		assert(bit < Size());
+		gAssert(bit < Size());
 		count = count < Size() - bit ? count : Size() - bit;
 		SetRange(bit, bit + count);
 	}
 
 	void SetBitAndDown(uint32 bit, uint32 count = ~0)
 	{
-		assert(bit < Size());
+		gAssert(bit < Size());
 		count = bit < count ? bit : count;
 		SetRange(bit - count, bit);
 	}

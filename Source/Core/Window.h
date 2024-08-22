@@ -19,26 +19,13 @@ public:
 	HWND GetNativeWindow() const { return m_Window; }
 	Vector2i GetRect() const { return Vector2i(m_DisplayWidth, m_DisplayHeight); }
 
-	DECLARE_MULTICAST_DELEGATE(OnFocusChangedDelegate, bool);
-	OnFocusChangedDelegate OnFocusChanged;
-
-	DECLARE_MULTICAST_DELEGATE(OnResizeDelegate, uint32, uint32);
-	OnResizeDelegate OnResizeOrMove;
-
-	DECLARE_MULTICAST_DELEGATE(OnCharInputDelegate, uint32);
-	OnCharInputDelegate OnCharInput;
-
-	DECLARE_MULTICAST_DELEGATE(OnKeyInputDelegate, uint32, bool);
-	OnKeyInputDelegate OnKeyInput;
-
-	DECLARE_MULTICAST_DELEGATE(OnMouseInputDelegate, uint32, bool);
-	OnMouseInputDelegate OnMouseInput;
-
-	DECLARE_MULTICAST_DELEGATE(OnMouseMoveDelegate, uint32, uint32);
-	OnMouseMoveDelegate OnMouseMove;
-
-	DECLARE_MULTICAST_DELEGATE(OnMouseScrollDelegate, float);
-	OnMouseScrollDelegate OnMouseScroll;
+	MulticastDelegate<bool>				OnFocusChanged;
+	MulticastDelegate<uint32, uint32>	OnResizeOrMove;
+	MulticastDelegate<uint32>			OnCharInput;
+	MulticastDelegate<uint32, bool>		OnKeyInput;
+	MulticastDelegate<uint32, bool>		OnMouseInput;
+	MulticastDelegate<uint32, uint32>	OnMouseMove;
+	MulticastDelegate<float>			OnMouseScroll;
 
 private:
 	static LRESULT CALLBACK WndProcStatic(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);

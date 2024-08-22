@@ -84,8 +84,8 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 					uint32 NumFogVolumes;
 				} params;
 
-				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
-				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
+				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.Depth);
+				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.Depth);
 				constexpr Math::HaltonSequence<32, 2> halton;
 				params.Jitter = halton[pView->pRenderer->GetFrameIndex() & 31];
 				params.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / lightCullData.ClusterSize;
@@ -130,8 +130,8 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 					Vector3 InvClusterDimensions;
 					uint32 : 32;
 				} params;
-				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.DepthOrArraySize);
-				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.DepthOrArraySize);
+				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.Depth);
+				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.Depth);
 
 				Renderer::BindViewUniforms(context, *pView);
 				context.BindRootCBV(BindingSlot::PerInstance, params);

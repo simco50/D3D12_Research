@@ -81,7 +81,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
-				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
+				PrecomputedLightData* pLightData = &allocation.As<PrecomputedLightData>();
 
 				const Matrix& viewMatrix = pView->WorldToView;
 				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();
@@ -168,7 +168,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 			{
 				uint32 precomputedLightDataSize = sizeof(PrecomputedLightData) * pRenderer->GetNumLights();
 				ScratchAllocation allocation = context.AllocateScratch(precomputedLightDataSize);
-				PrecomputedLightData* pLightData = static_cast<PrecomputedLightData*>(allocation.pMappedMemory);
+				PrecomputedLightData* pLightData = &allocation.As<PrecomputedLightData>();
 
 				const Matrix& viewMatrix = pView->WorldToView;
 				auto light_view = pView->pWorld->Registry.view<const Transform, const Light>();

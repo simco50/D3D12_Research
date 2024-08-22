@@ -1,9 +1,6 @@
 #pragma once
 #include "DeviceResource.h"
 #include "Shader.h"
-#include "Core/TaskQueue.h"
-
-class ShaderManager;
 
 enum class BlendMode
 {

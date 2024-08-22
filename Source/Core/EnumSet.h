@@ -1,6 +1,5 @@
 #pragma once
 
-#include <type_traits>
 
 template<typename Enum, typename StorageType = std::underlying_type_t<Enum>>
 class EnumSet

@@ -538,17 +538,17 @@ RenderPassInfo RGResources::GetRenderPassInfo() const
 		targetInfo.ArrayIndex = 0;
 		targetInfo.MipLevel = 0;
 		targetInfo.Flags = renderTarget.Flags;
-		targetInfo.Target = (Texture*)renderTarget.pResource->GetPhysicalUnsafe();
+		targetInfo.pTarget = (Texture*)renderTarget.pResource->GetPhysicalUnsafe();
 
 		if (renderTarget.pResolveTarget && renderTarget.pResource != renderTarget.pResolveTarget)
 			targetInfo.Flags |= RenderPassColorFlags::Resolve;
 
 		if (renderTarget.pResolveTarget)
-			targetInfo.ResolveTarget = (Texture*)renderTarget.pResolveTarget->GetPhysicalUnsafe();
+			targetInfo.pResolveTarget = (Texture*)renderTarget.pResolveTarget->GetPhysicalUnsafe();
 	}
 	if (m_Pass.DepthStencilTarget.pResource)
 	{
-		passInfo.DepthStencilTarget.Target = (Texture*)m_Pass.DepthStencilTarget.pResource->GetPhysicalUnsafe();
+		passInfo.DepthStencilTarget.pTarget = (Texture*)m_Pass.DepthStencilTarget.pResource->GetPhysicalUnsafe();
 		passInfo.DepthStencilTarget.Flags = m_Pass.DepthStencilTarget.Flags;
 	}
 	return passInfo;

@@ -16,22 +16,22 @@ enum class CommandListContext : uint8
 
 enum class RenderPassColorFlags : uint8
 {
-	None,
-	Clear = 1 << 0,
-	Resolve = 1 << 1,
+	None		= 0,
+	Clear		= 1 << 0,
+	Resolve		= 1 << 1,
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderPassColorFlags)
 
 enum class RenderPassDepthFlags : uint8
 {
 	None,
-	ClearDepth = 1 << 0,
-	ClearStencil = 1 << 1,
-	ReadOnlyDepth = 1 << 2,
+	ClearDepth		= 1 << 0,
+	ClearStencil	= 1 << 1,
+	ReadOnlyDepth	= 1 << 2,
 	ReadOnlyStencil = 1 << 3,
 
-	ReadOnly = ReadOnlyDepth | ReadOnlyStencil,
-	Clear = ClearDepth | ClearStencil,
+	ReadOnly		= ReadOnlyDepth | ReadOnlyStencil,
+	Clear			= ClearDepth | ClearStencil,
 };
 DEFINE_ENUM_FLAG_OPERATORS(RenderPassDepthFlags)
 
@@ -39,17 +39,19 @@ struct RenderPassInfo
 {
 	struct RenderTargetInfo
 	{
-		Texture* Target = nullptr;
-		Texture* ResolveTarget = nullptr;
+		Texture* pTarget = nullptr;
+		Texture* pResolveTarget = nullptr;
 		RenderPassColorFlags Flags = RenderPassColorFlags::None;
-		int MipLevel = 0;
-		int ArrayIndex = 0;
+		uint8 MipLevel = 0;
+		uint8 ArrayIndex = 0;
 	};
 
 	struct DepthTargetInfo
 	{
-		Texture* Target = nullptr;
+		Texture* pTarget = nullptr;
 		RenderPassDepthFlags Flags = RenderPassDepthFlags::None;
+		uint8 MipLevel = 0;
+		uint8 ArrayIndex = 0;
 	};
 
 	RenderPassInfo() = default;
@@ -58,16 +60,16 @@ struct RenderPassInfo
 		: RenderTargetCount(1)
 	{
 		RenderTargets[0].Flags = colorFlags;
-		RenderTargets[0].Target = pRenderTarget;
+		RenderTargets[0].pTarget = pRenderTarget;
 		DepthStencilTarget.Flags = depthFlags;
-		DepthStencilTarget.Target = pDepthBuffer;
+		DepthStencilTarget.pTarget = pDepthBuffer;
 	}
 
 	static RenderPassInfo DepthOnly(Texture* pDepthTarget, RenderPassDepthFlags depthFlags)
 	{
 		RenderPassInfo result;
 		result.DepthStencilTarget.Flags = depthFlags;
-		result.DepthStencilTarget.Target = pDepthTarget;
+		result.DepthStencilTarget.pTarget = pDepthTarget;
 		return result;
 	}
 
@@ -173,11 +175,10 @@ public:
 	ID3D12GraphicsCommandListX* GetCommandList() const { return m_pCommandList; }
 
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
-	const PipelineState* GetCurrentPSO() const { return m_pCurrentPSO; }
 	void ResolvePendingBarriers(CommandContext& resolveContext);
-	void PrepareDraw();
 
 private:
+	void PrepareDraw();
 	void AddBarrier(const D3D12_RESOURCE_BARRIER& barrier);
 
 	D3D12_RESOURCE_STATES GetLocalResourceState(const DeviceResource* pResource, uint32 subResource) const

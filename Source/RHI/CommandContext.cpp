@@ -21,6 +21,7 @@ CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> p
 
 	gVerify(pCommandList.As(&m_pCommandList), == true);
 
+	// Create DSV and RTV description heap per commandlist to create on-the-fly descriptors
 	ID3D12Device* pDevice = pParent->GetDevice();
 	D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
 	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
@@ -199,13 +200,16 @@ void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pTarget, 
 	gAssert(pSource && pSource->GetResource(), "Source is invalid");
 	gAssert(pTarget && pTarget->GetResource(), "Target is invalid");
 
-	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint;
-	textureFootprint.Offset = 0;
-	textureFootprint.Footprint.Width = sourceRegion.right - sourceRegion.left;
-	textureFootprint.Footprint.Depth = sourceRegion.back - sourceRegion.front;
-	textureFootprint.Footprint.Height = sourceRegion.bottom - sourceRegion.top;
-	textureFootprint.Footprint.Format = D3D::ConvertFormat(pSource->GetFormat());
-	textureFootprint.Footprint.RowPitch = Math::AlignUp<uint32>((uint32)RHI::GetRowPitch(pSource->GetFormat(), textureFootprint.Footprint.Width), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {
+		.Offset = 0,
+		.Footprint = {
+			.Format		= D3D::ConvertFormat(pSource->GetFormat()),
+			.Width		= sourceRegion.right - sourceRegion.left,
+			.Height		= sourceRegion.bottom - sourceRegion.top,
+			.Depth		= sourceRegion.back - sourceRegion.front,
+			.RowPitch	= Math::AlignUp<uint32>((uint32)RHI::GetRowPitch(pSource->GetFormat(), textureFootprint.Footprint.Width), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT),
+		}
+	};
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
 	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pTarget->GetResource(), textureFootprint);
@@ -470,42 +474,43 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	if (EnumHasAllFlags(renderPassInfo.DepthStencilTarget.Flags, RenderPassDepthFlags::ClearStencil))
 		clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
 
-	if (renderPassInfo.DepthStencilTarget.Target)
+	if (renderPassInfo.DepthStencilTarget.pTarget)
 	{
 		dsvHandle = m_pDSVHeap->GetCPUDescriptorHandleForHeapStart();
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-		const TextureDesc& desc = renderPassInfo.DepthStencilTarget.Target->GetDesc();
+		const RenderPassInfo::DepthTargetInfo& depthInfo = renderPassInfo.DepthStencilTarget;
+		const TextureDesc& desc = renderPassInfo.DepthStencilTarget.pTarget->GetDesc();
 		dsvDesc.Format = D3D::ConvertFormat(desc.Format);
 		switch (desc.Type)
 		{
 		case TextureType::Texture1D:
-			dsvDesc.Texture1D.MipSlice = 0;
-			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
+			dsvDesc.Texture1D.MipSlice				= depthInfo.MipLevel;
+			dsvDesc.ViewDimension					= D3D12_DSV_DIMENSION_TEXTURE1D;
 			break;
 		case TextureType::Texture1DArray:
-			dsvDesc.Texture1DArray.ArraySize = desc.DepthOrArraySize;
-			dsvDesc.Texture1DArray.FirstArraySlice = 0;
-			dsvDesc.Texture1DArray.MipSlice = 0;
-			dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+			dsvDesc.Texture1DArray.ArraySize		= desc.ArraySize;
+			dsvDesc.Texture1DArray.FirstArraySlice	= depthInfo.ArrayIndex;
+			dsvDesc.Texture1DArray.MipSlice			= depthInfo.MipLevel;
+			dsvDesc.ViewDimension					= D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
 			break;
 		case TextureType::Texture2D:
-			dsvDesc.Texture2D.MipSlice = 0;
-			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
+			dsvDesc.Texture2D.MipSlice				= depthInfo.MipLevel;
+			dsvDesc.ViewDimension					= desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
 			break;
 		case TextureType::Texture3D:
 		case TextureType::Texture2DArray:
-			dsvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
-			dsvDesc.Texture2DArray.FirstArraySlice = 0;
-			dsvDesc.Texture2DArray.MipSlice = 0;
-			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+			dsvDesc.Texture2DArray.ArraySize		= desc.ArraySize;
+			dsvDesc.Texture2DArray.FirstArraySlice	= depthInfo.ArrayIndex;
+			dsvDesc.Texture2DArray.MipSlice			= depthInfo.MipLevel;
+			dsvDesc.ViewDimension					= desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
 			break;
 		case TextureType::TextureCube:
 		case TextureType::TextureCubeArray:
-			dsvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize * 6;
-			dsvDesc.Texture2DArray.FirstArraySlice = 0;
-			dsvDesc.Texture2DArray.MipSlice = 0;
-			dsvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+			dsvDesc.Texture2DArray.ArraySize		= desc.ArraySize * 6;
+			dsvDesc.Texture2DArray.FirstArraySlice	= depthInfo.ArrayIndex;
+			dsvDesc.Texture2DArray.MipSlice			= depthInfo.MipLevel;
+			dsvDesc.ViewDimension					= desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
 			break;
 		default:
 			break;
@@ -514,12 +519,12 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 			dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_DEPTH;
 		if (EnumHasAllFlags(renderPassInfo.DepthStencilTarget.Flags, RenderPassDepthFlags::ReadOnlyStencil))
 			dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_STENCIL;
-		GetParent()->GetDevice()->CreateDepthStencilView(renderPassInfo.DepthStencilTarget.Target->GetResource(), &dsvDesc, dsvHandle);
+		GetParent()->GetDevice()->CreateDepthStencilView(renderPassInfo.DepthStencilTarget.pTarget->GetResource(), &dsvDesc, dsvHandle);
 	}
 
 	if (clearFlags != (D3D12_CLEAR_FLAGS)0)
 	{
-		const ClearBinding& clearBinding = renderPassInfo.DepthStencilTarget.Target->GetClearBinding();
+		const ClearBinding& clearBinding = renderPassInfo.DepthStencilTarget.pTarget->GetClearBinding();
 		gAssert(clearBinding.BindingValue == ClearBinding::ClearBindingValue::DepthStencil);
 		m_pCommandList->ClearDepthStencilView(dsvHandle, clearFlags, clearBinding.DepthStencil.Depth, clearBinding.DepthStencil.Stencil, 0, nullptr);
 	}
@@ -530,51 +535,51 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 		const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
 
 		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-		const TextureDesc& desc = data.Target->GetDesc();
+		const TextureDesc& desc = data.pTarget->GetDesc();
 		rtvDesc.Format = D3D::ConvertFormat(desc.Format);
 		switch (desc.Type)
 		{
 		case TextureType::Texture1D:
-			rtvDesc.Texture1D.MipSlice = 0;
-			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
+			rtvDesc.Texture1D.MipSlice					= data.MipLevel;
+			rtvDesc.ViewDimension						= D3D12_RTV_DIMENSION_TEXTURE1D;
 			break;
 		case TextureType::Texture1DArray:
-			rtvDesc.Texture1DArray.ArraySize = desc.DepthOrArraySize;
-			rtvDesc.Texture1DArray.FirstArraySlice = 0;
-			rtvDesc.Texture1DArray.MipSlice = 0;
-			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+			rtvDesc.Texture1DArray.ArraySize			= desc.ArraySize;
+			rtvDesc.Texture1DArray.FirstArraySlice		= data.ArrayIndex;
+			rtvDesc.Texture1DArray.MipSlice				= data.MipLevel;
+			rtvDesc.ViewDimension						= D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
 			break;
 		case TextureType::Texture2D:
-			rtvDesc.Texture2D.MipSlice = 0;
-			rtvDesc.Texture2D.PlaneSlice = 0;
-			rtvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS : D3D12_RTV_DIMENSION_TEXTURE2D;
+			rtvDesc.Texture2D.MipSlice					= data.MipLevel;
+			rtvDesc.Texture2D.PlaneSlice				= 0;
+			rtvDesc.ViewDimension						= desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS : D3D12_RTV_DIMENSION_TEXTURE2D;
 			break;
 		case TextureType::TextureCube:
 		case TextureType::TextureCubeArray:
 		case TextureType::Texture2DArray:
-			rtvDesc.Texture2DArray.MipSlice = 0;
-			rtvDesc.Texture2DArray.PlaneSlice = 0;
-			rtvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
-			rtvDesc.Texture2DArray.FirstArraySlice = 0;
-			rtvDesc.ViewDimension = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY : D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+			rtvDesc.Texture2DArray.MipSlice				= data.MipLevel;
+			rtvDesc.Texture2DArray.PlaneSlice			= 0;
+			rtvDesc.Texture2DArray.ArraySize			= desc.ArraySize;
+			rtvDesc.Texture2DArray.FirstArraySlice		= data.ArrayIndex;
+			rtvDesc.ViewDimension						= desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY : D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
 			break;
 		case TextureType::Texture3D:
-			rtvDesc.Texture3D.FirstWSlice = 0;
-			rtvDesc.Texture3D.MipSlice = 0;
-			rtvDesc.Texture3D.WSize = desc.DepthOrArraySize;
-			rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
+			rtvDesc.Texture3D.FirstWSlice				= 0;
+			rtvDesc.Texture3D.MipSlice					= data.MipLevel;
+			rtvDesc.Texture3D.WSize						= desc.Depth;
+			rtvDesc.ViewDimension						= D3D12_RTV_DIMENSION_TEXTURE3D;
 			break;
 		default:
 			break;
 		}
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtv = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), i, m_RTVSize);
-		GetParent()->GetDevice()->CreateRenderTargetView(data.Target->GetResource(), &rtvDesc, rtv);
+		GetParent()->GetDevice()->CreateRenderTargetView(data.pTarget->GetResource(), &rtvDesc, rtv);
 
 		if (EnumHasAllFlags(data.Flags, RenderPassColorFlags::Clear))
 		{
-			gAssert(data.Target->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
-			m_pCommandList->ClearRenderTargetView(rtv, &data.Target->GetClearBinding().Color.x, 0, nullptr);
+			gAssert(data.pTarget->GetClearBinding().BindingValue == ClearBinding::ClearBindingValue::Color);
+			m_pCommandList->ClearRenderTargetView(rtv, &data.pTarget->GetClearBinding().Color.x, 0, nullptr);
 		}
 		rtvs[i] = rtv;
 	}
@@ -583,7 +588,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	m_InRenderPass = true;
 	m_CurrentRenderPassInfo = renderPassInfo;
 
-	Texture* pTargetTexture = renderPassInfo.DepthStencilTarget.Target ? renderPassInfo.DepthStencilTarget.Target : renderPassInfo.RenderTargets[0].Target;
+	Texture* pTargetTexture = renderPassInfo.DepthStencilTarget.pTarget ? renderPassInfo.DepthStencilTarget.pTarget : renderPassInfo.RenderTargets[0].pTarget;
 	SetViewport(FloatRect(0, 0, (float)pTargetTexture->GetWidth(), (float)pTargetTexture->GetHeight()), 0, 1);
 }
 
@@ -596,17 +601,17 @@ void CommandContext::EndRenderPass()
 		const RenderPassInfo::RenderTargetInfo& data = m_CurrentRenderPassInfo.RenderTargets[i];
 		if (EnumHasAllFlags(data.Flags, RenderPassColorFlags::Resolve))
 		{
-			if (data.Target->GetDesc().SampleCount > 1)
+			if (data.pTarget->GetDesc().SampleCount > 1)
 			{
-				InsertResourceBarrier(data.Target, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-				InsertResourceBarrier(data.ResolveTarget, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_RESOLVE_DEST);
-				uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.Target->GetMipLevels(), data.Target->GetArraySize());
-				ResolveResource(data.Target, subResource, data.ResolveTarget, 0, data.Target->GetFormat());
+				InsertResourceBarrier(data.pTarget, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+				InsertResourceBarrier(data.pResolveTarget, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_RESOLVE_DEST);
+				uint32 subResource = D3D12CalcSubresource(data.MipLevel, data.ArrayIndex, 0, data.pTarget->GetMipLevels(), data.pTarget->GetArraySize());
+				ResolveResource(data.pTarget, subResource, data.pResolveTarget, 0, data.pTarget->GetFormat());
 			}
-			else if (data.Target != data.ResolveTarget)
+			else if (data.pTarget != data.pResolveTarget)
 			{
 				E_LOG(Warning, "RenderTarget %u is set to resolve but has a sample count of 1. This will just do a CopyTexture instead which is wasteful.", i);
-				CopyResource(data.Target, data.ResolveTarget);
+				CopyResource(data.pTarget, data.pResolveTarget);
 			}
 		}
 	}
@@ -702,9 +707,11 @@ void CommandContext::SetVertexBuffers(Span<VertexBufferView> buffers)
 	uint32 numViews = 0;
 	for (const VertexBufferView& view : buffers)
 	{
-		views[numViews].BufferLocation = view.Location;
-		views[numViews].SizeInBytes = view.Elements * view.Stride;
-		views[numViews].StrideInBytes = view.Stride;
+		views[numViews] = {
+			.BufferLocation = view.Location,
+			.SizeInBytes	= view.Elements * view.Stride,
+			.StrideInBytes	= view.Stride,
+		};
 		++numViews;
 	}
 	m_pCommandList->IASetVertexBuffers(0, buffers.GetSize(), views);
@@ -712,22 +719,24 @@ void CommandContext::SetVertexBuffers(Span<VertexBufferView> buffers)
 
 void CommandContext::SetIndexBuffer(const IndexBufferView& indexBuffer)
 {
-	D3D12_INDEX_BUFFER_VIEW view;
-	view.BufferLocation = indexBuffer.Location;
-	view.Format = D3D::ConvertFormat(indexBuffer.Format);
-	view.SizeInBytes = indexBuffer.Stride() * indexBuffer.Elements;
+	D3D12_INDEX_BUFFER_VIEW view ={
+		.BufferLocation	= indexBuffer.Location,
+		.SizeInBytes	= indexBuffer.Stride() * indexBuffer.Elements,
+		.Format			= D3D::ConvertFormat(indexBuffer.Format),
+	};
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
 void CommandContext::SetViewport(const FloatRect& rect, float minDepth /*= 0.0f*/, float maxDepth /*= 1.0f*/)
 {
-	D3D12_VIEWPORT viewport;
-	viewport.TopLeftX = (float)rect.Left;
-	viewport.TopLeftY = (float)rect.Top;
-	viewport.Height = (float)rect.GetHeight();
-	viewport.Width = (float)rect.GetWidth();
-	viewport.MinDepth = minDepth;
-	viewport.MaxDepth = maxDepth;
+	D3D12_VIEWPORT viewport = {
+		.TopLeftX	= (float)rect.Left,
+		.TopLeftY	= (float)rect.Top,
+		.Width		= (float)rect.GetWidth(),
+		.Height		= (float)rect.GetHeight(),
+		.MinDepth	= minDepth,
+		.MaxDepth	= maxDepth,
+	};
 	m_pCommandList->RSSetViewports(1, &viewport);
 	SetScissorRect(rect);
 }
@@ -738,10 +747,11 @@ void CommandContext::BindDynamicVertexBuffer(uint32 rootIndex, uint32 elementCou
 	uint32 bufferSize = elementCount * elementSize;
 	ScratchAllocation allocation = AllocateScratch(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
-	D3D12_VERTEX_BUFFER_VIEW view = {};
-	view.BufferLocation = allocation.GpuHandle;
-	view.SizeInBytes = bufferSize;
-	view.StrideInBytes = elementSize;
+	D3D12_VERTEX_BUFFER_VIEW view = {
+		.BufferLocation = allocation.GpuHandle,
+		.SizeInBytes	= bufferSize,
+		.StrideInBytes	= elementSize,
+	};
 	m_pCommandList->IASetVertexBuffers(rootIndex, 1, &view);
 }
 
@@ -750,20 +760,22 @@ void CommandContext::BindDynamicIndexBuffer(uint32 elementCount, const void* pDa
 	uint32 bufferSize = (uint32)RHI::GetRowPitch(format, elementCount);
 	ScratchAllocation allocation = AllocateScratch(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
-	D3D12_INDEX_BUFFER_VIEW view = {};
-	view.BufferLocation = allocation.GpuHandle;
-	view.SizeInBytes = bufferSize;
-	view.Format = D3D::ConvertFormat(format);
+	D3D12_INDEX_BUFFER_VIEW view = {
+		.BufferLocation	= allocation.GpuHandle,
+		.SizeInBytes	= bufferSize,
+		.Format			= D3D::ConvertFormat(format),
+	};
 	m_pCommandList->IASetIndexBuffer(&view);
 }
 
 void CommandContext::SetScissorRect(const FloatRect& rect)
 {
-	D3D12_RECT r;
-	r.left = (LONG)rect.Left;
-	r.top = (LONG)rect.Top;
-	r.right = (LONG)rect.Right;
-	r.bottom = (LONG)rect.Bottom;
+	D3D12_RECT r = {
+		.left	= (LONG)rect.Left,
+		.top	= (LONG)rect.Top,
+		.right	= (LONG)rect.Right,
+		.bottom	= (LONG)rect.Bottom,
+	};
 	m_pCommandList->RSSetScissorRects(1, &r);
 }
 
@@ -786,87 +798,97 @@ CommandSignature::CommandSignature(GraphicsDevice* pParent, ID3D12CommandSignatu
 
 D3D12_COMMAND_SIGNATURE_DESC CommandSignatureInitializer::GetDesc() const
 {
-	D3D12_COMMAND_SIGNATURE_DESC desc;
-	desc.ByteStride = m_Stride;
-	desc.NodeMask = 0;
-	desc.NumArgumentDescs = (uint32)m_ArgumentDesc.size();
-	desc.pArgumentDescs = m_ArgumentDesc.data();
-	return desc;
+	return D3D12_COMMAND_SIGNATURE_DESC{
+		.ByteStride			= m_Stride,
+		.NumArgumentDescs	= (uint32)m_ArgumentDesc.size(),
+		.pArgumentDescs		= m_ArgumentDesc.data(),
+		.NodeMask			= 0,
+	};
 }
 
 void CommandSignatureInitializer::AddDispatch()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
+	m_ArgumentDesc.push_back({ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH });
 	m_Stride += sizeof(D3D12_DISPATCH_ARGUMENTS);
 }
 
 void CommandSignatureInitializer::AddDispatchMesh()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
+	m_ArgumentDesc.push_back({ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH });
 	m_Stride += sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
 }
 
 void CommandSignatureInitializer::AddDraw()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
+	m_ArgumentDesc.push_back({ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW });
 	m_Stride += sizeof(D3D12_DRAW_ARGUMENTS);
 }
 
 void CommandSignatureInitializer::AddDrawIndexed()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+	m_ArgumentDesc.push_back({ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED });
 	m_Stride += sizeof(D3D12_DRAW_INDEXED_ARGUMENTS);
 }
 
 void CommandSignatureInitializer::AddConstants(uint32 numConstants, uint32 rootIndex, uint32 offset)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
-	desc.Constant.RootParameterIndex = rootIndex;
-	desc.Constant.DestOffsetIn32BitValues = offset;
-	desc.Constant.Num32BitValuesToSet = numConstants;
+	m_ArgumentDesc.push_back({
+		.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT,
+		.Constant {
+			.RootParameterIndex			= rootIndex,
+			.DestOffsetIn32BitValues	= offset,
+			.Num32BitValuesToSet		= numConstants,
+		}
+	});
 	m_Stride += numConstants * sizeof(uint32);
 }
 
 void CommandSignatureInitializer::AddConstantBufferView(uint32 rootIndex)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW;
-	desc.ConstantBufferView.RootParameterIndex = rootIndex;
+	m_ArgumentDesc.push_back({
+		.Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW,
+		.ConstantBufferView {
+			.RootParameterIndex = rootIndex,
+		}
+	});
 	m_Stride += sizeof(uint64);
 }
 
 void CommandSignatureInitializer::AddShaderResourceView(uint32 rootIndex)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW;
-	desc.ShaderResourceView.RootParameterIndex = rootIndex;
+	m_ArgumentDesc.push_back({
+		.Type = D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW,
+		.ShaderResourceView {
+			.RootParameterIndex = rootIndex,
+		}
+	});
 	m_Stride += 8;
 }
 
 void CommandSignatureInitializer::AddUnorderedAccessView(uint32 rootIndex)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW;
-	desc.UnorderedAccessView.RootParameterIndex = rootIndex;
+	m_ArgumentDesc.push_back({
+		.Type = D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW,
+		.UnorderedAccessView {
+			.RootParameterIndex = rootIndex,
+		}
+	});
 	m_Stride += 8;
 }
 
 void CommandSignatureInitializer::AddVertexBuffer(uint32 slot)
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW;
-	desc.VertexBuffer.Slot = slot;
+	m_ArgumentDesc.push_back({
+		.Type = D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW,
+		.VertexBuffer {
+			.Slot = slot,
+		}
+	});
 	m_Stride += sizeof(D3D12_VERTEX_BUFFER_VIEW);
 }
 
 void CommandSignatureInitializer::AddIndexBuffer()
 {
-	D3D12_INDIRECT_ARGUMENT_DESC& desc = m_ArgumentDesc.emplace_back();
-	desc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW;
+	m_ArgumentDesc.push_back({ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW });
 	m_Stride += sizeof(D3D12_INDEX_BUFFER_VIEW);
 }

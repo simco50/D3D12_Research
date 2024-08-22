@@ -32,12 +32,12 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 	captureContext.SourceName = pSource->GetName();
 	captureContext.SourceDesc = pSource->GetDesc();
 
-	RGBuffer* pReadbackTarget = RGUtils::CreatePersistent(graph, "TextureCapture.ReadbackTarget", BufferDesc::CreateReadback(sizeof(CaptureTextureContext::PickData) * 3), &captureContext.pReadbackBuffer, true);
+	RGBuffer* pReadbackTarget = RGUtils::CreatePersistent(graph, "TextureCapture.ReadbackTarget", BufferDesc::CreateReadback(sizeof(Vector4u) * 2), &captureContext.pReadbackBuffer, true);
 
 	const TextureDesc& desc = pSource->GetDesc();
 	Vector2u mipSize(desc.Width >> captureContext.MipLevel, desc.Height >> captureContext.MipLevel);
 	RGTexture* pTarget = RGUtils::CreatePersistent(graph, "TextureCapture.Target", TextureDesc::Create2D(mipSize.x, mipSize.y, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &captureContext.pTextureTarget, true);
-	RGBuffer* pPickingBuffer = graph.Create("TextureCapture.Picking", BufferDesc::CreateStructured(1, sizeof(CaptureTextureContext::PickData)));
+	RGBuffer* pPickingBuffer = graph.Create("TextureCapture.Picking", BufferDesc::CreateStructured(1, sizeof(Vector4u)));
 
 	graph.AddPass("CaptureTexture.Process", RGPassFlag::Compute)
 		.Read({ pSource })
@@ -59,25 +59,26 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 					uint32 MipLevel;
 					uint32 Slice;
 					uint32 IsIntegerFormat;
+					uint32 IntAsID;
 				} constants;
 
 				const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
 
-				constants.HoveredPixel = captureContext.HoveredPixel;
-				constants.TextureSource = resources.GetSRV(pSource)->GetHeapIndex();
-				constants.TextureTarget = resources.GetUAV(pTarget)->GetHeapIndex();
-				constants.Dimensions = mipSize;
-				constants.TextureType = (uint32)pSource->GetDesc().Type;
-				constants.ValueRange = Vector2(captureContext.RangeMin, captureContext.RangeMax);
-				constants.ChannelMask =
-					(captureContext.VisibleChannels[0] ? 1 : 0) << 0 |
-					(captureContext.VisibleChannels[1] ? 1 : 0) << 1 |
-					(captureContext.VisibleChannels[2] ? 1 : 0) << 2 |
-					(captureContext.VisibleChannels[3] ? 1 : 0) << 3;
-				constants.ChannelMask &= ((1u << formatInfo.NumComponents) - 1u);
-				constants.MipLevel = (uint32)captureContext.MipLevel;
-				constants.Slice = (uint32)captureContext.Slice;
-				constants.IsIntegerFormat = formatInfo.Type == FormatType::Integer;
+				constants.HoveredPixel		= captureContext.HoveredPixel;
+				constants.TextureSource		= resources.GetSRV(pSource)->GetHeapIndex();
+				constants.TextureTarget		= resources.GetUAV(pTarget)->GetHeapIndex();
+				constants.Dimensions		= mipSize;
+				constants.TextureType		= (uint32)pSource->GetDesc().Type;
+				constants.ValueRange		= Vector2(captureContext.RangeMin, captureContext.RangeMax);
+				constants.ChannelMask		=	(captureContext.VisibleChannels[0] ? 1 : 0) << 0 |
+												(captureContext.VisibleChannels[1] ? 1 : 0) << 1 |
+												(captureContext.VisibleChannels[2] ? 1 : 0) << 2 |
+												(captureContext.VisibleChannels[3] ? 1 : 0) << 3;
+				constants.ChannelMask		&= ((1u << formatInfo.NumComponents) - 1u);
+				constants.MipLevel			= (uint32)captureContext.MipLevel;
+				constants.Slice				= desc.Type == TextureType::TextureCube ? captureContext.CubeFaceIndex : (uint32)captureContext.Slice;
+				constants.IsIntegerFormat	= formatInfo.Type == FormatType::Integer;
+				constants.IntAsID			= captureContext.IntAsID;
 
 				context.BindRootCBV(BindingSlot::PerInstance, constants);
 				context.BindResources(BindingSlot::UAV, resources.GetUAV(pPickingBuffer));
@@ -90,12 +91,12 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 		.Write(pReadbackTarget)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.CopyBuffer(resources.Get(pPickingBuffer), resources.Get(pReadbackTarget), sizeof(CaptureTextureContext::PickData), 0, sizeof(CaptureTextureContext::PickData) * captureContext.ReadbackIndex);
+				context.CopyBuffer(resources.Get(pPickingBuffer), resources.Get(pReadbackTarget), sizeof(Vector4u), 0, sizeof(Vector4u) * captureContext.ReadbackIndex);
 			});
 
 	if(captureContext.pReadbackBuffer)
-		captureContext.Pick = static_cast<CaptureTextureContext::PickData*>(captureContext.pReadbackBuffer->GetMappedData())[captureContext.ReadbackIndex];
-	captureContext.ReadbackIndex = (captureContext.ReadbackIndex + 1) % 3;
+		captureContext.PickingData = static_cast<Vector4u*>(captureContext.pReadbackBuffer->GetMappedData())[captureContext.ReadbackIndex];
+	captureContext.ReadbackIndex = captureContext.ReadbackIndex & 1;
 }
 
 void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const ImVec2& viewportOrigin, const ImVec2& viewportSize)
@@ -129,27 +130,40 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 			const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
 			Vector2u mipSize(desc.Width >> captureContext.MipLevel, desc.Height >> captureContext.MipLevel);
 
+			ImGui::Text("%s - %dx%d %d mips - %s", captureContext.SourceName.c_str(), desc.Width, desc.Height, desc.Mips, formatInfo.pName);
+
 			{
 				Group group;
 
 				// Channel visibility switches
 				{
-					auto ChannelButton = [](const char* pName, bool* pValue, bool enabled, const ImVec2& size)
+					auto ChannelButton = [](const char* pName, bool* pValue, bool enabled, const ImVec2& size, const ImU32& activeColor, const ImU32& inActiveColor)
 					{
 						ImGui::BeginDisabled(!enabled);
-						ImGui::ToggleButton(pName, pValue, size);
+
+						ImGui::PushStyleColor(ImGuiCol_Button,			*pValue ? activeColor : inActiveColor);
+						ImGui::PushStyleColor(ImGuiCol_ButtonHovered,	*pValue ? activeColor : inActiveColor);
+						ImGui::PushStyleColor(ImGuiCol_ButtonActive,	*pValue ? activeColor : inActiveColor);
+						bool clicked = false;
+						if (ImGui::Button(pName, size))
+						{
+							*pValue = !*pValue;
+							clicked = true;
+						}
+						ImGui::PopStyleColor(3);
+
 						ImGui::EndDisabled();
 					};
 
 					ImVec2 buttonSize = ImVec2(ImGui::GetTextLineHeightWithSpacing(), ImGui::GetTextLineHeightWithSpacing());
 
-					ChannelButton("R", &captureContext.VisibleChannels[0], formatInfo.NumComponents >= 1, buttonSize);
+					ChannelButton("R", &captureContext.VisibleChannels[0], formatInfo.NumComponents >= 1, buttonSize, ImColor(0.7f, 0.1f, 0.1f, 1.0f), ImColor(0.1f, 0.1f, 0.1f, 1.0f));
 					ImGui::SameLine();
-					ChannelButton("G", &captureContext.VisibleChannels[1], formatInfo.NumComponents >= 2, buttonSize);
+					ChannelButton("G", &captureContext.VisibleChannels[1], formatInfo.NumComponents >= 2, buttonSize, ImColor(0.1f, 0.7f, 0.1f, 1.0f), ImColor(0.1f, 0.1f, 0.1f, 1.0f));
 					ImGui::SameLine();
-					ChannelButton("B", &captureContext.VisibleChannels[2], formatInfo.NumComponents >= 3, buttonSize);
+					ChannelButton("B", &captureContext.VisibleChannels[2], formatInfo.NumComponents >= 3, buttonSize, ImColor(0.1f, 0.1f, 0.7f, 1.0f), ImColor(0.1f, 0.1f, 0.1f, 1.0f));
 					ImGui::SameLine();
-					ChannelButton("A", &captureContext.VisibleChannels[3], formatInfo.NumComponents >= 4, buttonSize);
+					ChannelButton("A", &captureContext.VisibleChannels[3], formatInfo.NumComponents >= 4, buttonSize, ImColor(0.8f, 0.8f, 0.8f, 1.0f), ImColor(0.1f, 0.1f, 0.1f, 1.0f));
 				}
 
 				ImGui::SameLine();
@@ -158,6 +172,16 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 				{
 					ImVec2 buttonSize = ImVec2(ImGui::GetTextLineHeightWithSpacing(), ImGui::GetTextLineHeightWithSpacing());
 					ImGui::ToggleButton(ICON_FA_SEARCH_PLUS, &captureContext.XRay, buttonSize);
+				}
+
+				ImGui::SameLine();
+
+				// Int as ID
+				{
+					ImGui::BeginDisabled(formatInfo.Type != FormatType::Integer);
+					ImVec2 buttonSize = ImVec2(ImGui::GetTextLineHeightWithSpacing(), ImGui::GetTextLineHeightWithSpacing());
+					ImGui::ToggleButton("ID", &captureContext.IntAsID, buttonSize);
+					ImGui::EndDisabled();
 				}
 			}
 
@@ -188,7 +212,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 
 			ImGui::SameLine();
 
-			// Slice/Face Selection
+			// Slice Selection
 			{
 				Group group;
 
@@ -198,10 +222,35 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 				ImGui::Text("Slice");
 				ImGui::SameLine();
 				ImGui::SetNextItemWidth(100);
-				ImGui::SliderFloat("##SliceNr", &captureContext.Slice, 0, (float)desc.DepthOrArraySize - 1, "%.2f");
+				ImGui::SliderFloat("##SliceNr", &captureContext.Slice, 0, (float)desc.Depth - 1, "%.2f");
 				ImGui::EndDisabled();
 			}
 
+			// Face Selection
+			ImGui::SameLine();
+			{
+				Group group;
+
+				ImGui::BeginDisabled(desc.Type != TextureType::TextureCube);
+				ImGui::SameLine();
+				ImGui::AlignTextToFramePadding();
+				ImGui::Text("Face");
+				ImGui::SameLine();
+				ImGui::SetNextItemWidth(100);
+
+				constexpr const char* pFaces[] = {
+					"Right",
+					"Left",
+					"Top",
+					"Bottom",
+					"Front",
+					"Back",
+				};
+				ImGui::Combo("##Face", &captureContext.CubeFaceIndex, pFaces, ARRAYSIZE(pFaces));
+				ImGui::EndDisabled();
+			}
+
+			// Zoom/Scale
 			{
 				Group group;
 
@@ -226,6 +275,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 					captureContext.Scale = scalePercent / 100.0f;
 				}
 			}
+			
 
 			ImGui::SameLine();
 
@@ -241,7 +291,6 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 
 				constexpr float triangleSize = 5;
 
-				ImGuiWindow* window = ImGui::GetCurrentWindow();
 				ImGuiContext& g = *GImGui;
 				const ImGuiStyle& style = g.Style;
 
@@ -256,13 +305,13 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 				ImGuiID id = ImGui::GetID("##RangeSlider");
 				const float w = ImGui::CalcItemWidth();
 				const ImVec2 label_size = ImGui::CalcTextSize("", nullptr, true);
-				const ImRect frame_bb(window->DC.CursorPos, window->DC.CursorPos + ImVec2(w, label_size.y + style.FramePadding.y * 2.0f));
+				const ImRect frame_bb(ImGui::GetCursorScreenPos(), ImGui::GetCursorScreenPos() + ImVec2(w, label_size.y + style.FramePadding.y * 2.0f));
 				const ImRect total_bb(frame_bb.Min, frame_bb.Max + ImVec2(label_size.x > 0.0f ? style.ItemInnerSpacing.x + label_size.x : 0.0f, 0.0f));
 				ImGui::ItemSize(total_bb);
 				ImGui::ItemAdd(frame_bb, id);
 
 				ImGui::RenderNavHighlight(frame_bb, id);
-				ImGui::RenderFrame(frame_bb.Min, frame_bb.Max, ImGuiCol_FrameBgActive, true, g.Style.FrameRounding);
+				ImGui::RenderFrame(frame_bb.Min, frame_bb.Max, ImGuiCol_FrameBgActive, true, style.FrameRounding);
 
 				ImRect item_bb = ImRect(frame_bb.Min + style.FramePadding, frame_bb.Max - style.FramePadding);
 				float minRangePosX = Math::RemapRange(*pMinRange, minValue, maxValue, item_bb.Min.x, item_bb.Max.x);
@@ -278,9 +327,9 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 					{
 						if (clicked)
 							ImGui::SetKeyOwner(ImGuiKey_MouseLeft, minRangeHandleID);
-						ImGui::SetActiveID(minRangeHandleID, window);
-						ImGui::SetFocusID(minRangeHandleID, window);
-						ImGui::FocusWindow(window);
+						ImGui::SetActiveID(minRangeHandleID, ImGui::GetCurrentWindow());
+						ImGui::SetFocusID(minRangeHandleID, ImGui::GetCurrentWindow());
+						ImGui::FocusWindow(ImGui::GetCurrentWindow());
 					}
 					ImRect grabBB;
 					if (ImGui::SliderBehavior(item_bb, minRangeHandleID, ImGuiDataType_Float, pMinRange, &minValue, &maxValue, "", ImGuiSliderFlags_None, &grabBB))
@@ -298,9 +347,9 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 					{
 						if (clicked)
 							ImGui::SetKeyOwner(ImGuiKey_MouseLeft, maxRangeHandleID);
-						ImGui::SetActiveID(maxRangeHandleID, window);
-						ImGui::SetFocusID(maxRangeHandleID, window);
-						ImGui::FocusWindow(window);
+						ImGui::SetActiveID(maxRangeHandleID, ImGui::GetCurrentWindow());
+						ImGui::SetFocusID(maxRangeHandleID, ImGui::GetCurrentWindow());
+						ImGui::FocusWindow(ImGui::GetCurrentWindow());
 					}
 					ImRect grabBB;
 					if (ImGui::SliderBehavior(item_bb, maxRangeHandleID, ImGuiDataType_Float, pMaxRange, &minValue, &maxValue, "", ImGuiSliderFlags_None, &grabBB))
@@ -362,110 +411,124 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 				}
 
 				ImVec2 avail = ImGui::GetContentRegionAvail();
-				ImGui::BeginChild("##ImageView", ImVec2(avail.x, avail.y - ImGui::GetTextLineHeight()), false, windowFlags);
+				ImGui::BeginChild("##ImageView", ImVec2(avail.x, avail.y), ImGuiChildFlags_None, windowFlags);
 
 				ImVec2 UV;
-
 				ImVec2 imageSize = ImVec2((float)mipSize.x, (float)mipSize.y) * captureContext.Scale;
+
+				// Add checkerboard background
 				ImVec2 checkersSize = ImMax(ImGui::GetContentRegionAvail(), imageSize);
 				ImVec2 c = ImGui::GetCursorScreenPos();
 				ImGui::GetWindowDrawList()->AddImage(GraphicsCommon::GetDefaultTexture(DefaultTexture::CheckerPattern), c, c + ImGui::GetContentRegionAvail(), ImVec2(0.0f, 0.0f), checkersSize / 50.0f, ImColor(0.1f, 0.1f, 0.1f, 1.0f));
 
-				static bool held = false;
+				bool imageHovered = false;
 				if (captureContext.XRay)
 				{
-					ImVec2 maxSize = ImGui::GetContentRegionAvail() - ImVec2(0, ImGui::GetTextLineHeight());
-					ImGui::GetWindowDrawList()->AddImage(captureContext.pTextureTarget, viewportOrigin, viewportOrigin + viewportSize);
-					ImGui::ItemSize(viewportSize);
-					held = false;
+					// Match image with viewport
+					const ImRect bb(c, c + ImGui::GetContentRegionAvail());
+					ImGui::ItemSize(bb);
+					if (ImGui::ItemAdd(bb, ImGui::GetID("##Image")))
+					{
+						ImGui::GetWindowDrawList()->AddImage(captureContext.pTextureTarget, viewportOrigin, viewportOrigin + viewportSize);
+					}
+
+					imageHovered = ImGui::IsItemHovered();
 					UV = (ImGui::GetMousePos() - viewportOrigin) / viewportSize;
 				}
 				else
 				{
-
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-					ImGui::ImageButton("##ImageView", captureContext.pTextureTarget, imageSize);
-					UV = (ImGui::GetMousePos() - ImGui::GetItemRectMin()) / ImGui::GetItemRectSize();
+					ImGui::ImageButton("##Image", captureContext.pTextureTarget, imageSize);
 					ImGui::PopStyleVar();
-					if (ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-					{
-						held = true;
-					}
-				}
 
-				captureContext.HoveredPixel = Vector2u((uint32)Math::Floor(UV.x * mipSize.x), (uint32)Math::Floor(UV.y * mipSize.y));
+					imageHovered = ImGui::IsItemHovered();
+					UV = (ImGui::GetMousePos() - ImGui::GetItemRectMin()) / ImGui::GetItemRectSize();
 
-				if (held)
-				{
-					if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+					if (imageHovered)
 					{
-						held = false;
-					}
-					else
-					{
-						ImGuiContext& g = *ImGui::GetCurrentContext();
-						ImGuiWindow* window = g.CurrentWindow;
-						if (held)
+						// Panning
+						if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
 						{
+							ImGuiContext& g = *ImGui::GetCurrentContext();
+							ImGuiWindow* window = g.CurrentWindow;
 							ImGui::SetScrollX(window, window->Scroll.x - ImGui::GetIO().MouseDelta.x);
 							ImGui::SetScrollY(window, window->Scroll.y - ImGui::GetIO().MouseDelta.y);
+						}
+
+						// Zooming
+						float wheel = ImGui::GetIO().MouseWheel;
+						if (wheel != 0)
+						{
+							float logScale = logf(captureContext.Scale);
+							logScale += wheel / 5.0f;
+							captureContext.Scale = Math::Clamp(expf(logScale), 0.0f, 1000.0f);
 						}
 					}
 				}
 
 				ImGui::EndChild();
 
-				if (ImGui::IsItemHovered())
+				captureContext.HoveredPixel = Vector2u((uint32)Math::Floor(UV.x * mipSize.x), (uint32)Math::Floor(UV.y * mipSize.y));
+
+				// Pixel Data
 				{
-					float wheel = ImGui::GetIO().MouseWheel;
-					if (wheel != 0)
+					if (imageHovered)
 					{
-						float logScale = logf(captureContext.Scale);
-						logScale += wheel / 5.0f;
-						captureContext.Scale = Math::Clamp(expf(logScale), 0.0f, 1000.0f);
-					}
-				}
+						UV = ImClamp(UV, ImVec2(0, 0), ImVec2(1, 1));
+						Vector2u texel((uint32)Math::Floor(UV.x * mipSize.x), (uint32)Math::Floor(UV.y * mipSize.y));
+						UV.y = 1.0f - UV.y;
 
-				// Texture Description
-				{
-					UV = ImClamp(UV, ImVec2(0, 0), ImVec2(1, 1));
-					Vector2u texel((uint32)Math::Floor(UV.x * mipSize.x), (uint32)Math::Floor(UV.y * mipSize.y));
-					ImGui::Text("%s - %dx%d %d mips - %s - %8d, %8d (%.4f, %.4f)", captureContext.SourceName.c_str(), desc.Width, desc.Height, desc.Mips, formatInfo.pName, texel.x, texel.y, UV.x, 1.0f - UV.y);
-
-					CaptureTextureContext::PickData pickData = captureContext.Pick;
-
-					const char* componentNames[] = { "R", "G", "B", "A" };
-
-					String valueString;
-					if (formatInfo.Type == FormatType::Integer)
-					{
-						for (uint32 i = 0; i < formatInfo.NumComponents; ++i)
+						union PickData
 						{
-							if (i != 0)
-								valueString += ", ";
-							valueString += Sprintf("%s: %d", componentNames[i], pickData.DataUInt[i]);
-						}
+							uint32 UIntData[4];
+							float FloatData[4];
+						};
 
-						valueString += " (";
-						for (uint32 i = 0; i < formatInfo.NumComponents; ++i)
+						PickData pickData;
+						memcpy(pickData.UIntData, &captureContext.PickingData, sizeof(Vector4u));
+
+						if (ImGui::BeginTooltip())
 						{
-							if (i != 0)
-								valueString += ", ";
-							valueString += Sprintf("0x%08x", pickData.DataUInt[i]);
+							if (formatInfo.Type == FormatType::Integer)
+							{
+								ImGui::Text("Pos: %8d, %8d", texel.x, texel.y);
+								ImGui::Text("UV: %.3f, %.3f", UV.x, UV.y);
+
+								if (formatInfo.NumComponents == 1)
+									ImGui::Text("R: %d (0x%08x)", pickData.UIntData[0], pickData.UIntData[0]);
+								else if (formatInfo.NumComponents == 2)
+									ImGui::Text("R: %d, G: %d (0x%08x, 0x%08x)", pickData.UIntData[0], pickData.UIntData[1], pickData.UIntData[0], pickData.UIntData[1]);
+								else if (formatInfo.NumComponents == 3)
+									ImGui::Text("R: %d, G: %d, B: %d (0x%08x, 0x%08x, 0x%08x)", pickData.UIntData[0], pickData.UIntData[1], pickData.UIntData[2], pickData.UIntData[0], pickData.UIntData[1], pickData.UIntData[2]);
+								else if (formatInfo.NumComponents == 4)
+									ImGui::Text("R: %d, G: %d, B: %d, A: %d (0x%08x, 0x%08x, 0x%08x, 0x%08x)", pickData.UIntData[0], pickData.UIntData[1], pickData.UIntData[2], pickData.UIntData[3], pickData.UIntData[0], pickData.UIntData[1], pickData.UIntData[2], pickData.UIntData[3]);
+							}
+							else
+							{
+								ImVec4 color(pickData.FloatData[0], pickData.FloatData[1], pickData.FloatData[2], pickData.FloatData[3]);
+								if (formatInfo.NumComponents == 1)
+									color.y = color.z = color.x;
+								ImGui::ColorButton("##colorpreview", color, 0, ImVec2(64, 64));
+
+								ImGui::SameLine();
+								ImGui::BeginGroup();
+								ImGui::Text("Pos: %8d, %8d", texel.x, texel.y);
+								ImGui::Text("UV: %.3f, %.3f", UV.x, UV.y);
+
+								if (formatInfo.NumComponents == 1)
+									ImGui::Text("R: %.3f", pickData.FloatData[0]);
+								else if (formatInfo.NumComponents == 2)
+									ImGui::Text("R: %.3f, G: %.3f", pickData.FloatData[0], pickData.FloatData[1]);
+								else if (formatInfo.NumComponents == 3)
+									ImGui::Text("R: %.3f, G: %.3f, B: %.3f", pickData.FloatData[0], pickData.FloatData[1], pickData.FloatData[2]);
+								else if (formatInfo.NumComponents == 4)
+									ImGui::Text("R: %.3f, G: %.3f, B: %.3f, A: %.3f", pickData.FloatData[0], pickData.FloatData[1], pickData.FloatData[2], pickData.FloatData[3]);
+
+								ImGui::EndGroup();
+							}
 						}
-						valueString += ")";
+						ImGui::EndTooltip();
 					}
-					else
-					{
-						for (uint32 i = 0; i < formatInfo.NumComponents; ++i)
-						{
-							if (i != 0)
-								valueString += ", ";
-							valueString += Sprintf("%s: %f", componentNames[i], (&pickData.DataFloat.x)[i]);
-						}
-					}
-					ImGui::SameLine();
-					ImGui::Text(" - %s", valueString.c_str());
 				}
 			}
 			ImGui::PopID();

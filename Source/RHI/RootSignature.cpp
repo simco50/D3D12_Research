@@ -45,20 +45,21 @@ void RootSignature::AddDescriptorTable(uint32 shaderRegister, uint32 numDescript
 
 void RootSignature::AddStaticSampler(uint32 registerSlot, uint32 space, D3D12_FILTER filter, D3D12_TEXTURE_ADDRESS_MODE wrapMode, D3D12_COMPARISON_FUNC compareFunc)
 {
-	D3D12_STATIC_SAMPLER_DESC desc{};
-	desc.AddressU = wrapMode;
-	desc.AddressV = wrapMode;
-	desc.AddressW = wrapMode;
-	desc.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK;
-	desc.ComparisonFunc = compareFunc;
-	desc.Filter = filter;
-	desc.MaxAnisotropy = 8;
-	desc.MaxLOD = FLT_MAX;
-	desc.MinLOD = 0.0f;
-	desc.RegisterSpace = space;
-	desc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-	desc.ShaderRegister = registerSlot;
-	desc.MipLODBias = 0.0f;
+	D3D12_STATIC_SAMPLER_DESC desc{
+		.Filter				= filter,
+		.AddressU			= wrapMode,
+		.AddressV			= wrapMode,
+		.AddressW			= wrapMode,
+		.MipLODBias			= 0.0f,
+		.MaxAnisotropy		= 8,
+		.ComparisonFunc		= compareFunc,
+		.BorderColor		= D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
+		.MinLOD				= 0.0f,
+		.MaxLOD				= FLT_MAX,
+		.ShaderRegister		= registerSlot,
+		.RegisterSpace		= space,
+		.ShaderVisibility	= D3D12_SHADER_VISIBILITY_ALL,
+	};
 	m_StaticSamplers.push_back(desc);
 }
 

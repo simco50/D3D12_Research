@@ -1,18 +1,16 @@
-require "vstudio"
-
-PROJECT_NAME = "D3D12"
-SOURCE_DIR = "Source/"
-RESOURCE_DIR = "Resources/"
+SOLUTION_NAME 	= "D3D12"
+PROJECT_NAME 	= "D3D12"
+SOURCE_DIR 		= "Source/"
+RESOURCE_DIR 	= "Resources/"
 THIRD_PARTY_DIR = "ThirdParty/"
-TARGET_DIR = "Build/"
-
-WIN_SDK = "latest"
+TARGET_DIR 		= "Build/"
 
 function runtimeDependency(source, destination)
 	postbuildcommands { ("{COPY} \"$(SolutionDir)ThirdParty/" .. source .. "\" \"$(OutDir)" .. destination .. "/\"") }
 end
 
 function compileThirdPartyLibrary(name)
+	printf('Added %s', name)
 	includedirs ("$(SolutionDir)ThirdParty/" .. name)
 	files {
 		(THIRD_PARTY_DIR.. name .. "/*.cpp"),
@@ -32,7 +30,6 @@ workspace (PROJECT_NAME)
 	cppdialect "c++20"
 	startproject (PROJECT_NAME)
 	symbols "On"
-	architecture "x64"
 	characterset "MBCS"
 	flags {"MultiProcessorCompile", "ShadowedVariables"}
 	justmycode "Off"
@@ -41,7 +38,7 @@ workspace (PROJECT_NAME)
 	system "windows"
 	conformancemode "On"
 	editandcontinue "Off"
-	defines { "PLATFORM_WINDOWS=1", "WIN32" }
+	defines { "PLATFORM_WINDOWS=1" }
 	targetdir (TARGET_DIR .. "$(ProjectName)_$(Platform)_$(Configuration)")
 	objdir (TARGET_DIR .. "Intermediate/$(ProjectName)_$(Platform)_$(Configuration)")
 	
@@ -56,7 +53,6 @@ workspace (PROJECT_NAME)
 		runtime "Debug"
 		optimize "Off"
 		inlining "Disabled"
-		justmycode "On"
 
 	filter "configurations:Debug"
 		runtime "Debug"
@@ -84,7 +80,7 @@ workspace (PROJECT_NAME)
 		location (ROOT)
 		pchheader ("stdafx.h")
 		pchsource (SOURCE_DIR .. "stdafx.cpp")
-		systemversion (WIN_SDK)
+		systemversion "latest"
 		kind "WindowedApp"
 
 		includedirs { SOURCE_DIR }
@@ -145,17 +141,23 @@ workspace (PROJECT_NAME)
 		live_pp_path = "LivePP/API/x64/LPP_API_Version_x64_CPP.h"
 		live_pp = os.pathsearch(live_pp_path, os.getenv("PATH"))
 		if live_pp then
+			printf('Found Live++ in "%s"', live_pp_path)
 			includedirs (live_pp .. "/LivePP/API/x64")
 			defines ("LIVE_PP_PATH=L\"" .. live_pp .. "/LivePP\"")
 			linkoptions { "/FUNCTIONPADMIN" }
 			editandcontinue "Off"
+		else
+			printf('Did NOT find Live++ API')
 		end
 
 		-- Superluminal
 		superluminal_path = "C:/Program Files/Superluminal/Performance/API"
 		if os.isdir(superluminal_path) then
+			printf('Found Superluminal API in "%s"', superluminal_path)
 			includedirs (superluminal_path .. "/include")
 			defines ("SUPERLUMINAL_PATH=L\"" .. superluminal_path .. "/dll/x64/PerformanceAPI.dll\"")
+		else
+			printf('Did NOT find Superluminal API')
 		end
 
 		compileThirdPartyLibrary("ankerl")

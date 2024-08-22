@@ -80,9 +80,10 @@ struct ClearBinding
 
 struct TextureDesc
 {
-	uint32				Width				: 14	= 1;
-	uint32				Height				: 14	= 1;
-	uint32				DepthOrArraySize	: 10	= 1;
+	uint32				Width				: 16	= 1;
+	uint32				Height				: 16	= 1;
+	uint32				Depth				: 12	= 1;
+	uint32				ArraySize			: 12	= 1;
 	uint32				Mips				: 5		= 1;
 	uint32				SampleCount			: 3		= 1;
 	TextureType			Type						= TextureType::Texture2D;
@@ -90,23 +91,24 @@ struct TextureDesc
 	TextureFlag			Flags						= TextureFlag::None;
 	ClearBinding		ClearBindingValue			= ClearBinding(Colors::Black);
 
-	Vector3u Size() const { return Vector3u(Width, Height, DepthOrArraySize); }
+	Vector3u Size() const { return Vector3u(Width, Height, Depth); }
 	Vector2u Size2D() const { return Vector2u(Width, Height); }
+
+	bool operator==(const TextureDesc&) const = default;
 
 	static TextureDesc CreateCube(uint32 width, uint32 height, ResourceFormat format, uint32 mips = 1, TextureFlag flags = TextureFlag::None, const ClearBinding& clearBinding = ClearBinding(Colors::Black), uint32 sampleCount = 1)
 	{
 		gAssert(width);
 		gAssert(height);
-		TextureDesc desc;
-		desc.Width = width;
-		desc.Height = height;
-		desc.DepthOrArraySize = 1;
-		desc.Mips = mips;
-		desc.SampleCount = sampleCount;
-		desc.Format = format;
-		desc.Flags = flags;
-		desc.ClearBindingValue = clearBinding;
-		desc.Type = TextureType::TextureCube;
+		TextureDesc desc{};
+		desc.Width				= width;
+		desc.Height				= height;
+		desc.Mips				= mips;
+		desc.SampleCount		= sampleCount;
+		desc.Format				= format;
+		desc.Flags				= flags;
+		desc.ClearBindingValue	= clearBinding;
+		desc.Type				= TextureType::TextureCube;
 		return desc;
 	}
 
@@ -114,16 +116,16 @@ struct TextureDesc
 	{
 		gAssert(width);
 		gAssert(height);
-		TextureDesc desc;
-		desc.Width = width;
-		desc.Height = height;
-		desc.DepthOrArraySize = 1;
-		desc.Mips = mips;
-		desc.SampleCount = sampleCount;
-		desc.Format = format;
-		desc.Flags = flags;
-		desc.ClearBindingValue = clearBinding;
-		desc.Type = TextureType::Texture2D;
+		TextureDesc desc{};
+		desc.Width				= width;
+		desc.Height				= height;
+		desc.Depth				= 1;
+		desc.Mips				= mips;
+		desc.SampleCount		= sampleCount;
+		desc.Format				= format;
+		desc.Flags				= flags;
+		desc.ClearBindingValue	= clearBinding;
+		desc.Type				= TextureType::Texture2D;
 		return desc;
 	}
 
@@ -131,42 +133,25 @@ struct TextureDesc
 	{
 		gAssert(width);
 		gAssert(height);
-		TextureDesc desc;
-		desc.Width = width;
-		desc.Height = height;
-		desc.DepthOrArraySize = depth;
-		desc.Mips = mips;
-		desc.SampleCount = sampleCount;
-		desc.Format = format;
-		desc.Flags = flags;
-		desc.ClearBindingValue = clearBinding;
-		desc.Type = TextureType::Texture3D;
+		TextureDesc desc{};
+		desc.Width				= width;
+		desc.Height				= height;
+		desc.Depth				= depth;
+		desc.Mips				= mips;
+		desc.SampleCount		= sampleCount;
+		desc.Format				= format;
+		desc.Flags				= flags;
+		desc.ClearBindingValue	= clearBinding;
+		desc.Type				= TextureType::Texture3D;
 		return desc;
 	}
-
-	bool operator==(const TextureDesc& other) const
-	{
-		return Width == other.Width
-			&& Height == other.Height
-			&& DepthOrArraySize == other.DepthOrArraySize
-			&& Mips == other.Mips
-			&& SampleCount == other.SampleCount
-			&& Format == other.Format
-			&& Flags == other.Flags
-			&& ClearBindingValue == other.ClearBindingValue
-			&& Type == other.Type;
-	}
-
-	bool operator!=(const TextureDesc& other) const
-	{
-		return !operator==(other);
-	}
-
+	
 	bool IsCompatible(const TextureDesc& other) const
 	{
 		return Width == other.Width
 			&& Height == other.Height
-			&& DepthOrArraySize == other.DepthOrArraySize
+			&& Depth == other.Depth
+			&& ArraySize == other.ArraySize
 			&& Mips == other.Mips
 			&& SampleCount == other.SampleCount
 			&& Format == other.Format
@@ -186,8 +171,8 @@ public:
 
 	uint32 GetWidth() const { return m_Desc.Width; }
 	uint32 GetHeight() const { return m_Desc.Height; }
-	uint32 GetDepth() const { return m_Desc.DepthOrArraySize; }
-	uint32 GetArraySize() const { return m_Desc.DepthOrArraySize; }
+	uint32 GetDepth() const { return m_Desc.Depth; }
+	uint32 GetArraySize() const { return m_Desc.ArraySize; }
 	uint32 GetMipLevels() const { return m_Desc.Mips; }
 	ResourceFormat GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }

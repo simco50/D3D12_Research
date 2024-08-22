@@ -23,6 +23,8 @@ struct BufferDesc
 	BufferFlag		Flags			= BufferFlag::None;
 	ResourceFormat	Format			= ResourceFormat::Unknown;
 
+	bool operator==(const BufferDesc&) const = default;
+
 	static BufferDesc CreateIndexBuffer(uint32 elements, ResourceFormat format, BufferFlag flags = BufferFlag::None)
 	{
 		gAssert(format == ResourceFormat::R32_UINT || format == ResourceFormat::R16_UINT);
@@ -78,14 +80,6 @@ struct BufferDesc
 	}
 
 	uint32 NumElements() const { return (uint32)(Size / ElementSize); }
-
-	bool operator==(const BufferDesc& rhs) const
-	{
-		return Size == rhs.Size &&
-			ElementSize == rhs.ElementSize &&
-			Flags == rhs.Flags &&
-			Format == rhs.Format;
-	}
 
 	bool IsCompatible(const BufferDesc& rhs) const
 	{

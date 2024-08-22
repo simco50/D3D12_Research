@@ -147,16 +147,6 @@ uint32 Image::GetPixelInt(uint32 x, uint32 y) const
 	return c;
 }
 
-const unsigned char* Image::GetData(uint32 mipLevel) const
-{
-	uint64 offset = 0;
-	for (uint32 mip = 0; mip < mipLevel; ++mip)
-	{
-		offset += RHI::GetTextureMipByteSize(m_Format, m_Width, m_Height, m_Depth, mip);
-	}
-	return m_Pixels.data() + offset;
-}
-
 bool Image::LoadSTB(Stream& stream)
 {
 	int components = 0;
@@ -305,6 +295,7 @@ bool Image::LoadDDS(Stream& stream)
 					if (format == DXGI_FORMAT_R32G32B32A32_FLOAT) {		outFormat = ResourceFormat::RGBA32_FLOAT;		outSRGB = false;	return; }
 					if (format == DXGI_FORMAT_R32G32_FLOAT) {			outFormat = ResourceFormat::RG32_FLOAT;			outSRGB = false;	return; }
 					if (format == DXGI_FORMAT_R9G9B9E5_SHAREDEXP) {		outFormat = ResourceFormat::R9G9B9E5_SHAREDEXP; outSRGB = false;	return; }
+					if (format == DXGI_FORMAT_R8G8B8A8_UNORM) {			outFormat = ResourceFormat::RGBA8_UNORM; outSRGB = false;	return; }
 					gUnreachable();
 				};
 			ConvertDX10Format((DXGI_FORMAT)dx10Header.dxgiFormat, m_Format, m_sRgb);
@@ -366,7 +357,7 @@ bool Image::LoadDDS(Stream& stream)
 		for (uint32 imageIdx = 0; imageIdx < imageChainCount; ++imageIdx)
 		{
 			pCurrentImage->SetSize(header.dwWidth, header.dwHeight, header.dwDepth, header.dwMipMapCount);
-			stream.Read(m_Pixels.data(), (uint32)m_Pixels.size());
+			stream.Read(pCurrentImage->m_Pixels.data(), (uint32)pCurrentImage->m_Pixels.size());
 
 			if (imageIdx < imageChainCount - 1)
 			{
@@ -382,7 +373,7 @@ bool Image::LoadDDS(Stream& stream)
 	return true;
 }
 
-void Image::Save(const char* pFilePath)
+void Image::Save(const char* pFilePath) const
 {
 	const FormatInfo& info = RHI::GetFormatInfo(m_Format);
 	String extension = Paths::GetFileExtenstion(pFilePath);

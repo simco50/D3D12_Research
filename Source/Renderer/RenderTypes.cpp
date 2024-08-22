@@ -149,7 +149,7 @@ namespace GraphicsCommon
 		}
 		if (image.GetDepth() > 1)
 		{
-			desc.DepthOrArraySize = image.GetDepth();
+			desc.Depth = image.GetDepth();
 			desc.Type = TextureType::Texture3D;
 		}
 

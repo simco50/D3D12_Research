@@ -10,7 +10,7 @@ public:
 	Image(uint32 width, uint32 height, uint32 depth, ResourceFormat format, uint32 numMips = 1, const void* pInitialData = nullptr);
 	bool Load(const char* filePath);
 	bool Load(Stream& stream, const char* pFormatHint);
-	void Save(const char* pFilePath);
+	void Save(const char* pFilePath) const;
 
 	bool SetSize(uint32 x, uint32 y, uint32 depth, uint32 numMips);
 	bool SetData(const void* pPixels);
@@ -27,8 +27,6 @@ public:
 	bool IsSRGB() const { return m_sRgb; }
 	bool IsHDR() const { return m_IsHdr; }
 	bool IsCubemap() const { return m_IsCubemap; }
-
-	const unsigned char* GetData(uint32 mipLevel = 0) const;
 
 	uint32 GetMipLevels() const { return m_MipLevels; }
 	ResourceFormat GetFormat() const { return m_Format; }
@@ -48,6 +46,5 @@ private:
 	bool m_IsCubemap = false;
 	std::unique_ptr<Image> m_pNextImage;
 	ResourceFormat m_Format = ResourceFormat::Unknown;
-	StaticArray<uint64, D3D12_REQ_MIP_LEVELS> m_MipLevelDataOffsets{};
 	Array<uint8> m_Pixels;
 };

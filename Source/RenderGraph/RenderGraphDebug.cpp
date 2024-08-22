@@ -285,10 +285,10 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 						if (pResource->GetType() == RGResourceType::Texture)
 						{
 							const TextureDesc& desc = static_cast<const RGTexture*>(pResource)->Desc;
-							AddRow("Resolution:", "%dx%dx%d", desc.Width, desc.Height, desc.DepthOrArraySize);
+							AddRow("Resolution:", "%dx%dx%d", desc.Width, desc.Height, desc.Depth);
 							AddRow("Format:", "%s", RHI::GetFormatInfo(desc.Format).pName);
 							AddRow("Mips:", "%d", desc.Mips);
-							AddRow("Size:", "%s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)).c_str());
+							AddRow("Size:", "%s", Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.Depth)).c_str());
 						}
 						else if (pResource->GetType() == RGResourceType::Buffer)
 						{
@@ -626,10 +626,10 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 				if (pResource->GetType() == RGResourceType::Texture)
 				{
 					const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
-					stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "<br/>";
+					stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.Depth << "<br/>";
 					stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "<br/>";
 					stream << "Mips: " << desc.Mips << "<br/>";
-					stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize)) << "</br>";
+					stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.Depth)) << "</br>";
 				}
 				else if (pResource->GetType() == RGResourceType::Buffer)
 				{
@@ -720,10 +720,10 @@ void RGGraph::DumpDebugGraph(const char* pPath) const
 			if (pResource->GetType() == RGResourceType::Texture)
 			{
 				const TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
-				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.DepthOrArraySize << "\\n";
+				stream << "Res: " << desc.Width << "x" << desc.Height << "x" << desc.Depth << "\\n";
 				stream << "Fmt: " << RHI::GetFormatInfo(desc.Format).pName << "\\n";
 				stream << "Mips: " << desc.Mips << "\\n";
-				stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.DepthOrArraySize));
+				stream << "Size: " << Math::PrettyPrintDataSize(RHI::GetTextureByteSize(desc.Format, desc.Width, desc.Height, desc.Depth));
 			}
 			else if (pResource->GetType() == RGResourceType::Buffer)
 			{
