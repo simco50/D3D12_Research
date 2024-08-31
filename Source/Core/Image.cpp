@@ -147,6 +147,16 @@ uint32 Image::GetPixelInt(uint32 x, uint32 y) const
 	return c;
 }
 
+const unsigned char* Image::GetData(uint32 mipLevel) const
+{
+	uint64 offset = 0;
+	for (uint32 mip = 0; mip < mipLevel; ++mip)
+	{
+		offset += RHI::GetTextureMipByteSize(m_Format, m_Width, m_Height, m_Depth, mip);
+	}
+	return m_Pixels.data() + offset;
+}
+
 bool Image::LoadSTB(Stream& stream)
 {
 	int components = 0;

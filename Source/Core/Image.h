@@ -28,6 +28,7 @@ public:
 	bool IsHDR() const { return m_IsHdr; }
 	bool IsCubemap() const { return m_IsCubemap; }
 
+	const unsigned char* GetData(uint32 mipLevel = 0) const;
 	uint32 GetMipLevels() const { return m_MipLevels; }
 	ResourceFormat GetFormat() const { return m_Format; }
 	const Image* GetNextImage() const { return m_pNextImage.get(); }

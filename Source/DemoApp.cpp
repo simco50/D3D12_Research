@@ -73,6 +73,8 @@ void DemoApp::Shutdown()
 
 void DemoApp::SetupScene(const char* pFilePath)
 {
+	m_World = {};
+
 	Material& defaultMaterial = m_World.Materials.emplace_back();
 	defaultMaterial.BaseColorFactor = Vector4(0.7f, 0.7f, 0.7f, 1.0f);
 
