@@ -153,23 +153,19 @@ bool HZBCull(FrustumCullData cullData, Texture2D<float> hzbTexture, float2 hzbDi
 	{
 		DrawRect(rect.xy, rect.zw, RectMode::MinMax, Colors::Red);
 		TextWriter writer = CreateTextWriter(rect.xy * cView.ViewportDimensions);
-		String hzbText = TEXT("HZB mip: ");
-		writer.Text(hzbText);
+		writer.Text(TEXT("HZB mip: "));
 		writer.Int(mip);
 		writer.NewLine();
-		String visibleText = TEXT("Visible: ");
-		writer.Text(visibleText);
+		writer.Text(TEXT("Visible: "));
 		if(isOccluded)
 		{
 			writer.SetColor(Colors::Red);
-			String noText = TEXT("No");
-			writer.Text(noText);
+			writer.Text(TEXT("No"));
 		}
 		else
 		{
 			writer.SetColor(Colors::Green);
-			String yesText = TEXT("Yes");
-			writer.Text(yesText);
+			writer.Text(TEXT("Yes"));
 		}
 
 		if(mip >= 3)

@@ -313,19 +313,16 @@ void PrintStatsCS()
 	/*
 		Totals
 	*/
-	String sceneText = TEXT("--- Scene ---");
-	writer.Text(sceneText);
+	writer.Text(TEXT("--- Scene ---"));
 	writer.NewLine();
 
-	String meshletsText = TEXT("Total meshlets: ");
-	writer.Text(meshletsText);
+	writer.Text(TEXT("Total meshlets: "));
 	writer.LeftAlign(align);
 	writer.Int(numMeshlets, true);
 
 	writer.NewLine();
 
-	String totalProcessedMeshletsText = TEXT("Total processed meshlets: ");
-	writer.Text(totalProcessedMeshletsText);
+	writer.Text(TEXT("Total processed meshlets: "));
 
 	int numProcessedMeshletsCapped = min(MAX_NUM_MESHLETS, processedMeshlets);
 	writer.LeftAlign(align);
@@ -333,11 +330,10 @@ void PrintStatsCS()
 	if(numProcessedMeshletsCapped < processedMeshlets)
 	{
 		writer.SetColor(float4(1, 0, 0, 1));
-		String openBraceText = TEXT(" (+");
-		writer.Text(openBraceText);
+		writer.Text(TEXT(" (+"));
 		writer.LeftAlign(align);
 		writer.Int(processedMeshlets - numProcessedMeshletsCapped, true);
-		writer.Text(')');
+		writer.Text(TEXT(")"));
 		writer.SetColor(float4(1, 1, 1, 1));
 	}
 
@@ -347,37 +343,30 @@ void PrintStatsCS()
 	/*
 		Phase 1
 	*/
-	String phase1Text = TEXT("--- Phase 1 ---");
-	writer.Text(phase1Text);
+	writer.Text(TEXT("--- Phase 1 ---"));
 	writer.NewLine();
 
-	String instancesText = TEXT("Input instances: ");
-	writer.Text(instancesText);
+	writer.Text(TEXT("Input instances: "));
 	writer.LeftAlign(align);
 	writer.Int(numInstances, true);
 	writer.NewLine();
 
-	String processedMeshletsText = TEXT("Input meshlets: ");
-	String visibleMeshletsText = TEXT("Visible meshlets: ");
-	String occludedMeshletsText = TEXT("Occluded meshlets: ");
-	String occludedInstancesText = TEXT("Occluded instances: ");
-
-	writer.Text(processedMeshletsText);
+	writer.Text(TEXT("Input meshlets: "));
 	writer.LeftAlign(align);
 	writer.Int(phase1CandidateMeshlets, true);
 	writer.NewLine();
 
-	writer.Text(occludedInstancesText);
+	writer.Text(TEXT("Occluded instances: "));
 	writer.LeftAlign(align);
 	writer.Int(occludedInstances, true);
 	writer.NewLine();
 
-	writer.Text(occludedMeshletsText);
+	writer.Text(TEXT("Occluded meshlets: "));
 	writer.LeftAlign(align);
 	writer.Int(phase2CandidateMeshlets, true);
 	writer.NewLine();
 
-	writer.Text(visibleMeshletsText);
+	writer.Text(TEXT("Visible meshlets: "));
 	writer.LeftAlign(align);
 	writer.SetColor(Colors::Green);
 	writer.Int(phase1VisibleMeshlets, true);
@@ -385,21 +374,20 @@ void PrintStatsCS()
 	writer.NewLine();
 	writer.NewLine();
 
-	String phase2Text = TEXT("--- Phase 2 ---");
-	writer.Text(phase2Text);
+	writer.Text(TEXT("--- Phase 2 ---"));
 	writer.NewLine();
 
-	writer.Text(instancesText);
+	writer.Text(TEXT("Occluded instances: "));
 	writer.LeftAlign(align);
 	writer.Int(occludedInstances, true);
 	writer.NewLine();
 
-	writer.Text(processedMeshletsText);
+	writer.Text(TEXT("Input meshlets: "));
 	writer.LeftAlign(align);
 	writer.Int(phase2CandidateMeshlets, true);
 	writer.NewLine();
 
-	writer.Text(visibleMeshletsText);
+	writer.Text(TEXT("Visible meshlets: "));
 	writer.LeftAlign(align);
 	writer.SetColor(Colors::Green);
 	writer.Int(phase2VisibleMeshlets, true);
@@ -407,32 +395,27 @@ void PrintStatsCS()
 	writer.NewLine();
 	writer.NewLine();
 
-	String binHeaderText = TEXT("--- Bins ---");
-	writer.Text(binHeaderText);
+	writer.Text(TEXT("--- Bins ---"));
 	writer.NewLine();
 
 	for(int p = 0; p < 2; ++p)
 	{
-		String phaseText = TEXT("Phase ");
-		writer.Text(phaseText);
+		writer.Text(TEXT("Phase "));
 		writer.Int(p + 1);
 		writer.NewLine();
 		for(int i = 0; i < cPrintParams.NumBins; ++i)
 		{
-			String binText = TEXT("Bin ");
-			writer.Text(binText);
+			writer.Text(TEXT("Bin "));
 			writer.Int(i, false);
 			writer.Text(':');
 			writer.Text(' ');
 
 			uint4 offsetAndCount  = tBinnedMeshletOffsetAndCounts[p][i];
-			String countText = TEXT("Count: ");
-			writer.Text(countText);
+			writer.Text(TEXT("Count: "));
 			writer.Int(offsetAndCount.x);
 
 			writer.LeftAlign(200);
-			String offsetText = TEXT(" Offset: ");
-			writer.Text(offsetText);
+			writer.Text(TEXT(" Offset: "));
 			writer.Int(offsetAndCount.w);
 
 			writer.NewLine();

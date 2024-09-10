@@ -168,52 +168,67 @@ namespace ShaderCompiler
 		return true;
 	}
 
-	static String CustomPreprocess(const String& input)
+	static String CustomPreprocess(const char* pFileName, const String& input)
 	{
+		// Search for `TEXT("Foo")` and gather all characters in a const int array
+		// static const int cStringArray_2430948[] = { 'F', 'o', 'o' };
+
+		StringView in = input;
 		String output;
-		output.reserve(input.size());
+		output.reserve(in.size());
 
-		size_t index = 0;
-		constexpr const char* pSearchText = "TEXT(\"";
-		constexpr uint32 searchLength = CString::StrLen(pSearchText);
+		size_t charIndex = 0;
+		constexpr const char* pTextStr = "TEXT(\"";
+		constexpr uint32 textStrLen = CString::StrLen(pTextStr);
 
-		while (index < input.length())
+		int stringOffset = 0;
+
+		String stringArrayName = Sprintf("cStringArray_%u", StringHash(pFileName).m_Hash);
+		String stringArrayText;
+
+		while (charIndex < in.length())
 		{
-			size_t foundIndex = input.find(pSearchText, index);
-			if (foundIndex != String::npos)
+			size_t textStartIndex = in.find(pTextStr, charIndex);
+			if (textStartIndex != String::npos)
 			{
-				output += input.substr(index, foundIndex - index);
+				output += in.substr(charIndex, textStartIndex - charIndex);
 
 				// Find the closing parenthesis of the TEXT macro
-				size_t closingQuoteIndex = input.find(')', foundIndex + searchLength);
+				size_t closingQuoteIndex = in.find("\")", textStartIndex + textStrLen + 1);
 				if (closingQuoteIndex != String::npos)
 				{
-					output += "{'";
-					size_t targetStart = foundIndex + searchLength;
-					size_t targetEnd = closingQuoteIndex - foundIndex - searchLength - 1;
-					for (int i = 0; i < targetEnd; ++i)
-					{
-						output += input[targetStart + i];
-						output += "','";
-					}
-					output.pop_back();
-					output.pop_back();
-					output += "}";
+					uint32 textStart = (uint32)textStartIndex + textStrLen;
+					uint32 targetEnd = (uint32)closingQuoteIndex;
+					uint32 stringSize = targetEnd - textStart;
 
-					index = closingQuoteIndex + 1;
+					for (uint32 i = textStart; i < targetEnd; ++i)
+						stringArrayText += Sprintf("'%c', ", input[i]);
+
+					output += Sprintf("%s, %d, %d", stringArrayName, stringOffset, stringSize);
+					stringOffset += stringSize;
+
+					charIndex = closingQuoteIndex + 2;
 				}
 				else
 				{
-					output += input.substr(foundIndex, searchLength);
-					index = foundIndex + searchLength;
+					gAssert(false);
+					output += in.substr(textStartIndex, textStrLen);
+					charIndex = textStartIndex + textStrLen;
 				}
 			}
 			else
 			{
-				output += input.substr(index);
+				output += in.substr(charIndex);
 				break;
 			}
 		}
+
+		if (stringOffset == 0)
+			return input;
+
+		// Prepend shader content with string array
+		output = Sprintf("static const uint %s[] = { %s };\n", stringArrayName, stringArrayText) + output;
+
 		return output;
 	}
 
@@ -246,7 +261,7 @@ namespace ShaderCompiler
 			// +1 null terminator
 			Array<char> charBuffer(stream.GetLength() + 1);
 			stream.Read(charBuffer.data(), (uint32)charBuffer.size());
-			String buffer = CustomPreprocess(charBuffer.data());
+			String buffer = CustomPreprocess(pFileName, charBuffer.data());
 
 			CachedFile file;
 			file.Timestamp = fileTime;

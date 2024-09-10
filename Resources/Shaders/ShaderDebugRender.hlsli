@@ -2,10 +2,8 @@
 #include "Common.hlsli"
 #include "Packing.hlsli"
 
-using String = int[];
 // This macro gets replaced by custom preprocessor if available
-// `TEXT("123")` becomes `{ '1', '2', '3' }`
-#define TEXT(txt) { ' ' }
+#define TEXT(txt)
 
 struct CharacterInstance
 {
@@ -301,15 +299,22 @@ struct TextWriter
 	}
 
 	template<int N>
-	void Text(int str[N])
+	void Text(const uint str[N], int charOffset, int length)
 	{
 		uint offset;
-		if(Private::ReserveCharacters(N, offset))
+		if(Private::ReserveCharacters(length, offset))
 		{
 			[loop]
-			for(int i = 0; i < N; ++i)
-				Text_(str[i], i + offset);
+			for(int i = 0; i < length; ++i)
+				Text_(str[i + charOffset], i + offset);
 		}
+	}
+
+	void Text() 
+	{
+		Text('E');
+		Text('r');
+		Text('r');
 	}
 
 	void Int(int value, bool seperators = false)
@@ -363,13 +368,11 @@ struct TextWriter
 	{
 		if(isnan(value))
 		{
-			String nan = TEXT("NaN");
-			Text(nan);
+			Text(TEXT("NaN"));
 		}
 		else if(!isfinite(value))
 		{
-			String inf = TEXT("INF");
-			Text(inf);
+			Text(TEXT("INF"));
 		}
 		else
 		{
