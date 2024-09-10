@@ -69,6 +69,7 @@ template<typename Key, typename Hash = ankerl::unordered_dense::hash<Key>>
 using HashSet = ankerl::unordered_dense::set<Key, Hash>;
 
 using String = std::string;
+using StringView = std::string_view;
 
 template<typename T, typename Allocator = std::allocator<T>>
 using Array = std::vector<T, Allocator>;
