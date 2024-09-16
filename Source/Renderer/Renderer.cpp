@@ -103,7 +103,7 @@ namespace Tweakables
 	bool gDumpRenderGraphNextFrame = false;
 	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { gDumpRenderGraphNextFrame = true; });
 
-	String VisualizeTextureName = "";
+	String VisualizeTextureName = "SSR.Output";
 	ConsoleCommand<const char*> gVisualizeTexture("vis", [](const char* pName) { VisualizeTextureName = pName; });
 }
 
@@ -742,6 +742,28 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								context.Draw(0, 3);
 							});
 
+					RGTexture* pSSROutput = graph.Create("SSR.Output", TextureDesc::Create2D(viewDimensions.x, viewDimensions.y, ResourceFormat::RGBA16_FLOAT));
+
+					graph.AddPass("SSR", RGPassFlag::Compute)
+						.Read({ sceneTextures.pDepth, sceneTextures.pPreviousColor })
+						.Read({ sceneTextures.pGBuffer })
+						.Write(pSSROutput)
+						.Bind([=](CommandContext& context, const RGResources& resources)
+							{
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+								context.SetPipelineState(m_pSSRTracePSO);
+
+								Renderer::BindViewUniforms(context, *pView);
+								context.BindResources(BindingSlot::UAV, resources.GetUAV(pSSROutput));
+								context.BindResources(BindingSlot::SRV, {
+									resources.GetSRV(sceneTextures.pGBuffer),
+									resources.GetSRV(sceneTextures.pDepth),
+									resources.GetSRV(sceneTextures.pPreviousColor),
+									});
+
+								context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
+							});
+
 					graph.AddPass("Deferred Shading", RGPassFlag::Compute)
 						.Read({ pFog })
 						.Read({ sceneTextures.pDepth, pAO, sceneTextures.pPreviousColor })
@@ -1319,6 +1341,8 @@ void Renderer::InitializePipelines()
 	{
 		m_pSkinPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "Skinning.hlsl", "CSMain");
 	}
+
+	m_pSSRTracePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "SSR.hlsl", "TraceCS");
 }
 
 
@@ -1379,9 +1403,19 @@ void Renderer::GetViewUniforms(const RenderView& view, ShaderInterop::ViewUnifor
 	outUniforms.DDGIVolumesIndex		= m_DDGIVolumesBuffer.pBuffer->GetSRVIndex();
 	outUniforms.NumDDGIVolumes			= m_DDGIVolumesBuffer.Count;
 
-	outUniforms.FontDataIndex			= m_DebugRenderData.FontDataSRV;
-	outUniforms.DebugRenderDataIndex	= m_DebugRenderData.RenderDataUAV;
-	outUniforms.FontSize				= m_DebugRenderData.FontSize;
+	ShaderInterop::DebugUniforms& debug = outUniforms.Debug;
+	debug.FontDataIndex			= m_DebugRenderData.FontDataSRV;
+	debug.DebugRenderDataIndex	= m_DebugRenderData.RenderDataUAV;
+	debug.FontSize				= m_DebugRenderData.FontSize;
+
+	ImGuiWindow* pWindow = ImGui::FindWindowByName(ICON_FA_DESKTOP " Viewport");
+	ImVec2 viewportOrigin = pWindow->WorkRect.Min;
+	const ImGuiIO& io = ImGui::GetIO();
+	ImVec2 mousePos = ImFloor(io.MousePos - viewportOrigin);
+	debug.MousePos = Vector2u((uint32)mousePos.x, (uint32)mousePos.y);
+	debug.MouseHold = io.MouseDown[ImGuiMouseButton_Left];
+	debug.MousePressed = io.MouseClicked[ImGuiMouseButton_Left];
+	debug.MouseRelease = io.MouseReleased[ImGuiMouseButton_Left];
 }
 
 

@@ -134,6 +134,21 @@ VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData insta
 MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttribute attributes)
 {
 	MaterialProperties properties;
+
+#if 1
+
+	properties.BaseColor = 0.5f;
+	properties.Opacity = 0;
+	properties.Metalness = 0;
+	properties.Roughness = 0.66f;
+	properties.Emissive = 0.0f;
+	properties.Normal = attributes.Normal;
+	properties.Specular = 0.5f;
+	return properties;
+
+#endif
+
+
 	float4 baseColor = material.BaseColorFactor * RGBA8_UNORM::Unpack(attributes.Color);
 	if(material.Diffuse != INVALID_HANDLE)
 	{

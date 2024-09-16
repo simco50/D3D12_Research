@@ -196,6 +196,18 @@ float3 ScreenToView(float4 screen, float2 screenDimensionsInv, float4x4 projecti
 	return ViewPositionFromDepth(screenNormalized, screen.z, projectionInverse);
 }
 
+float3 ViewToClip(float3 view)
+{
+	float4 clip = mul(float4(view, 1.0f), cView.ViewToClip);
+	return clip.xyz / clip.w;
+}
+
+float3 ClipToView(float4 clip)
+{
+	float4 view = mul(clip, cView.ClipToView);
+	return view.xyz / view.w;
+}
+
 float2 ClipToUV(float2 clip)
 {
 	return clip * float2(0.5f, -0.5f) + 0.5f;

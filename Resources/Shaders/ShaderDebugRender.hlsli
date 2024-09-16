@@ -5,6 +5,11 @@
 // This macro gets replaced by custom preprocessor if available
 #define TEXT(txt)
 
+DebugUniforms GetDebug()
+{
+	return cView.Debug;
+}
+
 struct CharacterInstance
 {
 	float4 Color;
@@ -102,7 +107,7 @@ namespace Private
 {
 	RWByteAddressBuffer GetRenderData()
 	{
-		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
+		RWByteAddressBuffer renderData = ResourceDescriptorHeap[GetDebug().DebugRenderDataIndex];
 		return renderData;
 	}
 
@@ -272,7 +277,7 @@ struct TextWriter
 
 	void Text_(uint character, uint offset)
 	{
-		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
+		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[GetDebug().FontDataIndex];
 		Glyph glyph = glyphBuffer[character];
 		Private::AddCharacter(character, Cursor + glyph.Offset, Color, Scale, offset);
 		Cursor.x += glyph.AdvanceX * Scale;
@@ -280,7 +285,7 @@ struct TextWriter
 
 	void NewLine()
 	{
-		Cursor.y += cView.FontSize * Scale;
+		Cursor.y += GetDebug().FontSize * Scale;
 		Cursor.x = StartLocation.x;
 	}
 

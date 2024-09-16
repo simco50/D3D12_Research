@@ -99,7 +99,7 @@ private:
 	Array<Ref<Texture>>						m_ShadowHZBs;
 
 	uint32									m_Frame			= 0;
-	RenderPath								m_RenderPath	= RenderPath::Visibility;
+	RenderPath								m_RenderPath	= RenderPath::VisibilityDeferred;
 	RenderView								m_MainView{};
 
 	GraphicsDevice*							m_pDevice		= nullptr;
@@ -181,4 +181,6 @@ private:
 
 	// Skinning
 	Ref<PipelineState>						m_pSkinPSO;
+
+	Ref<PipelineState>						m_pSSRTracePSO;
 };

@@ -23,13 +23,16 @@ using float4x4 = Matrix;
 static const int MESHLET_MAX_TRIANGLES = 124;
 static const int MESHLET_MAX_VERTICES = 64;
 
+using BufferHandle = uint;
+using TextureHandle = uint;
+
 // Per material shader data
 struct MaterialData
 {
-	uint Diffuse;
-	uint Normal;
-	uint RoughnessMetalness;
-	uint Emissive;
+	TextureHandle Diffuse;
+	TextureHandle Normal;
+	TextureHandle RoughnessMetalness;
+	TextureHandle Emissive;
 	float4 BaseColorFactor;
 	float4 EmissiveFactor;
 	float MetalnessFactor;
@@ -40,7 +43,7 @@ struct MaterialData
 
 struct MeshData
 {
-	uint BufferIndex;
+	BufferHandle BufferIndex;
 	uint PositionsOffset;
 	uint UVsOffset;
 	uint NormalsOffset;
@@ -102,7 +105,7 @@ struct Light
 
 	uint ShadowMapIndex;
 	uint MatrixIndex;
-	uint MaskTexture;
+	TextureHandle MaskTexture;
 
 	// flags
 	uint IsEnabled : 1;
@@ -119,29 +122,46 @@ struct Light
 
 struct DDGIVolume
 {
-	float3 BoundsMin;
-	uint NumRaysPerProbe;
-	float3 ProbeSize;
-	uint MaxRaysPerProbe;
-	uint3 ProbeVolumeDimensions;
-	uint IrradianceIndex;
-	uint DepthIndex;
-	uint ProbeOffsetIndex;
-	uint ProbeStatesIndex;
-	uint pad0;
+	float3			BoundsMin;
+	uint			NumRaysPerProbe;
+	float3			ProbeSize;
+	uint			MaxRaysPerProbe;
+	uint3			ProbeVolumeDimensions;
+	TextureHandle	IrradianceIndex;
+	TextureHandle	DepthIndex;
+	uint			ProbeOffsetIndex;
+	uint			ProbeStatesIndex;
+	uint			pad0;
 };
 
 struct FogVolume
 {
-	float3 Location;
-	float3 Extents;
-	float3 Color;
-	float DensityChange;
-	float DensityBase;
+	float3	Location;
+	float3	Extents;
+	float3	Color;
+	float	DensityChange;
+	float	DensityBase;
+};
+
+
+struct DebugUniforms
+{
+	BufferHandle	DebugRenderDataIndex;
+	BufferHandle	FontDataIndex;
+	uint			FontSize;
+	uint			pad0;
+
+	uint2			MousePos;
+	uint			MousePressed : 1;
+	uint			MouseRelease : 1;
+	uint			MouseHold	 : 1;
+	uint			pad1;
 };
 
 struct ViewUniforms
 {
+	DebugUniforms Debug;
+
 	float4x4 WorldToView;
 	float4x4 ViewToWorld;
 	float4x4 ViewToClip;
@@ -185,10 +205,6 @@ struct ViewUniforms
 	uint SkyIndex;
 	uint DDGIVolumesIndex;
 	uint TLASIndex;
-
-	uint DebugRenderDataIndex;
-	uint FontDataIndex;
-	uint FontSize;
 };
 
 #ifdef __cplusplus
