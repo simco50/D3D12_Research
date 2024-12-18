@@ -123,7 +123,7 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 	{
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
 		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
-		//pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
+		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
 	};
 	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, frameHistory, 3, maxGPUEvents, maxGPUCopyEvents, maxGPUActiveCmdLists);
 
@@ -169,7 +169,7 @@ void App::Init_Internal()
 	m_Window.OnMouseInput		+= [](uint32 mouse, bool isDown)		{ Input::Instance().UpdateMouseKey(mouse, isDown); };
 	m_Window.OnMouseMove		+= [](uint32 x, uint32 y)				{ Input::Instance().UpdateMousePosition((float)x, (float)y); };
 	m_Window.OnMouseScroll		+= [](float wheel)						{ Input::Instance().UpdateMouseWheel(wheel); };
-	m_Window.OnResizeOrMove		+= [this](uint32 width, uint32 height)	{ OnWindowResized_Internal(width, height); };
+	m_Window.OnResizeOrMove		+= [this](uint32 width, uint32 height)	{ OnWindowResizeOrMove(width, height); };
 	m_Window.SetTitle("App");
 
 	Time::Reset();
@@ -238,7 +238,7 @@ void App::Shutdown_Internal()
 	Console::Shutdown();
 }
 
-void App::OnWindowResized_Internal(uint32 width, uint32 height)
+void App::OnWindowResizeOrMove(uint32 width, uint32 height)
 {
 	E_LOG(Info, "Window resized: %dx%d", width, height);
 	m_pSwapchain->OnResizeOrMove(width, height);

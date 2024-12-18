@@ -13,17 +13,17 @@ protected:
 	virtual void Init() {}
 	virtual void Update() {}
 	virtual void Shutdown() {}
-	virtual void OnWindowResized(uint32 width, uint32 height) {}
 
 protected:
 	Ref<GraphicsDevice> m_pDevice;
 	Ref<SwapChain> m_pSwapchain;
 	Window m_Window;
 
+private:
 	void Init_Internal();
 	void Update_Internal();
 	void Shutdown_Internal();
-	void OnWindowResized_Internal(uint32 width, uint32 height);
+	void OnWindowResizeOrMove(uint32 width, uint32 height);
 };
 
 #define DECLARE_MAIN(app_class) \

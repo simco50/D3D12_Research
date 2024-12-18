@@ -204,7 +204,7 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 				for (const ProfilerEvent& event : events)
 				{
 					// Skip events above the max depth
-					if (event.Depth >= (uint32)style.MaxDepth)
+					if (!event.IsValid() || event.Depth >= (uint32)style.MaxDepth)
 						continue;
 
 					outTrackDepth = ImMax(outTrackDepth, (uint32)event.Depth + 1);

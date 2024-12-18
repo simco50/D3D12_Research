@@ -12,7 +12,6 @@ public:
 	virtual void Init() override;
 	virtual void Update() override;
 	virtual void Shutdown() override;
-	virtual void OnWindowResized(uint32 width, uint32 height) {}
 
 private:
 	void SetupScene(const char* pFilePath);

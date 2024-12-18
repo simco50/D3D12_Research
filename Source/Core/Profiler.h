@@ -174,6 +174,7 @@ struct ProfilerEvent
 	uint64		TicksBegin	= 0;		// Begin CPU ticks
 	uint64		TicksEnd	= 0;		// End CPU ticks
 
+	bool IsValid() const { return TicksBegin != 0 && TicksEnd != 0; }
 	uint32 GetColor() const { return Color | (0xFF << 24); }
 };
 
@@ -354,8 +355,10 @@ private:
 	{
 		struct QueryRange
 		{
-			uint32 QueryIndexBegin	: 16;
-			uint32 QueryIndexEnd	: 16;
+			uint32 QueryIndexBegin	: 16 = 0xFFFF;
+			uint32 QueryIndexEnd	: 16 = 0xFFFF;
+
+			bool IsValid() const { return QueryIndexBegin != 0xFFFF && QueryIndexEnd != 0xFFFF; }
 		};
 		static_assert(sizeof(QueryRange) == sizeof(uint32));
 		Array<QueryRange>	Ranges;
@@ -371,10 +374,11 @@ private:
 		{
 			struct Query
 			{
-				uint32 QueryIndex	: 16;
-				uint32 RangeIndex	: 16;
+				uint32 QueryIndex	: 16 = InvalidRangeIndex;
+				uint32 RangeIndex	: 16 = InvalidRangeIndex;
 
-				static constexpr uint32 EndRangeIndex = 0xFFFF;
+				static constexpr uint32 EndRangeIndex = 0xFFFE;
+				static constexpr uint32 InvalidRangeIndex = 0xFFFF;
 			};
 			static_assert(sizeof(Query) == sizeof(uint32));
 			Array<Query> Queries;
