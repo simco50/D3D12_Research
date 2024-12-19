@@ -42,7 +42,7 @@ void GPUProfiler::Initialize(
 	uint32						maxNumActiveCommandLists)
 {
 	// Event indices are 16 bit, so max 2^16 events
-	gAssert(maxNumEvents + maxNumCopyEvents < (1 << 16));
+	gAssert(maxNumEvents + maxNumCopyEvents < (1u << 16u));
 
 	m_FrameLatency		= frameLatency;
 	m_EventHistorySize	= sampleHistory;
@@ -122,10 +122,10 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 
 	QueryData& queryData			= GetQueryData();
 	ProfilerEventData& eventData	= GetSampleFrame();
-	CommandListData::Data* pCmdData = m_CommandListData.Get(pCmd, true);
 
-	// Create a query
-	CommandListData::Data::Query& cmdListQuery = pCmdData->Queries.emplace_back();
+	// Register a query on the commandlist
+	CommandListState::CommandListQueries& commandListQueries = *m_CommandListData.Get(pCmd, true);
+	CommandListState::Query& cmdListQuery = commandListQueries.emplace_back();
 
 	// Allocate a query range. This stores a begin/end query index pair. (Also event index)
 	uint32 eventIndex = m_EventIndex.fetch_add(1);
@@ -144,11 +144,11 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 	range.QueryIndexBegin			= queryIndex;
 
 	// Allocate an event in the sample history
-	ProfilerEvent& event	= eventData.Events[eventIndex];
-	event.pName				= eventData.Allocator.String(pName);
-	event.pFilePath			= pFilePath;
-	event.LineNumber		= lineNumber;
-	event.Color				= color == 0 ? ColorFromString(pName, 0.0f, 0.5f) : color;
+	ProfilerEvent& event			= eventData.Events[eventIndex];
+	event.pName						= eventData.Allocator.String(pName);
+	event.pFilePath					= pFilePath;
+	event.LineNumber				= lineNumber;
+	event.Color						= color == 0 ? ColorFromString(pName, 0.0f, 0.5f) : color;
 }
 
 
@@ -164,10 +164,10 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 		return;
 
 	// Record a query in the commandlist
-	CommandListData::Data* pCmdData		= m_CommandListData.Get(pCmd, true);
-	CommandListData::Data::Query& query = pCmdData->Queries.emplace_back();
+	CommandListState::CommandListQueries& commandListQueries = *m_CommandListData.Get(pCmd, true);
+	CommandListState::Query& query		= commandListQueries.emplace_back();
 	query.QueryIndex					= GetHeap(pCmd->GetType()).RecordQuery(pCmd);
-	query.RangeIndex					= CommandListData::Data::Query::EndRangeIndex; // Range index to indicate this is an 'End' query
+	query.RangeIndex					= CommandListState::Query::EndRangeIndex; // Range index to indicate this is an 'End' query
 }
 
 void GPUProfiler::Tick()
@@ -175,12 +175,8 @@ void GPUProfiler::Tick()
 	if (!m_IsInitialized)
 		return;
 
-#if ENABLE_ASSERTS
 	for (ActiveEventStack& stack : m_QueueEventStack)
-	{
 		gAssert(stack.GetSize() == 0, "EventStack for the CommandQueue should be empty. Forgot to `End()` %d Events", stack.GetSize());
-	}
-#endif
 
 	// If the next frame is not finished resolving, wait for it here so the data can be read from before it's being reset
 	for (QueryHeap& heap : m_QueryHeaps)
@@ -281,22 +277,22 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 	if (it == m_QueueIndexMap.end())
 		return;
 
-	uint32 queueIndex = it->second;
-	ActiveEventStack& eventStack = m_QueueEventStack[queueIndex];
-	QueryData& queryData = GetQueryData();
-	ProfilerEventData& sampleFrame = GetSampleFrame();
+	uint32 queueIndex				= it->second;
+	ActiveEventStack& eventStack	= m_QueueEventStack[queueIndex];
+	QueryData& queryData			= GetQueryData();
+	ProfilerEventData& sampleFrame	= GetSampleFrame();
 
 	for (ID3D12CommandList* pCmd : commandLists)
 	{
-		CommandListData::Data* pEventData = m_CommandListData.Get(pCmd, false);
-		if (pEventData)
+		CommandListState::CommandListQueries* pCommandListQueries = m_CommandListData.Get(pCmd, false);
+		if (pCommandListQueries)
 		{
-			for (CommandListData::Data::Query& query : pEventData->Queries)
+			for (CommandListState::Query& query : *pCommandListQueries)
 			{
-				if (query.RangeIndex != CommandListData::Data::Query::EndRangeIndex)
+				if (query.RangeIndex != CommandListState::Query::EndRangeIndex)
 				{
 					eventStack.Push() = query.RangeIndex;
-					if (query.RangeIndex == CommandListData::Data::Query::InvalidRangeIndex)
+					if (query.RangeIndex == CommandListState::Query::InvalidRangeIndex)
 						continue;
 
 					ProfilerEvent& sampleEvent = sampleFrame.Events[query.RangeIndex];
@@ -306,7 +302,7 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 				{
 					gAssert(eventStack.GetSize() > 0, "Event Begin/End mismatch");
 					uint32 queryRangeIndex = eventStack.Pop();
-					if (queryRangeIndex == CommandListData::Data::Query::InvalidRangeIndex)
+					if (queryRangeIndex == CommandListState::Query::InvalidRangeIndex)
 						continue;
 
 					QueryData::QueryRange& queryRange = queryData.Ranges[queryRangeIndex];
@@ -317,7 +313,7 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 					gAssert(sampleEvent.QueueIndex == queueIndex, "Begin/EndEvent must be recorded on the same queue");
 				}
 			}
-			pEventData->Queries.clear();
+			pCommandListQueries->clear();
 		}
 	}
 }
@@ -412,8 +408,8 @@ void GPUProfiler::QueryHeap::Reset(uint32 frameIndex)
 
 void CPUProfiler::Initialize(uint32 historySize)
 {
-	m_pEventData = new ProfilerEventData[historySize];
-	m_HistorySize = historySize;
+	m_pEventData	= new ProfilerEventData[historySize];
+	m_HistorySize	= historySize;
 	m_IsInitialized = true;
 }
 
@@ -424,6 +420,7 @@ void CPUProfiler::Shutdown()
 }
 
 
+// Begin a new CPU event on the current thread
 void CPUProfiler::BeginEvent(const char* pName, uint32 color, const char* pFilePath, uint32 lineNumber)
 {
 	if (!m_IsInitialized)
@@ -435,6 +432,7 @@ void CPUProfiler::BeginEvent(const char* pName, uint32 color, const char* pFileP
 	if (m_Paused)
 		return;
 
+	// Record new event on TLS
 	TLS& tls = GetTLS();
 	tls.EventStack.Push()		= (uint32)tls.Events.size();
 
@@ -445,12 +443,11 @@ void CPUProfiler::BeginEvent(const char* pName, uint32 color, const char* pFileP
 	newEvent.pFilePath			= pFilePath;
 	newEvent.LineNumber			= lineNumber;
 	newEvent.Color				= color == 0 ? ColorFromString(pName, 0.5f, 1.0f) : color;
-
 	QueryPerformanceCounter((LARGE_INTEGER*)(&newEvent.TicksBegin));
 }
 
 
-// End and pop the last pushed event on the current thread
+// End the last pushed event on the current thread
 void CPUProfiler::EndEvent()
 {
 	if (!m_IsInitialized)
@@ -462,13 +459,17 @@ void CPUProfiler::EndEvent()
 	if (m_Paused)
 		return;
 
-	TLS& tls = GetTLS();
-	uint32 eventIndex = tls.EventStack.Pop();
-	ProfilerEvent& event = tls.Events[eventIndex];
+	// End and pop an event of the stack
+	TLS& tls				= GetTLS();
+
+	gAssert(tls.EventStack.GetSize() > 0, "Event mismatch. Called EndEvent more than BeginEvent");
+	uint32 eventIndex		= tls.EventStack.Pop();
+	ProfilerEvent& event	= tls.Events[eventIndex];
 	QueryPerformanceCounter((LARGE_INTEGER*)(&event.TicksEnd));
 }
 
 
+// Process the current frame and advance to the next
 void CPUProfiler::Tick()
 {
 	if (!m_IsInitialized)
@@ -478,47 +479,52 @@ void CPUProfiler::Tick()
 	if (m_Paused || !m_pEventData)
 		return;
 
+	// End the "CPU Frame" event (except on frame 0)
 	if (m_FrameIndex)
 		EndEvent();
 
-	// Check if all threads have ended all open sample events
-#if ENABLE_ASSERTS
-	for (auto& threadData : m_ThreadData)
-		gAssert(threadData.pTLS->EventStack.GetSize() == 0);
-#endif
+	std::scoped_lock lock(m_ThreadDataLock);
 
+	// Collect recorded events from all threads
 	ProfilerEventData& data = GetData();
 	data.NumEvents = (uint32)data.Events.size();
-	for (uint32 i = 0; i < m_HistorySize; ++i)
-		data.EventOffsetAndCountPerTrack.resize(m_ThreadData.size());
-
+	data.EventOffsetAndCountPerTrack.resize(m_ThreadData.size());
 	data.Events.clear();
 	for (uint32 threadIndex = 0; threadIndex < (uint32)m_ThreadData.size(); ++threadIndex)
 	{
 		ThreadData& threadData = m_ThreadData[threadIndex];
+
+		// Check if all threads have ended all open sample events
+		gAssert(threadData.pTLS->EventStack.GetSize() == 0, "Thread %s has not closed all events", threadData.Name);
+
+		// Copy all events for the thread to the common array
+		// Keep track of which range of events belong to what thread
 		data.EventOffsetAndCountPerTrack[threadIndex] = ProfilerEventData::OffsetAndSize((uint32)data.Events.size(), (uint32)threadData.pTLS->Events.size());
 		data.Events.insert(data.Events.end(), threadData.pTLS->Events.begin(), threadData.pTLS->Events.end());
 		threadData.pTLS->Events.clear();
 	}
 
+	// Advance the frame and reset its data
 	++m_FrameIndex;
 
 	ProfilerEventData& newData = GetData();
 	newData.Allocator.Reset();
 	newData.NumEvents = 0;
 
+	// Begin a "CPU Frame" event
 	BeginEvent("CPU Frame");
 }
 
 
+// Register a new thread
 void CPUProfiler::RegisterThread(const char* pName)
 {
 	TLS& tls = GetTLSUnsafe();
 	gAssert(!tls.IsInitialized);
-	tls.IsInitialized = true;
+	tls.IsInitialized	= true;
 	std::scoped_lock lock(m_ThreadDataLock);
-	tls.ThreadIndex = (uint32)m_ThreadData.size();
-	ThreadData& data = m_ThreadData.emplace_back();
+	tls.ThreadIndex		= (uint32)m_ThreadData.size();
+	ThreadData& data	= m_ThreadData.emplace_back();
 
 	// If the name is not provided, retrieve it using GetThreadDescription()
 	if (pName)
@@ -532,9 +538,9 @@ void CPUProfiler::RegisterThread(const char* pName)
 		size_t converted = 0;
 		gVerify(wcstombs_s(&converted, data.Name, ARRAYSIZE(data.Name), pDescription, ARRAYSIZE(data.Name)), == 0);
 	}
-	data.ThreadID = GetCurrentThreadId();
-	data.pTLS = &tls;
-	data.Index = (uint32)m_ThreadData.size() - 1;
+	data.ThreadID	= GetCurrentThreadId();
+	data.pTLS		= &tls;
+	data.Index		= (uint32)m_ThreadData.size() - 1;
 }
 
 #endif

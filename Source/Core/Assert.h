@@ -52,9 +52,9 @@ bool ReportAssertFmt(const char* pFilePath, int line, const char* pExpression, c
 
 #else
 
-#define gAssert(expression, ...)
+#define gAssert(expression, ...) do {} while(0);
 #define gVerify(expression, validation, ...) (expression)
-#define gAssertOnce(expression, ...)
+#define gAssertOnce(expression, ...) do {} while(0);
 
 #endif
 
