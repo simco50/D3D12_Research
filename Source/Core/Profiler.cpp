@@ -91,11 +91,6 @@ void GPUProfiler::Initialize(
 	}
 
 	m_pQueryData = new QueryData[frameLatency];
-	for (uint32 i = 0; i < frameLatency; ++i)
-	{
-		QueryData& queryData = m_pQueryData[i];
-		queryData.Ranges.resize(maxNumEvents + maxNumCopyEvents);
-	}
 
 	m_IsInitialized = true;
 }
@@ -120,28 +115,20 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 	if (m_IsPaused)
 		return;
 
-	QueryData& queryData			= GetQueryData();
 	ProfilerEventData& eventData	= GetSampleFrame();
 
 	// Register a query on the commandlist
-	CommandListState::CommandListQueries& commandListQueries = *m_CommandListData.Get(pCmd, true);
-	CommandListState::Query& cmdListQuery = commandListQueries.emplace_back();
+	CommandListState::CommandListQueries& commandListQueries	= *m_CommandListData.Get(pCmd, true);
+	CommandListState::Query& cmdListQuery						= commandListQueries.emplace_back();
 
 	// Allocate a query range. This stores a begin/end query index pair. (Also event index)
 	uint32 eventIndex = m_EventIndex.fetch_add(1);
 	if (eventIndex >= eventData.Events.size())
 		return;
 
-	// Record a timestamp query
-	uint32 queryIndex = GetHeap(pCmd->GetType()).RecordQuery(pCmd);
-
-	// Assign the query to the commandlist
-	cmdListQuery.QueryIndex			= queryIndex;
-	cmdListQuery.RangeIndex			= eventIndex;
-
-	// Allocate a query range in the query frame
-	QueryData::QueryRange& range	= queryData.Ranges[eventIndex];
-	range.QueryIndexBegin			= queryIndex;
+	// Record a timestamp query and assign to the commandlist
+	cmdListQuery.QueryIndex			= GetHeap(pCmd->GetType()).RecordQuery(pCmd);
+	cmdListQuery.EventIndex			= eventIndex;
 
 	// Allocate an event in the sample history
 	ProfilerEvent& event			= eventData.Events[eventIndex];
@@ -163,11 +150,11 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 	if (m_IsPaused)
 		return;
 
-	// Record a query in the commandlist
+	// Record a timestamp query and assign to the commandlist
 	CommandListState::CommandListQueries& commandListQueries = *m_CommandListData.Get(pCmd, true);
 	CommandListState::Query& query		= commandListQueries.emplace_back();
 	query.QueryIndex					= GetHeap(pCmd->GetType()).RecordQuery(pCmd);
-	query.RangeIndex					= CommandListState::Query::EndRangeIndex; // Range index to indicate this is an 'End' query
+	query.EventIndex					= CommandListState::Query::EndEventFlag; // Range index to indicate this is an 'End' query
 }
 
 void GPUProfiler::Tick()
@@ -196,13 +183,15 @@ void GPUProfiler::Tick()
 		if (!allHeapsReady)
 			break;
 
-		const QueryData& queryData		= GetQueryData(m_FrameToReadback);
+		std::scoped_lock lock(m_QueryRangeLock);
+
+		QueryData& queryData			= GetQueryData(m_FrameToReadback);
 		ProfilerEventData& eventData	= GetSampleFrame(m_FrameToReadback);
 
 		for (uint32 i = 0; i < eventData.NumEvents; ++i)
 		{
-			ProfilerEvent& event					= eventData.Events[i];
-			const QueryData::QueryRange& queryRange = queryData.Ranges[i];
+			ProfilerEvent& event				= eventData.Events[i];
+			QueryData::QueryPair& queryRange	= queryData.Pairs[i];
 			if (!queryRange.IsValid())
 			{
 				event.TicksBegin = 0;
@@ -216,6 +205,7 @@ void GPUProfiler::Tick()
 			// Convert to CPU ticks and assign to event
 			event.TicksBegin = ConvertToCPUTicks(queue, queries[queryRange.QueryIndexBegin]);
 			event.TicksEnd = ConvertToCPUTicks(queue, queries[queryRange.QueryIndexEnd]);
+
 		}
 
 		// Sort events by queue and make groups per queue for fast per-queue event iteration.
@@ -262,6 +252,9 @@ void GPUProfiler::Tick()
 		eventFrame.Allocator.Reset();
 		for (uint32 i = 0; i < (uint32)m_Queues.size(); ++i)
 			eventFrame.EventOffsetAndCountPerTrack[i] = {};
+
+		QueryData& queryData = GetQueryData();
+		queryData.Pairs.clear();
 	}
 }
 
@@ -277,10 +270,15 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 	if (it == m_QueueIndexMap.end())
 		return;
 
+	std::scoped_lock lock(m_QueryRangeLock);
+
 	uint32 queueIndex				= it->second;
 	ActiveEventStack& eventStack	= m_QueueEventStack[queueIndex];
 	QueryData& queryData			= GetQueryData();
 	ProfilerEventData& sampleFrame	= GetSampleFrame();
+
+	// Ensure there are as many query pairs as there are events
+	queryData.Pairs.resize(sampleFrame.Events.size());
 
 	for (ID3D12CommandList* pCmd : commandLists)
 	{
@@ -289,27 +287,32 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 		{
 			for (CommandListState::Query& query : *pCommandListQueries)
 			{
-				if (query.RangeIndex != CommandListState::Query::EndRangeIndex)
+				if (query.EventIndex != CommandListState::Query::EndEventFlag)
 				{
-					eventStack.Push() = query.RangeIndex;
-					if (query.RangeIndex == CommandListState::Query::InvalidRangeIndex)
+					// If it's a "BeginEvent", add to the stack
+					eventStack.Push() = query;
+					if (query.EventIndex == CommandListState::Query::InvalidEventFlag)
 						continue;
 
-					ProfilerEvent& sampleEvent = sampleFrame.Events[query.RangeIndex];
-					sampleEvent.QueueIndex = queueIndex;
+					ProfilerEvent& sampleEvent	= sampleFrame.Events[query.EventIndex];
+					sampleEvent.QueueIndex		= queueIndex;
 				}
 				else
 				{
+					// If it's an "EndEvent", pop top query from the stack and pair up
 					gAssert(eventStack.GetSize() > 0, "Event Begin/End mismatch");
-					uint32 queryRangeIndex = eventStack.Pop();
-					if (queryRangeIndex == CommandListState::Query::InvalidRangeIndex)
+					CommandListState::Query beginEventQuery = eventStack.Pop();
+					if (beginEventQuery.EventIndex == CommandListState::Query::InvalidEventFlag)
 						continue;
 
-					QueryData::QueryRange& queryRange = queryData.Ranges[queryRangeIndex];
-					ProfilerEvent& sampleEvent = sampleFrame.Events[queryRangeIndex];
+					// Pair up Begin/End query indices
+					QueryData::QueryPair& pair	= queryData.Pairs[beginEventQuery.EventIndex];
+					pair.QueryIndexBegin		= beginEventQuery.QueryIndex;
+					pair.QueryIndexEnd			= query.QueryIndex;
 
-					queryRange.QueryIndexEnd = query.QueryIndex;
-					sampleEvent.Depth = eventStack.GetSize();
+					// Compute event depth
+					ProfilerEvent& sampleEvent	= sampleFrame.Events[beginEventQuery.EventIndex];
+					sampleEvent.Depth			= eventStack.GetSize();
 					gAssert(sampleEvent.QueueIndex == queueIndex, "Begin/EndEvent must be recorded on the same queue");
 				}
 			}
@@ -321,8 +324,8 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 
 void GPUProfiler::QueryHeap::Initialize(ID3D12Device* pDevice, ID3D12CommandQueue* pResolveQueue, uint32 maxNumQueries, uint32 frameLatency)
 {
-	m_pResolveQueue = pResolveQueue;
-	m_FrameLatency = frameLatency;
+	m_pResolveQueue	= pResolveQueue;
+	m_FrameLatency	= frameLatency;
 	m_MaxNumQueries = maxNumQueries;
 
 	D3D12_COMMAND_QUEUE_DESC queueDesc = pResolveQueue->GetDesc();

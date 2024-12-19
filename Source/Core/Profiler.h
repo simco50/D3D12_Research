@@ -360,15 +360,15 @@ private:
 	// Data for a single frame of GPU queries. One for each frame latency
 	struct QueryData
 	{
-		struct QueryRange
+		struct QueryPair
 		{
 			uint32 QueryIndexBegin	: 16 = 0xFFFF;
 			uint32 QueryIndexEnd	: 16 = 0xFFFF;
 
 			bool IsValid() const { return QueryIndexBegin != 0xFFFF && QueryIndexEnd != 0xFFFF; }
 		};
-		static_assert(sizeof(QueryRange) == sizeof(uint32));
-		Array<QueryRange>	Ranges;
+		static_assert(sizeof(QueryPair) == sizeof(uint32));
+		Array<QueryPair>	Pairs;
 	};
 	QueryData& GetQueryData(uint32 frameIndex) { return m_pQueryData[frameIndex % m_FrameLatency]; }
 	QueryData& GetQueryData() { return GetQueryData(m_FrameIndex); }
@@ -379,11 +379,11 @@ private:
 	public:
 		struct Query
 		{
-			uint32 QueryIndex : 16 = InvalidRangeIndex;
-			uint32 RangeIndex : 16 = InvalidRangeIndex;
+			uint32 QueryIndex : 16 = InvalidEventFlag;
+			uint32 EventIndex : 16 = InvalidEventFlag;
 
-			static constexpr uint32 EndRangeIndex		= 0xFFFE;
-			static constexpr uint32 InvalidRangeIndex	= 0xFFFF;
+			static constexpr uint32 EndEventFlag		= 0xFFFE;
+			static constexpr uint32 InvalidEventFlag	= 0xFFFF;
 		};
 		static_assert(sizeof(Query) == sizeof(uint32));
 		using CommandListQueries = Array<Query>;
@@ -437,6 +437,10 @@ private:
 
 	QueryHeap& GetHeap(D3D12_COMMAND_LIST_TYPE type) { return type == D3D12_COMMAND_LIST_TYPE_COPY ? m_QueryHeaps[1] : m_QueryHeaps[0]; }
 
+	bool						m_IsInitialized			= false;
+	bool						m_IsPaused				= false;
+	bool						m_PauseQueued			= false;
+
 	CommandListState			m_CommandListData{};
 
 	ProfilerEventData*			m_pEventData		= nullptr;		///< Data containing all resulting events. 1 per frame history
@@ -449,16 +453,14 @@ private:
 	StaticArray<QueryHeap, 2>	m_QueryHeaps;						///< GPU Query Heaps
 	uint64						m_CPUTickFrequency = 0;				///< Tick frequency of CPU for QPC
 
+	std::mutex					m_QueryRangeLock;
+
 	static constexpr uint32 MAX_EVENT_DEPTH = 32;
-	using ActiveEventStack = FixedStack<uint32, MAX_EVENT_DEPTH>;
+	using ActiveEventStack = FixedStack<CommandListState::Query, MAX_EVENT_DEPTH>;
 	Array<ActiveEventStack>					m_QueueEventStack;		///< Stack of active events for each command queue
 	Array<QueueInfo>						m_Queues;				///< All registered queues
 	HashMap<ID3D12CommandQueue*, uint32>	m_QueueIndexMap;		///< Map from command queue to index
 	GPUProfilerCallbacks					m_EventCallback;
-
-	bool						m_IsInitialized			= false;
-	bool						m_IsPaused				= false;
-	bool						m_PauseQueued			= false;
 };
 
 
