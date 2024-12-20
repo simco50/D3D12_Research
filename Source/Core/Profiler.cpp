@@ -47,7 +47,9 @@ void GPUProfiler::Initialize(
 	m_FrameLatency		= frameLatency;
 	m_EventHistorySize	= sampleHistory;
 
-	m_CommandListData.Setup(maxNumActiveCommandLists);
+	InitializeSRWLock(&m_CommandListMapLock);
+	m_CommandListData.resize(maxNumActiveCommandLists);
+
 	m_QueueEventStack.resize(queues.GetSize());
 	for (uint32 queueIndex = 0; queueIndex < queues.GetSize(); ++queueIndex)
 	{
@@ -118,8 +120,8 @@ void GPUProfiler::BeginEvent(ID3D12GraphicsCommandList* pCmd, const char* pName,
 	ProfilerEventData& eventData	= GetSampleFrame();
 
 	// Register a query on the commandlist
-	CommandListState::CommandListQueries& commandListQueries	= *m_CommandListData.Get(pCmd, true);
-	CommandListState::Query& cmdListQuery						= commandListQueries.emplace_back();
+	CommandListState& state = *GetState(pCmd, true);
+	CommandListState::Query& cmdListQuery = state.Queries.emplace_back();
 
 	// Allocate a query range. This stores a begin/end query index pair. (Also event index)
 	uint32 eventIndex = m_EventIndex.fetch_add(1);
@@ -151,10 +153,10 @@ void GPUProfiler::EndEvent(ID3D12GraphicsCommandList* pCmd)
 		return;
 
 	// Record a timestamp query and assign to the commandlist
-	CommandListState::CommandListQueries& commandListQueries = *m_CommandListData.Get(pCmd, true);
-	CommandListState::Query& query		= commandListQueries.emplace_back();
-	query.QueryIndex					= GetHeap(pCmd->GetType()).RecordQuery(pCmd);
-	query.EventIndex					= CommandListState::Query::EndEventFlag; // Range index to indicate this is an 'End' query
+	CommandListState& state			= *GetState(pCmd, true);
+	CommandListState::Query& query	= state.Queries.emplace_back();
+	query.QueryIndex				= GetHeap(pCmd->GetType()).RecordQuery(pCmd);
+	query.EventIndex				= CommandListState::Query::EndEventFlag; // Range index to indicate this is an 'End' query
 }
 
 void GPUProfiler::Tick()
@@ -236,7 +238,11 @@ void GPUProfiler::Tick()
 	if (m_IsPaused)
 		return;
 
-	m_CommandListData.Reset();
+#if ENABLE_ASSERTS
+	for (const CommandListState& state : m_CommandListData)
+		gAssert(state.Queries.empty(), "The Queries inside the commandlist is not empty. This is because ExecuteCommandLists was not called with this commandlist.");
+#endif
+	m_CommandListMap.clear();
 
 	for(QueryHeap& heap : m_QueryHeaps)
 		heap.Resolve(m_FrameIndex);
@@ -282,10 +288,10 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 
 	for (ID3D12CommandList* pCmd : commandLists)
 	{
-		CommandListState::CommandListQueries* pCommandListQueries = m_CommandListData.Get(pCmd, false);
+		CommandListState* pCommandListQueries = GetState(pCmd, false);
 		if (pCommandListQueries)
 		{
-			for (CommandListState::Query& query : *pCommandListQueries)
+			for (CommandListState::Query& query : pCommandListQueries->Queries)
 			{
 				if (query.EventIndex != CommandListState::Query::EndEventFlag)
 				{
@@ -294,8 +300,8 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 					if (query.EventIndex == CommandListState::Query::InvalidEventFlag)
 						continue;
 
-					ProfilerEvent& sampleEvent	= sampleFrame.Events[query.EventIndex];
-					sampleEvent.QueueIndex		= queueIndex;
+					ProfilerEvent& sampleEvent = sampleFrame.Events[query.EventIndex];
+					sampleEvent.QueueIndex = queueIndex;
 				}
 				else
 				{
@@ -316,9 +322,35 @@ void GPUProfiler::ExecuteCommandLists(ID3D12CommandQueue* pQueue, Span<ID3D12Com
 					gAssert(sampleEvent.QueueIndex == queueIndex, "Begin/EndEvent must be recorded on the same queue");
 				}
 			}
-			pCommandListQueries->clear();
+			pCommandListQueries->Queries.clear();
 		}
 	}
+}
+
+
+GPUProfiler::CommandListState* GPUProfiler::GetState(ID3D12CommandList* pCmd, bool createIfNotFound)
+{
+	// See if it's already tracked
+	AcquireSRWLockShared(&m_CommandListMapLock);
+	auto it = m_CommandListMap.find(pCmd);
+	uint32 index = it != m_CommandListMap.end() ? it->second : 0xFFFFFFFF;
+	ReleaseSRWLockShared(&m_CommandListMapLock);
+
+	if (index != 0xFFFFFFFF)
+		return &m_CommandListData[index];
+
+	if (createIfNotFound)
+	{
+		// If not, register new commandlist
+		AcquireSRWLockExclusive(&m_CommandListMapLock);
+		index = (uint32)m_CommandListMap.size();
+		gAssert((uint32)index < m_CommandListData.size());
+		m_CommandListMap[pCmd] = index;
+		ReleaseSRWLockExclusive(&m_CommandListMapLock);
+
+		return &m_CommandListData[index];
+	}
+	return nullptr;
 }
 
 

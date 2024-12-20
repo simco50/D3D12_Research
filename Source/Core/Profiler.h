@@ -295,12 +295,12 @@ private:
 	struct QueryHeap
 	{
 	public:
-		void Initialize(ID3D12Device* pDevice, ID3D12CommandQueue* pResolveQueue, uint32 maxNumQueries, uint32 frameLatency);
-		void Shutdown();
+		void			Initialize(ID3D12Device* pDevice, ID3D12CommandQueue* pResolveQueue, uint32 maxNumQueries, uint32 frameLatency);
+		void			Shutdown();
 
-		uint32 RecordQuery(ID3D12GraphicsCommandList* pCmd);
-		uint32 Resolve(uint32 frameIndex);
-		void Reset(uint32 frameIndex);
+		uint32			RecordQuery(ID3D12GraphicsCommandList* pCmd);
+		uint32			Resolve(uint32 frameIndex);
+		void			Reset(uint32 frameIndex);
 
 		Span<const uint64> GetQueryData(uint32 frameIndex) const
 		{
@@ -335,8 +335,8 @@ private:
 			}
 		}
 
-		bool IsInitialized() const			{ return m_pQueryHeap != nullptr; }
-		ID3D12QueryHeap* GetHeap() const	{ return m_pQueryHeap; }
+		bool				IsInitialized() const	{ return m_pQueryHeap != nullptr; }
+		ID3D12QueryHeap*	GetHeap() const			{ return m_pQueryHeap; }
 
 	private:
 		Array<ID3D12CommandAllocator*>			m_CommandAllocators;				///< CommandAlloctors to resolve queries. 1 per frame
@@ -353,9 +353,9 @@ private:
 		uint64									m_LastCompletedFence	= 0;		///< Last finish fence value
 	};
 
-	const ProfilerEventData& GetSampleFrame(uint32 frameIndex) const { return m_pEventData[frameIndex % m_EventHistorySize]; }
-	ProfilerEventData& GetSampleFrame(uint32 frameIndex) { return m_pEventData[frameIndex % m_EventHistorySize]; }
-	ProfilerEventData& GetSampleFrame() { return GetSampleFrame(m_FrameIndex); }
+	const ProfilerEventData&	GetSampleFrame(uint32 frameIndex) const		{ return m_pEventData[frameIndex % m_EventHistorySize]; }
+	ProfilerEventData&			GetSampleFrame(uint32 frameIndex)			{ return m_pEventData[frameIndex % m_EventHistorySize]; }
+	ProfilerEventData&			GetSampleFrame()							{ return GetSampleFrame(m_FrameIndex); }
 
 	// Data for a single frame of GPU queries. One for each frame latency
 	struct QueryData
@@ -373,61 +373,22 @@ private:
 	QueryData& GetQueryData(uint32 frameIndex) { return m_pQueryData[frameIndex % m_FrameLatency]; }
 	QueryData& GetQueryData() { return GetQueryData(m_FrameIndex); }
 
-	// Query data for each commandlist
-	class CommandListState
+	// Contains the state for a tracked commandlist
+	struct CommandListState
 	{
-	public:
 		struct Query
 		{
-			uint32 QueryIndex : 16 = InvalidEventFlag;
-			uint32 EventIndex : 16 = InvalidEventFlag;
+			uint32 QueryIndex : 16 = InvalidEventFlag;		///< The index into the query heap
+			uint32 EventIndex : 16 = InvalidEventFlag;		///< The ProfilerEvent index. 0xFFFE is it is an "EndEvent"
 
 			static constexpr uint32 EndEventFlag		= 0xFFFE;
 			static constexpr uint32 InvalidEventFlag	= 0xFFFF;
 		};
 		static_assert(sizeof(Query) == sizeof(uint32));
-		using CommandListQueries = Array<Query>;
-
-		void Setup(uint32 maxCommandLists)
-		{
-			InitializeSRWLock(&m_CommandListMapLock);
-			m_CommandListData.resize(maxCommandLists);
-		}
-
-		CommandListQueries* Get(const ID3D12CommandList* pCmd, bool createIfNotFound)
-		{
-			static constexpr uint32 InvalidIndex = 0xFFFFFFFF;
-			AcquireSRWLockShared(&m_CommandListMapLock);
-			auto it = m_CommandListMap.find(pCmd);
-			uint32 index = InvalidIndex;
-			if (it != m_CommandListMap.end())
-				index = it->second;
-			ReleaseSRWLockShared(&m_CommandListMapLock);
-			if (createIfNotFound && index == InvalidIndex)
-			{
-				AcquireSRWLockExclusive(&m_CommandListMapLock);
-				index = (uint32)m_CommandListMap.size();
-				gAssert((uint32)index < m_CommandListData.size());
-				m_CommandListMap[pCmd] = index;
-				ReleaseSRWLockExclusive(&m_CommandListMapLock);
-			}
-			return index != InvalidIndex ? &m_CommandListData[index] : nullptr;
-		}
-
-		void Reset()
-		{
-#if ENABLE_ASSERTS
-			for (CommandListQueries& queries : m_CommandListData)
-				gAssert(queries.empty(), "The Queries inside the commandlist is not empty. This is because ExecuteCommandLists was not called with this commandlist.");
-#endif
-			m_CommandListMap.clear();
-		}
-
-	private:
-		SRWLOCK										m_CommandListMapLock{};	///< Lock for accessing hashmap
-		HashMap<const ID3D12CommandList*, uint32>	m_CommandListMap;		///< Maps commandlist to index
-		Array<CommandListQueries>					m_CommandListData;		///< Contains queries for all commandlists
+		Array<Query> Queries;
 	};
+
+	CommandListState* GetState(ID3D12CommandList* pCmd, bool createIfNotFound);
 
 	uint64 ConvertToCPUTicks(const QueueInfo& queue, uint64 gpuTicks) const
 	{
@@ -437,29 +398,30 @@ private:
 
 	QueryHeap& GetHeap(D3D12_COMMAND_LIST_TYPE type) { return type == D3D12_COMMAND_LIST_TYPE_COPY ? m_QueryHeaps[1] : m_QueryHeaps[0]; }
 
-	bool						m_IsInitialized			= false;
-	bool						m_IsPaused				= false;
-	bool						m_PauseQueued			= false;
+	bool									m_IsInitialized		= false;
+	bool									m_IsPaused			= false;
+	bool									m_PauseQueued		= false;
 
-	CommandListState			m_CommandListData{};
+	ProfilerEventData*						m_pEventData		= nullptr;	///< Data containing all resulting events. 1 per frame history
+	uint32									m_EventHistorySize	= 0;		///< Number of frames to keep track of
+	std::atomic<uint32>						m_EventIndex		= 0;		///< Current event index
+	QueryData*								m_pQueryData		= nullptr;	///< Data containing all intermediate query event data. 1 per frame latency
+	uint32									m_FrameLatency		= 0;		///< Max number of in-flight GPU frames
+	uint32									m_FrameToReadback	= 0;		///< Next frame to readback from
+	uint32									m_FrameIndex		= 0;		///< Current frame index
+	StaticArray<QueryHeap, 2>				m_QueryHeaps;					///< GPU Query Heaps
+	uint64									m_CPUTickFrequency = 0;			///< Tick frequency of CPU for QPC
+	std::mutex								m_QueryRangeLock;
 
-	ProfilerEventData*			m_pEventData		= nullptr;		///< Data containing all resulting events. 1 per frame history
-	uint32						m_EventHistorySize	= 0;			///< Number of frames to keep track of
-	std::atomic<uint32>			m_EventIndex		= 0;			///< Current event index
-	QueryData*					m_pQueryData		= nullptr;		///< Data containing all intermediate query event data. 1 per frame latency
-	uint32						m_FrameLatency		= 0;			///< Max number of in-flight GPU frames
-	uint32						m_FrameToReadback	= 0;			///< Next frame to readback from
-	uint32						m_FrameIndex		= 0;			///< Current frame index
-	StaticArray<QueryHeap, 2>	m_QueryHeaps;						///< GPU Query Heaps
-	uint64						m_CPUTickFrequency = 0;				///< Tick frequency of CPU for QPC
-
-	std::mutex					m_QueryRangeLock;
+	SRWLOCK									m_CommandListMapLock{};			///< Lock for accessing commandlist state hashmap
+	HashMap<ID3D12CommandList*, uint32>		m_CommandListMap;				///< Maps commandlist to index
+	Array<CommandListState>					m_CommandListData;				///< Contains state for all commandlists
 
 	static constexpr uint32 MAX_EVENT_DEPTH = 32;
 	using ActiveEventStack = FixedStack<CommandListState::Query, MAX_EVENT_DEPTH>;
-	Array<ActiveEventStack>					m_QueueEventStack;		///< Stack of active events for each command queue
-	Array<QueueInfo>						m_Queues;				///< All registered queues
-	HashMap<ID3D12CommandQueue*, uint32>	m_QueueIndexMap;		///< Map from command queue to index
+	Array<ActiveEventStack>					m_QueueEventStack;				///< Stack of active events for each command queue
+	Array<QueueInfo>						m_Queues;						///< All registered queues
+	HashMap<ID3D12CommandQueue*, uint32>	m_QueueIndexMap;				///< Map from command queue to index
 	GPUProfilerCallbacks					m_EventCallback;
 };
 
