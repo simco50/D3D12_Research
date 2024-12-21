@@ -317,55 +317,48 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 	{
 		PROFILE_CPU_SCOPE("Pass Grouping");
 
-		if (options.Jobify)
+		// Group passes in jobs
+		const uint32 maxPassesPerJob = options.Jobify ? options.CommandlistGroupSize : 0xFFFFFFFF;
+
+		// Duplicate profile events that cross the border of jobs to retain event hierarchy
+		RGPassID firstPass;
+		uint32 currentGroupSize = 0;
+		Array<RGEventID> activeEvents;
+		RGPass* pLastPass = nullptr;
+
+		for (uint32 passIndex = 0; passIndex < (uint32)m_Passes.size(); ++passIndex)
 		{
-			// Group passes in jobs
-			const uint32 maxPassesPerJob = options.CommandlistGroupSize;
-
-			// Duplicate profile events that cross the border of jobs to retain event hierarchy
-			RGPassID firstPass;
-			uint32 currentGroupSize = 0;
-			Array<RGEventID> activeEvents;
-			RGPass* pLastPass = nullptr;
-
-			for (uint32 passIndex = 0; passIndex < (uint32)m_Passes.size(); ++passIndex)
+			RGPass* pPass = m_Passes[passIndex];
+			if (!pPass->IsCulled)
 			{
-				RGPass* pPass = m_Passes[passIndex];
-				if (!pPass->IsCulled)
+				pPass->CPUEventsToStart = pPass->EventsToStart;
+				pPass->NumCPUEventsToEnd = pPass->NumEventsToEnd;
+
+				for (RGEventID event : pPass->CPUEventsToStart)
+					activeEvents.push_back(event);
+
+				if (currentGroupSize == 0)
 				{
-					pPass->CPUEventsToStart = pPass->EventsToStart;
-					pPass->NumCPUEventsToEnd = pPass->NumEventsToEnd;
-
-					for (RGEventID event : pPass->CPUEventsToStart)
-						activeEvents.push_back(event);
-
-					if (currentGroupSize == 0)
-					{
-						firstPass = pPass->ID;
-						pPass->CPUEventsToStart = activeEvents;
-					}
-
-					for (uint32 i = 0; i < pPass->NumCPUEventsToEnd; ++i)
-						activeEvents.pop_back();
-
-					++currentGroupSize;
-					if (currentGroupSize >= maxPassesPerJob)
-					{
-						pPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
-						m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_Passes[firstPass.GetIndex()], passIndex - firstPass.GetIndex() + 1));
-						currentGroupSize = 0;
-					}
-					pLastPass = pPass;
+					firstPass = pPass->ID;
+					pPass->CPUEventsToStart = activeEvents;
 				}
+
+				for (uint32 i = 0; i < pPass->NumCPUEventsToEnd; ++i)
+					activeEvents.pop_back();
+
+				++currentGroupSize;
+				if (currentGroupSize >= maxPassesPerJob)
+				{
+					pPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
+					m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_Passes[firstPass.GetIndex()], passIndex - firstPass.GetIndex() + 1));
+					currentGroupSize = 0;
+				}
+				pLastPass = pPass;
 			}
-			if (currentGroupSize > 0)
-				m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_Passes[firstPass.GetIndex()], (uint32)m_Passes.size() - firstPass.GetIndex()));
-			pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
 		}
-		else
-		{
-			m_PassExecuteGroups.push_back(Span<const RGPass*>(m_Passes.data(), (uint32)m_Passes.size()));
-		}
+		if (currentGroupSize > 0)
+			m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_Passes[firstPass.GetIndex()], (uint32)m_Passes.size() - firstPass.GetIndex()));
+		pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
 	}
 
 	m_IsCompiled = true;
