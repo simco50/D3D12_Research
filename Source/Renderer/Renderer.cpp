@@ -149,6 +149,383 @@ void Renderer::Shutdown()
 	DebugRenderer::Get()->Shutdown();
 }
 
+
+static D3D12_RESOURCE_ALLOCATION_INFO GetResourceAllocationInfo(GraphicsDevice* pDevice, const RGResource* pResource)
+{
+	D3D12_RESOURCE_DESC resourceDesc;
+
+	if (pResource->GetType() == RGResourceType::Texture)
+	{
+		const RGTexture* pTexture = (RGTexture*)pResource;
+		const TextureDesc& desc = pTexture->GetDesc();
+
+		auto GetResourceDesc = [](const TextureDesc& textureDesc)
+			{
+				DXGI_FORMAT format = D3D::ConvertFormat(textureDesc.Format);
+
+				D3D12_RESOURCE_DESC desc{};
+				switch (textureDesc.Type)
+				{
+				case TextureType::Texture1D:
+				case TextureType::Texture1DArray:
+					desc = CD3DX12_RESOURCE_DESC::Tex1D(format, textureDesc.Width, (uint16)textureDesc.ArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+					break;
+				case TextureType::Texture2D:
+				case TextureType::Texture2DArray:
+					desc = CD3DX12_RESOURCE_DESC::Tex2D(format, textureDesc.Width, textureDesc.Height, (uint16)textureDesc.ArraySize, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+					break;
+				case TextureType::TextureCube:
+				case TextureType::TextureCubeArray:
+					desc = CD3DX12_RESOURCE_DESC::Tex2D(format, textureDesc.Width, textureDesc.Height, (uint16)textureDesc.ArraySize * 6, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+					break;
+				case TextureType::Texture3D:
+					desc = CD3DX12_RESOURCE_DESC::Tex3D(format, textureDesc.Width, textureDesc.Height, (uint16)textureDesc.Depth, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
+					break;
+				default:
+					gUnreachable();
+					break;
+				}
+
+				if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::UnorderedAccess))
+				{
+					desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+				}
+				if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::RenderTarget))
+				{
+					desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+				}
+				if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::DepthStencil))
+				{
+					desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+					if (!EnumHasAnyFlags(textureDesc.Flags, TextureFlag::ShaderResource))
+					{
+						//I think this can be a significant optimization on some devices because then the depth buffer can never be (de)compressed
+						desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+					}
+				}
+				return desc;
+			};
+
+		resourceDesc = GetResourceDesc(desc);
+	}
+	else
+	{
+		const RGBuffer* pBuffer = (RGBuffer*)pResource;
+		const BufferDesc desc = pBuffer->GetDesc();
+		resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(desc.Size);
+	}
+
+	return pDevice->GetDevice()->GetResourceAllocationInfo(0, 1, &resourceDesc);
+}
+
+
+void Renderer::DrawTest(Span<RGResource*> graphResources)
+{
+	PROFILE_CPU_SCOPE("Aliasing Experiment");
+
+	struct RenderResource
+	{
+		std::string Name;
+		int Size;
+		int Alignment;
+		URange Lifetime;
+		uint64 Offset = 0xFFFFFFFF;
+		int ID;
+		DeviceResource* pResource;
+
+		ImColor GetColor() const
+		{
+			srand(ID);
+			return ImColor(
+				Math::RandomRange(0.0f, 1.0f),
+				Math::RandomRange(0.0f, 1.0f),
+				Math::RandomRange(0.0f, 1.0f), 1.0f);
+		}
+	};
+
+	static bool liveCapture = false;
+	static bool preferHeaps = true;
+	static std::vector<RenderResource> resourcesActual;
+	if (liveCapture)
+	{
+		resourcesActual.clear();
+		for (RGResource* pResource : graphResources)
+		{
+			if (pResource->IsImported || pResource->IsExported || !pResource->GetPhysicalUnsafe())
+				continue;
+
+			RenderResource& resource = resourcesActual.emplace_back();
+			resource.Lifetime = pResource->GetLifetime();
+			resource.ID = pResource->ID.GetIndex();
+			resource.Name = pResource->GetName();
+			resource.pResource = pResource->GetPhysicalUnsafe();
+
+			D3D12_RESOURCE_ALLOCATION_INFO allocInfo = GetResourceAllocationInfo(m_pDevice, pResource);
+
+			resource.Size = (int)allocInfo.SizeInBytes;
+			resource.Alignment = (int)allocInfo.Alignment;
+		}
+	}
+
+	uint32 lastPassID = 0;
+	for (RenderResource& resource : resourcesActual)
+		lastPassID = Math::Max(resource.Lifetime.End, lastPassID);
+
+	std::vector<RenderResource*> resources;
+	for (RenderResource& resource : resourcesActual)
+		resources.push_back(&resource);
+
+	struct Heap
+	{
+		std::vector<RenderResource*> Allocations;
+		uint64 Size;
+	};
+	std::vector<Heap> heaps;
+	if (!preferHeaps)
+		heaps.push_back({ {}, 0 });
+
+	// Sort resources largest to smallest, then largest alignment to smallest.
+	std::sort(resources.begin(), resources.end(), [](RenderResource* pA, RenderResource* pB)
+		{
+			if (pA->Size == pB->Size)
+				return pA->Alignment > pB->Alignment;
+			return pA->Size > pB->Size;
+		});
+
+	for (RenderResource* pResource : resources)
+	{
+		if (pResource->Size == 0)
+			break;
+
+		Heap* pHeap = nullptr;
+		for (auto it = heaps.rbegin(); it != heaps.rend(); ++it)
+		{
+			Heap& heap = *it;
+			if (pResource->Size <= heap.Size)
+			{
+				struct HeapOffset
+				{
+					uint64 Offset;
+					bool IsFreeBegin;
+				};
+				std::vector<HeapOffset> free_ranges;
+				free_ranges.push_back({ 0, true });
+				for (RenderResource* existing : heap.Allocations)
+				{
+					if (existing->Lifetime.Overlaps(pResource->Lifetime))
+					{
+						free_ranges.push_back({ existing->Offset, false });
+						free_ranges.push_back({ existing->Offset + existing->Size, true });
+					}
+				}
+				free_ranges.push_back({ (uint64)heap.Size, false });
+				std::sort(free_ranges.begin(), free_ranges.end(), [](const HeapOffset& a, const HeapOffset& b) { return a.Offset < b.Offset; });
+
+				uint64 lastBeginOffset = 0;
+				uint32 freeRangeCounter = 0;
+				for (int i = 0; i < free_ranges.size(); ++i)
+				{
+					if (free_ranges[i].IsFreeBegin)
+					{
+						lastBeginOffset = free_ranges[i].Offset;
+						++freeRangeCounter;
+					}
+					else
+					{
+						--freeRangeCounter;
+						if (freeRangeCounter == 0)
+						{
+							uint64 offset = Math::AlignUp<uint64>(lastBeginOffset, pResource->Alignment);
+							if (offset + pResource->Size <= free_ranges[i].Offset)
+							{
+								pResource->Offset = offset;
+								pHeap = &heap;
+								break;
+							}
+						}
+					}
+				}
+				if (pHeap)
+					break;
+			}
+		}
+
+		if (!pHeap)
+		{
+			if (preferHeaps)
+			{
+				Heap& heap = heaps.emplace_back();
+				heap.Size = pResource->Size;
+				pResource->Offset = 0;
+				pHeap = &heap;
+			}
+			else
+			{
+				Heap& heap = heaps.back();
+				pResource->Offset = heap.Size;
+				heap.Size += pResource->Size;
+				pHeap = &heap;
+			}
+		}
+
+		pHeap->Allocations.push_back(pResource);
+	}
+
+	// Show allocation sizes and heap layout
+	if (ImGui::Begin("Heap Layout"))
+	{
+		uint64 totalResourcesSize = 0;
+		for (RenderResource& resource : resourcesActual)
+			totalResourcesSize += resource.Size;
+
+		uint64 totalHeapSize = 0;
+		for (Heap& heap : heaps)
+			totalHeapSize += heap.Size;
+
+		if (ImGui::BeginTable("Size Stats", 4))
+		{
+			ImGui::TableHeader("Header");
+			ImGui::TableSetupColumn("Mode");
+			ImGui::TableSetupColumn("Unaliased");
+			ImGui::TableSetupColumn("Aliased");
+			ImGui::TableSetupColumn("Difference");
+			ImGui::TableHeadersRow();
+
+			ImGui::TableNextColumn();
+			ImGui::Text("No Aliasing");
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(0).c_str());
+
+			ImGui::TableNextColumn();
+			ImGui::Text("Aliasing");
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(totalResourcesSize).c_str());
+			ImGui::TableNextColumn();
+			ImGui::Text(Math::PrettyPrintDataSize(totalHeapSize).c_str());
+			ImGui::TableNextColumn();
+			if (totalResourcesSize > totalHeapSize)
+				ImGui::Text("%s", Math::PrettyPrintDataSize(totalResourcesSize - totalHeapSize).c_str());
+			else
+				ImGui::Text("+%s", Math::PrettyPrintDataSize(totalHeapSize - totalResourcesSize).c_str());
+			ImGui::EndTable();
+		}
+
+		float width = ImGui::GetContentRegionAvail().x;
+		float widthScale = width / lastPassID;
+		for (Heap& heap : heaps)
+		{
+			ImGui::Text("Heap (Size: %s - Allocations: %d)", Math::PrettyPrintDataSize(heap.Size).c_str(), heap.Allocations.size());
+			ImDrawList* pDraw = ImGui::GetWindowDrawList();
+
+			ImVec2 cursor = ImGui::GetCursorScreenPos();
+
+			float heapHeight = preferHeaps ? log2f((float)heap.Size + 1) : ImGui::GetContentRegionAvail().y;
+			auto GetBarHeight = [&](uint64 size) { return (float)size / heap.Size * heapHeight; };
+
+			pDraw->AddRectFilled(cursor, cursor + ImVec2(widthScale * (lastPassID + 1), heapHeight), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+			for (RenderResource* resource : heap.Allocations)
+			{
+				ImRect barRect(
+					cursor + ImVec2(widthScale * resource->Lifetime.Begin, GetBarHeight(resource->Offset)),
+					cursor + ImVec2(widthScale * (resource->Lifetime.End + 1), GetBarHeight(resource->Size + resource->Offset))
+				);
+
+				ImGui::ItemAdd(barRect, resource->ID);
+				ImColor color = resource->GetColor();
+				if (ImGui::IsItemHovered() && ImGui::BeginTooltip())
+				{
+					color.Value.x *= 1.5f;
+					color.Value.y *= 1.5f;
+					color.Value.z *= 1.5f;
+					ImGui::Text("Name: %s", resource->Name.c_str());
+					ImGui::Text("Size: %s", Math::PrettyPrintDataSize(resource->Size).c_str());
+					ImGui::EndTooltip();
+				}
+
+				pDraw->AddRectFilled(barRect.Min, barRect.Max, ImColor(0.5f, 0.5f, 0.5f));
+				pDraw->AddRectFilled(barRect.Min + ImVec2(1, 1), barRect.Max - ImVec2(1, 1), color);
+			}
+			ImGui::Dummy(ImVec2(0, heapHeight));
+		}
+	}
+
+	ImGui::End();
+
+	// Show data of all captured resources
+	if (ImGui::Begin("Resource Table"))
+	{
+		int remove = -1;
+		int duplicate = -1;
+		ImGui::Checkbox("Live Capture", &liveCapture);
+		ImGui::SameLine();
+		ImGui::Checkbox("Prefer heaps", &preferHeaps);
+		if (ImGui::Button("Clear All"))
+			resourcesActual.clear();
+
+		if (ImGui::BeginTable("TestTable", 5))
+		{
+			ImGui::TableHeader("Header");
+			ImGui::TableSetupColumn("Color");
+			ImGui::TableSetupColumn("Size");
+			ImGui::TableSetupColumn("Alignment");
+			ImGui::TableSetupColumn("Lifetime");
+			ImGui::TableSetupColumn("Remove?");
+			ImGui::TableHeadersRow();
+			int idx = 0;
+			for (RenderResource& resource : resourcesActual)
+			{
+				ImGui::PushID(resource.ID);
+				ImGui::TableNextColumn();
+				ImGui::ColorButton("##color", resource.GetColor());
+				ImGui::SameLine();
+				ImGui::Text("%s", resource.Name.c_str());
+				ImGui::TableNextColumn();
+				ImGui::SliderInt("##size", &resource.Size, 0, Math::MegaBytesToBytes * 10);
+				ImGui::TableNextColumn();
+				ImGui::SliderInt("##alignment", &resource.Alignment, 16, Math::KilobytesToBytes * 64);
+				ImGui::TableNextColumn();
+				IRange lifetime(resource.Lifetime.Begin, resource.Lifetime.End);
+				ImGui::DragIntRange2("##lifetime", &lifetime.Begin, &lifetime.End, 1.0f, 0, lastPassID);
+				resource.Lifetime = URange(lifetime.Begin, lifetime.End);
+				ImGui::TableNextColumn();
+				if (ImGui::Button("Remove"))
+					remove = idx;
+				ImGui::SameLine();
+				if (ImGui::Button("Duplicate"))
+					duplicate = idx;
+				++idx;
+				ImGui::PopID();
+			}
+			ImGui::EndTable();
+		}
+
+		static int ID = 0xFFFF;
+		if (ImGui::Button("Add resource"))
+		{
+			resourcesActual.push_back({ "New Resource", 100000028, 1, {0,100}, 0, ID++ });
+		}
+
+		if (remove >= 0)
+		{
+			std::swap(resourcesActual[remove], resourcesActual[resourcesActual.size() - 1]);
+			resourcesActual.erase(resourcesActual.begin() + remove);
+		}
+		if (duplicate >= 0)
+		{
+			RenderResource newResource = resourcesActual[duplicate];
+			newResource.ID = ID++;
+			resourcesActual.insert(resourcesActual.begin() + duplicate + 1, newResource);
+		}
+	}
+	ImGui::End();
+}
+
+
+
 void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Texture* pTarget)
 {
 	uint32 w = pTarget->GetWidth();
@@ -1192,6 +1569,8 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			graph.DumpDebugGraph(Sprintf("%sRenderGraph_%s", Paths::SavedDir(), Utils::GetTimeString()).c_str());
 			Tweakables::gDumpRenderGraphNextFrame = false;
 		}
+
+		DrawTest(graph.GetResources());
 
 		// Execute
 		graph.Execute(m_pDevice);

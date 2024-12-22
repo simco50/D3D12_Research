@@ -60,6 +60,7 @@ class RGResource
 public:
 	friend class RGGraph;
 	friend class RGPass;
+	friend class Renderer;
 
 	RGResource(const char* pName, RGResourceID id, RGResourceType type, DeviceResource* pPhysicalResource = nullptr)
 		: pName(pName), ID(id), Allocated(false), IsImported(!!pPhysicalResource), IsExported(false), Type((uint32)type), pPhysicalResource(nullptr)
@@ -78,6 +79,7 @@ public:
 	DeviceResource*		GetPhysicalUnsafe() const	{ return pPhysicalResource; }
 	RGResourceType		GetType() const				{ return (RGResourceType)Type; }
 	bool				IsAllocated() const			{ return Allocated; }
+	URange				GetLifetime() const			{ return URange(FirstAccess.GetIndex(), LastAccess.GetIndex() + 1); }
 
 protected:
 	void SetResource(DeviceResource* resource)

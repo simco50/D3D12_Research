@@ -295,6 +295,8 @@ public:
 
 	void Execute(GraphicsDevice* pDevice);
 
+	Span<RGResource*> GetResources() const { return m_Resources; }
+
 	template<typename T, typename... Args>
 	NO_DISCARD T* Allocate(Args&&... args)
 	{
