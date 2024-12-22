@@ -22,11 +22,11 @@ namespace GraphicsCommon
 	static void CreateCommonRootSignature(GraphicsDevice* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags, Ref<RootSignature>& pOutRootSignature)
 	{
 		pOutRootSignature = new RootSignature(pDevice);
-		pOutRootSignature->AddRootCBV(0, 0);
-		pOutRootSignature->AddRootCBV(1, 0);
-		pOutRootSignature->AddRootCBV(2, 0);
-		pOutRootSignature->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0);
-		pOutRootSignature->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0);
+		pOutRootSignature->AddRootCBV(0, 0);												// PerInstance
+		pOutRootSignature->AddRootCBV(1, 0);												// PerPass
+		pOutRootSignature->AddRootCBV(2, 0);												// PerView
+		pOutRootSignature->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0);	// UAV
+		pOutRootSignature->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0);	// SRV
 
 		int staticSamplerRegisterSlot = 0;
 		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP);

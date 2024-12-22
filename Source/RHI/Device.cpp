@@ -581,7 +581,6 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 	}
 
 	Texture* pTexture = new Texture(this, desc, pResource);
-	pTexture->SetResourceState(resourceState);
 	pTexture->SetName(pName);
 
 	if (initData.GetSize() > 0)
@@ -632,7 +631,7 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 	}
 	if (EnumHasAnyFlags(desc.Flags, TextureFlag::UnorderedAccess))
 	{
-		pTexture->m_NeedsStateTracking = true;
+		pTexture->m_pResourceState = std::make_unique<ResourceState>();
 
 		pTexture->m_UAVs.resize(desc.Mips);
 		for (uint8 mip = 0; mip < desc.Mips; ++mip)
@@ -640,12 +639,15 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 	}
 	if (EnumHasAnyFlags(desc.Flags, TextureFlag::RenderTarget))
 	{
-		pTexture->m_NeedsStateTracking = true;
+		pTexture->m_pResourceState = std::make_unique<ResourceState>();
 	}
 	else if (EnumHasAnyFlags(desc.Flags, TextureFlag::DepthStencil))
 	{
-		pTexture->m_NeedsStateTracking = true;
+		pTexture->m_pResourceState = std::make_unique<ResourceState>();
 	}
+
+	if(pTexture->UseStateTracking())
+		pTexture->SetResourceState(resourceState, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 
 	return pTexture;
 }
@@ -666,8 +668,8 @@ Ref<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12ResourceX* pSwapcha
 	Texture* pTexture = new Texture(this, desc, pSwapchainResource);
 	pTexture->SetImmediateDelete(true);
 	pTexture->SetName(Sprintf("Backbuffer %d", index).c_str());
-	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT);
-	pTexture->m_NeedsStateTracking = true;
+	pTexture->m_pResourceState = std::make_unique<ResourceState>();
+	pTexture->SetResourceState(D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 
 	pTexture->m_pSRV = CreateSRV(pTexture, TextureSRVDesc(0, 1));
 	return pTexture;
@@ -725,13 +727,12 @@ Ref<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHe
 	}
 
 	Buffer* pBuffer = new Buffer(this, desc, pResource);
-	pBuffer->SetResourceState(initialState);
 	pBuffer->SetName(pName);
 
 	if (EnumHasAnyFlags(desc.Flags, BufferFlag::Upload | BufferFlag::Readback))
 	{
 		VERIFY_HR(pResource->Map(0, nullptr, &pBuffer->m_pMappedData));
-		pBuffer->m_NeedsStateTracking = true;
+		pBuffer->m_pResourceState = std::make_unique<ResourceState>();
 	}
 
 	bool isRaw = EnumHasAnyFlags(desc.Flags, BufferFlag::ByteAddress);
@@ -745,7 +746,7 @@ Ref<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHe
 	if (EnumHasAnyFlags(desc.Flags, BufferFlag::UnorderedAccess))
 	{
 		pBuffer->m_pUAV = CreateUAV(pBuffer, BufferUAVDesc(desc.Format, isRaw, withCounter));
-		pBuffer->m_NeedsStateTracking = true;
+		pBuffer->m_pResourceState = std::make_unique<ResourceState>();
 	}
 
 	if (pInitData)
@@ -763,6 +764,9 @@ Ref<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHe
 			m_pRingBufferAllocator->Free(allocation);
 		}
 	}
+
+	if(pBuffer->UseStateTracking())
+		pBuffer->SetResourceState(initialState, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 
 	return pBuffer;
 }

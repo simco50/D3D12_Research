@@ -335,7 +335,7 @@ public:
 	NO_DISCARD RGTexture* Import(Texture* pTexture)
 	{
 		gAssert(pTexture);
-		RGTexture* pResource = Allocate<RGTexture>(m_Allocator.AllocateString(pTexture->GetName()), RGResourceID((uint16)m_Resources.size()), pTexture->GetDesc(), pTexture);
+		RGTexture* pResource = Allocate<RGTexture>(m_Allocator.AllocateString(pTexture->GetName().c_str()), RGResourceID((uint16)m_Resources.size()), pTexture->GetDesc(), pTexture);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}
@@ -350,7 +350,7 @@ public:
 	NO_DISCARD RGBuffer* Import(Buffer* pBuffer)
 	{
 		gAssert(pBuffer);
-		RGBuffer* pResource = Allocate<RGBuffer>(m_Allocator.AllocateString(pBuffer->GetName()), RGResourceID((uint16)m_Resources.size()), pBuffer->GetDesc(), pBuffer);
+		RGBuffer* pResource = Allocate<RGBuffer>(m_Allocator.AllocateString(pBuffer->GetName().c_str()), RGResourceID((uint16)m_Resources.size()), pBuffer->GetDesc(), pBuffer);
 		m_Resources.push_back(pResource);
 		return pResource;
 	}

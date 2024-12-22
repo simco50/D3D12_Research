@@ -18,30 +18,6 @@ class RingBufferAllocator;
 
 using WindowHandle = HWND;
 
-template<typename T>
-class GlobalResource
-{
-public:
-	GlobalResource& operator=(Ref<T>&& pResource)
-	{
-		static_assert(std::is_base_of_v<DeviceObject, T>);
-		gAssert(pResource);
-		gAssert(m_pResource == nullptr);
-		m_pResource = pResource.Get();
-		pResource->GetParent()->RegisterGlobalResource(std::move(pResource));
-		return *this;
-	}
-
-	GlobalResource& operator=(const GlobalResource& rhs) = delete;
-
-	T* operator->() const { return m_pResource; }
-	operator bool() const { return m_pResource != nullptr; }
-	operator T* () const { return m_pResource; }
-
-private:
-	T* m_pResource = nullptr;
-};
-
 enum class DisplayMode
 {
 	SDR,
@@ -172,11 +148,6 @@ public:
 	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", Span<ShaderDefine> defines = {});
 	ShaderResult GetLibrary(const char* pShaderPath, Span<ShaderDefine> defines = {});
 
-	void RegisterGlobalResource(Ref<DeviceObject>&& pResource)
-	{
-		m_GlobalResources.push_back(std::move(pResource));
-	}
-
 	RingBufferAllocator* GetRingBuffer() const { return m_pRingBufferAllocator; }
 	GPUDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
 	GPUDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
@@ -249,8 +220,6 @@ private:
 	Ref<CPUDescriptorHeap> m_pCPUResourceViewHeap;
 	Ref<ScratchAllocationManager> m_pScratchAllocationManager;
 	Ref<RingBufferAllocator> m_pRingBufferAllocator;
-
-	Array<Ref<DeviceObject>> m_GlobalResources;
 
 	std::mutex m_ContextAllocationMutex;
 };

@@ -27,5 +27,9 @@ DeviceResource::~DeviceResource()
 void DeviceResource::SetName(const char* pName)
 {
 	D3D::SetObjectName(m_pResource, pName);
-	m_Name = pName;
+}
+
+String DeviceResource::GetName() const
+{
+	return D3D::GetObjectName(m_pResource);
 }

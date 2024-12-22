@@ -68,20 +68,18 @@ public:
 	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
 
 	void SetName(const char* pName);
-	const char* GetName() const { return m_Name.c_str(); }
+	String GetName() const;
 
-	bool UseStateTracking() const { return m_NeedsStateTracking; }
+	bool UseStateTracking() const { return m_pResourceState != nullptr; }
 
 	ID3D12ResourceX* GetResource() const { return m_pResource; }
 	D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
 
-	void SetResourceState(D3D12_RESOURCE_STATES state, uint32 subResource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES) { m_ResourceState.Set(state, subResource); }
-	D3D12_RESOURCE_STATES GetResourceState(uint32 subResource = 0) const { return m_ResourceState.Get(subResource); }
+	void SetResourceState(D3D12_RESOURCE_STATES state, uint32 subResource) { m_pResourceState->Set(state, subResource); }
+	D3D12_RESOURCE_STATES GetResourceState(uint32 subResource = 0) const { return m_pResourceState->Get(subResource); }
 
 protected:
-	String m_Name;
-	bool m_ImmediateDelete = false;
-	ID3D12ResourceX* m_pResource = nullptr;
-	ResourceState m_ResourceState;
-	bool m_NeedsStateTracking = false;
+	ID3D12ResourceX*			m_pResource = nullptr;
+	UniquePtr<ResourceState>	m_pResourceState;
+	uint32						m_ImmediateDelete : 1 = 0;
 };

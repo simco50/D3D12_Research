@@ -132,13 +132,13 @@ void ApplyImGuiStyle()
 	colors[ImGuiCol_ModalWindowDimBg] =				ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 }
 
-static GlobalResource<PipelineState> gImGuiPSO;
-static GlobalResource<Texture> gFontTexture;
+static Ref<PipelineState> sImGuiPSO;
+static Ref<Texture> sFontTexture;
 
 static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 {
 	context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSWithIA);
-	context.SetPipelineState(gImGuiPSO);
+	context.SetPipelineState(sImGuiPSO);
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 	context.SetViewport(FloatRect(0.0f, 0.0f, pDrawData->DisplaySize.x, pDrawData->DisplaySize.y));
@@ -190,7 +190,7 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 
 				Texture* pTexture = (Texture*)pCmd->GetTexID();
 				if (!pTexture)
-					pTexture = gFontTexture;
+					pTexture = sFontTexture;
 
 				gAssert(pTexture->GetSRV());
 
@@ -332,7 +332,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	data.pData = pPixels;
 	data.RowPitch = RHI::GetRowPitch(pixelFormat, width);
 	data.SlicePitch = RHI::GetSlicePitch(pixelFormat, width, height);
-	gFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, pixelFormat, 1, TextureFlag::ShaderResource), "ImGui Font", data);
+	sFontTexture = pDevice->CreateTexture(TextureDesc::Create2D(width, height, pixelFormat, 1, TextureFlag::ShaderResource), "ImGui Font", data);
 
 	PipelineStateInitializer psoDesc;
 	psoDesc.SetInputLayout({
@@ -349,13 +349,16 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 	psoDesc.SetName("ImGui");
-	gImGuiPSO = pDevice->CreatePipeline(psoDesc);
+	sImGuiPSO = pDevice->CreatePipeline(psoDesc);
 
 	ApplyImGuiStyle();
 }
 
 void ImGuiRenderer::Shutdown()
 {
+	sFontTexture = nullptr;
+	sImGuiPSO = nullptr;
+
 	ImGui::DestroyPlatformWindows();
 	ViewportImpl::Shutdown();
 	ImGui_ImplWin32_Shutdown();

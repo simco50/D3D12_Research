@@ -256,7 +256,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
 
-				bool isOpen = ImGui::TreeNodeEx(Sprintf("%d", rowIndex).c_str(), ImGuiTreeNodeFlags_SpanAvailWidth, pPhysical->GetName());
+				bool isOpen = ImGui::TreeNodeEx(Sprintf("%d", rowIndex).c_str(), ImGuiTreeNodeFlags_SpanAvailWidth, pPhysical->GetName().c_str());
 				rowIndex++;
 
 				auto DrawResourceTooltip = [&](const RGResource* pResource, const RGPass::ResourceAccess* pAccess)
