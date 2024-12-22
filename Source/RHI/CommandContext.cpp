@@ -279,9 +279,12 @@ void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, 
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
-void CommandContext::ClearUAVu(const UnorderedAccessView* pUAV, const Vector4u& values)
+void CommandContext::ClearBufferFloat(Buffer* pBuffer, float value)
 {
+	gAssert(pBuffer);
+	UnorderedAccessView* pUAV = pBuffer->GetUAV();
 	gAssert(pUAV);
+
 	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
 	if (gpuHandle.IsNull())
 	{
@@ -290,12 +293,17 @@ void CommandContext::ClearUAVu(const UnorderedAccessView* pUAV, const Vector4u& 
 	}
 
 	FlushResourceBarriers();
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pUAV->GetResource()->GetResource(), &values.x, 0, nullptr);
+
+	float values[4] = { value, value, value, value };
+	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pBuffer->GetResource(), values, 0, nullptr);
 }
 
-void CommandContext::ClearUAVf(const UnorderedAccessView* pUAV, const Vector4& values)
+void CommandContext::ClearBufferUInt(Buffer* pBuffer, uint32 value)
 {
+	gAssert(pBuffer);
+	UnorderedAccessView* pUAV = pBuffer->GetUAV();
 	gAssert(pUAV);
+
 	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
 	if (gpuHandle.IsNull())
 	{
@@ -304,7 +312,45 @@ void CommandContext::ClearUAVf(const UnorderedAccessView* pUAV, const Vector4& v
 	}
 
 	FlushResourceBarriers();
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pUAV->GetResource()->GetResource(), &values.x, 0, nullptr);
+
+	uint32 values[4] = { value, value, value, value };
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pBuffer->GetResource(), values, 0, nullptr);
+}
+
+void CommandContext::ClearTextureUInt(Texture* pTexture, const Vector4u& values)
+{
+	gAssert(pTexture);
+	UnorderedAccessView* pUAV = pTexture->GetUAV();
+	gAssert(pUAV);
+
+	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
+	if (gpuHandle.IsNull())
+	{
+		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
+		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	}
+
+	FlushResourceBarriers();
+
+	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pTexture->GetResource(), &values.x, 0, nullptr);
+}
+
+void CommandContext::ClearTextureFloat(Texture* pTexture, const Vector4& values)
+{
+	gAssert(pTexture);
+	UnorderedAccessView* pUAV = pTexture->GetUAV();
+	gAssert(pUAV);
+
+	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
+	if (gpuHandle.IsNull())
+	{
+		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
+		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	}
+
+	FlushResourceBarriers();
+
+	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pTexture->GetResource(), &values.x, 0, nullptr);
 }
 
 void CommandContext::SetComputeRootSignature(const RootSignature* pRootSignature)

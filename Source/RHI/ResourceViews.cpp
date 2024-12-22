@@ -6,7 +6,7 @@
 #include "CPUDescriptorHeap.h"
 
 ResourceView::ResourceView(DeviceResource* pParent, D3D12_CPU_DESCRIPTOR_HANDLE cpuDescriptor, DescriptorHandle gpuDescriptor)
-	: DeviceObject(pParent->GetParent()), m_pResource(pParent), m_Descriptor(cpuDescriptor), m_GpuDescriptor(gpuDescriptor)
+	: DeviceObject(pParent->GetParent()), m_Descriptor(cpuDescriptor), m_GpuDescriptor(gpuDescriptor)
 {
 }
 

@@ -41,7 +41,7 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 		.Write(pRasterOutput)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.ClearUAVu(resources.GetUAV(pRasterOutput));
+				context.ClearTextureUInt(resources.Get(pRasterOutput));
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterPSO);

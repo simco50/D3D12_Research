@@ -12,7 +12,7 @@ struct PassParameters
 	float Tau;
 };
 
-ByteAddressBuffer tLuminanceHistogram : register(t0);
+Buffer<uint> tLuminanceHistogram : register(t0);
 RWStructuredBuffer<float> uLuminanceOutput : register(u0);
 ConstantBuffer<PassParameters> cPassParameters : register(b0);
 
@@ -41,7 +41,7 @@ float Adaption(float current, float target, float dt, float speed)
 [numthreads(HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION, HISTOGRAM_AVERAGE_THREADS_PER_DIMENSION, 1)]
 void CSMain(uint groupIndex : SV_GroupIndex)
 {
-	float countForThisBin = (float)tLuminanceHistogram.Load(groupIndex * 4);
+	float countForThisBin = (float)tLuminanceHistogram[groupIndex];
 	gHistogramShared[groupIndex] = countForThisBin * groupIndex;
 	GroupMemoryBarrierWithGroupSync();
 

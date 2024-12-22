@@ -110,7 +110,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 
 				// Clear the light grid because we're accumulating the light count in the shader
 				Buffer* pLightGrid = resources.Get(cullData.pLightGrid);
-				context.ClearUAVu(pLightGrid->GetUAV());
+				context.ClearBufferUInt(pLightGrid);
 
 				Renderer::BindViewUniforms(context, *pView);
 

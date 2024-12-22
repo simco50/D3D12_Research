@@ -670,7 +670,7 @@ void MeshletRasterizer::Render(RGGraph& graph, const RenderView* pView, RasterCo
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				if (outResult.pDebugData)
-					context.ClearUAVu(resources.GetUAV(outResult.pDebugData));
+					context.ClearTextureUInt(resources.Get(outResult.pDebugData));
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pClearCountersPSO);
@@ -770,14 +770,13 @@ void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(hzbDimensions.x, 16, hzbDimensions.y, 16));
 			});
 
-	RGBuffer* pSPDCounter = graph.Create("SPD.Counter", BufferDesc::CreateStructured(1, sizeof(uint32)));
+	RGBuffer* pSPDCounter = graph.Create("SPD.Counter", BufferDesc::CreateTyped(1, ResourceFormat::R32_UINT));
 
 	graph.AddPass("HZB Mips", RGPassFlag::Compute)
 		.Write({ pHZB, pSPDCounter })
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				Ref<UnorderedAccessView> pUAV = m_pDevice->CreateUAV(resources.Get(pSPDCounter), BufferUAVDesc(ResourceFormat::R32_UINT));
-				context.ClearUAVu(pUAV);
+				context.ClearBufferUInt(resources.Get(pSPDCounter));
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pHZBCreatePSO);

@@ -889,7 +889,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.TargetDimensions.x, 8, parameters.TargetDimensions.y, 8));
 						});
 
-				RGBuffer* pLuminanceHistogram = graph.Create("Luminance Histogram", BufferDesc::CreateByteAddress(sizeof(uint32) * 256));
+				RGBuffer* pLuminanceHistogram = graph.Create("Luminance Histogram", BufferDesc::CreateTyped(256, ResourceFormat::R32_UINT));
 				graph.AddPass("Luminance Histogram", RGPassFlag::Compute)
 					.Read(pDownscaleTarget)
 					.Write(pLuminanceHistogram)
@@ -898,7 +898,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 							Texture* pColorSource = resources.Get(pDownscaleTarget);
 							Buffer* pHistogram = resources.Get(pLuminanceHistogram);
 
-							context.ClearUAVu(pHistogram->GetUAV());
+							context.ClearBufferUInt(pHistogram);
 
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pLuminanceHistogramPSO);
@@ -962,7 +962,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Write(pHistogramDebugTexture)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
-								context.ClearUAVf(resources.GetUAV(pHistogramDebugTexture));
+								context.ClearTextureFloat(resources.Get(pHistogramDebugTexture));
 
 								context.SetPipelineState(m_pDrawHistogramPSO);
 								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);

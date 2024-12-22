@@ -13,7 +13,7 @@ struct PassParameters
 
 ConstantBuffer<PassParameters> cPassData : register(b0);
 Texture2D tHDRTexture : register(t0);
-RWByteAddressBuffer uLuminanceHistogram : register(u0);
+RWBuffer<uint> uLuminanceHistogram : register(u0);
 
 
 uint HDRToHistogramBin(float3 hdrColor)
@@ -47,5 +47,5 @@ void CSMain(uint groupIndex : SV_GroupIndex, uint3 threadId : SV_DispatchThreadI
 
 	GroupMemoryBarrierWithGroupSync();
 
-	uLuminanceHistogram.InterlockedAdd(groupIndex * 4, HistogramShared[groupIndex]);
+	InterlockedAdd(uLuminanceHistogram[groupIndex], HistogramShared[groupIndex]);
 }

@@ -135,8 +135,11 @@ public:
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
 
-	void ClearUAVu(const UnorderedAccessView* pUAV, const Vector4u& values = Vector4u::Zero());
-	void ClearUAVf(const UnorderedAccessView* pUAV, const Vector4& values = Vector4::Zero);
+	void ClearBufferFloat(Buffer* pBuffer, float value = 0);
+	void ClearBufferUInt(Buffer* pBuffer, uint32 value = 0);
+
+	void ClearTextureFloat(Texture* pTexture, const Vector4& values = Vector4::Zero);
+	void ClearTextureUInt(Texture* pTexture, const Vector4u& values = Vector4u::Zero());
 
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);

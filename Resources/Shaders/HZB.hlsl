@@ -28,7 +28,7 @@ struct SpdConstants
     float2 WorkGroupOffset;
 };
 
-globallycoherent RWStructuredBuffer<uint> uSpdGlobalAtomic : register(u0);
+globallycoherent RWBuffer<uint> uSpdGlobalAtomic : register(u0);
 globallycoherent RWTexture2D<float> uDestination6 : register(u1);
 RWTexture2D<float> uDestination[12] : register(u2);
 
