@@ -5,13 +5,13 @@
 #include "RayTracing/DDGICommon.hlsli"
 #include "Noise.hlsli"
 
-Texture2D<uint> tVisibilityTexture : register(t0);
-Texture2D<float> tAO :	register(t1);
-Texture2D<float> tDepth : register(t2);
-Texture2D tPreviousSceneColor :	register(t3);
-Texture3D<float4> tFog : register(t4);
-StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t5);
-StructuredBuffer<uint> tLightGrid : register(t6);
+Texture2D<uint> 					tVisibilityTexture	: register(t0);
+Texture2D<float> 					tAO 				: register(t1);
+Texture2D<float> 					tDepth 				: register(t2);
+Texture2D							tPreviousSceneColor	: register(t3);
+Texture3D<float4>					tFog 				: register(t4);
+StructuredBuffer<MeshletCandidate> 	tVisibleMeshlets 	: register(t5);
+StructuredBuffer<uint> 				tLightGrid 			: register(t6);
 
 float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
@@ -23,6 +23,10 @@ float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, flo
 	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
 		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
+
+		bucket = WaveActiveBitOr(bucket);
+		bucket = WaveReadLaneFirst(bucket);
+
 		while(bucket)
 		{
 			uint bitIndex = firstbitlow(bucket);

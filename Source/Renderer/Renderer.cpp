@@ -1589,11 +1589,6 @@ void Renderer::UploadSceneData(CommandContext& context)
 	}
 
 	sceneBatches.swap(m_Batches);
-
-	// View Uniform Buffers
-	{
-		Renderer::UploadViewUniforms(context, m_MainView);
-	}
 }
 
 
@@ -1612,8 +1607,6 @@ void Renderer::DrawScene(CommandContext& context, Span<const Batch> batches, con
 	{
 		if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 		{
-			PROFILE_CPU_SCOPE("Draw Primitive");
-			PROFILE_GPU_SCOPE(context.GetCommandList(), "Draw Pritimive");
 			context.BindRootCBV(BindingSlot::PerInstance, b.InstanceID);
 			context.DispatchMesh(Math::DivideAndRoundUp(b.pMesh->NumMeshlets, 32));
 		}

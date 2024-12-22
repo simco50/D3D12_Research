@@ -123,18 +123,16 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	int2 uv = min(threadID.xy, cView.ViewportDimensions.xy - 1);
 	float fDepth = tDepthTexture[uv].r;
 
-	// Convert to uint because you can't used interlocked functions on floats
-	uint depth = asuint(fDepth);
-
 	// Get the min/max depth in the wave
-	float waveMin = WaveActiveMin(depth);
-	float waveMax = WaveActiveMax(depth);
+	float waveMin = WaveActiveMin(fDepth);
+	float waveMax = WaveActiveMax(fDepth);
 
 	// Let first thread in wave combine into groupshared min/max
 	if(WaveIsFirstLane())
 	{
-		InterlockedMin(gsMinDepth, waveMin);
-		InterlockedMax(gsMaxDepth, waveMax);
+		// Convert to uint because you can't used interlocked functions on floats
+		InterlockedMin(gsMinDepth, asuint(waveMin));
+		InterlockedMax(gsMaxDepth, asuint(waveMax));
 	}
 
 	// Wait for all the threads to finish

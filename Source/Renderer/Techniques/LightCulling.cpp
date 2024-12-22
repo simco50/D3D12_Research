@@ -17,13 +17,13 @@
 // Clustered
 static constexpr int gLightClusterTexelSize = 64;
 static constexpr int gLightClustersNumZ = 32;
-static constexpr int gMaxLightsPerCluster = 256;
-static_assert(gMaxLightsPerCluster % 32 == 0);
+static constexpr int gClusteredLightingMaxLights = 1024;
+static_assert(gClusteredLightingMaxLights % 32 == 0);
 
 // Tiled
 static constexpr int gTiledLightingTileSize = 8;
-static constexpr int gMaxLightsPerTile = 256;
-static_assert(gMaxLightsPerTile % 32 == 0);
+static constexpr int gTiledMaxLights = 1024;
+static_assert(gTiledMaxLights % 32 == 0);
 
 LightCulling::LightCulling(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
@@ -58,7 +58,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 
 	uint32 totalClusterCount = cullData.ClusterCount.x * cullData.ClusterCount.y * cullData.ClusterCount.z;
 
-	cullData.pLightGrid = graph.Create("Light Index Grid", BufferDesc::CreateTyped(gMaxLightsPerCluster / 32 * totalClusterCount, ResourceFormat::R32_UINT));
+	cullData.pLightGrid = graph.Create("Light Index Grid", BufferDesc::CreateTyped(gClusteredLightingMaxLights / 32 * totalClusterCount, ResourceFormat::R32_UINT));
 
 	struct PrecomputedLightData
 	{
@@ -148,7 +148,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 
 	uint32 tilesX = Math::DivideAndRoundUp((uint32)pView->Viewport.GetWidth(), gTiledLightingTileSize);
 	uint32 tilesY = Math::DivideAndRoundUp((uint32)pView->Viewport.GetHeight(), gTiledLightingTileSize);
-	uint32 lightListElements = tilesX * tilesY * (gMaxLightsPerTile / 32);
+	uint32 lightListElements = tilesX * tilesY * (gTiledMaxLights / 32);
 
 	cullResources.pLightListOpaque = graph.Create("Light List - Opaque", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));
 	cullResources.pLightListTransparent = graph.Create("Light List - Transparant", BufferDesc::CreateTyped(lightListElements, ResourceFormat::R32_UINT));

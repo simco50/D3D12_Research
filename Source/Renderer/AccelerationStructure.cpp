@@ -144,7 +144,7 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 
 		{
 			PROFILE_GPU_SCOPE(context.GetCommandList(), "BLAS Compaction");
-			ProcessCompaction(context);
+			//ProcessCompaction(context);
 		}
 
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
