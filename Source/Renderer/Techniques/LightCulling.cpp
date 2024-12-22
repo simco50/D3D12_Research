@@ -35,6 +35,21 @@ LightCulling::LightCulling(GraphicsDevice* pDevice)
 	// Tiled
 	m_pTiledCullPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LightCulling.hlsl", "CSMain");
 	m_pTiledVisualizeLightsPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
+
+	PipelineStateInitializer psoDesc{};
+	psoDesc.SetVertexShader("FullscreenTriangle.hlsl", "WithTexCoordVS");
+	psoDesc.SetDepthEnabled(false);
+	psoDesc.SetRenderTargetFormats({ ResourceFormat::RGBA8_UNORM }, ResourceFormat::Unknown, 1);
+	psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+	psoDesc.SetBlendMode(BlendMode::Alpha, false);
+	psoDesc.SetName("Light Count Overhead View");
+
+	psoDesc.SetPixelShader("VisualizeLightCount.hlsl", "TopDownViewPS", { "TILED_FORWARD" });
+	m_pTiledVisualizeTopDownPSO = m_pDevice->CreatePipeline(psoDesc);
+
+	psoDesc.SetPixelShader("VisualizeLightCount.hlsl", "TopDownViewPS", { "CLUSTERED_FORWARD" });
+	m_pClusteredVisualizeTopDownPSO = m_pDevice->CreatePipeline(psoDesc);
 }
 
 LightCulling::~LightCulling()
@@ -62,14 +77,14 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 
 	struct PrecomputedLightData
 	{
-		Vector3 ViewSpacePosition;
-		float SpotCosAngle;
-		Vector3 ViewSpaceDirection;
-		float SpotSinAngle;
-		float Range;
-		uint32 IsSpot : 1;
-		uint32 IsPoint : 1;
-		uint32 IsDirectional : 1;
+		Vector3		ViewSpacePosition;
+		float		SpotCosAngle;
+		Vector3		ViewSpaceDirection;
+		float		SpotSinAngle;
+		float		Range;
+		uint32		IsSpot : 1;
+		uint32		IsPoint : 1;
+		uint32		IsDirectional : 1;
 	};
 
 	const Renderer* pRenderer = pView->pRenderer;
@@ -88,14 +103,14 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 				light_view.each([&](const Transform& transform, const Light& light)
 					{
 						PrecomputedLightData& data = *pLightData++;
-						data.ViewSpacePosition = Vector3::Transform(transform.Position, viewMatrix);
+						data.ViewSpacePosition	= Vector3::Transform(transform.Position, viewMatrix);
 						data.ViewSpaceDirection = Vector3::TransformNormal(Vector3::Transform(Vector3::Forward, transform.Rotation), viewMatrix);
-						data.SpotCosAngle = cos(light.OuterConeAngle / 2.0f);
-						data.SpotSinAngle = sin(light.OuterConeAngle / 2.0f);
-						data.Range = light.Range;
-						data.IsSpot = light.Type == LightType::Spot;
-						data.IsPoint = light.Type == LightType::Point;
-						data.IsDirectional = light.Type == LightType::Directional;
+						data.SpotCosAngle		= cos(light.OuterConeAngle / 2.0f);
+						data.SpotSinAngle		= sin(light.OuterConeAngle / 2.0f);
+						data.Range				= light.Range;
+						data.IsSpot				= light.Type == LightType::Spot;
+						data.IsPoint			= light.Type == LightType::Point;
+						data.IsDirectional		= light.Type == LightType::Directional;
 					});
 				context.CopyBuffer(allocation.pBackingResource, resources.Get(pPrecomputeData), precomputedLightDataSize, allocation.Offset, 0);
 			});
@@ -155,8 +170,8 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 
 	struct PrecomputedLightData
 	{
-		Vector3 SphereViewPosition;
-		float SphereRadius;
+		Vector3		SphereViewPosition;
+		float		SphereRadius;
 	};
 
 	const Renderer* pRenderer = pView->pRenderer;
@@ -230,42 +245,37 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 			});
 }
 
+
 RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView* pView, RGTexture* pSceneDepth, const LightCull2DData& lightCullData)
 {
-	RGTexture* pVisualizationTarget = graph.Create("Light Density Visualization", TextureDesc::Create2D(pSceneDepth->GetDesc().Width, pSceneDepth->GetDesc().Height, ResourceFormat::RGBA8_UNORM, 1));
-
-	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
-		.Read({ pSceneDepth, lightCullData.pLightListOpaque })
-		.Write(pVisualizationTarget)
-		.Bind([=](CommandContext& context, const RGResources& resources)
-			{
-				Texture* pTarget = resources.Get(pVisualizationTarget);
-
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-				context.SetPipelineState(m_pTiledVisualizeLightsPSO);
-
-				Renderer::BindViewUniforms(context, *pView);
-				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pSceneDepth),
-					resources.GetSRV(lightCullData.pLightListOpaque),
-					});
-
-				context.Dispatch(ComputeUtils::GetNumThreadGroups(
-					pTarget->GetWidth(), 16,
-					pTarget->GetHeight(), 16));
-			});
-
-	return pVisualizationTarget;
+	return VisualizeLightDensity(graph, pView, pSceneDepth, &lightCullData, nullptr);
 }
 
 RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView* pView, RGTexture* pSceneDepth, const LightCull3DData& lightCullData)
 {
+	return VisualizeLightDensity(graph, pView, pSceneDepth, nullptr, &lightCullData);
+}
+
+RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView* pView, RGTexture* pSceneDepth, const LightCull2DData* pLightCull2DData, const LightCull3DData* pLightCull3DData)
+{
 	RGTexture* pVisualizationTarget = graph.Create("Light Density Visualization", TextureDesc::Create2D(pSceneDepth->GetDesc().Width, pSceneDepth->GetDesc().Height, ResourceFormat::RGBA8_UNORM, 1));
 
-	RGBuffer* pLightGrid = lightCullData.pLightGrid;
-	Vector2 lightGridParams = lightCullData.LightGridParams;
-	Vector3i clusterCount = lightCullData.ClusterCount;
+	bool visualize3d = pLightCull3DData != nullptr;
+
+	RGBuffer* pLightGrid		= visualize3d ? pLightCull3DData->pLightGrid : pLightCull2DData->pLightListOpaque;
+	Vector2 lightGridParams		= visualize3d ? pLightCull3DData->LightGridParams : Vector2::Zero;
+	Vector3i clusterCount		= visualize3d ? pLightCull3DData->ClusterCount : Vector3i::Zero();
+
+	struct
+	{
+		Vector2i ClusterDimensions;
+		Vector2i ClusterSize;
+		Vector2 LightGridParams;
+	} constantBuffer;
+
+	constantBuffer.ClusterDimensions	= Vector2i(clusterCount.x, clusterCount.y);
+	constantBuffer.ClusterSize			= Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
+	constantBuffer.LightGridParams		= lightGridParams;
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ pSceneDepth, pLightGrid })
@@ -274,22 +284,11 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 			{
 				Texture* pTarget = resources.Get(pVisualizationTarget);
 
-				struct
-				{
-					Vector2i ClusterDimensions;
-					Vector2i ClusterSize;
-					Vector2 LightGridParams;
-				} constantBuffer;
-
-				constantBuffer.ClusterDimensions = Vector2i(clusterCount.x, clusterCount.y);
-				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
-				constantBuffer.LightGridParams = lightGridParams;
-
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-				context.SetPipelineState(m_pClusteredVisualizeLightsPSO);
+				context.SetPipelineState(visualize3d ? m_pClusteredVisualizeLightsPSO : m_pTiledVisualizeLightsPSO);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindRootCBV(BindingSlot::PerInstance, constantBuffer);
+				context.BindRootCBV(BindingSlot::PerPass, constantBuffer);
 				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
 				context.BindResources(BindingSlot::SRV, {
 					resources.GetSRV(pSceneDepth),
@@ -297,8 +296,48 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 					});
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(
-					pTarget->GetWidth(), 16,
-					pTarget->GetHeight(), 16));
+					pTarget->GetWidth(), 8,
+					pTarget->GetHeight(), 8));
+			});
+
+
+	graph.AddPass("Top Down Visualize Light Density", RGPassFlag::Raster)
+		.Read({ pSceneDepth, pLightGrid })
+		.RenderTarget(pVisualizationTarget)
+		.Bind([=](CommandContext& context, const RGResources& resources)
+			{
+				Vector2 size(300.0f, 300.0f);
+				Vector2 topLeft(pView->Viewport.GetWidth() - size.x - 20.0f, pView->Viewport.GetHeight() - size.y - 20.0f);
+				FloatRect rect(topLeft.x, topLeft.y, topLeft.x + size.x, topLeft.y + size.y);
+				context.SetViewport(rect);
+
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+				context.SetPipelineState(visualize3d ? m_pClusteredVisualizeTopDownPSO : m_pTiledVisualizeTopDownPSO);
+
+				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+				struct
+				{
+					Vector3 ViewMin;
+					float padding;
+					Vector3 ViewMax;
+				} params;
+
+				Vector3 topRight	= Vector3::Transform(Vector3(1.0f, 1.0f, 0.0f), pView->ClipToView);
+				Vector3 bottomLeft	= Vector3::Transform(Vector3(-1.0f, -1.0f, 0.0f), pView->ClipToView);
+				params.ViewMin		= Vector3(bottomLeft.x, bottomLeft.y, pView->NearPlane);
+				params.ViewMax		= Vector3(topRight.x, topRight.y, pView->FarPlane);
+
+				context.BindRootCBV(BindingSlot::PerPass, constantBuffer);
+				context.BindRootCBV(BindingSlot::PerInstance, params);
+
+				Renderer::BindViewUniforms(context, *pView);
+				context.BindResources(BindingSlot::SRV, {
+					resources.GetSRV(pSceneDepth),
+					resources.GetSRV(pLightGrid),
+					});
+
+				context.Draw(0, 3);
 			});
 
 	return pVisualizationTarget;

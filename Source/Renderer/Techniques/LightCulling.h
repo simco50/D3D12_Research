@@ -37,13 +37,16 @@ public:
 	RGTexture* VisualizeLightDensity(RGGraph& graph, const RenderView* pView, RGTexture* pSceneDepth, const LightCull2DData& lightCullData);
 
 private:
+	RGTexture* VisualizeLightDensity(RGGraph& graph, const RenderView* pView, RGTexture* pSceneDepth, const LightCull2DData* pLightCull2DData, const LightCull3DData* pLightCull3DData);
 	GraphicsDevice* m_pDevice;
 
 	// Clustered
 	Ref<PipelineState> m_pClusteredCullPSO;
-	Ref<PipelineState> m_pTiledVisualizeLightsPSO;
+	Ref<PipelineState> m_pClusteredVisualizeLightsPSO;
+	Ref<PipelineState> m_pClusteredVisualizeTopDownPSO;
 
 	// Tiled
 	Ref<PipelineState> m_pTiledCullPSO;
-	Ref<PipelineState> m_pClusteredVisualizeLightsPSO;
+	Ref<PipelineState> m_pTiledVisualizeLightsPSO;
+	Ref<PipelineState> m_pTiledVisualizeTopDownPSO;
 };
