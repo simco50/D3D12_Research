@@ -185,9 +185,6 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 			}
 			ImGui::PopClipRect();
 
-			// Passes row
-			const RGPass* pActivePass = nullptr;
-
 			// Open row
 			ImGui::TableNextRow(ImGuiTableRowFlags_Headers, ImGui::TableGetHeaderRowHeight());
 
@@ -228,8 +225,6 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 						ImGui::Text("Flags: %s", PassFlagToString(pPass->Flags).c_str());
 						ImGui::Text("Index: %d", pPass->ID.GetIndex());
 						ImGui::EndTooltip();
-
-						pActivePass = pPass;
 					}
 				}
 
@@ -267,7 +262,7 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 
 						if (pAccess)
 						{
-							ImColor rectColor = D3D::HasWriteResourceState(pAccess->Access) ? ImColor(1.0f, 0.5f, 0.1f, 1.0f) : ImColor(0.0f, 0.9f, 0.3f, 1.0f);
+							ImColor rectColor = D3D::HasWriteResourceState(pAccess->Access) ? ImColor(255, 91, 62) : ImColor(182, 223, 48);
 							ImGui::TextColored(rectColor, "%s", D3D::ResourceStateToString(pAccess->Access).c_str());
 						}
 
@@ -327,40 +322,38 @@ void RGGraph::DrawResourceTracker(bool& enabled) const
 						itemRect.Expand(-1);
 						itemRect.Translate(c);
 						if (ImGui::ItemAdd(itemRect, ImGui::GetID(pResource)))
-							pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(0.3f, 0.3f, 0.3f, 1.0f));
-
-						bool mainBarHovered = ImGui::IsItemHovered();
-
-						// If there is a hovered pass, limit the highlighed read/writes to the current pass
-						if (pActivePass)
 						{
-							firstPassOffset = pActivePass->ID.GetIndex();
-							lastPassOffset = pActivePass->ID.GetIndex();
-						}
+							bool mainBarHovered = ImGui::IsItemHovered();
 
-						const RGPass::ResourceAccess* pResourceAccess = nullptr;
-						for (uint32 i = firstPassOffset; i <= lastPassOffset; ++i)
-						{
-							const RGPass* pPass = m_Passes[i];
-							auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
-							if (it != pPass->Accesses.end())
+							const RGPass::ResourceAccess* pResourceAccess = nullptr;
+							for (uint32 i = firstPassOffset; i <= lastPassOffset; ++i)
 							{
-								ImColor rectColor = D3D::HasWriteResourceState(it->Access) ? ImColor(1.0f, 0.5f, 0.1f, 0.6f) : ImColor(0.0f, 0.9f, 0.3f, 0.6f);
 								ImRect squareRect(i * colWidth, 0, (i + 1) * colWidth, row_height);
 								squareRect.Expand(-1);
 								squareRect.Translate(c);
-								if (ImGui::ItemAdd(squareRect, ImGui::GetID(&*it)))
-									pDraw->AddRectFilled(squareRect.Min, squareRect.Max, rectColor);
 
-								if (ImGui::IsItemHovered())
-									pResourceAccess = &*it;
+								const RGPass* pPass = m_Passes[i];
+								auto it = std::find_if(pPass->Accesses.begin(), pPass->Accesses.end(), [pResource](const RGPass::ResourceAccess& access) { return access.pResource == pResource; });
+								if (it != pPass->Accesses.end())
+								{
+									ImColor rectColor = D3D::HasWriteResourceState(it->Access) ? ImColor(255, 91, 62) : ImColor(182, 223, 48);
+									if (ImGui::ItemAdd(squareRect, ImGui::GetID(&*it)))
+										pDraw->AddRectFilled(squareRect.Min, squareRect.Max, rectColor);
+
+									if (ImGui::IsItemHovered())
+										pResourceAccess = &*it;
+								}
+								else
+								{
+									pDraw->AddRectFilled(squareRect.Min, squareRect.Max, ImColor(0.3f, 0.3f, 0.3f, 1.0f));
+								}
 							}
-						}
 
-						if (mainBarHovered)
-						{
-							pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(1.0f, 1.0f, 1.0f, 0.2f));
-							DrawResourceTooltip(pResource, pResourceAccess);
+							if (mainBarHovered)
+							{
+								pDraw->AddRectFilled(itemRect.Min, itemRect.Max, ImColor(1.0f, 1.0f, 1.0f, 0.2f));
+								DrawResourceTooltip(pResource, pResourceAccess);
+							}
 						}
 
 

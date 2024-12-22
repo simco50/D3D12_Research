@@ -461,6 +461,49 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 			LightCull2DData lightCull2DData;
 			LightCull3DData lightCull3DData;
+			RasterResult rasterResult;
+
+			const bool doPrepass = true;
+			const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred;
+
+			if (doPrepass)
+			{
+				if (needVisibilityBuffer)
+				{
+					RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
+					rasterContext.EnableDebug = Tweakables::gVisibilityDebugMode > 0;
+					rasterContext.EnableOcclusionCulling = Tweakables::gOcclusionCulling;
+					rasterContext.WorkGraph = Tweakables::gWorkGraph;
+					m_pMeshletRasterizer->Render(graph, pView, rasterContext, rasterResult);
+					if (Tweakables::gCullDebugStats)
+						m_pMeshletRasterizer->PrintStats(graph, Vector2(20, 20), pView, rasterContext);
+				}
+				else
+				{
+					graph.AddPass("Depth Prepass", RGPassFlag::Raster)
+						.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::Clear)
+						.Bind([=](CommandContext& context, const RGResources& resources)
+							{
+								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+
+								Renderer::BindViewUniforms(context, *pView);
+								{
+									PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
+									context.SetPipelineState(m_pDepthPrepassOpaquePSO);
+									DrawScene(context, *pView, Batch::Blending::Opaque);
+								}
+								{
+									PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
+									context.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
+									DrawScene(context, *pView, Batch::Blending::AlphaMask);
+								}
+							});
+				}
+
+				if (Tweakables::gRenderTerrain.GetBool())
+					m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
+			}
 
 			RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
 			if (Tweakables::gSky)
@@ -494,7 +537,6 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			// Export makes sure the target texture is filled in during pass execution.
 			graph.Export(pSky, &m_pSky, TextureFlag::ShaderResource);
 
-			RasterResult rasterResult;
 			if (m_RenderPath != RenderPath::PathTracing)
 			{
 				{
@@ -539,48 +581,6 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 									});
 						}
 					}
-				}
-
-				const bool doPrepass = true;
-				const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred;
-
-				if (doPrepass)
-				{
-					if (needVisibilityBuffer)
-					{
-						RasterContext rasterContext(graph, sceneTextures.pDepth, RasterMode::VisibilityBuffer, &m_pHZB);
-						rasterContext.EnableDebug = Tweakables::gVisibilityDebugMode > 0;
-						rasterContext.EnableOcclusionCulling = Tweakables::gOcclusionCulling;
-						rasterContext.WorkGraph = Tweakables::gWorkGraph;
-						m_pMeshletRasterizer->Render(graph, pView, rasterContext, rasterResult);
-						if (Tweakables::gCullDebugStats)
-							m_pMeshletRasterizer->PrintStats(graph, Vector2(20, 20), pView, rasterContext);
-					}
-					else
-					{
-						graph.AddPass("Depth Prepass", RGPassFlag::Raster)
-							.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::Clear)
-							.Bind([=](CommandContext& context, const RGResources& resources)
-								{
-									context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-									context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
-
-									Renderer::BindViewUniforms(context, *pView);
-									{
-										PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
-										context.SetPipelineState(m_pDepthPrepassOpaquePSO);
-										DrawScene(context, *pView, Batch::Blending::Opaque);
-									}
-									{
-										PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
-										context.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
-										DrawScene(context, *pView, Batch::Blending::AlphaMask);
-									}
-								});
-					}
-
-					if (Tweakables::gRenderTerrain.GetBool())
-						m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
 				}
 
 				if (Tweakables::gSDSM)
