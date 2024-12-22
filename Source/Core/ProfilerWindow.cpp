@@ -7,6 +7,7 @@
 #include "Core/Paths.h"
 #include <IconsFontAwesome4.h>
 #include <imgui_internal.h>
+#include <fstream>
 
 struct StyleOptions
 {
@@ -105,12 +106,84 @@ static StringHash GetEventHash(const ProfilerEvent& event)
 	return hash;
 }
 
+struct TraceContext
+{
+	TraceContext()
+	{
+		QueryPerformanceCounter((LARGE_INTEGER*)&BaseTime);
+	}
+
+	std::ofstream TraceStream;
+	uint64 BaseTime = 0;
+};
+
+void BeginTrace(const char* pPath, TraceContext& context)
+{
+	if (context.TraceStream.is_open())
+		return;
+
+	context.TraceStream.open(pPath);
+	context.TraceStream << "{\n\"traceEvents\": [\n";
+
+	context.TraceStream << Sprintf("{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":0,\"args\":{\"name\":\"GPU\"}},\n");
+	context.TraceStream<<Sprintf("{\"name\":\"process_name\",\"ph\":\"M\",\"pid\":1,\"args\":{\"name\":\"CPU\"}},\n");
+
+	for (const GPUProfiler::QueueInfo& queue : gGPUProfiler.GetQueues())
+	{
+		context.TraceStream << Sprintf("{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":0,\"tid\":%d,\"args\":{\"name\":\"%s\"}},\n", queue.Index, queue.Name);
+	}
+	for (const CPUProfiler::ThreadData& thread : gCPUProfiler.GetThreads())
+	{
+		context.TraceStream << Sprintf("{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":%d,\"args\":{\"name\":\"%s\"}},\n", thread.ThreadID, thread.Name);
+	}
+}
+
+
+void UpdateTrace(TraceContext& context)
+{
+	if (!context.TraceStream.is_open())
+		return;
+
+	uint64 frequency = 0;
+	QueryPerformanceFrequency((LARGE_INTEGER*)&frequency);
+	const float TicksToMs = 1000.0f / frequency;
+
+	URange gpuRange = gGPUProfiler.GetFrameRange();
+	for (const GPUProfiler::QueueInfo& queue : gGPUProfiler.GetQueues())
+	{
+		for (const ProfilerEvent& event : gGPUProfiler.GetEventData(gpuRange.End - 1).GetEvents(queue.Index))
+			context.TraceStream << Sprintf("{\"pid\":0,\"tid\":%d,\"ts\":%d,\"dur\":%d,\"ph\":\"X\",\"name\":\"%s\"},\n", queue.Index, (int)(1000 * TicksToMs * (event.TicksBegin - context.BaseTime)), (int)(1000 * TicksToMs * (event.TicksEnd - event.TicksBegin)), event.pName);
+	}
+
+	URange cpuRange = gCPUProfiler.GetFrameRange();
+	for (const CPUProfiler::ThreadData& thread : gCPUProfiler.GetThreads())
+	{
+		for (const ProfilerEvent& event : gCPUProfiler.GetEventData(cpuRange.End - 1).GetEvents(thread.Index))
+			context.TraceStream << Sprintf("{\"pid\":1,\"tid\":%d,\"ts\":%d,\"dur\":%d,\"ph\":\"X\",\"name\":\"%s\"},\n", thread.ThreadID, (int)(1000 * TicksToMs * (event.TicksBegin - context.BaseTime)), (int)(1000 * TicksToMs * (event.TicksEnd - event.TicksBegin)), event.pName);
+	}
+}
+
+
+void EndTrace(TraceContext& context)
+{
+	if (!context.TraceStream.is_open())
+		return;
+
+	context.TraceStream << "{}]\n}";
+	context.TraceStream.close();
+}
+
+
 static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 {
 	PROFILE_CPU_SCOPE();
 
 	HUDContext& context = gHUDContext;
 	StyleOptions& style = context.Style;
+
+	static TraceContext traceContext;
+
+	UpdateTrace(traceContext);
 
 	ImVec2 sizeActual = ImGui::CalcItemSize(size, ImGui::GetContentRegionAvail().x, ImGui::GetContentRegionAvail().y);
 
@@ -534,6 +607,24 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 		// Add extra data to tooltip
 		ImGui::SameLine();
 
+		ImGui::BeginGroup();
+
+		std::string tracePath = Paths::SavedDir() + "trace.json";
+		if (!traceContext.TraceStream.is_open())
+		{
+			if (ImGui::Button("Begin Trace", ImVec2(ImGui::GetContentRegionAvail().x, 0)))
+			{
+				BeginTrace(tracePath.c_str(), traceContext);
+			}
+		}
+		else
+		{
+			if (ImGui::Button("End Trace", ImVec2(ImGui::GetContentRegionAvail().x, 0)))
+			{
+				EndTrace(traceContext);
+			}
+		}
+
 		HUDContext::SelectedStatData& selectedEvent = context.SelectedEvent;
 		if ((uint32)selectedEvent.Hash != 0)
 		{
@@ -580,7 +671,6 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 			if (eventTime)
 			{
-				ImGui::BeginGroup();
 				ImGui::Text(pName);
 				if (ImGui::BeginTable("TooltipTable", 2))
 				{
@@ -598,9 +688,9 @@ static void DrawProfilerTimeline(const ImVec2& size = ImVec2(0, 0))
 
 					ImGui::EndTable();
 				}
-				ImGui::EndGroup();
 			}
 		}
+		ImGui::EndGroup();
 
 
 		// Horizontal scroll bar
