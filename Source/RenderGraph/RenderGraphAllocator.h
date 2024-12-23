@@ -7,9 +7,10 @@
 class RGAllocator
 {
 public:
-	inline static bool liveCapture = false;
-	inline static bool preferHeaps = true;
-	inline static bool bestFit = false;
+	inline static bool sLiveCapture = false;
+	inline static bool sPreferHeaps = true;
+	inline static bool sBestFit = false;
+	inline static bool sUsePlacedResources = true;
 
 	struct Resource
 	{
@@ -19,6 +20,7 @@ public:
 		URange			Lifetime;
 		uint64			Offset = 0xFFFFFFFF;
 		int				ID;
+		D3D12_RESOURCE_DESC ResourceDesc;
 
 		ImColor GetColor()
 		{
@@ -130,10 +132,10 @@ public:
 			resource.ID = pResource->ID.GetIndex();
 			resource.Name = pResource->GetName();
 
-			D3D12_RESOURCE_DESC resourceDesc = GetResourceDesc(pResource);
+			resource.ResourceDesc = GetResourceDesc(pResource);
 
 			uint64 size, alignment;
-			D3D::GetResourceAllocationInfo(pDevice->GetDevice(), resourceDesc, size, alignment);
+			D3D::GetResourceAllocationInfo(pDevice->GetDevice(), resource.ResourceDesc, size, alignment);
 
 			resource.Size = (int)size;
 			resource.Alignment = (int)alignment;
@@ -144,18 +146,64 @@ public:
 	static void AliasingExperiment(GraphicsDevice* pDevice, Span<RGResource*> graphResources)
 	{
 		PROFILE_CPU_SCOPE();
-		Array<Resource>& resources = GetResources(pDevice, graphResources, liveCapture);
+		Array<Resource>& resources = GetResources(pDevice, graphResources, sLiveCapture);
 
 		Array<Heap> heaps;
-		ComputeAliasing_V1(resources, heaps);
+		if(sUsePlacedResources)
+			ComputeAliasing_PlacedResources_V1(resources, heaps);
+		else
+			ComputeAliasing_CommittedResources(resources, heaps);
 		DrawDebugView(resources, heaps);
 	}
 
-	static void ComputeAliasing_V1(Array<Resource>& resources, Array<Heap>& heaps)
+	static void ComputeAliasing_CommittedResources(Array<Resource>& resources, Array<Heap>& heaps)
 	{
 		PROFILE_CPU_SCOPE();
 
-		if (!preferHeaps)
+		for (Resource& resource : resources)
+		{
+			Heap* pHeap = nullptr;
+			for (Heap& heap : heaps)
+			{
+				const Resource* pAllocation = heap.Allocations.front();
+				D3D::ResourceDescEqual eq;
+				if (eq.operator()(pAllocation->ResourceDesc, resource.ResourceDesc))
+				{
+					bool anyOverlap = false;
+					for (const Resource* pExisting : heap.Allocations)
+					{
+						if (pExisting->Lifetime.Overlaps(resource.Lifetime))
+						{
+							anyOverlap = true;
+							break;
+						}
+					}
+
+					if (!anyOverlap)
+					{
+						pHeap = &heap;
+					}
+				}
+			}
+
+			if (!pHeap)
+			{
+				Heap& heap = heaps.emplace_back();
+				heap.Size = resource.Size;
+				pHeap = &heap;
+			}
+
+			resource.Offset = 0;
+			pHeap->Allocations.push_back(&resource);
+		}
+
+	}
+
+	static void ComputeAliasing_PlacedResources_V1(Array<Resource>& resources, Array<Heap>& heaps)
+	{
+		PROFILE_CPU_SCOPE();
+
+		if (!sPreferHeaps)
 			heaps.push_back({ {}, 0 });
 
 		// Sort resources largest to smallest, then largest alignment to smallest.
@@ -236,7 +284,7 @@ public:
 									pHeap = &heap;
 
 									// If we're not looking for the best fit, we're done. Otherwise keep looking
-									if (!bestFit)
+									if (!sBestFit)
 										break;
 								}
 							}
@@ -249,7 +297,7 @@ public:
 
 			if (!pHeap)
 			{
-				if (preferHeaps)
+				if (sPreferHeaps)
 				{
 					Heap& heap = heaps.emplace_back();
 					heap.Size = resource.Size;
@@ -330,7 +378,7 @@ public:
 
 				ImVec2 cursor = ImGui::GetCursorScreenPos();
 
-				float heapHeight = preferHeaps ? log2f((float)heap.Size + 1) : ImGui::GetContentRegionAvail().y;
+				float heapHeight = sPreferHeaps ? log2f((float)heap.Size + 1) : ImGui::GetContentRegionAvail().y;
 				auto GetBarHeight = [&](uint64 size) { return (float)size / heap.Size * heapHeight; };
 
 				pDraw->AddRectFilled(cursor, cursor + ImVec2(widthScale * (lastPassID + 1), heapHeight), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
@@ -369,11 +417,13 @@ public:
 		{
 			int remove = -1;
 			int duplicate = -1;
-			ImGui::Checkbox("Live Capture", &liveCapture);
+			ImGui::Checkbox("Live Capture", &sLiveCapture);
 			ImGui::SameLine();
-			ImGui::Checkbox("Prefer heaps", &preferHeaps);
+			ImGui::Checkbox("Prefer heaps", &sPreferHeaps);
 			ImGui::SameLine();
-			ImGui::Checkbox("Best Fit", &bestFit);
+			ImGui::Checkbox("Best Fit", &sBestFit);
+			ImGui::SameLine();
+			ImGui::Checkbox("Placed Resources", &sUsePlacedResources);
 			if (ImGui::Button("Clear All"))
 				resources.clear();
 
