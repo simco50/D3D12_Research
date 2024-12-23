@@ -60,7 +60,7 @@ class RGResource
 public:
 	friend class RGGraph;
 	friend class RGPass;
-	friend class Renderer;
+	friend class RGAllocator;
 
 	RGResource(const char* pName, RGResourceID id, RGResourceType type, DeviceResource* pPhysicalResource = nullptr)
 		: pName(pName), ID(id), Allocated(false), IsImported(!!pPhysicalResource), IsExported(false), Type((uint32)type), pPhysicalResource(nullptr)

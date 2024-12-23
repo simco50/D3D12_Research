@@ -11,6 +11,7 @@
 #include "Core/Paths.h"
 #include "Core/Utils.h"
 #include "Core/Callstack.h"
+#include "Core/Mutex.h"
 
 #define VERIFY_HR(hr) D3D::LogHRESULT(hr, nullptr, #hr, __FILE__, __LINE__)
 #define VERIFY_HR_EX(hr, device) D3D::LogHRESULT(hr, device, #hr, __FILE__, __LINE__)
@@ -29,13 +30,13 @@ namespace D3D
 		char* pCurrent = outString;
 		int i = 0;
 		auto AddText = [&](const char* pText)
-		{
-			if (i++ > 0)
-				*pCurrent++ = '/';
-			strcpy_s(pCurrent, 1024 - (pCurrent - outString), pText);
-			size_t len = strlen(pText);
-			pCurrent += len;
-		};
+			{
+				if (i++ > 0)
+					*pCurrent++ = '/';
+				strcpy_s(pCurrent, 1024 - (pCurrent - outString), pText);
+				size_t len = strlen(pText);
+				pCurrent += len;
+			};
 
 #define STATE_CASE(name) if((state & D3D12_RESOURCE_STATE_##name) == D3D12_RESOURCE_STATE_##name) { AddText(#name); state &= ~D3D12_RESOURCE_STATE_##name; }
 
@@ -79,7 +80,7 @@ namespace D3D
 			STATE_CASE(VIDEO_DECODE);
 			STATE_CASE(VIDEO_ENCODE);
 			STATE_CASE(VIDEO_PROCESS);
-			default: return "";
+		default: return "";
 		}
 #undef STATE_CASE
 	}
@@ -356,6 +357,87 @@ namespace D3D
 		case DXGI_FORMAT_BC7_UNORM:				return DXGI_FORMAT_BC7_UNORM_SRGB;
 		default:								return format;
 		};
+	}
+
+	struct ResourceDescHash
+	{
+		size_t operator()(const D3D12_RESOURCE_DESC& resourceDesc) const
+		{
+			uint64 hash = gHash(resourceDesc.Dimension);
+			hash = gHashCombine(hash, resourceDesc.Alignment);
+			hash = gHashCombine(hash, resourceDesc.Width);
+			hash = gHashCombine(hash, resourceDesc.Height);
+			hash = gHashCombine(hash, resourceDesc.DepthOrArraySize);
+			hash = gHashCombine(hash, resourceDesc.MipLevels);
+			hash = gHashCombine(hash, resourceDesc.Format);
+			hash = gHashCombine(hash, resourceDesc.SampleDesc.Count);
+			hash = gHashCombine(hash, resourceDesc.SampleDesc.Quality);
+			hash = gHashCombine(hash, resourceDesc.Layout);
+			hash = gHashCombine(hash, resourceDesc.Flags);
+			return hash;
+		}
+
+	};
+
+	struct ResourceDescEqual
+	{
+		bool operator()(const D3D12_RESOURCE_DESC& a, const D3D12_RESOURCE_DESC& b) const
+		{
+			return a.Dimension				== b.Dimension &&
+				a.Alignment					== b.Alignment &&
+				a.Width						== b.Width &&
+				a.Height					== b.Height &&
+				a.DepthOrArraySize			== b.DepthOrArraySize &&
+				a.MipLevels					== b.MipLevels &&
+				a.Format					== b.Format &&
+				a.SampleDesc.Count			== b.SampleDesc.Count &&
+				a.SampleDesc.Quality		== b.SampleDesc.Quality &&
+				a.Layout					== b.Layout &&
+				a.Flags						== b.Flags;
+		}
+	};
+
+	static void GetResourceAllocationInfo(ID3D12Device* pDevice, const D3D12_RESOURCE_DESC& resourceDesc, uint64& outSize, uint64& outAlignment)
+	{
+		if (resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+		{
+			outSize = resourceDesc.Width;
+			outAlignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+			return;
+		}
+
+		struct AllocationInfo
+		{
+			uint64 Alignment;
+			uint64 Size;
+		};
+		static HashMap<D3D12_RESOURCE_DESC, AllocationInfo, ResourceDescHash, ResourceDescEqual> lut;
+		static RWMutex lock;
+
+		{
+			ScopedReadLock scope(lock);
+			auto it = lut.find(resourceDesc);
+			if (it != lut.end())
+			{
+				outSize = it->second.Size;
+				outAlignment = it->second.Alignment;
+				return;
+			}
+		}
+
+		D3D12_RESOURCE_ALLOCATION_INFO allocInfo = pDevice->GetResourceAllocationInfo(0, 1, &resourceDesc);
+		AllocationInfo info{
+			.Alignment = allocInfo.Alignment,
+			.Size = allocInfo.SizeInBytes,
+		};
+
+		{
+			ScopedWriteLock scope(lock);
+			lut[resourceDesc] = info;
+		}
+
+		outSize = info.Size;
+		outAlignment = info.Alignment;
 	}
 
 	static String GetResourceDescription(ID3D12Resource* pResource)

@@ -36,8 +36,6 @@ public:
 	void Init(GraphicsDevice* pDevice, World* pWorld);
 	void Shutdown();
 
-	void DrawTest(Span<RGResource*> graphResources);
-
 	void Render(const Transform& cameraTransform, const Camera& camera, Texture* pTarget);
 	void DrawImGui();
 	void MakeScreenshot(Texture* pSource);

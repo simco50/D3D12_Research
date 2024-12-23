@@ -62,11 +62,11 @@ constexpr inline bool EnumHasAnyFlags(Enum Flags, Enum Contains)
 }
 
 
-template<typename Key, typename Value, typename Hash = ankerl::unordered_dense::hash<Key>>
-using HashMap = ankerl::unordered_dense::map<Key, Value, Hash>;
+template<typename Key, typename Value, typename Hash = ankerl::unordered_dense::hash<Key>, typename KeyEqual = std::equal_to<Key>>
+using HashMap = ankerl::unordered_dense::map<Key, Value, Hash, KeyEqual>;
 
-template<typename Key, typename Hash = ankerl::unordered_dense::hash<Key>>
-using HashSet = ankerl::unordered_dense::set<Key, Hash>;
+template<typename Key, typename Hash = ankerl::unordered_dense::hash<Key>, typename KeyEqual = std::equal_to<Key>>
+using HashSet = ankerl::unordered_dense::set<Key, Hash, KeyEqual>;
 
 using String = std::string;
 using StringView = std::string_view;
@@ -79,3 +79,21 @@ using StaticArray = std::array<T, Size>;
 
 template<typename T>
 using UniquePtr = std::unique_ptr<T>;
+
+inline uint64 gHash(uint64 inValue)
+{
+	return ankerl::unordered_dense::detail::wyhash::hash(inValue);
+}
+
+inline uint64 gHashCombine(uint64 inA, uint64 inB)
+{
+	return ankerl::unordered_dense::detail::wyhash::mix(inA, inB);
+}
+
+template<typename T>
+inline uint64 gHash(T& value)
+{
+	static_assert(std::has_unique_object_representations_v<T>);
+	return ankerl::unordered_dense::detail::wyhash::hash(&value, sizeof(T));
+}
+
