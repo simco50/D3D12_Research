@@ -345,6 +345,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 	psoDesc.SetPixelShader("ImGui.hlsl", "PSMain");
 	psoDesc.SetBlendMode(BlendMode::Alpha, false);
 	psoDesc.SetDepthWrite(false);
+	psoDesc.SetDepthEnabled(false);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);

@@ -577,7 +577,7 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 	}
 	else
 	{
-		VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, resourceState, pClearValue, IID_PPV_ARGS(&pResource)), m_pDevice);
+		VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &resourceDesc, resourceState, pClearValue, IID_PPV_ARGS(&pResource)), m_pDevice);
 	}
 
 	Texture* pTexture = new Texture(this, desc, pResource);
@@ -723,7 +723,7 @@ Ref<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHe
 	}
 	else
 	{
-		VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_CREATE_NOT_ZEROED, &resourceDesc, initialState, nullptr, IID_PPV_ARGS(&pResource)), m_pDevice);
+		VERIFY_HR_EX(m_pDevice->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &resourceDesc, initialState, nullptr, IID_PPV_ARGS(&pResource)), m_pDevice);
 	}
 
 	Buffer* pBuffer = new Buffer(this, desc, pResource);
