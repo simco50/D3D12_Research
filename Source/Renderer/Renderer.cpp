@@ -1901,7 +1901,7 @@ void Renderer::DrawImGui()
 		ImGui::Begin("Luminance Histogram");
 		ImVec2 cursor = ImGui::GetCursorPos();
 		ImVec2 size = ImGui::GetAutoSize(ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
-		ImGui::Image(m_pDebugHistogramTexture, size);
+		ImGui::Image((ImTextureID)m_pDebugHistogramTexture.Get(), size);
 		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::gMinLogLuminance.Get()).c_str());
 		ImGui::End();
 	}
@@ -1937,7 +1937,7 @@ void Renderer::DrawImGui()
 					corners[c] = ImVec2(corner.x, corner.y) * cascadeImageSize;
 				}
 
-				pDraw->AddImage(sunLight.ShadowMaps[i], cursor, cursor + ImVec2(cascadeImageSize, cascadeImageSize));
+				pDraw->AddImage((ImTextureID)sunLight.ShadowMaps[i], cursor, cursor + ImVec2(cascadeImageSize, cascadeImageSize));
 
 				ImColor clr(0.7f, 1.0f, 1.0f, 0.5f);
 				pDraw->AddLine(cursor + corners[0], cursor + corners[4], clr);

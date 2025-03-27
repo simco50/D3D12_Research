@@ -266,7 +266,7 @@ void DemoApp::DrawImGui()
 	{
 		m_pViewportTexture = m_pDevice->CreateTexture(TextureDesc::Create2D((uint32)imageSize.x, (uint32)imageSize.y, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource | TextureFlag::UnorderedAccess), "Viewport");
 	}
-	ImGui::Image(m_pViewportTexture, imageSize);
+	ImGui::Image((ImTextureID)m_pViewportTexture.Get(), imageSize);
 	ImVec2 viewportOrigin = ImGui::GetItemRectMin();
 	ImVec2 viewportExtents = ImGui::GetItemRectSize();
 	ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());

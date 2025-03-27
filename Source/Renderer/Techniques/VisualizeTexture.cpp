@@ -419,7 +419,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 				// Add checkerboard background
 				ImVec2 checkersSize = ImMax(ImGui::GetContentRegionAvail(), imageSize);
 				ImVec2 c = ImGui::GetCursorScreenPos();
-				ImGui::GetWindowDrawList()->AddImage(GraphicsCommon::GetDefaultTexture(DefaultTexture::CheckerPattern), c, c + ImGui::GetContentRegionAvail(), ImVec2(0.0f, 0.0f), checkersSize / 50.0f, ImColor(0.1f, 0.1f, 0.1f, 1.0f));
+				ImGui::GetWindowDrawList()->AddImage((ImTextureID)GraphicsCommon::GetDefaultTexture(DefaultTexture::CheckerPattern), c, c + ImGui::GetContentRegionAvail(), ImVec2(0.0f, 0.0f), checkersSize / 50.0f, ImColor(0.1f, 0.1f, 0.1f, 1.0f));
 
 				bool imageHovered = false;
 				if (captureContext.XRay)
@@ -429,7 +429,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 					ImGui::ItemSize(bb);
 					if (ImGui::ItemAdd(bb, ImGui::GetID("##Image")))
 					{
-						ImGui::GetWindowDrawList()->AddImage(captureContext.pTextureTarget, viewportOrigin, viewportOrigin + viewportSize);
+						ImGui::GetWindowDrawList()->AddImage((ImTextureID)captureContext.pTextureTarget.Get(), viewportOrigin, viewportOrigin + viewportSize);
 					}
 
 					imageHovered = ImGui::IsItemHovered();
@@ -438,7 +438,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 				else
 				{
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-					ImGui::ImageButton("##Image", captureContext.pTextureTarget, imageSize);
+					ImGui::ImageButton("##Image", (ImTextureID)captureContext.pTextureTarget.Get(), imageSize);
 					ImGui::PopStyleVar();
 
 					imageHovered = ImGui::IsItemHovered();
