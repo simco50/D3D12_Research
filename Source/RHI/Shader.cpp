@@ -42,7 +42,7 @@ namespace ShaderCompiler
 
 	struct CompileResult
 	{
-		static constexpr int Version = 7;
+		static constexpr int Version = 8;
 
 		String ErrorMessage;
 		ShaderBlob pBlob;
