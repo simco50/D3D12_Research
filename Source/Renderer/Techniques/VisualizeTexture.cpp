@@ -65,8 +65,8 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 				const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
 
 				constants.HoveredPixel		= captureContext.HoveredPixel;
-				constants.TextureSource		= resources.GetSRV(pSource)->GetHeapIndex();
-				constants.TextureTarget		= resources.GetUAV(pTarget)->GetHeapIndex();
+				constants.TextureSource		= resources.GetSRV(pSource);
+				constants.TextureTarget		= resources.GetUAV(pTarget);
 				constants.Dimensions		= mipSize;
 				constants.TextureType		= (uint32)pSource->GetDesc().Type;
 				constants.ValueRange		= Vector2(captureContext.RangeMin, captureContext.RangeMax);

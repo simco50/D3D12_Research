@@ -7,7 +7,6 @@
 #include "RootSignature.h"
 #include "Buffer.h"
 #include "Texture.h"
-#include "ResourceViews.h"
 #include "ShaderBindingTable.h"
 #include "StateObject.h"
 #include "Core/Profiler.h"
@@ -207,7 +206,7 @@ void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pTarget, 
 			.Width		= sourceRegion.right - sourceRegion.left,
 			.Height		= sourceRegion.bottom - sourceRegion.top,
 			.Depth		= sourceRegion.back - sourceRegion.front,
-			.RowPitch	= Math::AlignUp<uint32>((uint32)RHI::GetRowPitch(pSource->GetFormat(), textureFootprint.Footprint.Width), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT),
+			.RowPitch	= Math::AlignUp<uint32>((uint32)RHI::GetRowPitch(pSource->GetFormat(), sourceRegion.right - sourceRegion.left), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT),
 		}
 	};
 
@@ -282,75 +281,51 @@ void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, 
 void CommandContext::ClearBufferFloat(Buffer* pBuffer, float value)
 {
 	gAssert(pBuffer);
-	UnorderedAccessView* pUAV = pBuffer->GetUAV();
-	gAssert(pUAV);
-
-	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
-	if (gpuHandle.IsNull())
-	{
-		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
+	DescriptorHandle gpuHandle = pBuffer->GetUAV();
+	gAssert(gpuHandle.IsValid());
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
 	float values[4] = { value, value, value, value };
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pBuffer->GetResource(), values, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewFloat(ptr.GPUHandle, ptr.CPUOpaqueHandle, pBuffer->GetResource(), values, 0, nullptr);
 }
 
 void CommandContext::ClearBufferUInt(Buffer* pBuffer, uint32 value)
 {
 	gAssert(pBuffer);
-	UnorderedAccessView* pUAV = pBuffer->GetUAV();
-	gAssert(pUAV);
-
-	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
-	if (gpuHandle.IsNull())
-	{
-		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
+	DescriptorHandle gpuHandle = pBuffer->GetUAV();
+	gAssert(gpuHandle.IsValid());
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
 	uint32 values[4] = { value, value, value, value };
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pBuffer->GetResource(), values, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewUint(ptr.GPUHandle, ptr.CPUOpaqueHandle, pBuffer->GetResource(), values, 0, nullptr);
 }
 
 void CommandContext::ClearTextureUInt(Texture* pTexture, const Vector4u& values)
 {
 	gAssert(pTexture);
-	UnorderedAccessView* pUAV = pTexture->GetUAV();
-	gAssert(pUAV);
-
-	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
-	if (gpuHandle.IsNull())
-	{
-		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
+	DescriptorHandle gpuHandle = pTexture->GetUAV();
+	gAssert(gpuHandle.IsValid());
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pTexture->GetResource(), &values.x, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewUint(ptr.GPUHandle, ptr.CPUOpaqueHandle, pTexture->GetResource(), &values.x, 0, nullptr);
 }
 
 void CommandContext::ClearTextureFloat(Texture* pTexture, const Vector4& values)
 {
 	gAssert(pTexture);
-	UnorderedAccessView* pUAV = pTexture->GetUAV();
-	gAssert(pUAV);
-
-	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
-	if (gpuHandle.IsNull())
-	{
-		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
+	DescriptorHandle gpuHandle = pTexture->GetUAV();
+	gAssert(gpuHandle.IsValid());
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pTexture->GetResource(), &values.x, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewFloat(ptr.GPUHandle, ptr.CPUOpaqueHandle, pTexture->GetResource(), &values.x, 0, nullptr);
 }
 
 void CommandContext::SetComputeRootSignature(const RootSignature* pRootSignature)
@@ -452,9 +427,9 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const Buffer* pBuffer)
 }
 
 
-void CommandContext::BindResources(uint32 rootIndex, Span<const ResourceView*> pViews, uint32 offset)
+void CommandContext::BindResources(uint32 rootIndex, Span<DescriptorHandle> descriptorHandles, uint32 offset)
 {
-	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, pViews);
+	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, descriptorHandles);
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)

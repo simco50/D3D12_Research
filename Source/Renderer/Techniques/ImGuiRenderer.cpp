@@ -193,8 +193,7 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 					pTexture = sFontTexture;
 
 				gAssert(pTexture->GetSRV());
-
-				params.mTextureIndex = pTexture->GetSRVIndex();
+				params.mTextureIndex = pTexture->GetSRV();
 
 				context.BindRootCBV(BindingSlot::PerInstance, params);
 				context.SetScissorRect(FloatRect(clip_min.x, clip_min.y, clip_max.x, clip_max.y));

@@ -146,8 +146,8 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 
 void ShaderDebugRenderer::GetGPUData(GPUDebugRenderData* pData) const
 {
-	pData->RenderDataUAV = m_pRenderDataBuffer->GetUAVIndex();
-	pData->FontDataSRV = m_pGlyphData->GetSRVIndex();
+	pData->RenderDataUAV = m_pRenderDataBuffer->GetUAV();
+	pData->FontDataSRV = m_pGlyphData->GetSRV();
 	pData->FontSize = m_FontSize;
 }
 

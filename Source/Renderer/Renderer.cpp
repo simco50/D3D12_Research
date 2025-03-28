@@ -1369,14 +1369,14 @@ void Renderer::GetViewUniforms(const RenderView& view, ShaderInterop::ViewUnifor
 	outUniforms.CascadeDepths			= m_ShadowCascadeDepths;
 	outUniforms.NumCascades				= m_NumShadowCascades;
 
-	outUniforms.TLASIndex				= m_AccelerationStructure.GetSRV() ? m_AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-	outUniforms.MeshesIndex				= m_MeshBuffer.pBuffer->GetSRVIndex();
-	outUniforms.MaterialsIndex			= m_MaterialBuffer.pBuffer->GetSRVIndex();
-	outUniforms.InstancesIndex			= m_InstanceBuffer.pBuffer->GetSRVIndex();
-	outUniforms.LightsIndex				= m_LightBuffer.pBuffer->GetSRVIndex();
-	outUniforms.LightMatricesIndex		= m_LightMatricesBuffer.pBuffer->GetSRVIndex();
-	outUniforms.SkyIndex				= m_pSky ? m_pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-	outUniforms.DDGIVolumesIndex		= m_DDGIVolumesBuffer.pBuffer->GetSRVIndex();
+	outUniforms.TLASIndex				= m_AccelerationStructure.GetSRV();
+	outUniforms.MeshesIndex				= m_MeshBuffer.pBuffer->GetSRV();
+	outUniforms.MaterialsIndex			= m_MaterialBuffer.pBuffer->GetSRV();
+	outUniforms.InstancesIndex			= m_InstanceBuffer.pBuffer->GetSRV();
+	outUniforms.LightsIndex				= m_LightBuffer.pBuffer->GetSRV();
+	outUniforms.LightMatricesIndex		= m_LightMatricesBuffer.pBuffer->GetSRV();
+	outUniforms.SkyIndex				= m_pSky ? m_pSky->GetSRV() : SRVHandle::Invalid();
+	outUniforms.DDGIVolumesIndex		= m_DDGIVolumesBuffer.pBuffer->GetSRV();
 	outUniforms.NumDDGIVolumes			= m_DDGIVolumesBuffer.Count;
 
 	outUniforms.FontDataIndex			= m_DebugRenderData.FontDataSRV;
@@ -1486,7 +1486,7 @@ void Renderer::UploadSceneData(CommandContext& context)
 		for (const Mesh& mesh : pWorld->Meshes)
 		{
 			ShaderInterop::MeshData& meshData = meshes.emplace_back();
-			meshData.BufferIndex = mesh.pBuffer->GetSRVIndex();
+			meshData.BufferIndex = mesh.pBuffer->GetSRV();
 			meshData.IndexByteSize = mesh.IndicesLocation.Stride();
 			meshData.IndicesOffset = (uint32)mesh.IndicesLocation.OffsetFromStart;
 			meshData.PositionsOffset = mesh.SkinnedPositionStreamLocation.IsValid() ? (uint32)mesh.SkinnedPositionStreamLocation.OffsetFromStart : (uint32)mesh.PositionStreamLocation.OffsetFromStart;
@@ -1510,10 +1510,10 @@ void Renderer::UploadSceneData(CommandContext& context)
 		for (const Material& material : pWorld->Materials)
 		{
 			ShaderInterop::MaterialData& materialData = materials.emplace_back();
-			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRVIndex() : -1;
-			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRVIndex() : -1;
-			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRVIndex() : -1;
-			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRVIndex() : -1;
+			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV() : SRVHandle::Invalid();
+			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRV() : SRVHandle::Invalid();
+			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRV() : SRVHandle::Invalid();
+			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRV() : SRVHandle::Invalid();
 			materialData.BaseColorFactor = material.BaseColorFactor;
 			materialData.MetalnessFactor = material.MetalnessFactor;
 			materialData.RoughnessFactor = material.RoughnessFactor;
@@ -1541,10 +1541,10 @@ void Renderer::UploadSceneData(CommandContext& context)
 					ddgi.BoundsMin = transform.Position - volume.Extents;
 					ddgi.ProbeSize = 2 * volume.Extents / (Vector3((float)volume.NumProbes.x, (float)volume.NumProbes.y, (float)volume.NumProbes.z) - Vector3::One);
 					ddgi.ProbeVolumeDimensions = Vector3u(volume.NumProbes.x, volume.NumProbes.y, volume.NumProbes.z);
-					ddgi.IrradianceIndex = volume.pIrradianceHistory ? volume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.DepthIndex = volume.pDepthHistory ? volume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.ProbeOffsetIndex = volume.pProbeOffset ? volume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.ProbeStatesIndex = volume.pProbeStates ? volume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.IrradianceIndex = volume.pIrradianceHistory ? volume.pIrradianceHistory->GetSRV() : SRVHandle::Invalid();
+					ddgi.DepthIndex = volume.pDepthHistory ? volume.pDepthHistory->GetSRV() : SRVHandle::Invalid();
+					ddgi.ProbeOffsetIndex = volume.pProbeOffset ? volume.pProbeOffset->GetSRV() : SRVHandle::Invalid();
+					ddgi.ProbeStatesIndex = volume.pProbeStates ? volume.pProbeStates->GetSRV() : SRVHandle::Invalid();
 					ddgi.NumRaysPerProbe = volume.NumRays;
 					ddgi.MaxRaysPerProbe = volume.MaxNumRays;
 				});
@@ -1566,8 +1566,8 @@ void Renderer::UploadSceneData(CommandContext& context)
 				data.Color = Math::Pack_RGBA8_UNORM(light.Colour);
 				data.Intensity = light.Intensity;
 				data.Range = light.Range;
-				data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-				data.MaskTexture = light.pLightTexture ? light.pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+				data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRV() : SRVHandle::Invalid();
+				data.MaskTexture = light.pLightTexture ? light.pLightTexture->GetSRV() : SRVHandle::Invalid();
 				data.MatrixIndex = light.MatrixIndex;
 				data.InvShadowSize = 1.0f / light.ShadowMapSize;
 				data.IsEnabled = light.Intensity > 0 ? 1 : 0;

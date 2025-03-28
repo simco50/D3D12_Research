@@ -5,7 +5,6 @@
 #include "RHI/CommandContext.h"
 #include "RHI/Texture.h"
 #include "RHI/ShaderBindingTable.h"
-#include "RHI/ResourceViews.h"
 #include "RHI/StateObject.h"
 #include "Renderer/Renderer.h"
 #include "RenderGraph/RenderGraph.h"

@@ -14,6 +14,11 @@ using int2 = Vector2i;
 using int3 = Vector3i;
 using int4 = Vector4i;
 using float4x4 = Matrix;
+#else
+template<bool Writeable>
+using DescriptorHandle = uint;
+using UAVHandle = DescriptorHandle<true>;
+using SRVHandle = DescriptorHandle<false>;
 #endif
 
 #define CONCAT_IMPL( x, y ) x##y
@@ -26,10 +31,10 @@ static const int MESHLET_MAX_VERTICES = 64;
 // Per material shader data
 struct MaterialData
 {
-	uint Diffuse;
-	uint Normal;
-	uint RoughnessMetalness;
-	uint Emissive;
+	SRVHandle Diffuse;
+	SRVHandle Normal;
+	SRVHandle RoughnessMetalness;
+	SRVHandle Emissive;
 	float4 BaseColorFactor;
 	float4 EmissiveFactor;
 	float MetalnessFactor;
@@ -40,7 +45,7 @@ struct MaterialData
 
 struct MeshData
 {
-	uint BufferIndex;
+	SRVHandle BufferIndex;
 	uint PositionsOffset;
 	uint UVsOffset;
 	uint NormalsOffset;
@@ -100,9 +105,9 @@ struct Light
 	float Range;
 	float InvShadowSize;
 
-	uint ShadowMapIndex;
+	SRVHandle ShadowMapIndex;
 	uint MatrixIndex;
-	uint MaskTexture;
+	SRVHandle MaskTexture;
 
 	// flags
 	uint IsEnabled : 1;
@@ -124,10 +129,10 @@ struct DDGIVolume
 	float3 ProbeSize;
 	uint MaxRaysPerProbe;
 	uint3 ProbeVolumeDimensions;
-	uint IrradianceIndex;
-	uint DepthIndex;
-	uint ProbeOffsetIndex;
-	uint ProbeStatesIndex;
+	SRVHandle IrradianceIndex;
+	SRVHandle DepthIndex;
+	SRVHandle ProbeOffsetIndex;
+	SRVHandle ProbeStatesIndex;
 	uint pad0;
 };
 
@@ -177,17 +182,17 @@ struct ViewUniforms
 	uint LightCount;
 	uint NumDDGIVolumes;
 
-	uint InstancesIndex;
-	uint MeshesIndex;
-	uint MaterialsIndex;
-	uint LightsIndex;
-	uint LightMatricesIndex;
-	uint SkyIndex;
-	uint DDGIVolumesIndex;
-	uint TLASIndex;
+	SRVHandle InstancesIndex;
+	SRVHandle MeshesIndex;
+	SRVHandle MaterialsIndex;
+	SRVHandle LightsIndex;
+	SRVHandle LightMatricesIndex;
+	SRVHandle SkyIndex;
+	SRVHandle DDGIVolumesIndex;
+	SRVHandle TLASIndex;
 
-	uint DebugRenderDataIndex;
-	uint FontDataIndex;
+	UAVHandle DebugRenderDataIndex;
+	SRVHandle FontDataIndex;
 	uint FontSize;
 };
 

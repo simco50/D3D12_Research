@@ -9,21 +9,7 @@ Texture::Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12Resourc
 
 Texture::~Texture()
 {
+	GetParent()->ReleaseResourceDescriptor(m_SRV);
+	for (DescriptorHandle& uav : m_UAVs)
+		GetParent()->ReleaseResourceDescriptor(uav);
 }
-
-UnorderedAccessView* Texture::GetUAV(uint32 subresourceIndex) const
-{
-	gAssert(subresourceIndex < m_UAVs.size());
-	return m_UAVs[subresourceIndex];
-}
-
-uint32 Texture::GetUAVIndex(uint32 subresourceIndex) const
-{
-	return GetUAV(subresourceIndex)->GetHeapIndex();
-}
-
-uint32 Texture::GetSRVIndex() const
-{
-	return m_pSRV ? m_pSRV->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-}
-

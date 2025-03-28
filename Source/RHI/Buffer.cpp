@@ -1,19 +1,15 @@
 #include "stdafx.h"
 #include "Buffer.h"
-#include "ResourceViews.h"
+#include "Device.h"
 
 Buffer::Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12ResourceX* pResource)
 	: DeviceResource(pParent, pResource), m_Desc(desc)
 {
 }
 
-uint32 Buffer::GetUAVIndex() const
-{
-	return m_pUAV->GetHeapIndex();
-}
 
-uint32 Buffer::GetSRVIndex() const
+Buffer::~Buffer()
 {
-	return m_pSRV->GetHeapIndex();
+	GetParent()->ReleaseResourceDescriptor(m_SRV);
+	GetParent()->ReleaseResourceDescriptor(m_UAV);
 }
-

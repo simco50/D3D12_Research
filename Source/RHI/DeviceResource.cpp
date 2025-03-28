@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "DeviceResource.h"
-#include "ResourceViews.h"
 #include "Device.h"
 
 DeviceResource::DeviceResource(GraphicsDevice* pParent, ID3D12ResourceX* pResource)

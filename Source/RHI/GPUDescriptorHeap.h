@@ -7,66 +7,81 @@
 
 enum class CommandListContext : uint8;
 
+
 struct DescriptorHeapPage
 {
-	DescriptorHeapPage(const DescriptorHandle& startHandle, uint32 size)
-		: StartHandle(startHandle), Size(size), CurrentOffset(0)
+	DescriptorHeapPage(const DescriptorPtr& startHandle, uint32 size)
+		: StartPtr(startHandle), Size(size), CurrentOffset(0)
 	{}
-	DescriptorHandle StartHandle;
-	uint32 Size;
-	uint32 CurrentOffset;
-	SyncPoint SyncPoint;
+	DescriptorPtr	StartPtr;
+	uint32			Size;
+	uint32			CurrentOffset;
+	SyncPoint		SyncPoint;
 };
+
 
 class GPUDescriptorHeap : public DeviceObject
 {
 public:
+	struct Stats
+	{
+		uint32 NumPersistentAllocations;
+		uint32 PersistentCapacity;
+		uint32 NumScratchAllocations;
+		uint32 ScratchCapacity;
+	};
+
 	GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 dynamicPageSize, uint32 numDescriptors);
 	~GPUDescriptorHeap();
 
-	DescriptorHandle AllocatePersistent();
-	void FreePersistent(uint32& heapIndex);
+	DescriptorPtr AllocatePersistent();
+	void FreePersistent(DescriptorHandle& handle);
 
-	DescriptorHeapPage* AllocateDynamicPage();
-	void FreeDynamicPage(const SyncPoint& syncPoint, DescriptorHeapPage* pPage);
-	uint32 GetDynamicPageSize() const { return m_DynamicPageSize; }
+	DescriptorHeapPage* AllocateScratchPage();
+	void FreeScratchPage(const SyncPoint& syncPoint, DescriptorHeapPage* pPage);
+	uint32 GetDynamicPageSize() const { return m_ScratchPageSize; }
+
+	Stats GetStats() const;
 
 	uint32 GetDescriptorSize() const { return m_DescriptorSize; }
 	ID3D12DescriptorHeap* GetHeap() const { return m_pHeap.Get(); }
 	D3D12_DESCRIPTOR_HEAP_TYPE GetType() const { return m_Type; }
-	DescriptorHandle GetStartHandle() const { return m_StartHandle; }
+	DescriptorPtr GetStartPtr() const { return m_StartPtr; }
 
 private:
 	void CleanupPersistent();
-	void CleanupDynamic();
+	void CleanupScratch();
 
 	Ref<ID3D12DescriptorHeap> m_pHeap;
+	Ref<ID3D12DescriptorHeap> m_pCPUHeap;
 	D3D12_DESCRIPTOR_HEAP_TYPE m_Type;
 	uint32 m_DescriptorSize = 0;
-	DescriptorHandle m_StartHandle;
+	DescriptorPtr m_StartPtr;
 
-	std::mutex m_DynamicPageAllocateMutex;
-	uint32 m_DynamicPageSize;
-	uint32 m_NumDynamicDescriptors;
-	Array<std::unique_ptr<DescriptorHeapPage>> m_DynamicPages;
-	std::queue<DescriptorHeapPage*> m_ReleasedDynamicPages;
-	Array<DescriptorHeapPage*> m_FreeDynamicPages;
+	std::mutex m_ScratchPageAllocationMutex;
+	uint32 m_ScratchPageSize;
+	uint32 m_NumScratchDescriptors;
+	Array<std::unique_ptr<DescriptorHeapPage>> m_ScratchPages;
+	std::queue<DescriptorHeapPage*> m_ReleasedScratchPages;
+	Array<DescriptorHeapPage*> m_FreeScratchPages;
 
 	FreeList m_PersistentHandles;
 	uint32 m_NumPersistentDescriptors;
 	std::mutex m_AllocationLock;
-	std::queue<std::pair<uint32, uint64>> m_PersistentDeletionQueue;
+	std::queue<std::pair<DescriptorHandle, uint64>> m_PersistentDeletionQueue;
 };
 
-class DynamicGPUDescriptorAllocator : public DeviceObject
+
+
+class GPUScratchDescriptorAllocator : public DeviceObject
 {
 public:
-	DynamicGPUDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap);
-	~DynamicGPUDescriptorAllocator();
+	GPUScratchDescriptorAllocator(GPUDescriptorHeap* pGlobalHeap);
+	~GPUScratchDescriptorAllocator();
 
-	DescriptorHandle Allocate(uint32 count);
+	DescriptorPtr Allocate(uint32 count);
 
-	void SetDescriptors(uint32 rootIndex, uint32 offset, Span<const ResourceView*> handles);
+	void SetDescriptors(uint32 rootIndex, uint32 offset, Span<DescriptorHandle> handles);
 	void BindStagedDescriptors(CommandContext& context, CommandListContext descriptorTableType);
 
 	void ParseRootSignature(const RootSignature* pRootSignature);

@@ -3,15 +3,15 @@
 #include "Shader.h"
 #include "DescriptorHandle.h"
 #include "DeviceResource.h"
-#include "ResourceViews.h"
 #include "D3D.h"
 #include "Fence.h"
 #include "ScratchAllocator.h"
+#include "Texture.h"
+#include "Buffer.h"
 
 class ScratchAllocationManager;
 class ShaderManager;
 class GPUDescriptorHeap;
-class CPUDescriptorHeap;
 class SwapChain;
 class CommandSignatureInitializer;
 class RingBufferAllocator;
@@ -38,7 +38,7 @@ public:
 	void SetMaxFrameLatency(uint32 maxFrameLatency);
 	uint32 GetMaxFrameLatency() const { return m_MaxFrameLatency; }
 	void SetUseWaitableSwapChain(bool enabled);
-	bool GetUseWaitableSwapChain() { return m_UseWaitableObject; }
+	bool GetUseWaitableSwapChain() const { return m_UseWaitableObject; }
 
 	void SetDisplayMode(DisplayMode displayMode) { m_DesiredDisplayMode = displayMode; }
 	void SetVSync(bool enabled) { m_Vsync = enabled; }
@@ -123,10 +123,9 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE AllocateCPUDescriptor();
-	void FreeCPUDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
-	DescriptorHandle RegisterGlobalResourceView(D3D12_CPU_DESCRIPTOR_HANDLE view);
-	void UnregisterGlobalResourceView(DescriptorHandle& handle);
+	DescriptorPtr AllocateResourceDescriptor();
+	void ReleaseResourceDescriptor(DescriptorHandle& handle);
+	DescriptorPtr FindResourceDescriptorPtr(DescriptorHandle handle);
 
 	Ref<Texture> CreateTexture(const TextureDesc& desc, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
 	Ref<Texture> CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
@@ -134,15 +133,14 @@ public:
 	Ref<Buffer> CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData = nullptr);
 	Ref<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
 	void DeferReleaseObject(ID3D12Object* pObject);
-	ScratchAllocation AllocateUploadScratch(uint32 inSize, uint32 inAlignment = 1);
 
 	Ref<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
 	Ref<PipelineState> CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
 	Ref<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
-	Ref<ShaderResourceView> CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
-	Ref<UnorderedAccessView> CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
-	Ref<ShaderResourceView> CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
-	Ref<UnorderedAccessView> CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
+	SRVHandle CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
+	UAVHandle CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
+	SRVHandle CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
+	UAVHandle CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
 	Ref<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
 
 	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", Span<ShaderDefine> defines = {});
@@ -184,7 +182,6 @@ private:
 	uint32 m_FrameIndex = 0;
 
 	StaticArray<Ref<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
-	ScratchAllocator m_FrameScratchAllocator;
 
 	Ref<GPUDescriptorHeap> m_pGlobalViewHeap;
 	Ref<GPUDescriptorHeap> m_pGlobalSamplerHeap;
@@ -217,7 +214,6 @@ private:
 	DeferredDeleteQueue m_DeleteQueue;
 
 	std::unique_ptr<ShaderManager> m_pShaderManager;
-	Ref<CPUDescriptorHeap> m_pCPUResourceViewHeap;
 	Ref<ScratchAllocationManager> m_pScratchAllocationManager;
 	Ref<RingBufferAllocator> m_pRingBufferAllocator;
 

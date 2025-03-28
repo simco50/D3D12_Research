@@ -108,7 +108,7 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 
 				if (!pBLASScratch)
 				{
-					pBLASScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::NoBindless), "BLAS.ScratchBuffer");
+					pBLASScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT), BufferFlag::UnorderedAccess), "BLAS.ScratchBuffer");
 					pMesh->pBLASScratch = pBLASScratch;
 				}
 
@@ -219,13 +219,13 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 	}
 }
 
-ShaderResourceView* AccelerationStructure::GetSRV() const
+SRVHandle AccelerationStructure::GetSRV() const
 {
 	if (m_pTLAS)
 	{
 		return m_pTLAS->GetSRV();
 	}
-	return nullptr;
+	return SRVHandle::Invalid();
 }
 
 void AccelerationStructure::ProcessCompaction(CommandContext& context)

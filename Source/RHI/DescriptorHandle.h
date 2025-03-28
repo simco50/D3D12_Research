@@ -1,51 +1,67 @@
 #pragma once
 
+struct DescriptorPtr
+{
+	CD3DX12_CPU_DESCRIPTOR_HANDLE CPUHandle;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE GPUHandle;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE CPUOpaqueHandle;
+	uint32 HeapIndex;
+
+	DescriptorPtr Offset(uint32 i, uint32 descriptorSize) const
+	{
+		DescriptorPtr h = *this;
+		h.CPUHandle.Offset(i, descriptorSize);
+		h.GPUHandle.Offset(i, descriptorSize);
+		h.CPUOpaqueHandle.Offset(i, descriptorSize);
+		h.HeapIndex += i;
+		return h;
+	}
+};
+
 class DescriptorHandle
 {
 public:
-	DescriptorHandle()
-		: CpuHandle(InvalidCPUHandle), GpuHandle(InvalidGPUHandle), HeapIndex(InvalidHeapIndex)
+	constexpr DescriptorHandle()
+		: HeapIndex(InvalidHeapIndex)
 	{}
 
-	DescriptorHandle(
-		D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-		uint32 heapIndex,
-		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = InvalidGPUHandle)
-		: CpuHandle(cpuHandle), GpuHandle(gpuHandle), HeapIndex(heapIndex)
+	explicit constexpr DescriptorHandle(uint32 index)
+		: HeapIndex(index)
 	{}
 
-	void OffsetInline(uint32 numDescriptors, uint32 descriptorSize)
-	{
-		if (CpuHandle != InvalidCPUHandle)
-			CpuHandle.Offset(numDescriptors, descriptorSize);
-		if (GpuHandle != InvalidGPUHandle)
-			GpuHandle.Offset(numDescriptors, descriptorSize);
-		if (HeapIndex != InvalidHeapIndex)
-			HeapIndex += numDescriptors;
-	}
+	void Reset() { HeapIndex = InvalidHeapIndex; }
 
-	DescriptorHandle Offset(uint32 numDescriptors, uint32 descriptorSize)
-	{
-		DescriptorHandle handle = *this;
-		handle.OffsetInline(numDescriptors, descriptorSize);
-		return handle;
-	}
+	bool IsValid() const { return HeapIndex != InvalidHeapIndex; }
 
-	void Reset()
-	{
-		CpuHandle = InvalidCPUHandle;
-		GpuHandle = InvalidGPUHandle;
-		HeapIndex = InvalidHeapIndex;
-	}
+	operator uint32() const { return HeapIndex;	}
 
-	bool IsNull() const { return CpuHandle == InvalidCPUHandle; }
-	bool IsShaderVisible() const { return GpuHandle != InvalidGPUHandle; }
-
-	constexpr static D3D12_CPU_DESCRIPTOR_HANDLE InvalidCPUHandle = { ~0u };
-	constexpr static D3D12_GPU_DESCRIPTOR_HANDLE InvalidGPUHandle = { ~0u };
 	constexpr static uint32 InvalidHeapIndex = 0xFFFFFFFF;
-
-	CD3DX12_CPU_DESCRIPTOR_HANDLE CpuHandle;
-	CD3DX12_GPU_DESCRIPTOR_HANDLE GpuHandle;
 	uint32 HeapIndex;
 };
+
+template<bool Writeable>
+class DescriptorHandleT : public DescriptorHandle
+{
+public:
+	constexpr DescriptorHandleT() = default;
+
+	explicit constexpr DescriptorHandleT(uint32 index)
+		: DescriptorHandle(index)
+	{
+	}
+
+	explicit constexpr DescriptorHandleT(const DescriptorPtr& inPtr)
+		: DescriptorHandle(inPtr.HeapIndex)
+	{
+	}
+
+	static constexpr DescriptorHandleT Invalid() { return DescriptorHandleT(); }
+
+	static constexpr bool IsWriteable = Writeable;
+};
+
+class Texture;
+class Buffer;
+
+using SRVHandle = DescriptorHandleT<false>;
+using UAVHandle = DescriptorHandleT<true>;
