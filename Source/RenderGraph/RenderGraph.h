@@ -36,12 +36,12 @@ public:
 	Texture* Get(const RGTexture* pTexture) const			{ return static_cast<Texture*>(GetResource(pTexture, D3D12_RESOURCE_STATE_COMMON)); }
 	Buffer* Get(const RGBuffer* pBuffer) const				{ return static_cast<Buffer*>(GetResource(pBuffer, D3D12_RESOURCE_STATE_COMMON)); }
 
-	SRVHandle GetSRV(const RGTexture* pTexture) const					{ return static_cast<Texture*>(GetResource(pTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))->GetSRV(); }
-	SRVHandle GetSRV(const RGBuffer* pBuffer) const						{ return static_cast<Buffer*>(GetResource(pBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))->GetSRV(); }
-	UAVHandle GetUAV(const RGTexture* pTexture, uint32 index = 0) const	{ return static_cast<Texture*>(GetResource(pTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))->GetUAV(index); }
-	UAVHandle GetUAV(const RGBuffer* pBuffer) const						{ return static_cast<Buffer*>(GetResource(pBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))->GetUAV(); }
+	TextureView GetSRV(const RGTexture* pTexture) const						{ return static_cast<Texture*>(GetResource(pTexture, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))->GetSRV(); }
+	BufferView GetSRV(const RGBuffer* pBuffer) const							{ return static_cast<Buffer*>(GetResource(pBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))->GetSRV(); }
+	RWTextureView GetUAV(const RGTexture* pTexture, uint32 index = 0) const	{ return static_cast<Texture*>(GetResource(pTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))->GetUAV(index); }
+	RWBufferView GetUAV(const RGBuffer* pBuffer) const						{ return static_cast<Buffer*>(GetResource(pBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))->GetUAV(); }
 
-	DeviceResource* GetResourceUnsafe(const RGResource* pResource) const			{ return pResource->GetPhysicalUnsafe(); }
+	DeviceResource* GetResourceUnsafe(const RGResource* pResource) const		{ return pResource->GetPhysicalUnsafe(); }
 
 private:
 	DeviceResource* GetResource(const RGResource* pResource, D3D12_RESOURCE_STATES requiredAccess) const;

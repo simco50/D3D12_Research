@@ -5,23 +5,39 @@
 #include "DDGICommon.hlsli"
 #include "Random.hlsli"
 
-struct PassParameters
+struct UpdateIrradianceParams
 {
 	float3 RandomVector;
 	float RandomAngle;
 	float HistoryBlendWeight;
 	uint VolumeIndex;
+
+	TypedBufferH<float4> RayHitInfo;
+	RWTexture2DH<float4> IrradianceMap;
 };
+DEFINE_CONSTANTS(UpdateIrradianceParams, 0);
 
-ConstantBuffer<PassParameters> cPass : register(b0);
+struct UpdateDepthParams
+{
+	float3 RandomVector;
+	float RandomAngle;
+	float HistoryBlendWeight;
+	uint VolumeIndex;
 
-RWTexture2D<float4> uIrradianceMap : register(u0);
-RWTexture2D<float2> uDepthMap : register(u0);
-RWTexture2D<float4> uVisualizeTexture : register(u0);
-RWBuffer<float4> uProbeOffsets : register(u1);
-RWBuffer<uint> uProbeStates : register(u0);
+	TypedBufferH<float4> RayHitInfo;
+	RWTexture2DH<float2> DepthMap;
+};
+DEFINE_CONSTANTS(UpdateDepthParams, 0);
 
-Buffer<float4> tRayHitInfo : register(t0);
+struct UpdateProbeStateParams
+{
+	uint VolumeIndex;
+
+	TypedBufferH<float4> RayHitInfo;
+	RWTypedBufferH<float4> ProbeOffsets;
+	RWTypedBufferH<uint> ProbeStates;
+};
+DEFINE_CONSTANTS(UpdateProbeStateParams, 0);
 
 /**
 	- UpdateIrradiance -
@@ -53,7 +69,7 @@ void UpdateIrradianceCS(
 	uint groupId : SV_GroupID,
 	uint groupIndex : SV_GroupIndex)
 {
-	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
+	DDGIVolume volume = GetDDGIVolume(cUpdateIrradianceParams.VolumeIndex);
 	uint probeIdx = groupId;
 	uint3 probeCoordinates = GetDDGIProbeIndex3D(volume, probeIdx);
 
@@ -65,10 +81,9 @@ void UpdateIrradianceCS(
 	uint2 texelLocation = GetDDGIProbeTexel(volume, probeCoordinates, DDGI_PROBE_IRRADIANCE_TEXELS);
 	uint2 cornerTexelLocation = texelLocation - 1u;
 	texelLocation += groupThreadId.xy;
-	Texture2D<float4> tIrradianceMap = ResourceDescriptorHeap[volume.IrradianceIndex];
-	float3 prevRadiance = tIrradianceMap[texelLocation].rgb;
+	float3 prevRadiance = volume.IrradianceTexture[texelLocation].rgb;
 	float3 probeDirection = Octahedral::Unpack(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_IRRADIANCE_TEXELS) * 2 - 1);
-	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
+	float3x3 randomRotation = AngleAxis3x3(cUpdateIrradianceParams.RandomAngle, cUpdateIrradianceParams.RandomVector);
 
 	float weightSum = 0;
 	float3 sum = 0;
@@ -79,7 +94,7 @@ void UpdateIrradianceCS(
 		uint rayCount = min(IRRADIANCE_RAY_HIT_GS_SIZE, volume.NumRaysPerProbe - rayIndex);
 		if(groupIndex < rayCount)
 		{
-			gsRadianceCache_Irradiance[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex + groupIndex].rgb;
+			gsRadianceCache_Irradiance[groupIndex] = cUpdateIrradianceParams.RayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex + groupIndex].rgb;
 			gsDirectionCache_Irradiance[groupIndex] = DDGIGetRayDirection(rayIndex + groupIndex, volume.NumRaysPerProbe, randomRotation);
 		}
 		GroupMemoryBarrierWithGroupSync();
@@ -100,10 +115,10 @@ void UpdateIrradianceCS(
 
 	// Apply tone curve for better encoding
 	sum = pow(sum, rcp(DDGI_PROBE_GAMMA));
-	const float historyBlendWeight = saturate(1.0f - cPass.HistoryBlendWeight);
+	const float historyBlendWeight = saturate(1.0f - cUpdateIrradianceParams.HistoryBlendWeight);
 	sum = lerp(prevRadiance, sum, historyBlendWeight);
 
-	uIrradianceMap[texelLocation] = float4(sum, 1);
+	cUpdateIrradianceParams.IrradianceMap.Store(texelLocation, float4(sum, 1));
 
 	GroupMemoryBarrierWithGroupSync();
 
@@ -112,7 +127,7 @@ void UpdateIrradianceCS(
 	{
 		uint2 sourceIndex = cornerTexelLocation + DDGI_COLOR_BORDER_OFFSETS[index].xy;
 		uint2 targetIndex = cornerTexelLocation + DDGI_COLOR_BORDER_OFFSETS[index].zw;
-		uIrradianceMap[targetIndex] = uIrradianceMap[sourceIndex];
+		cUpdateIrradianceParams.IrradianceMap.Store(targetIndex, cUpdateIrradianceParams.IrradianceMap[sourceIndex]);
 	}
 }
 
@@ -145,7 +160,7 @@ void UpdateDepthCS(
 	uint groupId : SV_GroupID,
 	uint groupIndex : SV_GroupIndex)
 {
-	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
+	DDGIVolume volume = GetDDGIVolume(cUpdateDepthParams.VolumeIndex);
 	uint probeIdx = groupId;
 	uint3 probeCoordinates = GetDDGIProbeIndex3D(volume, probeIdx);
 
@@ -157,10 +172,9 @@ void UpdateDepthCS(
 	uint2 texelLocation = GetDDGIProbeTexel(volume, probeCoordinates, DDGI_PROBE_DEPTH_TEXELS);
 	uint2 cornerTexelLocation = texelLocation - 1u;
 	texelLocation += groupThreadId.xy;
-	Texture2D<float2> tDepthMap = ResourceDescriptorHeap[volume.DepthIndex];
-	float2 prevDepth = tDepthMap[texelLocation];
+	float2 prevDepth = volume.DepthTexture[texelLocation];
 	float3 probeDirection = Octahedral::Unpack(((groupThreadId.xy + 0.5f) / (float)DDGI_PROBE_DEPTH_TEXELS) * 2 - 1);
-	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
+	float3x3 randomRotation = AngleAxis3x3(cUpdateDepthParams.RandomAngle, cUpdateDepthParams.RandomVector);
 
 	float weightSum = 0;
 	float2 sum = 0;
@@ -171,7 +185,7 @@ void UpdateDepthCS(
 		uint rayCount = min(DEPTH_RAY_HIT_GS_SIZE, volume.NumRaysPerProbe - rayIndex);
 		if(groupIndex < rayCount)
 		{
-			gsDepthCache_Depth[groupIndex] = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex + groupIndex].a;
+			gsDepthCache_Depth[groupIndex] = cUpdateDepthParams.RayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex + groupIndex].a;
 			gsDirectionCache_Depth[groupIndex] = DDGIGetRayDirection(rayIndex + groupIndex, volume.NumRaysPerProbe, randomRotation);
 		}
 		GroupMemoryBarrierWithGroupSync();
@@ -196,10 +210,10 @@ void UpdateDepthCS(
 		sum /= weightSum;
 	}
 
-	const float historyBlendWeight = saturate(1.0f - cPass.HistoryBlendWeight);
+	const float historyBlendWeight = saturate(1.0f - cUpdateDepthParams.HistoryBlendWeight);
 	sum = lerp(prevDepth, sum, historyBlendWeight);
 
-	uDepthMap[texelLocation] = sum;
+	cUpdateDepthParams.DepthMap.Store(texelLocation, sum);
 
 	GroupMemoryBarrierWithGroupSync();
 
@@ -208,7 +222,7 @@ void UpdateDepthCS(
 	{
 		uint2 sourceIndex = cornerTexelLocation + DDGI_DEPTH_BORDER_OFFSETS[index].xy;
 		uint2 targetIndex = cornerTexelLocation + DDGI_DEPTH_BORDER_OFFSETS[index].zw;
-		uDepthMap[targetIndex] = uDepthMap[sourceIndex];
+		cUpdateDepthParams.DepthMap.Store(targetIndex, cUpdateDepthParams.DepthMap[sourceIndex]);
 	}
 }
 
@@ -219,13 +233,13 @@ void UpdateDepthCS(
 [numthreads(32, 1, 1)]
 void UpdateProbeStatesCS(uint threadID : SV_DispatchThreadID)
 {
-	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
+	DDGIVolume volume = GetDDGIVolume(cUpdateProbeStateParams.VolumeIndex);
 	uint probeIdx = threadID.x;
 	uint numProbes = volume.ProbeVolumeDimensions.x * volume.ProbeVolumeDimensions.y * volume.ProbeVolumeDimensions.z;
 	if(probeIdx >= numProbes)
 		return;
 
-	float3 prevOffset = uProbeOffsets[probeIdx].xyz;
+	float3 prevOffset = cUpdateProbeStateParams.ProbeOffsets[probeIdx].xyz;
 
 	// Use the stable rays to determine if the probe should be (re)activated.
 	// The rays are temporally stable so that they don't make the probe states flicker.
@@ -244,7 +258,7 @@ void UpdateProbeStatesCS(uint threadID : SV_DispatchThreadID)
 
 	for(uint rayIndex = 0; rayIndex < numStableRays; ++rayIndex)
 	{
-		float depth = tRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex].a;
+		float depth = cUpdateProbeStateParams.RayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex].a;
 		if(depth < 0)
 		{
 			numBackfaces++;
@@ -307,12 +321,12 @@ void UpdateProbeStatesCS(uint threadID : SV_DispatchThreadID)
         prevOffset = newOffset;
     }
 
-	uProbeOffsets[probeIdx] = float4(prevOffset, 0);
+	cUpdateProbeStateParams.ProbeOffsets.Store(probeIdx, float4(prevOffset, 0));
 
 	// Add some extra margin to max depth for when probes move around
 	const float3 maxProbeDepth = volume.ProbeSize * 3.0f;
 	bool isActive = numBackfaces < maxNumBackfaces && any(nearestFrontfaceHitDistance <= maxProbeDepth);
-	uProbeStates[probeIdx] = isActive ? 0 : 1;
+	cUpdateProbeStateParams.ProbeStates.Store(probeIdx, isActive ? 0 : 1);
 }
 
 /**
@@ -320,12 +334,11 @@ void UpdateProbeStatesCS(uint threadID : SV_DispatchThreadID)
 	Visualization Shader rendering spheres in the scene.
 */
 
-struct VisualizeParameters
+struct VisualizeParams
 {
 	uint VolumeIndex;
 };
-
-ConstantBuffer<VisualizeParameters> cVisualize : register(b0);
+DEFINE_CONSTANTS(VisualizeParams, 0);
 
 struct InterpolantsVSToPS
 {
@@ -338,7 +351,7 @@ InterpolantsVSToPS VisualizeIrradianceVS(
 	uint vertexId : SV_VertexID,
 	uint instanceId : SV_InstanceID)
 {
-	DDGIVolume volume = GetDDGIVolume(cVisualize.VolumeIndex);
+	DDGIVolume volume = GetDDGIVolume(cVisualizeParams.VolumeIndex);
 	const float scale = 0.1f;
 
 	uint probeIdx = instanceId;
@@ -362,19 +375,17 @@ InterpolantsVSToPS VisualizeIrradianceVS(
 
 float4 VisualizeIrradiancePS(InterpolantsVSToPS input) : SV_Target0
 {
-	DDGIVolume volume = GetDDGIVolume(cVisualize.VolumeIndex);
+	DDGIVolume volume = GetDDGIVolume(cVisualizeParams.VolumeIndex);
 	uint3 probeIdx3D = GetDDGIProbeIndex3D(volume, input.ProbeIndex);
 	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
 #if VISUALIZE_MODE == VISUALIZE_MODE_IRRADIANCE
 	float2 uv = GetDDGIProbeUV(volume, probeIdx3D, input.Normal, DDGI_PROBE_IRRADIANCE_TEXELS);
-	Texture2D<float4> tIrradianceMap = ResourceDescriptorHeap[volume.IrradianceIndex];
-	float3 radiance = tIrradianceMap.SampleLevel(sLinearClamp, uv, 0).rgb;
+	float3 radiance = volume.IrradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb;
 	radiance = pow(radiance, DDGI_PROBE_GAMMA * 0.5);
 	float3 color = radiance / PI;
 #elif VISUALIZE_MODE == VISUALIZE_MODE_DEPTH
 	float2 uv = GetDDGIProbeUV(volume, probeIdx3D, input.Normal, DDGI_PROBE_DEPTH_TEXELS);
-	Texture2D<float> tDepthMap = ResourceDescriptorHeap[volume.DepthIndex];
-	float depth = tDepthMap.SampleLevel(sLinearClamp, uv, 0);
+	float depth = volume.DepthTexture.SampleLevel(sLinearClamp, uv, 0);
 	float3 color = depth.xxx / (MaxComponent(volume.ProbeSize) * 3);
 #elif VISUALIZE_MODE == VISUALIZE_MODE_UNIQUE_COLOR
 	uint seed = SeedThread(input.ProbeIndex);

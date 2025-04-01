@@ -92,13 +92,13 @@ struct VisBufferVertexAttribute
 VisBufferVertexAttribute GetVertexAttributes(float2 screenUV, InstanceData instance, uint meshletIndex, uint primitiveID)
 {
 	MeshData mesh = GetMesh(instance.MeshIndex);
-	Meshlet meshlet = ByteBufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
-	Meshlet::Triangle tri = ByteBufferLoad<Meshlet::Triangle>(mesh.BufferIndex, primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+	Meshlet meshlet = mesh.DataBuffer.LoadStructure<Meshlet>(meshletIndex, mesh.MeshletOffset);
+	Meshlet::Triangle tri = mesh.DataBuffer.LoadStructure<Meshlet::Triangle>(primitiveID + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 
 	uint3 indices = uint3(
-		ByteBufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
-		ByteBufferLoad<uint>(mesh.BufferIndex, tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
-		ByteBufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
+		mesh.DataBuffer.LoadStructure<uint>(tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+		mesh.DataBuffer.LoadStructure<uint>(tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+		mesh.DataBuffer.LoadStructure<uint>(tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
 	);
 
 	Vertex vertices[3];
@@ -135,32 +135,32 @@ MaterialProperties EvaluateMaterial(MaterialData material, VisBufferVertexAttrib
 {
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor * RGBA8_UNORM::Unpack(attributes.Color);
-	if(material.Diffuse != INVALID_HANDLE)
+	if(material.Diffuse.IsValid())
 	{
-		baseColor *= SampleGrad2D(NonUniformResourceIndex(material.Diffuse), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);
+		baseColor *= material.Diffuse.SampleGrad(sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);
 	}
 	properties.BaseColor = baseColor.rgb;
 	properties.Opacity = baseColor.a;
 
 	properties.Metalness = material.MetalnessFactor;
 	properties.Roughness = material.RoughnessFactor;
-	if(material.RoughnessMetalness != INVALID_HANDLE)
+	if(material.RoughnessMetalness.IsValid())
 	{
-		float4 roughnessMetalnessSample = SampleGrad2D(NonUniformResourceIndex(material.RoughnessMetalness), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);
+		float4 roughnessMetalnessSample = material.RoughnessMetalness.SampleGrad(sMaterialSampler, attributes.UV, attributes.DX, attributes.DY);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
-	if(material.Emissive != INVALID_HANDLE)
+	if(material.Emissive.IsValid())
 	{
-		properties.Emissive *= SampleGrad2D(NonUniformResourceIndex(material.Emissive), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY).rgb;
+		properties.Emissive *= material.Emissive.SampleGrad(sMaterialSampler, attributes.UV, attributes.DX, attributes.DY).rgb;
 	}
 	properties.Specular = 0.5f;
 
 	properties.Normal = attributes.Normal;
-	if(material.Normal != INVALID_HANDLE)
+	if(material.Normal.IsValid())
 	{
-		float3 normalTS = SampleGrad2D(NonUniformResourceIndex(material.Normal), sMaterialSampler, attributes.UV, attributes.DX, attributes.DY).rgb;
+		float3 normalTS = material.Normal.SampleGrad(sMaterialSampler, attributes.UV, attributes.DX, attributes.DY).rgb;
 		float3x3 TBN = CreateTangentToWorld(properties.Normal, float4(normalize(attributes.Tangent.xyz), attributes.Tangent.w));
 		properties.Normal = TangentSpaceNormalMapping(normalTS, TBN);
 	}

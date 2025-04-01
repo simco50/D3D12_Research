@@ -2,42 +2,44 @@
 #include "D3D12.hlsli"
 #include "ShaderDebugRender.hlsli"
 
-RWByteAddressBuffer uRenderData : register(u0);
-RWStructuredBuffer<D3D12_DRAW_ARGUMENTS> uDrawArgs : register(u1);
+struct BuildArgsParams
+{
+	RWByteBufferH RenderData;
+	RWStructuredBufferH<D3D12_DRAW_ARGUMENTS> DrawArgs;
+};
+DEFINE_CONSTANTS(BuildArgsParams, 0);
 
 [numthreads(1, 1, 1)]
 void BuildIndirectDrawArgsCS(uint threadID : SV_DispatchThreadID)
 {
-	uint numCharacters = uRenderData.Load(TEXT_COUNTER_OFFSET);
-	uRenderData.Store(TEXT_COUNTER_OFFSET, 0);
-	uint numLines = uRenderData.Load(LINE_COUNTER_OFFSET);
-	uRenderData.Store(LINE_COUNTER_OFFSET, 0);
+	uint numCharacters = cBuildArgsParams.RenderData.Load<uint>(TEXT_COUNTER_OFFSET);
+	cBuildArgsParams.RenderData.Store<uint>(TEXT_COUNTER_OFFSET, 0);
+	uint numLines = cBuildArgsParams.RenderData.Load<uint>(LINE_COUNTER_OFFSET);
+	cBuildArgsParams.RenderData.Store<uint>(LINE_COUNTER_OFFSET, 0);
 
 	uint offset = 0;
 	D3D12_DRAW_ARGUMENTS args = (D3D12_DRAW_ARGUMENTS)0;
 	{
 		args.VertexCountPerInstance = 4;
 		args.InstanceCount = min(numCharacters, MAX_NUM_TEXT);
-		uDrawArgs[offset++] = args;
+		cBuildArgsParams.DrawArgs.Store(offset++, args);
 	}
 	{
 		args.VertexCountPerInstance = 2;
 		args.InstanceCount = min(numLines, MAX_NUM_LINES);
-		uDrawArgs[offset++] = args;
+		cBuildArgsParams.DrawArgs.Store(offset++, args);
 	}
 }
 
-struct RenderData
+struct RenderParams
 {
-	float2 AtlasDimensionsInv;
 	float2 TargetDimensionsInv;
+	Texture2DH<float4> FontAtlas;
+	StructuredBufferH<Glyph> GlyphData;
+	ByteBufferH RenderData;
+	Texture2DH<float> Depth;
 };
-
-ConstantBuffer<RenderData> cData : register(b0);
-Texture2D<float4> tFontAtlas : register(t0);
-StructuredBuffer<Glyph> tGlyphData : register(t1);
-ByteAddressBuffer tRenderData : register(t2);
-Texture2D<float> tDepth : register(t3);
+DEFINE_CONSTANTS(RenderParams, 0);
 
 void RenderGlyphVS(
 	uint vertexID : SV_VertexID,
@@ -50,15 +52,15 @@ void RenderGlyphVS(
 	uv = float2(vertexID % 2, vertexID / 2);
 
 	uint offset = instanceID * sizeof(PackedCharacterInstance);
-	CharacterInstance instance = UnpackCharacterInstance(tRenderData.Load<PackedCharacterInstance>(TEXT_INSTANCES_OFFSET + offset));
+	CharacterInstance instance = UnpackCharacterInstance(cRenderParams.RenderData.Load<PackedCharacterInstance>(TEXT_INSTANCES_OFFSET + offset));
 
-	Glyph glyph = tGlyphData[instance.Character];
+	Glyph glyph = cRenderParams.GlyphData[instance.Character];
 
 	float2 pos = float2(uv.x, uv.y);
 	pos *= glyph.Dimensions;
 	pos *= instance.Scale;
 	pos += instance.Position;
-	pos *= cData.TargetDimensionsInv;
+	pos *= cRenderParams.TargetDimensionsInv;
 
 	position = float4(pos * float2(2, -2) + float2(-1, 1), 0, 1);
 	uv = lerp(glyph.MinUV, glyph.MaxUV, uv);
@@ -71,7 +73,7 @@ float4 RenderGlyphPS(
 	float4 color : COLOR
 	) : SV_Target
 {
-	return tFontAtlas.SampleLevel(sLinearClamp, uv, 0) * color;
+	return cRenderParams.FontAtlas.SampleLevel(sLinearClamp, uv, 0) * color;
 }
 
 void RenderLineVS(
@@ -82,7 +84,7 @@ void RenderLineVS(
 	)
 {
 	uint offset = instanceID * sizeof(PackedLineInstance);
-	LineInstance instance = UnpackLineInstance(tRenderData.Load<PackedLineInstance>(LINE_INSTANCES_OFFSET + offset));
+	LineInstance instance = UnpackLineInstance(cRenderParams.RenderData.Load<PackedLineInstance>(LINE_INSTANCES_OFFSET + offset));
 
 	color = vertexID == 0 ? instance.ColorA : instance.ColorB;
 	float3 wPos = vertexID == 0 ? instance.A : instance.B;
@@ -104,7 +106,7 @@ float4 RenderLinePS(
 {
 	uint2 pixel = position.xy;
 	float2 uv = pixel.xy * cView.ViewportDimensionsInv;
-	float depth = tDepth.SampleLevel(sPointClamp, uv, 0);
+	float depth = cRenderParams.Depth.SampleLevel(sPointClamp, uv, 0);
 
 	bool occluded = depth > position.z;
 	float checkers = any(pixel % 2 == 0) ? 1.0f : 0.0f;

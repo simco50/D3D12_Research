@@ -39,7 +39,17 @@ public:
 	uint32 HeapIndex;
 };
 
-template<bool Writeable>
+enum class DescriptorType
+{
+	Texture,
+	RWTexture,
+	Buffer,
+	RWBuffer,
+	Sampler,
+	TLAS,
+};
+
+template<DescriptorType Type>
 class DescriptorHandleT : public DescriptorHandle
 {
 public:
@@ -57,11 +67,13 @@ public:
 
 	static constexpr DescriptorHandleT Invalid() { return DescriptorHandleT(); }
 
-	static constexpr bool IsWriteable = Writeable;
+	
+	static constexpr DescriptorType DescriptorType = Type;
 };
 
-class Texture;
-class Buffer;
-
-using SRVHandle = DescriptorHandleT<false>;
-using UAVHandle = DescriptorHandleT<true>;
+using TextureView	= DescriptorHandleT<DescriptorType::Texture>;
+using RWTextureView	= DescriptorHandleT<DescriptorType::RWTexture>;
+using BufferView	= DescriptorHandleT<DescriptorType::Buffer>;
+using RWBufferView	= DescriptorHandleT<DescriptorType::RWBuffer>;
+using SamplerView	= DescriptorHandleT<DescriptorType::Sampler>;
+using TLASView		= DescriptorHandleT<DescriptorType::TLAS>;

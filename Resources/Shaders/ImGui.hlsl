@@ -14,19 +14,17 @@ struct InterpolantsVSToPS
 	float4 Color : COLOR;
 };
 
-struct Params
+struct PassParams
 {
 	float4 ScaleBias;
-	uint TextureIndex;
-
+	Texture2DH<float4> Texture;
 };
-
-ConstantBuffer<Params> cPass : register(b0);
+DEFINE_CONSTANTS(PassParams, 0);
 
 InterpolantsVSToPS VSMain(VertexInput input)
 {
 	InterpolantsVSToPS output = (InterpolantsVSToPS)0;
-	output.Position = float4(input.Position * cPass.ScaleBias.xy + cPass.ScaleBias.zw, 0.0f, 1.0f);
+	output.Position = float4(input.Position * cPassParams.ScaleBias.xy + cPassParams.ScaleBias.zw, 0.0f, 1.0f);
 	output.UV = input.UV;
 	output.Color = input.Color;
 	return output;
@@ -34,5 +32,5 @@ InterpolantsVSToPS VSMain(VertexInput input)
 
 float4 PSMain(InterpolantsVSToPS input) : SV_Target
 {
-	return input.Color * Sample2D(cPass.TextureIndex, sPointWrap, input.UV);
+	return input.Color * cPassParams.Texture.Sample(sPointWrap, input.UV);
 }

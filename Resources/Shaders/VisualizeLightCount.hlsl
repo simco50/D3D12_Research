@@ -3,27 +3,18 @@
 #include "ShaderDebugRender.hlsli"
 #include "DebugFont.hlsli"
 
-struct PassParameters
+struct PassParams
 {
+	float3 ViewMin;
+	float3 ViewMax;
 	int2 ClusterDimensions;
 	int2 ClusterSize;
 	float2 LightGridParams;
+	Texture2DH<float> Depth;
+	TypedBufferH<uint> LightGrid;
+	RWTexture2DH<float4> Output;
 };
-
-struct Params
-{
-	float3 ViewMin;
-	float padding;
-	float3 ViewMax;
-};
-
-ConstantBuffer<Params> cParams : register(b0);
-ConstantBuffer<PassParameters> cPass : register(b1);
-
-RWTexture2D<float4> uOutput : register(u0);
-
-Texture2D<float> tDepth : register(t0);
-Buffer<uint> tLightGrid : register(t1);
+DEFINE_CONSTANTS(PassParams, 0);
 
 static const int MaxNumLights = 32;
 
@@ -44,7 +35,7 @@ float3 ApplyEdgeDetection(uint2 pixel, float3 color)
 	float2 depthGrad = 0.0f;
 	for(uint i = 0; i < ArraySize(SobelWeights); ++i)
 	{
-		float linearDepth = LinearizeDepth(tDepth.Load(uint3(pixel + SobelOffsets[i], 0)));
+		float linearDepth = LinearizeDepth(cPassParams.Depth.Load(uint3(pixel + SobelOffsets[i], 0)));
 		float logDepth = log2(linearDepth + 1.0f) * 5.0f;
 		depthGrad += SobelWeights[i] * logDepth;
 	}
@@ -66,22 +57,22 @@ uint GetLightCount(uint2 threadId, float viewDepth, out uint2 tileLocation, out 
 	uint lightGridOffset = tileIndex1D * TILED_LIGHTING_NUM_BUCKETS;
 	uint lightCount = 0;
 	for(uint i = 0; i < TILED_LIGHTING_NUM_BUCKETS; ++i)
-		lightCount += countbits(tLightGrid[lightGridOffset + i]);
+		lightCount += countbits(cPassParams.LightGrid[lightGridOffset + i]);
 
 	tileLocation = (tileIndex + 0.5f) * TILED_LIGHTING_TILE_SIZE;
 	tileSize = TILED_LIGHTING_TILE_SIZE;
 
 #elif CLUSTERED_FORWARD
-	uint slice = floor(log(viewDepth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
-	uint3 clusterIndex3D = uint3(floor(threadId.xy / cPass.ClusterSize), slice);
-	uint clusterIndex1D = clusterIndex3D.x + (cPass.ClusterDimensions.x * (clusterIndex3D.y + cPass.ClusterDimensions.y * clusterIndex3D.z));
+	uint slice = floor(log(viewDepth) * cPassParams.LightGridParams.x - cPassParams.LightGridParams.y);
+	uint3 clusterIndex3D = uint3(floor(threadId.xy / cPassParams.ClusterSize), slice);
+	uint clusterIndex1D = clusterIndex3D.x + (cPassParams.ClusterDimensions.x * (clusterIndex3D.y + cPassParams.ClusterDimensions.y * clusterIndex3D.z));
 	uint lightGridOffset = clusterIndex1D * CLUSTERED_LIGHTING_NUM_BUCKETS;
 	uint lightCount = 0;
 	for(uint i = 0; i < CLUSTERED_LIGHTING_NUM_BUCKETS; ++i)
-		lightCount += countbits(tLightGrid[lightGridOffset + i]);
+		lightCount += countbits(cPassParams.LightGrid[lightGridOffset + i]);
 
-	tileLocation = (clusterIndex3D.xy + 0.5f) * cPass.ClusterSize.xy;
-	tileSize = cPass.ClusterSize.xy;
+	tileLocation = (clusterIndex3D.xy + 0.5f) * cPassParams.ClusterSize.xy;
+	tileSize = cPassParams.ClusterSize.xy;
 #endif
 
 	return lightCount;
@@ -95,7 +86,7 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 
 	float viewDepth = 0;
 #ifdef CLUSTERED_FORWARD
-	float depth = tDepth.Load(uint3(threadId.xy, 0));
+	float depth = cPassParams.Depth.Load(uint3(threadId.xy, 0));
 	viewDepth = LinearizeDepth(depth, cView.NearZ, cView.FarZ);
 #endif
 
@@ -122,13 +113,13 @@ void DebugLightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	else
 		color = float4(GetColor(threadId.xy, lightCount), 1);
 
-	uOutput[threadId.xy] = color;
+	cPassParams.Output.Store(threadId.xy, color);
 }
 
 
 float4 TopDownViewPS(float4 position : SV_Position, float2 uv : TEXCOORD) : SV_Target0
 {
-	float3 viewPos = lerp(cParams.ViewMin, cParams.ViewMax, float3(uv.x, 0.5f, uv.y));
+	float3 viewPos = lerp(cPassParams.ViewMin, cPassParams.ViewMax, float3(uv.x, 0.5f, uv.y));
 	float4 projPos = mul(float4(viewPos, 1.0f), cView.ViewToClip);
 	projPos.xyz /= projPos.w;
 	projPos.y *= -1.0f;

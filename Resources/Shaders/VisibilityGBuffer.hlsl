@@ -3,8 +3,12 @@
 #include "VisibilityBuffer.hlsli"
 #include "GBuffer.hlsli"
 
-Texture2D<uint> tVisibilityTexture : register(t0);
-StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t1);
+struct PassParams
+{
+	Texture2DH<uint> VisibilityTexture;
+	StructuredBufferH<MeshletCandidate> VisibleMeshlets;
+};
+DEFINE_CONSTANTS(PassParams, 0);
 
 struct PSOut
 {
@@ -14,10 +18,10 @@ struct PSOut
 bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 {
 	uint candidateIndex, primitiveID;
-	if(!UnpackVisBuffer(tVisibilityTexture[texel], candidateIndex, primitiveID))
+	if(!UnpackVisBuffer(cPassParams.VisibilityTexture[texel], candidateIndex, primitiveID))
 		return false;
 
-	MeshletCandidate candidate = tVisibleMeshlets[candidateIndex];
+	MeshletCandidate candidate = cPassParams.VisibleMeshlets[candidateIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
 
 	float2 uv = TexelToUV(texel, cView.ViewportDimensionsInv);

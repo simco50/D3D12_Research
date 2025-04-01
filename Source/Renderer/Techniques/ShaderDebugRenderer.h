@@ -7,8 +7,8 @@ struct RenderView;
 
 struct GPUDebugRenderData
 {
-	UAVHandle RenderDataUAV;
-	SRVHandle FontDataSRV;
+	RWBufferView RenderDataUAV;
+	BufferView FontDataSRV;
 	uint32 FontSize;
 };
 

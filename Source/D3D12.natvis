@@ -89,7 +89,11 @@
 				</Loop>
 			</CustomListItems>
 		</Expand>
-		
+	</Type>
+
+	<Type Name="DescriptorHandle">
+		<DisplayString Condition="HeapIndex == 0xFFFFFFFF">Invalid</DisplayString>
+		<DisplayString>{HeapIndex}</DisplayString>
 	</Type>
 
 

@@ -6,30 +6,34 @@
 
 struct InjectParams
 {
-	uint3 ClusterDimensions;
-	float Jitter;
-	float3 InvClusterDimensions;
-	float LightClusterSizeFactor;
-	float2 LightGridParams;
-	uint2 LightClusterDimensions;
-	float MinBlendFactor;
-	uint NumFogVolumes;
+	uint3								ClusterDimensions;
+	float								Jitter;
+	float3								InvClusterDimensions;
+	float								LightClusterSizeFactor;
+	float2								LightGridParams;
+	uint2								LightClusterDimensions;
+	float								MinBlendFactor;
+	uint								NumFogVolumes;
+
+	RWTexture3DH<float4>			OutLightScattering;
+	StructuredBufferH<FogVolume>	FogVolumes;
+	TypedBufferH<uint>				LightGrid;
+	Texture3DH<float4>				LightScattering;
 };
+
+DEFINE_CONSTANTS(InjectParams, 0);
 
 struct AccumulateParams
 {
-	uint3 ClusterDimensions;
-	float3 InvClusterDimensions;
+	uint3								ClusterDimensions;
+	float3 								InvClusterDimensions;
+
+	RWTexture3DH<float4>			OutLightScattering;
+	Texture3DH<float4>				LightScattering;
 };
 
-ConstantBuffer<InjectParams> cInjectParams : register(b0);
-ConstantBuffer<InjectParams> cAccumulateParams : register(b0);
+DEFINE_CONSTANTS(AccumulateParams, 0);
 
-StructuredBuffer<FogVolume> tFogVolumes : register(t0);
-Buffer<uint> tLightGrid : register(t1);
-Texture3D<float4> tLightScattering : register(t2);
-
-RWTexture3D<float4> uOutLightScattering : register(u0);
 
 float3 GetWorldPosition(uint3 index, float offset, float3 clusterDimensionsInv, out float linearDepth)
 {
@@ -73,7 +77,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	float3 reprojUV = float3(ClipToUV(reprojNDC.xy), reprojNDC.z);
 	reprojUV.z = LinearizeDepth(reprojUV.z);
 	reprojUV.z = sqrt((reprojUV.z - cView.FarZ) / (cView.NearZ - cView.FarZ));
-	float4 prevScattering = tLightScattering.SampleLevel(sLinearClamp, reprojUV, 0);
+	float4 prevScattering = cInjectParams.LightScattering.SampleLevel(sLinearClamp, reprojUV, 0);
 
 	float3 inScattering = 0.0f;
 	float3 cellAbsorption = 0.0f;
@@ -82,7 +86,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	uint i;
 	for(i = 0; i < cInjectParams.NumFogVolumes; ++i)
 	{
-		FogVolume fogVolume = tFogVolumes[i];
+		FogVolume fogVolume = cInjectParams.FogVolumes.Load(i);
 
 		float3 posFogLocal = (worldPosition - fogVolume.Location) / fogVolume.Extents;
 		float heightNormalized = posFogLocal.y * 0.5f + 0.5f;
@@ -117,7 +121,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 
 		for(uint bucketIndex = 0; bucketIndex < CLUSTERED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 		{
-			uint bucket = tLightGrid[lightGridOffset + bucketIndex];
+			uint bucket = cInjectParams.LightGrid.Get()[lightGridOffset + bucketIndex];
 			while(bucket)
 			{
 				uint bitIndex = firstbitlow(bucket);
@@ -136,7 +140,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 					if(light.CastShadows)
 					{
 						int shadowIndex = GetShadowMapIndex(light, worldPosition, z, dither);
-						attenuation *= ShadowNoPCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMapIndex + shadowIndex, light.InvShadowSize);
+						attenuation *= ShadowNoPCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMap.Index + shadowIndex, light.InvShadowSize);
 					}
 					if(attenuation <= 0.0f)
 						continue;
@@ -157,7 +161,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	float4 newScattering = float4(inScattering * totalLighting, cellDensity);
 	newScattering = lerp(prevScattering, newScattering, blendFactor);
 
-	uOutLightScattering[threadId] = newScattering;
+	cInjectParams.OutLightScattering.Store(threadId, newScattering);
 }
 
 [numthreads(8, 8, 1)]
@@ -173,13 +177,13 @@ void AccumulateFogCS(uint3 threadId : SV_DispatchThreadID, uint groupIndex : SV_
 		float froxelLength = length(worldPosition - previousPosition);
 		previousPosition = worldPosition;
 
-		float4 scatteringAndDensity = tLightScattering[int3(threadId.xy, sliceIndex - 1)];
+		float4 scatteringAndDensity = cAccumulateParams.LightScattering.Get()[int3(threadId.xy, sliceIndex - 1)];
 		float transmittance = exp(-scatteringAndDensity.w * froxelLength);
 
 		float3 scatteringOverSlice = (scatteringAndDensity.xyz - scatteringAndDensity.xyz * transmittance) / max(scatteringAndDensity.w, 0.000001f);
 		accumulatedLight += scatteringOverSlice * accumulatedTransmittance;
 		accumulatedTransmittance *= transmittance;
 
-		uOutLightScattering[int3(threadId.xy, sliceIndex)] = float4(accumulatedLight, accumulatedTransmittance);
+		cAccumulateParams.OutLightScattering.Store(int3(threadId.xy, sliceIndex), float4(accumulatedLight, accumulatedTransmittance));
 	}
 }

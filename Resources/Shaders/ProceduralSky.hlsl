@@ -3,14 +3,12 @@
 #include "Primitives.hlsli"
 #include "External/Atmosphere.hlsli"
 
-RWTexture2DArray<float4> uSky : register(u0);
-
 struct PassParams
 {
 	float2 DimensionsInv;
+	RWTexture2DArrayH<float4> Sky;
 };
-
-ConstantBuffer<PassParams> cPass : register(b0);
+DEFINE_CONSTANTS(PassParams, 0);
 
 struct InterpolantsVSToPS
 {
@@ -47,7 +45,7 @@ void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 		float3x3(-1,0,0, 0,-1,0, 0,0,1),    // front
 	};
 
-	float2 uv = TexelToUV(threadId.xy, cPass.DimensionsInv);
+	float2 uv = TexelToUV(threadId.xy, cPassParams.DimensionsInv);
 	float3 dir = normalize(mul(CUBEMAP_ROTATIONS[threadId.z], float3(uv * 2 - 1, -1)));
 
 	float3 rayStart = cView.ViewLocation;
@@ -60,5 +58,5 @@ void ComputeSkyCS(uint3 threadId : SV_DispatchThreadID)
 	float3 transmittance;
 	float3 sky = IntegrateScattering(rayStart, dir, rayLength, lightDir, lightColor, transmittance);
 
-	uSky[threadId] = float4(sky, 1.0f);
+	cPassParams.Sky.Store(threadId, float4(sky, 1.0f));
 }

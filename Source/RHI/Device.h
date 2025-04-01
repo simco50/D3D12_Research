@@ -123,7 +123,6 @@ public:
 	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
 	void FreeCommandList(CommandContext* pCommandList);
 
-	DescriptorPtr AllocateResourceDescriptor();
 	void ReleaseResourceDescriptor(DescriptorHandle& handle);
 	DescriptorPtr FindResourceDescriptorPtr(DescriptorHandle handle);
 
@@ -137,10 +136,10 @@ public:
 	Ref<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
 	Ref<PipelineState> CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
 	Ref<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
-	SRVHandle CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
-	UAVHandle CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
-	SRVHandle CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
-	UAVHandle CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
+	BufferView CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
+	RWBufferView CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
+	TextureView CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
+	RWTextureView CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
 	Ref<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
 
 	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", Span<ShaderDefine> defines = {});

@@ -669,6 +669,10 @@ ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shader
 	job.Target = ShaderCompiler::GetShaderTarget(shaderType);
 	job.EnableDebugMode = CommandLine::GetBool("debugshaders");
 
+	// DXC hangs on compiling RT shaders without optimizations
+	if (shaderType == ShaderType::MAX)
+		job.EnableDebugMode = false;
+
 	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(job);
 
 	if (!result.Success())

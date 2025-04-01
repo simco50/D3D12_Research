@@ -3,14 +3,19 @@
 #define BLOCK_SIZE 16
 #define THREAD_COUNT (BLOCK_SIZE * BLOCK_SIZE)
 
-#if WITH_MSAA
-Texture2DMS<float> tDepthMap : register(t0);
-#else
-Texture2D<float> tDepthMap : register(t0);
-#endif
+struct PrepareParams
+{
+	Texture2DH<float> DepthMap;
+	RWTexture2DH<float2> OutputMap;
+};
+DEFINE_CONSTANTS(PrepareParams, 0);
 
-Texture2D<float2> tReductionMap : register(t0);
-RWTexture2D<float2> uOutputMap : register(u0);
+struct ReduceParams
+{
+	Texture2DH<float2> ReductionMap;
+	RWTexture2DH<float2> OutputMap;
+};
+DEFINE_CONSTANTS(ReduceParams, 0);
 
 groupshared float2 gsDepthSamples[BLOCK_SIZE * BLOCK_SIZE];
 
@@ -18,38 +23,16 @@ groupshared float2 gsDepthSamples[BLOCK_SIZE * BLOCK_SIZE];
 void PrepareReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID)
 {
 	uint2 samplePos = groupId.xy * BLOCK_SIZE + groupThreadId.xy;
-#if WITH_MSAA
-	uint2 dimensions;
-	uint sampleCount;
-	tDepthMap.GetDimensions(dimensions.x, dimensions.y, sampleCount);
-	samplePos = min(samplePos, dimensions - 1);
 
-	float depthMin = 10000000000000000.0f;
-	float depthMax = 0.0f;
-
-	for(uint sampleIdx = 0; sampleIdx < sampleCount; ++sampleIdx)
-	{
-		float depth = tDepthMap.Load(samplePos, sampleIdx);
-		if(depth > 0.0f)
-		{
-			depth = LinearizeDepth01(depth);
-			depthMin = min(depthMin, depth);
-			depthMax = max(depthMax, depth);
-		}
-	}
-	gsDepthSamples[groupIndex] = float2(depthMin, depthMax);
-#else
 	uint2 dimensions;
-	tDepthMap.GetDimensions(dimensions.x, dimensions.y);
+	cPrepareParams.DepthMap.Get().GetDimensions(dimensions.x, dimensions.y);
 	samplePos = min(samplePos, dimensions - 1);
-	float depth = tDepthMap[samplePos];
+	float depth = cPrepareParams.DepthMap[samplePos];
 	if(depth > 0.0f)
 	{
 		depth = LinearizeDepth01(depth);
 	}
 	gsDepthSamples[groupIndex] = float2(depth, depth);
-
-#endif
 
 	GroupMemoryBarrierWithGroupSync();
 
@@ -65,7 +48,7 @@ void PrepareReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_Grou
 
 	if(groupIndex == 0)
 	{
-		uOutputMap[groupId.xy] = gsDepthSamples[0];
+		cPrepareParams.OutputMap.Store(groupId.xy, gsDepthSamples[0]);
 	}
 }
 
@@ -73,13 +56,13 @@ void PrepareReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_Grou
 void ReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID)
 {
 	uint2 dimensions;
-	tReductionMap.GetDimensions(dimensions.x, dimensions.y);
+	cReduceParams.ReductionMap.Get().GetDimensions(dimensions.x, dimensions.y);
 
 	uint2 samplePos = groupId.xy * BLOCK_SIZE + groupThreadId.xy;
 	samplePos = min(samplePos, dimensions - 1);
 
-	float minDepth = tReductionMap[samplePos].x;
-	float maxDepth = tReductionMap[samplePos].y;
+	float minDepth = cReduceParams.ReductionMap[samplePos].x;
+	float maxDepth = cReduceParams.ReductionMap[samplePos].y;
 	gsDepthSamples[groupIndex] = float2(minDepth, maxDepth);
 
 	GroupMemoryBarrierWithGroupSync();
@@ -95,6 +78,6 @@ void ReduceDepth(uint groupIndex : SV_GroupIndex, uint3 groupId : SV_GroupID, ui
 	}
 	if(groupIndex == 0)
 	{
-		uOutputMap[groupId.xy] = gsDepthSamples[0];
+		cReduceParams.OutputMap.Store(groupId.xy, gsDepthSamples[0]);
 	}
 }

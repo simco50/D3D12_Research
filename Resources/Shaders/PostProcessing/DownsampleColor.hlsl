@@ -1,19 +1,17 @@
 #include "Common.hlsli"
 
-struct PassParameters
+struct PassParams
 {
 	uint2 TargetDimensions;
 	float2 TargetDimensionsInv;
+	RWTexture2DH<float4> Output;
+	Texture2DH<float4> Input;
 };
-
-ConstantBuffer<PassParameters> cPassData : register(b0);
-
-RWTexture2D<float4> uOutput : register(u0);
-Texture2D<float4> tInput : register(t0);
+DEFINE_CONSTANTS(PassParams, 0);
 
 [numthreads(8, 8, 1)]
 void CSMain(uint3 threadId : SV_DispatchThreadID)
 {
-	if(all(threadId.xy < cPassData.TargetDimensions))
-		uOutput[threadId.xy] = tInput.SampleLevel(sLinearClamp, TexelToUV(threadId.xy, cPassData.TargetDimensionsInv), 0);
+	if(all(threadId.xy < cPassParams.TargetDimensions))
+		cPassParams.Output.Store(threadId.xy, cPassParams.Input.SampleLevel(sLinearClamp, TexelToUV(threadId.xy, cPassParams.TargetDimensionsInv), 0));
 }

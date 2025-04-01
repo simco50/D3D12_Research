@@ -11,7 +11,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 	: m_FontSize(24)
 {
 	const char* pDebugRenderPath = "ShaderDebugRender.hlsl";
-	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, pDebugRenderPath, "BuildIndirectDrawArgsCS");
+	m_pBuildIndirectDrawArgsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, pDebugRenderPath, "BuildIndirectDrawArgsCS");
 
 	{
 		PipelineStateInitializer psoDesc;
@@ -20,7 +20,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 		psoDesc.SetDepthEnabled(false);
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
 		psoDesc.SetName("Render Glyphs");
 		m_pRenderTextPSO = pDevice->CreatePipeline(psoDesc);
 	}
@@ -33,7 +33,7 @@ ShaderDebugRenderer::ShaderDebugRenderer(GraphicsDevice* pDevice)
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
 		psoDesc.SetName("Render Lines");
 		m_pRenderLinesPSO = pDevice->CreatePipeline(psoDesc);
 	}
@@ -77,7 +77,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 		D3D12_DRAW_ARGUMENTS LineArgs;
 	};
 
-	RGBuffer* pDrawArgs = graph.Create("Indirect Draw Args", BufferDesc::CreateIndirectArguments<DrawArgs>());
+	RGBuffer* pDrawArgs = graph.Create("Indirect Draw Args", BufferDesc::CreateIndirectArguments<D3D12_DRAW_ARGUMENTS>(2));
 
 	graph.AddPass("Build Draw Args", RGPassFlag::Compute)
 		.Write({ pDrawArgs, pRenderData })
@@ -85,13 +85,18 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 			{
 				context.InsertUAVBarrier();
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(m_pBuildIndirectDrawArgsPSO);
 
-				context.BindResources(BindingSlot::UAV, {
-					resources.GetUAV(pRenderData),
-					resources.GetUAV(pDrawArgs),
-					});
+				struct
+				{
+					RWBufferView RenderData;
+					RWBufferView DrawArgs;
+				} params;
+				params.RenderData = resources.GetUAV(pRenderData);
+				params.DrawArgs	  = resources.GetUAV(pDrawArgs);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
+
 				context.Dispatch(1);
 			});
 
@@ -101,17 +106,27 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 		.DepthStencil(pDepth, RenderPassDepthFlags::ReadOnly)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(m_pRenderLinesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
+				struct
+				{
+					Vector2		TargetDimensionsInv;
+					TextureView FontAtlas;
+					BufferView	GlyphData;
+					BufferView	RenderData;
+					TextureView Depth;
+				} params;
+				params.TargetDimensionsInv = Vector2::One / Vector2(pTarget->GetDesc().Size2D());
+				params.FontAtlas		   = m_pFontAtlas->GetSRV();
+				params.GlyphData		   = m_pGlyphData->GetSRV();
+				params.RenderData		   = resources.GetSRV(pRenderData);
+				params.Depth			   = resources.GetSRV(pDepth);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
+
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindResources(BindingSlot::SRV, {
-					m_pFontAtlas->GetSRV(),
-					m_pGlyphData->GetSRV(),
-					resources.GetSRV(pRenderData),
-					resources.GetSRV(pDepth),
-					});
+
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pDrawArgs), nullptr, offsetof(DrawArgs, LineArgs));
 			});
 
@@ -120,23 +135,26 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 		.RenderTarget(pTarget)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(m_pRenderTextPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
 				struct
 				{
-					Vector2 AtlasDimensionsInv;
-					Vector2 TargetDimensionsInv;
-				} parameters;
-				parameters.AtlasDimensionsInv = Vector2::One / Vector2(m_pFontAtlas->GetDesc().Size2D());
-				parameters.TargetDimensionsInv = Vector2::One / Vector2(pTarget->GetDesc().Size2D());
-				context.BindRootCBV(BindingSlot::PerInstance, parameters);
-				context.BindResources(BindingSlot::SRV, {
-					m_pFontAtlas->GetSRV(),
-					m_pGlyphData->GetSRV(),
-					resources.GetSRV(pRenderData)
-					});
+					Vector2		TargetDimensionsInv;
+					TextureView FontAtlas;
+					BufferView	GlyphData;
+					BufferView	RenderData;
+					TextureView Depth{};
+				} params;
+				params.TargetDimensionsInv = Vector2::One / Vector2(pTarget->GetDesc().Size2D());
+				params.FontAtlas		   = m_pFontAtlas->GetSRV();
+				params.GlyphData		   = m_pGlyphData->GetSRV();
+				params.RenderData		   = resources.GetSRV(pRenderData);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
+
+				Renderer::BindViewUniforms(context, *pView);
+
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pDrawArgs), nullptr, offsetof(DrawArgs, TextArgs));
 			});
 
@@ -147,8 +165,8 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 void ShaderDebugRenderer::GetGPUData(GPUDebugRenderData* pData) const
 {
 	pData->RenderDataUAV = m_pRenderDataBuffer->GetUAV();
-	pData->FontDataSRV = m_pGlyphData->GetSRV();
-	pData->FontSize = m_FontSize;
+	pData->FontDataSRV	 = m_pGlyphData->GetSRV();
+	pData->FontSize		 = m_FontSize;
 }
 
 void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice)

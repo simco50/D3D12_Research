@@ -23,48 +23,48 @@ static const int COUNTER_PHASE2_VISIBLE_MESHLETS = 1;
 
 struct BinningParameters
 {
-	uint NumBins;
-	uint IsSecondPhase;
+	uint 												NumBins;
+	uint 												IsSecondPhase;
+
+	RWStructuredBufferH<uint>						RWMeshletCounts;
+	RWStructuredBufferH<uint4>						RWMeshletOffsetAndCounts;
+	RWStructuredBufferH<uint>						RWGlobalMeshletCounter;
+	RWStructuredBufferH<uint>						RWBinnedMeshlets;
+	RWStructuredBufferH<D3D12_DISPATCH_ARGUMENTS>	RWDispatchArguments;
+
+	StructuredBufferH<MeshletCandidate>			VisibleMeshlets;
+	StructuredBufferH<uint>						Counter_VisibleMeshlets;
+	StructuredBufferH<uint>						MeshletCounts;
 };
-ConstantBuffer<BinningParameters> cBinningParams 				: register(b0);
-
-RWStructuredBuffer<uint> uMeshletCounts 						: register(u0);
-RWStructuredBuffer<uint4> uMeshletOffsetAndCounts 				: register(u0);
-RWStructuredBuffer<uint> uGlobalMeshletCounter 					: register(u1);
-RWStructuredBuffer<uint> uBinnedMeshlets 						: register(u1);
-RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : register(u2);
-
-StructuredBuffer<MeshletCandidate> tVisibleMeshlets 			: register(t0);
-StructuredBuffer<uint> tCounter_VisibleMeshlets 				: register(t1);
-StructuredBuffer<uint> tMeshletCounts 							: register(t0);
+DEFINE_CONSTANTS(BinningParameters, 0);
 
 uint GetNumMeshlets()
 {
-	if(cBinningParams.IsSecondPhase)
-		return tCounter_VisibleMeshlets[COUNTER_PHASE2_VISIBLE_MESHLETS];
+	if(cBinningParameters.IsSecondPhase)
+		return cBinningParameters.Counter_VisibleMeshlets[COUNTER_PHASE2_VISIBLE_MESHLETS];
 	else
-		return tCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
+		return cBinningParameters.Counter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 }
 
 [numthreads(1, 1, 1)]
 void PrepareArgsCS()
 {
-	for(uint i = 0; i < cBinningParams.NumBins; ++i)
-		uMeshletCounts[i] = 0;
-	uGlobalMeshletCounter[0] = 0;
+	for(uint i = 0; i < cBinningParameters.NumBins; ++i)
+		cBinningParameters.RWMeshletCounts.Store(i, 0);
+	cBinningParameters.RWGlobalMeshletCounter.Store(0, 0);
 
 	D3D12_DISPATCH_ARGUMENTS args;
     args.ThreadGroupCount = uint3(DivideAndRoundUp(GetNumMeshlets(), 64), 1, 1);
-    uDispatchArguments[0] = args;
+    cBinningParameters.RWDispatchArguments.Store(0, args);
 }
 
 // Bin by whether the meshlet is alpha tested or not
 uint GetBin(uint meshletIndex)
 {
-	if(cBinningParams.IsSecondPhase)
-		meshletIndex += tCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
+	if(cBinningParameters.IsSecondPhase)
+		meshletIndex += cBinningParameters.Counter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 
-	MeshletCandidate candidate = tVisibleMeshlets[meshletIndex];
+	MeshletCandidate candidate = cBinningParameters.VisibleMeshlets[meshletIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	return material.RasterBin;
@@ -91,7 +91,7 @@ void ClassifyMeshletsCS(uint threadID : SV_DispatchThreadID)
 			{
 				// Accumulate the meshlet count for all active threads
 				uint originalValue;
-				InterlockedAdd_WaveOps(uMeshletCounts, firstBin, 1, originalValue);
+				InterlockedAdd_WaveOps(cBinningParameters.RWMeshletCounts.Get(), firstBin, 1, originalValue);
 				finished = true;
 			}
 		}
@@ -102,17 +102,17 @@ void ClassifyMeshletsCS(uint threadID : SV_DispatchThreadID)
 void AllocateBinRangesCS(uint threadID : SV_DispatchThreadID)
 {
 	uint bin = threadID;
-	if(bin >= cBinningParams.NumBins)
+	if(bin >= cBinningParameters.NumBins)
 		return;
 
 	// Compute the amount of meshlets for each bin and prefix sum to get the global index offset
-	uint numMeshlets = tMeshletCounts[bin];
+	uint numMeshlets = cBinningParameters.MeshletCounts[bin];
 	uint offset = WavePrefixSum(numMeshlets);
 	uint globalOffset;
 	if(WaveIsFirstLane())
-		InterlockedAdd(uGlobalMeshletCounter[0], numMeshlets, globalOffset);
+		InterlockedAdd(cBinningParameters.RWGlobalMeshletCounter.Get()[0], numMeshlets, globalOffset);
 	offset += WaveReadLaneFirst(globalOffset);
-	uMeshletOffsetAndCounts[bin] = uint4(0, 1, 1, offset);
+	cBinningParameters.RWMeshletOffsetAndCounts.Store(bin, uint4(0, 1, 1, offset));
 }
 
 [numthreads(64, 1, 1)]
@@ -124,7 +124,7 @@ void WriteBinsCS(uint threadID : SV_DispatchThreadID)
 
 	uint bin = GetBin(meshletIndex);
 
-	uint offset = uMeshletOffsetAndCounts[bin].w;
+	uint offset = cBinningParameters.RWMeshletOffsetAndCounts[bin].w;
 	uint meshletOffset;
 
 	// WaveOps optimzed loop to write meshlet indices to its associated bins.
@@ -144,15 +144,15 @@ void WriteBinsCS(uint threadID : SV_DispatchThreadID)
 				uint originalValue;
 				uint count = WaveActiveCountBits(true);
 				if(WaveIsFirstLane())
-					InterlockedAdd(uMeshletOffsetAndCounts[firstBin].x, count, originalValue);
+					InterlockedAdd(cBinningParameters.RWMeshletOffsetAndCounts.Get()[firstBin].x, count, originalValue);
 				meshletOffset = WaveReadLaneFirst(originalValue) + WavePrefixCountBits(true);
 				finished = true;
 			}
 		}
 	}
 
-	if(cBinningParams.IsSecondPhase)
-		meshletIndex += tCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
+	if(cBinningParameters.IsSecondPhase)
+		meshletIndex += cBinningParameters.Counter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 
-	uBinnedMeshlets[offset + meshletOffset] = meshletIndex;
+	cBinningParameters.RWBinnedMeshlets.Store(offset + meshletOffset, meshletIndex);
 }

@@ -4,14 +4,7 @@
 #include "Volumetrics.hlsli"
 #include "Noise.hlsli"
 
-RWTexture2D<float4> uOutput : register(u0);
-Texture2D tSceneTexture : register(t0);
-Texture2D tDepthTexture : register(t1);
-Texture2D tCloudTypeDensityLUT : register(t2);
-Texture3D tShapeNoise : register(t3);
-Texture3D tDetailNoise : register(t4);
-
-struct PassParameters
+struct PassParams
 {
 	float GlobalScale;
 	float ShapeNoiseScale;
@@ -28,9 +21,14 @@ struct PassParameters
 	float3 WindDirection;
 	float WindSpeed;
 	float TopSkew;
+	Texture2DH<float4> SceneTexture;
+	Texture2DH<float> DepthTexture;
+	Texture2DH<float4> CloudTypeDensityLUT;
+	Texture3DH<float4> ShapeNoise;
+	Texture3DH<float4> DetailNoise;
+	RWTexture2DH<float4> Output;
 };
-
-ConstantBuffer<PassParameters> cPass : register(b0);
+DEFINE_CONSTANTS(PassParams, 0);
 
 bool RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCenter, float sphereRadius, out float2 intersection)
 {
@@ -51,46 +49,46 @@ bool RaySphereIntersect(float3 rayOrigin, float3 rayDirection, float3 sphereCent
 float SampleDensity(float3 position, uint mipLevel)
 {
 	// Relative height based on spherical planet
-	float height = length(position - float3(0, -cPass.PlanetRadius, 0));
-	float heightGradient = saturate(InverseLerp(height - cPass.PlanetRadius, cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd));
+	float height = length(position - float3(0, -cPassParams.PlanetRadius, 0));
+	float heightGradient = saturate(InverseLerp(height - cPassParams.PlanetRadius, cPassParams.AtmosphereHeightStart, cPassParams.AtmosphereHeightEnd));
 
 	// Wind
-	position += heightGradient * cPass.WindDirection * cPass.TopSkew;
-	position += (cPass.WindDirection + float3(0, 0.2f, 0)) * cView.FrameIndex * cPass.WindSpeed;
-	position *= cPass.GlobalScale;
+	position += heightGradient * cPassParams.WindDirection * cPassParams.TopSkew;
+	position += (cPassParams.WindDirection + float3(0, 0.2f, 0)) * cView.FrameIndex * cPassParams.WindSpeed;
+	position *= cPassParams.GlobalScale;
 
 	// Shape
-	float4 lowFrequencies = tShapeNoise.SampleLevel(sLinearWrap, position * cPass.ShapeNoiseScale, mipLevel);
+	float4 lowFrequencies = cPassParams.ShapeNoise.SampleLevel(sLinearWrap, position * cPassParams.ShapeNoiseScale, mipLevel);
 	float lowFrequencyFBM = dot(lowFrequencies.yzw, float3(0.625f, 0.25f, 0.125f));
 	float baseCloud = saturate(Remap(lowFrequencies.r, (1.0f - lowFrequencyFBM), 1.0f, 0.0f, 1.0f));
 
 	// Coverage
-	float coverage = cPass.Coverage;
+	float coverage = cPassParams.Coverage;
 	baseCloud = Remap(baseCloud, 1.0f - coverage, 1.0f, 0.0f, 1.0f);
 	baseCloud *= coverage;
 
 	// Cloud type vertical gradient
-	float verticalDensity = tCloudTypeDensityLUT.SampleLevel(sLinearClamp, float2(cPass.CloudType, heightGradient), 0).x;
+	float verticalDensity = cPassParams.CloudTypeDensityLUT.SampleLevel(sLinearClamp, float2(cPassParams.CloudType, heightGradient), 0).x;
 	baseCloud *= verticalDensity;
 
 	// Detail noise
-	float4 highFrequencies = tDetailNoise.SampleLevel(sLinearWrap, position * cPass.DetailNoiseScale, mipLevel);
+	float4 highFrequencies = cPassParams.DetailNoise.SampleLevel(sLinearWrap, position * cPassParams.DetailNoiseScale, mipLevel);
 	float highFrequencyFBM = dot(highFrequencies.xyz, float3(0.625f, 0.25f, 0.125f));
 	float highFrequencyNoise = lerp(highFrequencyFBM, 1 - highFrequencyFBM, saturate(heightGradient * 10));
-	float finalCloud = Remap(baseCloud, highFrequencyNoise * cPass.DetailNoiseInfluence, 1.0f, 0.0f, 1.0f);
+	float finalCloud = Remap(baseCloud, highFrequencyNoise * cPassParams.DetailNoiseInfluence, 1.0f, 0.0f, 1.0f);
 
-	return saturate(finalCloud * cPass.GlobalDensity);
+	return saturate(finalCloud * cPassParams.GlobalDensity);
 }
 
 float LightMarch(float3 rayOrigin, float3 rayDirection)
 {
 	const float coneSize = 200.0f;
-	float stepSize = coneSize / cPass.LightMarchSteps;
+	float stepSize = coneSize / cPassParams.LightMarchSteps;
 
 	float totalDensity = 0;
 
 	uint seed = SeedThread(0);
-	for(uint i = 0; i < cPass.LightMarchSteps; ++i)
+	for(uint i = 0; i < cPassParams.LightMarchSteps; ++i)
 	{
 		float3 rnd = float3(Random01(seed), Random01(seed), Random01(seed)) / 5.0f;
 		rayOrigin += rayDirection * stepSize + (stepSize * rnd * (i + 1));
@@ -109,10 +107,10 @@ float4 RenderClouds(uint2 pixel, float3 rayOrigin, float3 rayDirection, float ma
 	float maxT = -1000000.0f;
 
 	float2 atmosphereHitTop;
-	if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightEnd, atmosphereHitTop))
+	if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPassParams.PlanetRadius, 0), cPassParams.PlanetRadius + cPassParams.AtmosphereHeightEnd, atmosphereHitTop))
 	{
 		float2 atmosphereHitBottom;
-		if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius + cPass.AtmosphereHeightStart, atmosphereHitBottom))
+		if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPassParams.PlanetRadius, 0), cPassParams.PlanetRadius + cPassParams.AtmosphereHeightStart, atmosphereHitBottom))
 		{
 			// If we see both intersection in front of us, keep the min/closest, otherwise the max/furthest
 			float TempTop = all(atmosphereHitTop > 0.0f) ? min(atmosphereHitTop.x, atmosphereHitTop.y) : max(atmosphereHitTop.x, atmosphereHitTop.y);
@@ -147,7 +145,7 @@ float4 RenderClouds(uint2 pixel, float3 rayOrigin, float3 rayDirection, float ma
 
 	Light light = GetLight(0);
 
-	const float stepSize = cPass.RayStepSize;
+	const float stepSize = cPassParams.RayStepSize;
 	float offset = InterleavedGradientNoise(pixel + cView.FrameIndex);
 	rayOrigin += rayDirection * offset * stepSize;
 
@@ -195,7 +193,7 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	if(all(debugUV >= 0.0f) && all(debugUV <= 1.0f))
 	{
 		debugUV = (debugUV * 2.0f - 1.0f) * 1000.0f;
-		float height = lerp(cPass.AtmosphereHeightStart, cPass.AtmosphereHeightEnd, 0.1f);
+		float height = lerp(cPassParams.AtmosphereHeightStart, cPassParams.AtmosphereHeightEnd, 0.1f);
 		float3 pos = float3(debugUV.x, height, debugUV.y);
 		uOutput[threadId.xy] = float4(SampleDensity(pos, 0).xxx, 1);
 		return;
@@ -203,15 +201,15 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 #endif
 
 	float2 uv = TexelToUV(threadId.xy, cView.ViewportDimensionsInv);
-	float4 color = tSceneTexture.SampleLevel(sPointClamp, uv, 0);
-	float sceneDepth = tDepthTexture.SampleLevel(sPointClamp, uv, 0).r;
+	float4 color = cPassParams.SceneTexture.SampleLevel(sPointClamp, uv, 0);
+	float sceneDepth = cPassParams.DepthTexture.SampleLevel(sPointClamp, uv, 0).r;
 	float3 viewRay = normalize(ViewPositionFromDepth(uv, sceneDepth, cView.ClipToView));
 	float linearDepth = sceneDepth == 0 ? 10000000 : length(viewRay);
 	float3 rayOrigin = cView.ViewLocation;
 	float3 rayDirection = mul(viewRay, (float3x3)cView.ViewToWorld);
 
 	float2 planetHit;
-	if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPass.PlanetRadius, 0), cPass.PlanetRadius, planetHit))
+	if(RaySphereIntersect(rayOrigin, rayDirection, float3(0, -cPassParams.PlanetRadius, 0), cPassParams.PlanetRadius, planetHit))
 	{
 		float hit = all(planetHit > 0) ? planetHit.x : planetHit.y;
 		if(hit > 0 && hit < linearDepth)
@@ -223,5 +221,5 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 
 	float4 scatteringTransmittance = RenderClouds(threadId.xy, rayOrigin, rayDirection, linearDepth);
 	float3 col = color.xyz * scatteringTransmittance.w + scatteringTransmittance.xyz;
-	uOutput[threadId.xy] = float4(col, 1);
+	cPassParams.Output.Store(threadId.xy, float4(col, 1));
 }

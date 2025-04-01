@@ -46,8 +46,6 @@ namespace Colors
 	static const float4 White = float4(1, 1, 1, 1);
 }
 
-static const uint INVALID_HANDLE = 0xFFFFFFFF;
-
 static const float3x3 IDENTITY_MATRIX_3 = float3x3(1, 0, 0, 0, 1, 0, 0, 0, 1);
 static const float4x4 IDENTITY_MATRIX_4 = float4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
 

@@ -9,12 +9,12 @@ struct PassData
 	float AoRadius;
 	float AoDepthThreshold;
 	int AoSamples;
+
+	Texture2DH<float> DepthTexture;
+	RWTexture2DH<float> OutputTexture;
 };
 
-ConstantBuffer<PassData> cPass : register(b0);
-Texture2D<float> tDepthTexture : register(t0);
-
-RWTexture2D<float> uAmbientOcclusion : register(u0);
+DEFINE_CONSTANTS(PassData, 0);
 
 float3x3 TangentMatrix(float3 z)
 {
@@ -30,9 +30,11 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 	if(any(threadId.xy >= cView.ViewportDimensions))
 		return;
 
+	PassData cPass = cPassData;
+
 	float2 uv = TexelToUV(threadId.xy, cView.ViewportDimensionsInv);
-	float depth = tDepthTexture.SampleLevel(sPointClamp, uv, 0);
-	float3 viewNormal = ViewNormalFromDepth(uv, tDepthTexture, NormalReconstructMethod::Taps5);
+	float depth = cPass.DepthTexture.SampleLevel(sPointClamp, uv, 0);
+	float3 viewNormal = ViewNormalFromDepth(uv, cPass.DepthTexture.Get(), NormalReconstructMethod::Taps5);
 	float3 viewPos = ViewPositionFromDepth(uv.xy, depth, cView.ClipToView).xyz;
 
 	uint seed = SeedThread(threadId.xy, cView.ViewportDimensions, cView.FrameIndex);
@@ -57,12 +59,12 @@ void CSMain(uint3 threadId : SV_DispatchThreadID)
 		// Make sure we're not sampling outside the screen
 		if(all(newTexCoord.xy >= 0) && all(newTexCoord.xy <= 1))
 		{
-			float sampleDepth = tDepthTexture.SampleLevel(sPointClamp, newTexCoord.xy, 0).r;
+			float sampleDepth = cPass.DepthTexture.SampleLevel(sPointClamp, newTexCoord.xy, 0).r;
 			float depthVpos = LinearizeDepth(sampleDepth);
 			float rangeCheck = smoothstep(0.0f, 1.0f, cPass.AoRadius / (viewPos.z - depthVpos));
 			occlusion += (vpos.z >= depthVpos + cPass.AoDepthThreshold) * rangeCheck;
 		}
 	}
 	occlusion = occlusion / cPass.AoSamples;
-	uAmbientOcclusion[threadId.xy] = pow(saturate(1 - occlusion), cPass.AoPower);
+	cPass.OutputTexture.Store(threadId.xy, pow(saturate(1 - occlusion), cPass.AoPower));
 }

@@ -11,9 +11,8 @@
 #include "StateObject.h"
 #include "Core/Profiler.h"
 
-CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pScratchAllocationManager)
+CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, ScratchAllocationManager* pScratchAllocationManager)
 	: DeviceObject(pParent),
-	m_ShaderResourceDescriptorAllocator(pDescriptorHeap),
 	m_Type(type)
 {
 	m_ScratchAllocator.Init(pScratchAllocationManager);
@@ -21,16 +20,27 @@ CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> p
 	gVerify(pCommandList.As(&m_pCommandList), == true);
 
 	// Create DSV and RTV description heap per commandlist to create on-the-fly descriptors
-	ID3D12Device* pDevice = pParent->GetDevice();
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	heapDesc.NumDescriptors = 1;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-	VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pDSVHeap.GetAddressOf())));
+	ID3D12Device*			   pDevice = pParent->GetDevice();
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC heapDesc{
+			.Type			= D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+			.NumDescriptors = 1,
+			.Flags			= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+		};
+		VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pDSVHeap.GetAddressOf())));
+		D3D::SetObjectName(m_pRTVHeap, "DSV Heap");
+	}
 
-	heapDesc.NumDescriptors = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-	VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pRTVHeap.GetAddressOf())));
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC heapDesc{
+			.Type			= D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+			.NumDescriptors = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT,
+			.Flags			= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+		};
+		VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pRTVHeap.GetAddressOf())));
+		D3D::SetObjectName(m_pRTVHeap, "RTV Heap");
+	}
+
 	m_RTVSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 }
 
@@ -79,11 +89,6 @@ void CommandContext::Free(const SyncPoint& syncPoint)
 	GetParent()->GetCommandQueue(m_Type)->FreeAllocator(syncPoint, m_pAllocator);
 	m_pAllocator = nullptr;
 	GetParent()->FreeCommandList(this);
-
-	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
-	{
-		m_ShaderResourceDescriptorAllocator.ReleaseUsedHeaps(syncPoint);
-	}
 }
 
 void CommandContext::ClearState()
@@ -194,10 +199,10 @@ void CommandContext::CopyResource(const DeviceResource* pSource, const DeviceRes
 	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
 }
 
-void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pTarget, const D3D12_BOX& sourceRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationOffset /*= 0*/)
+void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationOffset /*= 0*/)
 {
 	gAssert(pSource && pSource->GetResource(), "Source is invalid");
-	gAssert(pTarget && pTarget->GetResource(), "Target is invalid");
+	gAssert(pDestination && pDestination->GetResource(), "Target is invalid");
 
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {
 		.Offset = 0,
@@ -211,29 +216,29 @@ void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pTarget, 
 	};
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
-	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pTarget->GetResource(), textureFootprint);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), textureFootprint);
 	FlushResourceBarriers();
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationOffset, 0, 0, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyTexture(const Texture* pSource, const Texture* pTarget, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationSubregion /*= 0*/)
+void CommandContext::CopyTexture(const Texture* pSource, const Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationSubregion /*= 0*/)
 {
 	gAssert(pSource && pSource->GetResource(), "Source is invalid");
-	gAssert(pTarget && pTarget->GetResource(), "Target is invalid");
+	gAssert(pDestination && pDestination->GetResource(), "Target is invalid");
 
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
-	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pTarget->GetResource(), destinationSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), destinationSubregion);
 	FlushResourceBarriers();
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyBuffer(const Buffer* pSource, const Buffer* pTarget, uint64 size, uint64 sourceOffset, uint64 destinationOffset)
+void CommandContext::CopyBuffer(const Buffer* pSource, const Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset)
 {
 	gAssert(pSource && pSource->GetResource(), "Source is invalid");
-	gAssert(pTarget && pTarget->GetResource(), "Target is invalid");
+	gAssert(pDestination && pDestination->GetResource(), "Target is invalid");
 
 	FlushResourceBarriers();
-	m_pCommandList->CopyBufferRegion(pTarget->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
+	m_pCommandList->CopyBufferRegion(pDestination->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
@@ -278,7 +283,7 @@ void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, 
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
-void CommandContext::ClearBufferFloat(Buffer* pBuffer, float value)
+void CommandContext::ClearBufferFloat(const Buffer* pBuffer, float value)
 {
 	gAssert(pBuffer);
 	DescriptorHandle gpuHandle = pBuffer->GetUAV();
@@ -291,7 +296,7 @@ void CommandContext::ClearBufferFloat(Buffer* pBuffer, float value)
 	m_pCommandList->ClearUnorderedAccessViewFloat(ptr.GPUHandle, ptr.CPUOpaqueHandle, pBuffer->GetResource(), values, 0, nullptr);
 }
 
-void CommandContext::ClearBufferUInt(Buffer* pBuffer, uint32 value)
+void CommandContext::ClearBufferUInt(const Buffer* pBuffer, uint32 value)
 {
 	gAssert(pBuffer);
 	DescriptorHandle gpuHandle = pBuffer->GetUAV();
@@ -304,7 +309,7 @@ void CommandContext::ClearBufferUInt(Buffer* pBuffer, uint32 value)
 	m_pCommandList->ClearUnorderedAccessViewUint(ptr.GPUHandle, ptr.CPUOpaqueHandle, pBuffer->GetResource(), values, 0, nullptr);
 }
 
-void CommandContext::ClearTextureUInt(Texture* pTexture, const Vector4u& values)
+void CommandContext::ClearTextureUInt(const Texture* pTexture, const Vector4u& values)
 {
 	gAssert(pTexture);
 	DescriptorHandle gpuHandle = pTexture->GetUAV();
@@ -316,7 +321,7 @@ void CommandContext::ClearTextureUInt(Texture* pTexture, const Vector4u& values)
 	m_pCommandList->ClearUnorderedAccessViewUint(ptr.GPUHandle, ptr.CPUOpaqueHandle, pTexture->GetResource(), &values.x, 0, nullptr);
 }
 
-void CommandContext::ClearTextureFloat(Texture* pTexture, const Vector4& values)
+void CommandContext::ClearTextureFloat(const Texture* pTexture, const Vector4& values)
 {
 	gAssert(pTexture);
 	DescriptorHandle gpuHandle = pTexture->GetUAV();
@@ -334,7 +339,6 @@ void CommandContext::SetComputeRootSignature(const RootSignature* pRootSignature
 	if (pRootSignature != m_pCurrentComputeRS)
 	{
 		m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
-		m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 		m_pCurrentComputeRS = pRootSignature;
 	}
 }
@@ -345,7 +349,6 @@ void CommandContext::SetGraphicsRootSignature(const RootSignature* pRootSignatur
 	if (pRootSignature != m_pCurrentGraphicsRS)
 	{
 		m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
-		m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 		m_pCurrentGraphicsRS = pRootSignature;
 	}
 }
@@ -413,7 +416,15 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 }
 
 
-void CommandContext::BindRootCBV(uint32 rootIndex, const Buffer* pBuffer)
+void CommandContext::BindRootSRV(uint32 rootIndex, const void* pData, uint32 dataSize)
+{
+	ScratchAllocation allocation = AllocateScratch(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	BindRootSRV(rootIndex, allocation.GpuHandle);
+}
+
+
+void CommandContext::BindRootCBV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
 {
 #if ENABLE_ASSERTS
 	const RootSignature* pRootSignature = m_CurrentCommandContext == CommandListContext::Graphics ? m_pCurrentGraphicsRS : m_pCurrentComputeRS;
@@ -421,15 +432,9 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const Buffer* pBuffer)
 #endif
 
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
-		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, pBuffer->GetGpuHandle());
+		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, address);
 	else
-		m_pCommandList->SetComputeRootConstantBufferView(rootIndex, pBuffer->GetGpuHandle());
-}
-
-
-void CommandContext::BindResources(uint32 rootIndex, Span<DescriptorHandle> descriptorHandles, uint32 offset)
-{
-	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, descriptorHandles);
+		m_pCommandList->SetComputeRootConstantBufferView(rootIndex, address);
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
@@ -686,7 +691,6 @@ void CommandContext::PrepareDraw()
 {
 	gAssert(m_CurrentCommandContext != CommandListContext::Invalid);
 	FlushResourceBarriers();
-	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(*this, m_CurrentCommandContext);
 }
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)

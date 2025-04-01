@@ -3,18 +3,16 @@
 #define EPSILON 0.0001f
 #define HISTOGRAM_THREADS_PER_DIMENSION 16
 
-struct PassParameters
+struct PassParams
 {
 	uint Width;
 	uint Height;
 	float MinLogLuminance;
 	float OneOverLogLuminanceRange;
+	Texture2DH<float4> HDRTexture;
+	RWTypedBufferH<uint> LuminanceHistogram;
 };
-
-ConstantBuffer<PassParameters> cPassData : register(b0);
-Texture2D tHDRTexture : register(t0);
-RWBuffer<uint> uLuminanceHistogram : register(u0);
-
+DEFINE_CONSTANTS(PassParams, 0);
 
 uint HDRToHistogramBin(float3 hdrColor)
 {
@@ -25,7 +23,7 @@ uint HDRToHistogramBin(float3 hdrColor)
 		return 0;
 	}
 
-	float logLuminance = saturate((log2(luminance) - cPassData.MinLogLuminance) * cPassData.OneOverLogLuminanceRange);
+	float logLuminance = saturate((log2(luminance) - cPassParams.MinLogLuminance) * cPassParams.OneOverLogLuminanceRange);
 	return (uint)(logLuminance * (NUM_HISTOGRAM_BINS - 1) + 1.0);
 }
 
@@ -38,14 +36,14 @@ void CSMain(uint groupIndex : SV_GroupIndex, uint3 threadId : SV_DispatchThreadI
 
 	GroupMemoryBarrierWithGroupSync();
 
-	if(threadId.x < cPassData.Width && threadId.y < cPassData.Height)
+	if(threadId.x < cPassParams.Width && threadId.y < cPassParams.Height)
 	{
-		float3 hdrColor = tHDRTexture.Load(int3(threadId.xy, 0)).rgb;
+		float3 hdrColor = cPassParams.HDRTexture.Load(int3(threadId.xy, 0)).rgb;
 		uint binIndex = HDRToHistogramBin(hdrColor);
 		InterlockedAdd(HistogramShared[binIndex], 1);
 	}
 
 	GroupMemoryBarrierWithGroupSync();
 
-	InterlockedAdd(uLuminanceHistogram[groupIndex], HistogramShared[groupIndex]);
+	InterlockedAdd(cPassParams.LuminanceHistogram.Get()[groupIndex], HistogramShared[groupIndex]);
 }

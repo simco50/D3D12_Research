@@ -19,7 +19,7 @@ AccelerationStructure::~AccelerationStructure() = default;
 
 void AccelerationStructure::Init(GraphicsDevice* pDevice)
 {
-	m_pUpdateTLASPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "UpdateTLAS.hlsl", "UpdateTLASCS");
+	m_pUpdateTLASPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "UpdateTLAS.hlsl", "UpdateTLASCS");
 }
 
 void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstancesBuffer, Span<const Batch> batches)
@@ -170,7 +170,7 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 			uint32 numInstances = Math::AlignUp(Math::Max(1u, (uint32)blasInstances.size()), 128u);
 			if (!m_pBLASInstancesSourceBuffer || m_pBLASInstancesSourceBuffer->GetNumElements() < numInstances)
 			{
-				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::ShaderResource), "TLAS.BLASInstanceSourceDescs");
+				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(BLASInstance), BufferFlag::ShaderResource), "TLAS.BLASInstanceSourceDescs");
 				m_pBLASInstancesTargetBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::UnorderedAccess), "TLAS.BLASInstanceTargetDescs");
 			}
 
@@ -185,15 +185,22 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 				context.InsertResourceBarrier(m_pBLASInstancesSourceBuffer, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				context.InsertResourceBarrier(m_pBLASInstancesTargetBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(m_pUpdateTLASPSO);
-				context.BindRootCBV(BindingSlot::PerInstance, (uint32)blasInstances.size());
-				context.BindResources(BindingSlot::UAV, m_pBLASInstancesTargetBuffer->GetUAV());
-				context.BindResources(BindingSlot::SRV,
-					{
-						pInstancesBuffer->GetSRV(),
-						m_pBLASInstancesSourceBuffer->GetSRV(),
-					});
+
+				struct
+				{
+					uint32		 NumInstances;
+					BufferView	 InstanceData;
+					BufferView	 InputInstances;
+					RWBufferView OutputInstances;
+				} params{
+					.NumInstances	 = (uint32)blasInstances.size(),
+					.InstanceData	 = pInstancesBuffer->GetSRV(),
+					.InputInstances	 = m_pBLASInstancesSourceBuffer->GetSRV(),
+					.OutputInstances = m_pBLASInstancesTargetBuffer->GetUAV(),
+				};
+				context.BindRootSRV(BindingSlot::PerInstance, params);
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
 			}
 		}
@@ -219,13 +226,13 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 	}
 }
 
-SRVHandle AccelerationStructure::GetSRV() const
+TLASView AccelerationStructure::GetSRV() const
 {
 	if (m_pTLAS)
 	{
-		return m_pTLAS->GetSRV();
+		return TLASView(m_pTLAS->GetSRV());
 	}
-	return SRVHandle::Invalid();
+	return TLASView::Invalid();
 }
 
 void AccelerationStructure::ProcessCompaction(CommandContext& context)

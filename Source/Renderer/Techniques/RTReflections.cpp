@@ -24,7 +24,7 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 		stateDesc.MaxPayloadSize = 6 * sizeof(float);
 		stateDesc.MaxAttributeSize = 2 * sizeof(float);
 		stateDesc.MaxRecursion = 2;
-		stateDesc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
+		stateDesc.pGlobalRootSignature = GraphicsCommon::pCommonRSV2;
 		m_pRtSO = pDevice->CreateStateObject(stateDesc);
 	}
 }
@@ -40,15 +40,23 @@ void RTReflections::Execute(RGGraph& graph, const RenderView* pView, SceneTextur
 			{
 				Texture* pTarget = resources.Get(pReflectionsTarget);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(m_pRtSO);
 
 				struct
 				{
-					float ViewPixelSpreadAngle;
-				} parameters;
-
-				parameters.ViewPixelSpreadAngle = atanf(2.0f * tanf(pView->FoV / 2) / (float)pTarget->GetHeight());
+					TextureView	  Depth;
+					TextureView	  PreviousSceneColor;
+					TextureView	  SceneNormals;
+					TextureView	  SceneRoughness;
+					RWTextureView Output;
+				} params;
+				params.Depth			  = resources.GetSRV(sceneTextures.pDepth);
+				params.PreviousSceneColor = resources.GetSRV(sceneTextures.pColorTarget);
+				params.SceneNormals		  = resources.GetSRV(sceneTextures.pNormals);
+				params.SceneRoughness	  = resources.GetSRV(sceneTextures.pRoughness);
+				params.Output			  = pTarget->GetUAV();
+				context.BindRootSRV(BindingSlot::PerInstance, params);
 
 				ShaderBindingTable bindingTable(m_pRtSO);
 				bindingTable.BindRayGenShader("RayGen");
@@ -57,14 +65,6 @@ void RTReflections::Execute(RGGraph& graph, const RenderView* pView, SceneTextur
 				bindingTable.BindHitGroup("ReflectionHitGroup", 0);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindRootCBV(BindingSlot::PerInstance, parameters);
-				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(sceneTextures.pDepth),
-					resources.GetSRV(sceneTextures.pColorTarget),
-					resources.GetSRV(sceneTextures.pNormals),
-					resources.GetSRV(sceneTextures.pRoughness),
-					});
 
 				context.DispatchRays(bindingTable, pTarget->GetWidth(), pTarget->GetHeight());
 			});

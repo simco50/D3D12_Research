@@ -20,7 +20,7 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	{
 		//Opaque
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
 		psoDesc.SetBlendMode(BlendMode::Replace, false);
 		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "CLUSTERED_FORWARD" });
 		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "CLUSTERED_FORWARD" });
@@ -48,7 +48,7 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	{
 		//Opaque
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
 		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "TILED_FORWARD" });
 		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "TILED_FORWARD" });
 		psoDesc.SetPixelShader("ForwardShading.hlsl", "ShadePS", { "TILED_FORWARD" });
@@ -90,29 +90,31 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const RenderView* p
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
 
 				struct
 				{
-					Vector4i ClusterDimensions;
-					Vector2i ClusterSize;
-					Vector2 LightGridParams;
-				} frameData;
+					Vector4i	ClusterDimensions;
+					Vector2i	ClusterSize;
+					Vector2		LightGridParams;
+					TextureView AO;
+					TextureView Depth;
+					TextureView PreviousSceneColor;
+					TextureView LightScattering;
+					BufferView	LightGrid;
+				} passParams;
 
-				frameData.ClusterDimensions = Vector4i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y, lightCullData.ClusterCount.z, 0);
-				frameData.ClusterSize = Vector2i(lightCullData.ClusterSize, lightCullData.ClusterSize);
-				frameData.LightGridParams = lightCullData.LightGridParams;
+				passParams.ClusterDimensions  = Vector4i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y, lightCullData.ClusterCount.z, 0);
+				passParams.ClusterSize		  = Vector2i(lightCullData.ClusterSize, lightCullData.ClusterSize);
+				passParams.LightGridParams	  = lightCullData.LightGridParams;
+				passParams.AO				  = resources.GetSRV(pAO);
+				passParams.Depth			  = resources.GetSRV(sceneTextures.pDepth);
+				passParams.PreviousSceneColor = resources.GetSRV(sceneTextures.pPreviousColor);
+				passParams.LightScattering	  = resources.GetSRV(pFogTexture);
+				passParams.LightGrid		  = resources.GetSRV(lightCullData.pLightGrid);
+				context.BindRootSRV(BindingSlot::PerPass, passParams);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindRootCBV(BindingSlot::PerPass, frameData);
-
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pAO),
-					resources.GetSRV(sceneTextures.pDepth),
-					resources.GetSRV(sceneTextures.pPreviousColor),
-					resources.GetSRV(pFogTexture),
-					resources.GetSRV(lightCullData.pLightGrid),
-					});
 
 				if (!translucentOnly)
 				{
@@ -148,18 +150,27 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
 
 				Renderer::BindViewUniforms(context, *pView);
 
+				struct
 				{
-					context.BindResources(BindingSlot::SRV, {
-						resources.GetSRV(pAO),
-						resources.GetSRV(sceneTextures.pDepth),
-						resources.GetSRV(sceneTextures.pPreviousColor),
-						resources.GetSRV(pFogTexture),
-						resources.GetSRV(lightCullData.pLightListOpaque),
-						});
+					TextureView AO;
+					TextureView Depth;
+					TextureView PreviousSceneColor;
+					TextureView LightScattering;
+					BufferView	LightGrid;
+				} passParams;
+
+				{
+
+					passParams.AO				  = resources.GetSRV(pAO);
+					passParams.Depth			  = resources.GetSRV(sceneTextures.pDepth);
+					passParams.PreviousSceneColor = resources.GetSRV(sceneTextures.pPreviousColor);
+					passParams.LightScattering	  = resources.GetSRV(pFogTexture);
+					passParams.LightGrid		  = resources.GetSRV(lightCullData.pLightListOpaque);
+					context.BindRootSRV(BindingSlot::PerPass, passParams);
 
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
@@ -175,13 +186,12 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 				}
 
 				{
-					context.BindResources(BindingSlot::SRV, {
-						resources.GetSRV(pAO),
-						resources.GetSRV(sceneTextures.pDepth),
-						resources.GetSRV(sceneTextures.pPreviousColor),
-						resources.GetSRV(pFogTexture),
-						resources.GetSRV(lightCullData.pLightListTransparent),
-						});
+					passParams.AO				  = resources.GetSRV(pAO);
+					passParams.Depth			  = resources.GetSRV(sceneTextures.pDepth);
+					passParams.PreviousSceneColor = resources.GetSRV(sceneTextures.pPreviousColor);
+					passParams.LightScattering	  = resources.GetSRV(pFogTexture);
+					passParams.LightGrid		  = resources.GetSRV(lightCullData.pLightListTransparent);
+					context.BindRootSRV(BindingSlot::PerPass, passParams);
 
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Transparant");

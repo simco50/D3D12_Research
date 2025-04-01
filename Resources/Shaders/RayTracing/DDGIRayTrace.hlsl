@@ -3,16 +3,15 @@
 #include "Lighting.hlsli"
 #include "DDGICommon.hlsli"
 
-struct PassParameters
+struct PassParams
 {
 	float3 RandomVector;
 	float RandomAngle;
-	float HistoryBlendWeight;
 	uint VolumeIndex;
+	
+	RWTypedBufferH<float4> RayHitInfo;
 };
-
-ConstantBuffer<PassParameters> cPass : register(b0);
-RWBuffer<float4> uRayHitInfo : register(u0);
+DEFINE_CONSTANTS(PassParams, 0);
 
 /**
 	- TraceRays -
@@ -24,7 +23,7 @@ void TraceRaysRGS()
 {
 	uint probeIdx = DispatchRaysIndex().y;
 	uint rayIndex = DispatchRaysIndex().x;
-	DDGIVolume volume = GetDDGIVolume(cPass.VolumeIndex);
+	DDGIVolume volume = GetDDGIVolume(cPassParams.VolumeIndex);
 	uint3 probeIdx3D = GetDDGIProbeIndex3D(volume, probeIdx);
 
 	// If the probe is inactive, just trace the stable rays to determine if we have to re-activate the probe
@@ -33,17 +32,14 @@ void TraceRaysRGS()
 
 	float3 probePosition = GetDDGIProbePosition(volume, probeIdx3D);
 	const float maxDepth = MaxComponent(volume.ProbeSize) * 2;
-	float3x3 randomRotation = AngleAxis3x3(cPass.RandomAngle, cPass.RandomVector);
-
-	RaytracingAccelerationStructure TLAS = ResourceDescriptorHeap[cView.TLASIndex];
+	float3x3 randomRotation = AngleAxis3x3(cPassParams.RandomAngle, cPassParams.RandomVector);
 
 	RayDesc ray;
 	ray.Origin = probePosition;
 	ray.Direction = DDGIGetRayDirection(rayIndex, volume.NumRaysPerProbe, randomRotation);
 	ray.TMin = RAY_BIAS;
 	ray.TMax = FLT_MAX;
-	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-	MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
+	MaterialRayPayload payload = TraceMaterialRay(ray, cView.TLAS.Get());
 
 	float depth = maxDepth;
 	float3 radiance = 0;
@@ -74,7 +70,7 @@ void TraceRaysRGS()
 					continue;
 
 				RayDesc rayDesc = CreateLightOcclusionRay(light, hitLocation);
-				attenuation *= TraceOcclusionRay(rayDesc, tlas);
+				attenuation *= TraceOcclusionRay(rayDesc, cView.TLAS.Get());
 
 				if(attenuation <= 0.0f)
 					continue;
@@ -97,5 +93,5 @@ void TraceRaysRGS()
 		radiance = GetSky(ray.Direction);
 	}
 
-	uRayHitInfo[probeIdx * volume.MaxRaysPerProbe + rayIndex] = float4(radiance, depth);
+	cPassParams.RayHitInfo.Store(probeIdx * volume.MaxRaysPerProbe + rayIndex, float4(radiance, depth));
 }

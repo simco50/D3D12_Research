@@ -25,16 +25,14 @@ float3 SphericalFibonacci(float i, float n)
 
 DDGIVolume GetDDGIVolume(uint index)
 {
-	StructuredBuffer<DDGIVolume> volumeBuffer = ResourceDescriptorHeap[cView.DDGIVolumesIndex];
-	return volumeBuffer[index];
+	return cView.DDGIVolumesBuffer[index];
 }
 
 bool DDGIIsProbeActive(DDGIVolume volume, uint3 index3D)
 {
 #if DDGI_USE_PROBE_STATES
 	uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions.xy);
-	Buffer<uint> stateBuffer = ResourceDescriptorHeap[volume.ProbeStatesIndex];
-	return stateBuffer[index1D] == 0;
+	return volume.ProbeStatesBuffer[index1D] == 0;
 #else
 	return true;
 #endif
@@ -58,11 +56,10 @@ float3 GetDDGIProbePosition(DDGIVolume volume, uint3 index3D)
 {
 	float3 position = volume.BoundsMin + index3D * volume.ProbeSize;
 #if DDGI_DYNAMIC_PROBE_OFFSET
-	if(volume.ProbeOffsetIndex != INVALID_HANDLE)
+	if(volume.ProbeOffsetBuffer.IsValid())
 	{
-		Buffer<float4> offsetBuffer = ResourceDescriptorHeap[volume.ProbeOffsetIndex];
 		uint index1D = Flatten3D(index3D, volume.ProbeVolumeDimensions.xy);
-		position += offsetBuffer[index1D].xyz;
+		position += volume.ProbeOffsetBuffer[index1D].xyz;
 	}
 #endif
 	return position;
@@ -96,13 +93,10 @@ float3 DDGIComputeBias(DDGIVolume volume, float3 normal, float3 viewDirection, f
 
 float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction, float3 cameraDirection)
 {
-	if(volume.IrradianceIndex == INVALID_HANDLE || volume.DepthIndex == INVALID_HANDLE)
+	if(!volume.IrradianceTexture.IsValid() || !volume.DepthTexture.IsValid())
 	{
 		return 0;
 	}
-
-	Texture2D<float4> irradianceTexture = ResourceDescriptorHeap[volume.IrradianceIndex];
-	Texture2D<float2> depthTexture = ResourceDescriptorHeap[volume.DepthIndex];
 
 	float volumeWeight = 1.0f;
 
@@ -159,7 +153,7 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 		float2 depthUV = GetDDGIProbeUV(volume, probeCoordinates, -probeDirection, DDGI_PROBE_DEPTH_TEXELS);
 		float probeDistance = length(relativeProbePosition);
 		// https://developer.download.nvidia.com/SDK/10/direct3d/Source/VarianceShadowMapping/Doc/VarianceShadowMapping.pdf
-		float2 moments = depthTexture.SampleLevel(sLinearClamp, depthUV, 0).xy;
+		float2 moments = volume.DepthTexture.SampleLevel(sLinearClamp, depthUV, 0).xy;
 		float variance = abs(Square(moments.x) - moments.y);
 		float chebyshev = 1.0f;
 		if(probeDistance > moments.x)
@@ -181,7 +175,7 @@ float4 SampleDDGIIrradiance(DDGIVolume volume, float3 position, float3 direction
 
 		float2 uv = GetDDGIProbeUV(volume, probeCoordinates, direction, DDGI_PROBE_IRRADIANCE_TEXELS);
 		// Remove tone curve and blend in sRGB
-		float3 irradiance = irradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb;
+		float3 irradiance = volume.IrradianceTexture.SampleLevel(sLinearClamp, uv, 0).rgb;
 		irradiance = pow(irradiance, DDGI_PROBE_GAMMA * 0.5f);
 
 		sumIrradiance += irradiance * weight;

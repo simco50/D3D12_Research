@@ -5,14 +5,17 @@
 #include "Noise.hlsli"
 #include "GBuffer.hlsli"
 
-Texture2D<uint4> tGBuffer 					: register(t0);
-Texture2D<float> tDepth 					: register(t1);
-Texture2D tPreviousSceneColor 				: register(t2);
-Texture3D<float4> tFog 						: register(t3);
-StructuredBuffer<uint> tLightGrid 			: register(t4);
-Texture2D<float> tAO						: register(t5);
-
-RWTexture2D<float4> uOutput 				: register(u0);
+struct PassParams
+{
+	Texture2DH<uint4> GBuffer;
+	Texture2DH<float> Depth;
+	Texture2DH<float4> PreviousSceneColor;
+	Texture3DH<float4> Fog;
+	StructuredBufferH<uint> LightGrid;
+	Texture2DH<float> AO;
+	RWTexture2DH<float4> Output;
+};
+DEFINE_CONSTANTS(PassParams, 0);
 
 float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
@@ -23,7 +26,7 @@ float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, flo
 	float3 lighting = 0.0f;
 	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
-		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
+		uint bucket = cPassParams.LightGrid[lightGridOffset + bucketIndex];
 		while(bucket)
 		{
 			uint bitIndex = firstbitlow(bucket);
@@ -46,13 +49,13 @@ void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 		return;
 
 	float2 uv = TexelToUV(texel, cView.ViewportDimensionsInv);
-	float depth = tDepth[texel];
+	float depth = cPassParams.Depth[texel];
 	float3 viewPos = ViewPositionFromDepth(uv, depth, cView.ClipToView);
 	float3 worldPos = mul(float4(viewPos, 1), cView.ViewToWorld).xyz;
 	float linearDepth = viewPos.z;
 
 	MaterialProperties surface = (MaterialProperties)0;
-	GBufferData gbuffer = LoadGBuffer(tGBuffer[texel]);
+	GBufferData gbuffer = LoadGBuffer(cPassParams.GBuffer[texel]);
 	surface.BaseColor = gbuffer.BaseColor;
 	surface.Specular = gbuffer.Specular;
 	surface.Normal = gbuffer.Normal;
@@ -60,14 +63,14 @@ void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 	surface.Metalness = gbuffer.Metalness;
 	surface.Emissive = gbuffer.Emissive;
 
-	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, uv, 0);
+	float ambientOcclusion = cPassParams.AO.SampleLevel(sLinearClamp, uv, 0);
 	float dither = InterleavedGradientNoise(texel);
 
 	BrdfData brdfData = GetBrdfData(surface);
 
 	float3 V = normalize(cView.ViewLocation - worldPos);
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(worldPos, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(worldPos, surface.Normal, V, brdfData.Roughness, cPassParams.Depth.Get(), cPassParams.PreviousSceneColor.Get(), dither, ssrWeight);
 
 	float3 lighting = 0;
 	lighting += DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, worldPos, texel, linearDepth, dither);
@@ -76,8 +79,8 @@ void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 	lighting += surface.Emissive;
 
 	float fogSlice = sqrt((linearDepth - cView.FarZ) / (cView.NearZ - cView.FarZ));
-	float4 scatteringTransmittance = tFog.SampleLevel(sLinearClamp, float3(uv, fogSlice), 0);
+	float4 scatteringTransmittance = cPassParams.Fog.SampleLevel(sLinearClamp, float3(uv, fogSlice), 0);
 	lighting = lighting * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
-	uOutput[texel] = float4(lighting, surface.Opacity);
+	cPassParams.Output.Store(texel, float4(lighting, surface.Opacity));
 }

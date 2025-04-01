@@ -20,7 +20,7 @@ struct PickingData
 
 CaptureTextureSystem::CaptureTextureSystem(GraphicsDevice* pDevice)
 {
-	m_pVisualizePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ImageVisualize.hlsl", "CSMain");
+	m_pVisualizePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "ImageVisualize.hlsl", "CSMain");
 }
 
 
@@ -44,7 +44,7 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 		.Write({ pTarget, pPickingBuffer })
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(m_pVisualizePSO);
 
 				struct ConstantsData
@@ -52,14 +52,16 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 					Vector2u HoveredPixel;
 					Vector2u Dimensions;
 					Vector2 ValueRange;
-					uint32 TextureSource;
-					uint32 TextureTarget;
+					TextureView TextureSource;
+					RWTextureView TextureTarget;
 					uint32 TextureType;
 					uint32 ChannelMask;
 					uint32 MipLevel;
 					uint32 Slice;
 					uint32 IsIntegerFormat;
 					uint32 IntAsID;
+
+					RWBufferView PickingBuffer;
 				} constants;
 
 				const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
@@ -79,9 +81,9 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 				constants.Slice				= desc.Type == TextureType::TextureCube ? captureContext.CubeFaceIndex : (uint32)captureContext.Slice;
 				constants.IsIntegerFormat	= formatInfo.Type == FormatType::Integer;
 				constants.IntAsID			= captureContext.IntAsID;
+				constants.PickingBuffer		= resources.GetUAV(pPickingBuffer);
 
-				context.BindRootCBV(BindingSlot::PerInstance, constants);
-				context.BindResources(BindingSlot::UAV, resources.GetUAV(pPickingBuffer));
+				context.BindRootSRV(BindingSlot::PerInstance, constants);
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 8, desc.Height, 8));
 			});

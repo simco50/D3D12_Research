@@ -26,18 +26,17 @@
 #define TAA_LUMINANCE_WEIGHT			0						   		// [Lottes]
 #define TAA_DILATE_VELOCITY		 		1
 
-Texture2D tVelocity : register(t0);
-Texture2D tPreviousColor : register(t1);
-Texture2D tCurrentColor : register(t2);
-Texture2D tSceneDepth : register(t3);
-
-RWTexture2D<float4> uOutColor : register(u0);
-
-struct Params
+struct PassParams
 {
 	float MinBlendFactor;
+
+	Texture2DH<float2> Velocity;
+	Texture2DH<float4> PreviousColor;
+	Texture2DH<float4> CurrentColor;
+	Texture2DH<float> SceneDepth;
+	RWTexture2DH<float4> OutColor;
 };
-ConstantBuffer<Params> cParams;
+DEFINE_CONSTANTS(PassParams, 0);
 
 //Temporal Reprojection in Inside
 float4 ClipAABB(float3 aabb_min, float3 aabb_max, float4 p, float4 q)
@@ -192,7 +191,7 @@ void CSMain(
 	uint2 pixelIndex = ThreadId.xy;
 	float2 uv = TexelToUV(pixelIndex, dxdy);
 	float2 dimensions;
-	tCurrentColor.GetDimensions(dimensions.x, dimensions.y);
+	cPassParams.CurrentColor.Get().GetDimensions(dimensions.x, dimensions.y);
 
 	int gsLocation = GroupThreadId.x + GroupThreadId.y * GSM_ROW_SIZE + GSM_ROW_SIZE + 1;
 	int gsPrefetchLocation0 = GroupThreadId.x + GroupThreadId.y * THREAD_GROUP_ROW_SIZE;
@@ -200,10 +199,10 @@ void CSMain(
 	int2 prefetchLocation0 = int2(pixelIndex.x & -8, pixelIndex.y & -8) - 1 + int2(gsPrefetchLocation0 % 10, gsPrefetchLocation0 / 10);
 	int2 prefetchLocation1 = int2(pixelIndex.x & -8, pixelIndex.y & -8) - 1 + int2(gsPrefetchLocation1 % 10, gsPrefetchLocation1 / 10);
 
-	gsColors[gsPrefetchLocation0] = TransformColor(tCurrentColor[prefetchLocation0].rgb);
-	gsColors[gsPrefetchLocation1] = TransformColor(tCurrentColor[prefetchLocation1].rgb);
-	gsDepths[gsPrefetchLocation0] = tSceneDepth[prefetchLocation0].r;
-	gsDepths[gsPrefetchLocation1] = tSceneDepth[prefetchLocation1].r;
+	gsColors[gsPrefetchLocation0] = TransformColor(cPassParams.CurrentColor[prefetchLocation0].rgb);
+	gsColors[gsPrefetchLocation1] = TransformColor(cPassParams.CurrentColor[prefetchLocation1].rgb);
+	gsDepths[gsPrefetchLocation0] = cPassParams.SceneDepth[prefetchLocation0].r;
+	gsDepths[gsPrefetchLocation1] = cPassParams.SceneDepth[prefetchLocation1].r;
 
 	GroupMemoryBarrierWithGroupSync();
 
@@ -252,7 +251,7 @@ void CSMain(
 	float2 uvReproj = uv;
 
 #if TAA_REPROJECT
-	float depth = tSceneDepth.SampleLevel(sPointClamp, uvReproj, 0).r;
+	float depth = cPassParams.SceneDepth.SampleLevel(sPointClamp, uvReproj, 0).r;
 
 #if TAA_DILATE_VELOCITY
 	// [Karis14] - Use closest pixel to move edge along
@@ -276,18 +275,18 @@ void CSMain(
 	{
 		minOffset = float3(1.0f, 1.0f, crossDepths.w);
 	}
-	float2 velocity = tVelocity.SampleLevel(sPointClamp, uvReproj + minOffset.xy * dxdy, 0).xy;
+	float2 velocity = cPassParams.Velocity.SampleLevel(sPointClamp, uvReproj + minOffset.xy * dxdy, 0);
 #else
-	float2 velocity = tVelocity.SampleLevel(sPointClamp, uvReproj, 0).xy;
+	float2 velocity = cPassParams.Velocity.SampleLevel(sPointClamp, uvReproj, 0);
 #endif // TAA_DILATE_VELOCITY
 	uvReproj = uv + velocity;
 #endif // TAA_REPROJECT
 
 #if TAA_RESOLVE_METHOD == HISTORY_RESOLVE_CATMULL_ROM
 	// [Karis14] Cubic filter to avoid blurry result from billinear filter
-	float3 prevColor = SampleTextureCatmullRom(tPreviousColor, sLinearClamp, uvReproj, dimensions).rgb;
+	float3 prevColor = SampleTextureCatmullRom(cPassParams.PreviousColor.Get(), sLinearClamp, uvReproj, dimensions).rgb;
 #elif TAA_RESOLVE_METHOD == HISTORY_RESOLVE_BILINEAR
-	float3 prevColor = SampleColor(tPreviousColor, sLinearClamp, uvReproj);
+	float3 prevColor = SampleColor(cPassParams.PreviousColor.Get(), sLinearClamp, uvReproj);
 #else
 	#error No history resolve method specified
 	float3 prevColor = 0;
@@ -336,7 +335,7 @@ void CSMain(
 	prevColor = Reinhard(prevColor);
 #endif
 
-	blendFactor = max(cParams.MinBlendFactor, blendFactor);
+	blendFactor = max(cPassParams.MinBlendFactor, blendFactor);
 
 	if(any(uvReproj < 0) || any(uvReproj > 1))
 		blendFactor = 1;
@@ -349,5 +348,5 @@ void CSMain(
 
 	currColor = ResolveColor(currColor);
 
-	uOutColor[pixelIndex] = float4(currColor, 1);
+	cPassParams.OutColor.Store(pixelIndex, float4(currColor, 1));
 }

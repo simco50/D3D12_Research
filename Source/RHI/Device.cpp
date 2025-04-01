@@ -7,6 +7,7 @@
 #include "PipelineState.h"
 #include "Shader.h"
 #include "RingBufferAllocator.h"
+#include "GPUDescriptorHeap.h"
 #include "Texture.h"
 #include "Buffer.h"
 #include "StateObject.h"
@@ -378,8 +379,8 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	const uint64 uploadRingBufferSize							= 128 * Math::MegaBytesToBytes;
 	m_pRingBufferAllocator										= new RingBufferAllocator(this, uploadRingBufferSize);
 
-	m_pGlobalViewHeap											= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, 1 << 18);
-	m_pGlobalSamplerHeap										= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 32, 2048);
+	m_pGlobalViewHeap											= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1000000);
+	m_pGlobalSamplerHeap										= new GPUDescriptorHeap(this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 2048);
 
 	uint8 smMaj, smMin;
 	m_Capabilities.GetShaderModel(smMaj, smMin);
@@ -421,7 +422,7 @@ CommandContext* GraphicsDevice::AllocateCommandContext(D3D12_COMMAND_LIST_TYPE t
 			Ref<ID3D12CommandList> pCommandList;
 			VERIFY_HR(m_pDevice->CreateCommandList1(0, type, D3D12_COMMAND_LIST_FLAG_NONE, IID_PPV_ARGS(pCommandList.GetAddressOf())));
 			D3D::SetObjectName(pCommandList.Get(), Sprintf("Pooled %s Commandlist %d", D3D::CommandlistTypeToString(type), m_CommandListPool[typeIndex].size()).c_str());
-			pContext = m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, pCommandList, type, m_pGlobalViewHeap, m_pScratchAllocationManager));
+			pContext = m_CommandListPool[typeIndex].emplace_back(new CommandContext(this, pCommandList, type, m_pScratchAllocationManager));
 		}
 	}
 	pContext->Reset();
@@ -457,15 +458,10 @@ void GraphicsDevice::IdleGPU()
 	}
 }
 
-DescriptorPtr GraphicsDevice::AllocateResourceDescriptor()
-{
-	return m_pGlobalViewHeap->AllocatePersistent();
-}
-
 void GraphicsDevice::ReleaseResourceDescriptor(DescriptorHandle& handle)
 {
 	if (handle.IsValid())
-		m_pGlobalViewHeap->FreePersistent(handle);
+		m_pGlobalViewHeap->Free(handle);
 }
 
 DescriptorPtr GraphicsDevice::FindResourceDescriptorPtr(DescriptorHandle handle)
@@ -788,15 +784,18 @@ Ref<PipelineState> GraphicsDevice::CreatePipeline(const PipelineStateInitializer
 
 Ref<StateObject> GraphicsDevice::CreateStateObject(const StateObjectInitializer& stateDesc)
 {
-	return new StateObject(this, stateDesc);
+	Ref<StateObject> pSO = new StateObject(this, stateDesc);
+	if (CommandLine::GetBool("immediate_pso"))
+		pSO->ConditionallyReload();
+	return pSO;
 }
 
-SRVHandle GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)
+BufferView GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)
 {
 	gAssert(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
 
-	DescriptorPtr descriptor = AllocateResourceDescriptor();
+	DescriptorPtr descriptor = m_pGlobalViewHeap->Allocate(pBuffer);
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -832,10 +831,10 @@ SRVHandle GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)
 	}
 
 	m_pDevice->CopyDescriptorsSimple(1, descriptor.CPUHandle, descriptor.CPUOpaqueHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	return SRVHandle(descriptor);
+	return BufferView(descriptor);
 }
 
-UAVHandle GraphicsDevice::CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc)
+RWBufferView GraphicsDevice::CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc)
 {
 	gAssert(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
@@ -860,13 +859,13 @@ UAVHandle GraphicsDevice::CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc)
 		uavDesc.Buffer.StructureByteStride = uavDesc.Format == DXGI_FORMAT_UNKNOWN ? bufferDesc.ElementSize : 0;
 	}
 
-	DescriptorPtr descriptor = AllocateResourceDescriptor();
+	DescriptorPtr descriptor = m_pGlobalViewHeap->Allocate(pBuffer);
 	m_pDevice->CreateUnorderedAccessView(pBuffer->GetResource(), nullptr, &uavDesc, descriptor.CPUOpaqueHandle);
 	m_pDevice->CopyDescriptorsSimple(1, descriptor.CPUHandle, descriptor.CPUOpaqueHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	return UAVHandle(descriptor);
+	return RWBufferView(descriptor);
 }
 
-SRVHandle GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& desc)
+TextureView GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& desc)
 {
 	gAssert(pTexture);
 	const TextureDesc& textureDesc = pTexture->GetDesc();
@@ -944,13 +943,13 @@ SRVHandle GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& des
 		break;
 	}
 
-	DescriptorPtr descriptor = AllocateResourceDescriptor();
+	DescriptorPtr descriptor = m_pGlobalViewHeap->Allocate(pTexture);
 	m_pDevice->CreateShaderResourceView(pTexture->GetResource(), &srvDesc, descriptor.CPUOpaqueHandle);
 	m_pDevice->CopyDescriptorsSimple(1, descriptor.CPUHandle, descriptor.CPUOpaqueHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	return SRVHandle(descriptor);
+	return TextureView(descriptor);
 }
 
-UAVHandle GraphicsDevice::CreateUAV(Texture* pTexture, const TextureUAVDesc& desc)
+RWTextureView GraphicsDevice::CreateUAV(Texture* pTexture, const TextureUAVDesc& desc)
 {
 	gAssert(pTexture);
 	const TextureDesc& textureDesc = pTexture->GetDesc();
@@ -996,10 +995,10 @@ UAVHandle GraphicsDevice::CreateUAV(Texture* pTexture, const TextureUAVDesc& des
 	}
 	uavDesc.Format = D3D::ConvertFormat(pTexture->GetFormat());
 
-	DescriptorPtr descriptor = AllocateResourceDescriptor();
+	DescriptorPtr descriptor = m_pGlobalViewHeap->Allocate(pTexture);
 	m_pDevice->CreateUnorderedAccessView(pTexture->GetResource(), nullptr, &uavDesc, descriptor.CPUOpaqueHandle);
 	m_pDevice->CopyDescriptorsSimple(1, descriptor.CPUHandle, descriptor.CPUOpaqueHandle, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	return UAVHandle(descriptor);
+	return RWTextureView(descriptor);
 }
 
 Ref<CommandSignature> GraphicsDevice::CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature)

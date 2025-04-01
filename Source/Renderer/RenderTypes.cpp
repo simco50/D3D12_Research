@@ -16,36 +16,27 @@ namespace GraphicsCommon
 	Ref<CommandSignature> pIndirectDrawSignature;
 	Ref<CommandSignature> pIndirectDispatchSignature;
 	Ref<CommandSignature> pIndirectDispatchMeshSignature;
-	Ref<RootSignature> pCommonRS;
-	Ref<RootSignature> pCommonRSWithIA;
+	Ref<RootSignature> pCommonRS_DEPRECATED;
+	Ref<RootSignature> pCommonRSV2;
 
-	static void CreateCommonRootSignature(GraphicsDevice* pDevice, D3D12_ROOT_SIGNATURE_FLAGS flags, Ref<RootSignature>& pOutRootSignature)
+	static void AddCommonStaticSamplers(RootSignature* pRootSignature)
 	{
-		pOutRootSignature = new RootSignature(pDevice);
-		pOutRootSignature->AddRootCBV(0, 0);												// PerInstance
-		pOutRootSignature->AddRootCBV(1, 0);												// PerPass
-		pOutRootSignature->AddRootCBV(2, 0);												// PerView
-		pOutRootSignature->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0);	// UAV
-		pOutRootSignature->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0);	// SRV
-
 		int staticSamplerRegisterSlot = 0;
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
 
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
 
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_BORDER);
 
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_COMPARISON_FUNC_GREATER);
-		pOutRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_COMPARISON_FUNC_GREATER);
-
-		pOutRootSignature->Finalize("Common Rootsignature", flags);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_COMPARISON_FUNC_GREATER);
+		pRootSignature->AddStaticSampler(staticSamplerRegisterSlot++, 1, D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP, D3D12_COMPARISON_FUNC_GREATER);
 	}
 
 	void Create(GraphicsDevice* pDevice)
@@ -106,8 +97,21 @@ namespace GraphicsCommon
 			pIndirectDispatchMeshSignature = pDevice->CreateCommandSignature(sigDesc, "Default Indirect Dispatch Mesh");
 		}
 
-		CreateCommonRootSignature(pDevice, D3D12_ROOT_SIGNATURE_FLAG_NONE, pCommonRS);
-		CreateCommonRootSignature(pDevice, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, pCommonRSWithIA);
+		pCommonRSV2 = new RootSignature(pDevice);
+		pCommonRSV2->AddRootSRV(0, 100);															// PerInstance
+		pCommonRSV2->AddRootSRV(1, 100);															// PerPass
+		pCommonRSV2->AddRootSRV(2, 100);															// PerView
+		AddCommonStaticSamplers(pCommonRSV2);
+		pCommonRSV2->Finalize("Common Rootsignature V2", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+		pCommonRS_DEPRECATED = new RootSignature(pDevice);
+		pCommonRS_DEPRECATED->AddRootCBV(0, 100);													// PerInstance
+		pCommonRS_DEPRECATED->AddRootCBV(1, 100);													// PerPass
+		pCommonRS_DEPRECATED->AddRootSRV(2, 100);													// PerView
+		pCommonRS_DEPRECATED->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0);		// UAV
+		pCommonRS_DEPRECATED->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0);		// SRV
+		AddCommonStaticSamplers(pCommonRS_DEPRECATED);
+		pCommonRS_DEPRECATED->Finalize("Common Rootsignature DEPRECATED", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 	}
 
 	void Destroy()
@@ -120,8 +124,8 @@ namespace GraphicsCommon
 		pIndirectDispatchSignature.Reset();
 		pIndirectDrawSignature.Reset();
 		pIndirectDispatchMeshSignature.Reset();
-		pCommonRS.Reset();
-		pCommonRSWithIA.Reset();
+		pCommonRS_DEPRECATED.Reset();
+		pCommonRSV2.Reset();
 	}
 
 	Texture* GetDefaultTexture(DefaultTexture type)

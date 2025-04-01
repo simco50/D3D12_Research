@@ -28,18 +28,18 @@ LightCulling::LightCulling(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
 	// Clustered
-	m_pClusteredCullPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ClusteredLightCulling.hlsl", "LightCulling");
-	m_pClusteredVisualizeLightsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
+	m_pClusteredCullPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "ClusteredLightCulling.hlsl", "LightCulling");
+	m_pClusteredVisualizeLightsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
 
 	// Tiled
-	m_pTiledCullPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LightCulling.hlsl", "CSMain");
-	m_pTiledVisualizeLightsPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
+	m_pTiledCullPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "LightCulling.hlsl", "CSMain");
+	m_pTiledVisualizeLightsPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
 
 	PipelineStateInitializer psoDesc{};
 	psoDesc.SetVertexShader("FullscreenTriangle.hlsl", "WithTexCoordVS");
 	psoDesc.SetDepthEnabled(false);
 	psoDesc.SetRenderTargetFormats({ ResourceFormat::RGBA8_UNORM }, ResourceFormat::Unknown, 1);
-	psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+	psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 	psoDesc.SetBlendMode(BlendMode::Alpha, false);
 	psoDesc.SetName("Light Count Overhead View");
@@ -120,7 +120,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPipelineState(m_pClusteredCullPSO);
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
 
 				// Clear the light grid because we're accumulating the light count in the shader
 				Buffer* pLightGrid = resources.Get(cullData.pLightGrid);
@@ -130,22 +130,16 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 
 				struct
 				{
-					Vector4i ClusterDimensions;
-					Vector2i ClusterSize;
-
-				} constantBuffer;
-
-				constantBuffer.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
-				constantBuffer.ClusterDimensions = Vector4i(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
-
-				context.BindRootCBV(BindingSlot::PerInstance, constantBuffer);
-
-				context.BindResources(BindingSlot::UAV, {
-					resources.GetUAV(cullData.pLightGrid),
-					});
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pPrecomputeData)
-					});
+					Vector4i	 ClusterDimensions;
+					Vector2i	 ClusterSize;
+					RWBufferView LightGrid;
+					BufferView	 LightData;
+				} params;
+				params.ClusterSize = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
+				params.ClusterDimensions = Vector4i(cullData.ClusterCount.x, cullData.ClusterCount.y, cullData.ClusterCount.z, 0);
+				params.LightGrid = resources.GetUAV(cullData.pLightGrid);
+				params.LightData = resources.GetSRV(pPrecomputeData);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
 
 				context.Dispatch(
 					ComputeUtils::GetNumThreadGroups(
@@ -223,19 +217,23 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 			{
 				Texture* pDepth = resources.Get(sceneTextures.pDepth);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(m_pTiledCullPSO);
 
 				Renderer::BindViewUniforms(context, *pView);
 
-				context.BindResources(BindingSlot::UAV, {
-					resources.GetUAV(cullResources.pLightListOpaque),
-					resources.GetUAV(cullResources.pLightListTransparent),
-					});
-				context.BindResources(BindingSlot::SRV, {
-					pDepth->GetSRV(),
-					resources.GetSRV(pPrecomputeData),
-					});
+				struct
+				{
+					TextureView	 DepthTexture;
+					BufferView	 LightData;
+					RWBufferView LightListOpaque;
+					RWBufferView LightListTransparent;
+				} params;
+				params.DepthTexture			= pDepth->GetSRV();
+				params.LightData			= resources.GetSRV(pPrecomputeData);
+				params.LightListOpaque		= resources.GetUAV(cullResources.pLightListOpaque);
+				params.LightListTransparent = resources.GetUAV(cullResources.pLightListTransparent);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(
 					pDepth->GetWidth(), gTiledLightingTileSize,
@@ -265,16 +263,24 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 	Vector2 lightGridParams		= visualize3d ? pLightCull3DData->LightGridParams : Vector2::Zero;
 	Vector3i clusterCount		= visualize3d ? pLightCull3DData->ClusterCount : Vector3i::Zero();
 
-	struct
+	struct PassParams
 	{
-		Vector2i ClusterDimensions;
-		Vector2i ClusterSize;
-		Vector2 LightGridParams;
-	} constantBuffer;
-
-	constantBuffer.ClusterDimensions	= Vector2i(clusterCount.x, clusterCount.y);
-	constantBuffer.ClusterSize			= Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
-	constantBuffer.LightGridParams		= lightGridParams;
+		Vector3		  ViewMin;
+		Vector3		  ViewMax;
+		Vector2i	  ClusterDimensions;
+		Vector2i	  ClusterSize;
+		Vector2		  LightGridParams;
+		TextureView	  Depth;
+		BufferView	  LightGrid;
+		RWTextureView Output;
+	} params;
+	Vector3 topRight		 = Vector3::Transform(Vector3(1.0f, 1.0f, 0.0f), pView->ClipToView);
+	Vector3 bottomLeft		 = Vector3::Transform(Vector3(-1.0f, -1.0f, 0.0f), pView->ClipToView);
+	params.ViewMin			 = Vector3(bottomLeft.x, bottomLeft.y, pView->NearPlane);
+	params.ViewMax			 = Vector3(topRight.x, topRight.y, pView->FarPlane);
+	params.ClusterDimensions = Vector2i(clusterCount.x, clusterCount.y);
+	params.ClusterSize		 = Vector2i(gLightClusterTexelSize, gLightClusterTexelSize);
+	params.LightGridParams	 = lightGridParams;
 
 	graph.AddPass("Visualize Light Density", RGPassFlag::Compute)
 		.Read({ pSceneDepth, pLightGrid })
@@ -283,16 +289,16 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 			{
 				Texture* pTarget = resources.Get(pVisualizationTarget);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(visualize3d ? m_pClusteredVisualizeLightsPSO : m_pTiledVisualizeLightsPSO);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindRootCBV(BindingSlot::PerPass, constantBuffer);
-				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pSceneDepth),
-					resources.GetSRV(pLightGrid),
-					});
+
+				PassParams passParams = params;
+				passParams.Depth			 = resources.GetSRV(pSceneDepth);
+				passParams.LightGrid		 = resources.GetSRV(pLightGrid);
+				passParams.Output			 = pTarget->GetUAV();
+				context.BindRootSRV(BindingSlot::PerInstance, passParams);
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(
 					pTarget->GetWidth(), 8,
@@ -310,31 +316,17 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 				FloatRect rect(topLeft.x, topLeft.y, topLeft.x + size.x, topLeft.y + size.y);
 				context.SetViewport(rect);
 
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(visualize3d ? m_pClusteredVisualizeTopDownPSO : m_pTiledVisualizeTopDownPSO);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-				struct
-				{
-					Vector3 ViewMin;
-					float padding;
-					Vector3 ViewMax;
-				} params;
-
-				Vector3 topRight	= Vector3::Transform(Vector3(1.0f, 1.0f, 0.0f), pView->ClipToView);
-				Vector3 bottomLeft	= Vector3::Transform(Vector3(-1.0f, -1.0f, 0.0f), pView->ClipToView);
-				params.ViewMin		= Vector3(bottomLeft.x, bottomLeft.y, pView->NearPlane);
-				params.ViewMax		= Vector3(topRight.x, topRight.y, pView->FarPlane);
-
-				context.BindRootCBV(BindingSlot::PerPass, constantBuffer);
-				context.BindRootCBV(BindingSlot::PerInstance, params);
+				PassParams passParams = params;
+				passParams.Depth			 = resources.GetSRV(pSceneDepth);
+				passParams.LightGrid		 = resources.GetSRV(pLightGrid);
+				context.BindRootSRV(BindingSlot::PerInstance, passParams);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pSceneDepth),
-					resources.GetSRV(pLightGrid),
-					});
 
 				context.Draw(0, 3);
 			});

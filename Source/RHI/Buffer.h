@@ -132,13 +132,13 @@ public:
 	uint64 GetSize() const { return m_Desc.Size; }
 	uint32 GetNumElements() const { return m_Desc.NumElements(); }
 	const BufferDesc& GetDesc() const { return m_Desc; }
-	UAVHandle GetUAV() const { return m_UAV; }
-	SRVHandle GetSRV() const { return m_SRV; }
+	RWBufferView GetUAV() const { return m_UAV; }
+	BufferView GetSRV() const { return m_SRV; }
 	void* GetMappedData() const { gAssert(m_pMappedData); return m_pMappedData; }
 
 private:
-	UAVHandle m_UAV;
-	SRVHandle m_SRV;
+	RWBufferView m_UAV;
+	BufferView m_SRV;
 	void* m_pMappedData = nullptr;
 
 	const BufferDesc m_Desc;

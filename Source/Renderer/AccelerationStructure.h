@@ -16,7 +16,7 @@ public:
 
 	void Init(GraphicsDevice* pDevice);
 	void Build(CommandContext& context, const Buffer* pInstancesBuffer, Span<const Batch> batches);
-	SRVHandle GetSRV() const;
+	TLASView GetSRV() const;
 
 private:
 	void ProcessCompaction(CommandContext& context);

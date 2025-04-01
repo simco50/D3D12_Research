@@ -1,16 +1,15 @@
 #include "Common.hlsli"
 #include "Noise.hlsli"
 
-struct PassParameters
+struct PassParams
 {
 	uint Frequency;
 	float ResolutionInv;
 	uint Seed;
+	RWTexture3DH<float4> NoiseOutput;
+	RWTexture2DH<float> HeightGradient;
 };
-
-ConstantBuffer<PassParameters> cPass : register(b0);
-RWTexture3D<float4> uNoiseOutput : register(u0);
-RWTexture2D<float> uHeightGradient : register(u0);
+DEFINE_CONSTANTS(PassParams, 0);
 
 // Fbm for Perlin noise based on iq's blog
 float PerlinFBM(float3 p, uint freq, int octaves)
@@ -32,46 +31,46 @@ float PerlinFBM(float3 p, uint freq, int octaves)
 float WorleyFBM(float3 uvw, float frequency)
 {
 	return
-		saturate(InverseLerp(WorleyNoise(uvw, frequency, cPass.Seed), 0.15f, 0.85f)) * 0.625f +
-		saturate(InverseLerp(WorleyNoise(uvw, frequency * 2, cPass.Seed), 0.15f, 0.85f)) * 0.25f +
-		saturate(InverseLerp(WorleyNoise(uvw, frequency * 4, cPass.Seed), 0.15f, 0.85f)) * 0.125f;
+		saturate(InverseLerp(WorleyNoise(uvw, frequency, cPassParams.Seed), 0.15f, 0.85f)) * 0.625f +
+		saturate(InverseLerp(WorleyNoise(uvw, frequency * 2, cPassParams.Seed), 0.15f, 0.85f)) * 0.25f +
+		saturate(InverseLerp(WorleyNoise(uvw, frequency * 4, cPassParams.Seed), 0.15f, 0.85f)) * 0.125f;
 }
 
 [numthreads(8, 8, 8)]
 void CloudShapeNoiseCS(uint3 threadId : SV_DispatchThreadID)
 {
-	float3 uvw = TexelToUV(threadId, cPass.ResolutionInv);
+	float3 uvw = TexelToUV(threadId, cPassParams.ResolutionInv);
 
 	float4 noiseResults = 0;
-	noiseResults.y = WorleyFBM(uvw, cPass.Frequency);
-	noiseResults.z = WorleyFBM(uvw, cPass.Frequency * 2);
-	noiseResults.w = WorleyFBM(uvw, cPass.Frequency * 4);
+	noiseResults.y = WorleyFBM(uvw, cPassParams.Frequency);
+	noiseResults.z = WorleyFBM(uvw, cPassParams.Frequency * 2);
+	noiseResults.w = WorleyFBM(uvw, cPassParams.Frequency * 4);
 
     // Seven octave low frequency perlin FBM
 	float perlin = PerlinFBM(uvw, 3, 7);
 	noiseResults.x = Remap(perlin, 0.0f, 1.0f, noiseResults.y, 1.0f);
 
-	uNoiseOutput[threadId.xyz] = noiseResults;
+	cPassParams.NoiseOutput.Store(threadId.xyz, noiseResults);
 }
 
 [numthreads(8, 8, 8)]
 void CloudDetailNoiseCS(uint3 threadId : SV_DispatchThreadID)
 {
-	float3 uvw = TexelToUV(threadId, cPass.ResolutionInv);
+	float3 uvw = TexelToUV(threadId, cPassParams.ResolutionInv);
 
 	float4 noiseResults = 0;
-	noiseResults.x = WorleyFBM(uvw, cPass.Frequency);
-	noiseResults.y = WorleyFBM(uvw, cPass.Frequency * 2);
-	noiseResults.z = WorleyFBM(uvw, cPass.Frequency * 4);
-	noiseResults.w = WorleyFBM(uvw, cPass.Frequency * 8);
+	noiseResults.x = WorleyFBM(uvw, cPassParams.Frequency);
+	noiseResults.y = WorleyFBM(uvw, cPassParams.Frequency * 2);
+	noiseResults.z = WorleyFBM(uvw, cPassParams.Frequency * 4);
+	noiseResults.w = WorleyFBM(uvw, cPassParams.Frequency * 8);
 
-	uNoiseOutput[threadId.xyz] = noiseResults;
+	cPassParams.NoiseOutput.Store(threadId.xyz, noiseResults);
 }
 
 [numthreads(8, 8, 8)]
 void CloudHeightDensityCS(uint3 threadId : SV_DispatchThreadID)
 {
-	float3 uvw = TexelToUV(threadId, cPass.ResolutionInv);
+	float3 uvw = TexelToUV(threadId, cPassParams.ResolutionInv);
 	float cloudType = uvw.x;
 	float height = uvw.y;
 
@@ -88,5 +87,5 @@ void CloudHeightDensityCS(uint3 threadId : SV_DispatchThreadID)
 	float v2 = saturate(InverseLerp(height, gradient.w, gradient.z));
 	float v = v1 * v2;
 
-	uHeightGradient[threadId.xy] = v;
+	cPassParams.HeightGradient.Store(threadId.xy, v);
 }

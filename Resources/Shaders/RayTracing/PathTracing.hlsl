@@ -11,17 +11,15 @@
 #define RAY_DIFFUSE 0
 #define RAY_SPECULAR 1
 
-struct PassParameters
+struct PassParams
 {
 	uint NumBounces;
 	uint AccumulatedFrames;
+	RWTexture2DH<float4> Output;
+	RWTexture2DH<float4> AccumulationTarget;
+	Texture2DH<float4> Accumulation;
 };
-
-RWTexture2D<float4> uOutput : register(u0);
-RWTexture2D<float4> uAccumulation : register(u1);
-ConstantBuffer<PassParameters> cPass : register(b0);
-
-Texture2D<float4> tAccumulation : register(t0);
+DEFINE_CONSTANTS(PassParams, 0);
 
 float3 EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 geometryNormal, BrdfData brdfData)
 {
@@ -31,8 +29,7 @@ float3 EvaluateLight(Light light, float3 worldPos, float3 V, float3 N, float3 ge
 		return 0.0f;
 
 	RayDesc rayDesc = CreateLightOcclusionRay(light, worldPos);
-	RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-	attenuation *= TraceOcclusionRay(rayDesc, tlas);
+	attenuation *= TraceOcclusionRay(rayDesc, cView.TLAS.Get());
 	if(attenuation <= 0)
 		return 0.0f;
 
@@ -253,7 +250,7 @@ void RayGen()
 	float2 resolution = float2(DispatchRaysDimensions().xy);
 	uint seed = SeedThread(DispatchRaysIndex().xy, DispatchRaysDimensions().xy, cView.FrameIndex);
 
-	float3 previousColor = uAccumulation[DispatchRaysIndex().xy].rgb;
+	float3 previousColor = cPassParams.AccumulationTarget[DispatchRaysIndex().xy].rgb;
 
 	// Jitter to achieve anti-aliasing
 	float2 offset = float2(Random01(seed), Random01(seed));
@@ -264,15 +261,14 @@ void RayGen()
 
 	float3 radiance = 0;
 	float3 throughput = 1;
-	for(int i = 0; i < cPass.NumBounces; ++i)
+	for(int i = 0; i < cPassParams.NumBounces; ++i)
 	{
-		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-		MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
+		MaterialRayPayload payload = TraceMaterialRay(ray, cView.TLAS.Get());
 
 		// If the ray didn't hit anything, accumulate the sky and break the loop
 		if(!payload.IsHit())
 		{
-			const float3 SkyColor = GetSky(ray.Direction);
+			float3 SkyColor = GetSky(ray.Direction);
 			radiance += throughput * SkyColor;
 			break;
 		}
@@ -311,7 +307,7 @@ void RayGen()
 		}
 
 		// If we're at the last bounce, no point in computing the next ray
-		if(i == cPass.NumBounces - 1)
+		if(i == cPassParams.NumBounces - 1)
 		{
 			break;
 		}
@@ -360,12 +356,12 @@ void RayGen()
 	}
 
 	// Accumulation and output
-	if(cPass.AccumulatedFrames > 1)
+	if(cPassParams.AccumulatedFrames > 1)
 	{
 		radiance += previousColor;
 	}
-	uAccumulation[DispatchRaysIndex().xy] = float4(radiance, 1);
-	uOutput[DispatchRaysIndex().xy] = float4(radiance, 1.0f) / cPass.AccumulatedFrames;
+	cPassParams.AccumulationTarget.Store(DispatchRaysIndex().xy, float4(radiance, 1));
+	cPassParams.Output.Store(DispatchRaysIndex().xy, float4(radiance, 1.0f) / cPassParams.AccumulatedFrames);
 }
 
 #ifdef BLIT_SHADER
@@ -373,7 +369,7 @@ void RayGen()
 [numthreads(8, 8, 1)]
 void BlitAccumulationCS(uint3 threadId : SV_DispatchThreadID)
 {
-	uOutput[threadId.xy] = tAccumulation[threadId.xy] / cPass.AccumulatedFrames;
+	cPassParams.Output.Store(threadId.xy, cPassParams.Accumulation[threadId.xy] / cPassParams.AccumulatedFrames);
 }
 
 #endif

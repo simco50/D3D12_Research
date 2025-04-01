@@ -51,32 +51,32 @@ MaterialProperties EvaluateMaterial(MaterialData material, VertexAttribute attri
 {
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor * RGBA8_UNORM::Unpack(attributes.Color);
-	if(material.Diffuse != INVALID_HANDLE)
+	if(material.Diffuse.IsValid())
 	{
-		baseColor *= SampleLevel2D(NonUniformResourceIndex(material.Diffuse), sMaterialSampler, attributes.UV, mipLevel);
+		baseColor *= material.Diffuse.SampleLevel(sMaterialSampler, attributes.UV, mipLevel);
 	}
 	properties.BaseColor = baseColor.rgb;
 	properties.Opacity = baseColor.a;
 
 	properties.Metalness = material.MetalnessFactor;
 	properties.Roughness = material.RoughnessFactor;
-	if(material.RoughnessMetalness != INVALID_HANDLE)
+	if(material.RoughnessMetalness.IsValid())
 	{
-		float4 roughnessMetalnessSample = SampleLevel2D(NonUniformResourceIndex(material.RoughnessMetalness), sMaterialSampler, attributes.UV, mipLevel);
+		float4 roughnessMetalnessSample = material.RoughnessMetalness.SampleLevel(sMaterialSampler, attributes.UV, mipLevel);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
-	if(material.Emissive != INVALID_HANDLE)
+	if(material.Emissive.IsValid())
 	{
-		properties.Emissive *= SampleLevel2D(NonUniformResourceIndex(material.Emissive), sMaterialSampler, attributes.UV, mipLevel).rgb;
+		properties.Emissive *= material.Emissive.SampleLevel(sMaterialSampler, attributes.UV, mipLevel).rgb;
 	}
 	properties.Specular = 0.5f;
 
 	properties.Normal = attributes.Normal;
-	if(material.Normal != INVALID_HANDLE)
+	if(material.Normal.IsValid())
 	{
-		float3 normalTS = SampleLevel2D(NonUniformResourceIndex(material.Normal), sMaterialSampler, attributes.UV, mipLevel).rgb;
+		float3 normalTS = material.Normal.SampleLevel(sMaterialSampler, attributes.UV, mipLevel).rgb;
 		float3x3 TBN = CreateTangentToWorld(properties.Normal, float4(normalize(attributes.Tangent.xyz), attributes.Tangent.w));
 		properties.Normal = TangentSpaceNormalMapping(normalTS, TBN);
 	}

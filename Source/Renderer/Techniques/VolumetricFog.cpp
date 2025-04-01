@@ -20,8 +20,8 @@ static constexpr int gVolumetricNumZSlices = 128;
 VolumetricFog::VolumetricFog(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
-	m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VolumetricFog.hlsl", "AccumulateFogCS");
+	m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "VolumetricFog.hlsl", "InjectFogLightingCS");
+	m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "VolumetricFog.hlsl", "AccumulateFogCS");
 }
 
 VolumetricFog::~VolumetricFog()
@@ -68,40 +68,43 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 			{
 				Texture* pTarget = resources.Get(pTargetVolume);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
 				struct
 				{
 					Vector3i ClusterDimensions;
-					float Jitter;
-					Vector3 InvClusterDimensions;
-					float LightClusterSizeFactor;
-					Vector2 LightGridParams;
+					float	 Jitter;
+					Vector3	 InvClusterDimensions;
+					float	 LightClusterSizeFactor;
+					Vector2	 LightGridParams;
 					Vector2i LightClusterDimensions;
-					float MinBlendFactor;
-					uint32 NumFogVolumes;
+					float	 MinBlendFactor;
+					uint32	 NumFogVolumes;
+
+					RWTextureView FogTarget;
+					BufferView	  FogVolumes;
+					BufferView	  LightGrid;
+					TextureView	  SourceVolume;
 				} params;
 
 				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.Depth);
 				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.Depth);
 				constexpr Math::HaltonSequence<32, 2> halton;
-				params.Jitter = halton[pView->pRenderer->GetFrameIndex() & 31];
+				params.Jitter				  = halton[pView->pRenderer->GetFrameIndex() & 31];
 				params.LightClusterSizeFactor = (float)gVolumetricFroxelTexelSize / lightCullData.ClusterSize;
-				params.LightGridParams = lightCullData.LightGridParams;
+				params.LightGridParams		  = lightCullData.LightGridParams;
 				params.LightClusterDimensions = Vector2i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y);
-				params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
-				params.NumFogVolumes = pFogVolumes->GetDesc().NumElements();
+				params.MinBlendFactor		  = pView->CameraCut ? 1.0f : 0.0f;
+				params.NumFogVolumes		  = pFogVolumes->GetDesc().NumElements();
+				params.FogTarget			  = pTarget->GetUAV();
+				params.FogVolumes			  = resources.GetSRV(pFogVolumes);
+				params.LightGrid			  = resources.GetSRV(lightCullData.pLightGrid);
+				params.SourceVolume			  = resources.GetSRV(pSourceVolume);
+
+				context.BindRootSRV(BindingSlot::PerInstance, params);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindRootCBV(BindingSlot::PerInstance, params);
-				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pFogVolumes),
-					resources.GetSRV(lightCullData.pLightGrid),
-					resources.GetSRV(pSourceVolume),
-					});
-
 				context.Dispatch(
 					ComputeUtils::GetNumThreadGroups(
 						pTarget->GetWidth(), 8,
@@ -119,25 +122,24 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 			{
 				Texture* pFinalFog = resources.Get(pFinalVolumeFog);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
 				struct
 				{
 					Vector3i ClusterDimensions;
-					uint32 : 32;
-					Vector3 InvClusterDimensions;
-					uint32 : 32;
+					Vector3	 InvClusterDimensions;
+
+					RWTextureView FogTarget;
+					TextureView	  SourceVolume;
 				} params;
 				params.ClusterDimensions = Vector3i(volumeDesc.Width, volumeDesc.Height, volumeDesc.Depth);
 				params.InvClusterDimensions = Vector3(1.0f / volumeDesc.Width, 1.0f / volumeDesc.Height, 1.0f / volumeDesc.Depth);
+				params.FogTarget	= pFinalFog->GetUAV();
+				params.SourceVolume = resources.GetSRV(pTargetVolume);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindRootCBV(BindingSlot::PerInstance, params);
-				context.BindResources(BindingSlot::UAV, pFinalFog->GetUAV());
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pTargetVolume),
-					}, 2);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
 
 				context.Dispatch(
 					ComputeUtils::GetNumThreadGroups(
