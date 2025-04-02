@@ -80,22 +80,22 @@ T SampleTexture(float2 uv)
 	T output = T(1, 0, 1, 1);
 	if(passParams.TextureType == TextureDimension::Tex1D)
 	{
-		Texture1D<T> tex = ResourceDescriptorHeap[passParams.TextureSource.Index];
+		Texture1D<T> tex = ResourceDescriptorHeap[passParams.TextureSource.GetIndex()];
 		return tex.SampleLevel(sPointClamp, uv.x, mip);
 	}
 	else if(passParams.TextureType == TextureDimension::Tex2D)
 	{
-		Texture2D<T> tex = ResourceDescriptorHeap[passParams.TextureSource.Index];
+		Texture2D<T> tex = ResourceDescriptorHeap[passParams.TextureSource.GetIndex()];
 		return tex.SampleLevel(sPointClamp, uv, mip);
 	}
 	else if(passParams.TextureType == TextureDimension::Tex3D)
 	{
-		Texture3D<T> tex = ResourceDescriptorHeap[passParams.TextureSource.Index];
+		Texture3D<T> tex = ResourceDescriptorHeap[passParams.TextureSource.GetIndex()];
 		return tex.SampleLevel(sPointClamp, float3(uv, slice), mip);
 	}
 	else if(passParams.TextureType == TextureDimension::TexCube)
 	{
-		TextureCube<T> tex = ResourceDescriptorHeap[passParams.TextureSource.Index];
+		TextureCube<T> tex = ResourceDescriptorHeap[passParams.TextureSource.GetIndex()];
 		return tex.SampleLevel(sPointClamp, UVToDirection(uv, slice), mip);
 	}
 	return output;

@@ -13,6 +13,7 @@
 struct DescriptorHandleBase
 {
 	bool IsValid() { return Index != 0xFFFFFFFF; }
+	uint GetIndex() { return Index; }
 	uint Index;
 };
 
@@ -22,7 +23,7 @@ struct DescriptorHandleT : DescriptorHandleBase
 {
     ResourceType Get()
 	{
-		ResourceType resource = ResourceDescriptorHeap[NonUniformResourceIndex(Index)];
+		ResourceType resource = ResourceDescriptorHeap[NonUniformResourceIndex(GetIndex())];
 		return resource;
 	}
 };

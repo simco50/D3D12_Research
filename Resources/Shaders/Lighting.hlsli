@@ -342,7 +342,7 @@ float3 DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, 
 		}
 #endif
 
-		attenuation *= Shadow3x3PCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMap.Index + shadowIndex, light.InvShadowSize);
+		attenuation *= Shadow3x3PCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMap.GetIndex() + shadowIndex, light.InvShadowSize);
 		if(attenuation <= 0)
 			return 0;
 	}

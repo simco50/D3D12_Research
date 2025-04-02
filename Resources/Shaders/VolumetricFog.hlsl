@@ -140,7 +140,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 					if(light.CastShadows)
 					{
 						int shadowIndex = GetShadowMapIndex(light, worldPosition, z, dither);
-						attenuation *= ShadowNoPCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMap.Index + shadowIndex, light.InvShadowSize);
+						attenuation *= ShadowNoPCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMap.GetIndex() + shadowIndex, light.InvShadowSize);
 					}
 					if(attenuation <= 0.0f)
 						continue;
