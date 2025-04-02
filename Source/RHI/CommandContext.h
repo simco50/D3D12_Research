@@ -104,8 +104,6 @@ public:
 	CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, ScratchAllocationManager* pScratchAllocationManager);
 
 	void Reset();
-	SyncPoint Execute();
-	static SyncPoint Execute(Span<CommandContext* const> contexts);
 	void Free(const SyncPoint& syncPoint);
 	void ClearState();
 

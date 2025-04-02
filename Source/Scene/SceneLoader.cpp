@@ -180,7 +180,7 @@ static void UploadMesh(GraphicsDevice* pDevice, const MeshData& meshData, Mesh& 
 	outMesh.PositionsFormat = ResourceFormat::RGB32_FLOAT;
 
 	{
-		outMesh.PositionStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(TVertexPositionStream), dataOffset);
+		outMesh.PositionStreamLocation = VertexBufferView(pGeometryData->GetGPUAddress() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(TVertexPositionStream), dataOffset);
 		TVertexPositionStream* pTarget = (TVertexPositionStream*)(pMappedMemory + dataOffset);
 		for (const Vector3& position : meshData.PositionsStream)
 		{
@@ -190,13 +190,13 @@ static void UploadMesh(GraphicsDevice* pDevice, const MeshData& meshData, Mesh& 
 
 		if (hasAnim)
 		{
-			outMesh.SkinnedPositionStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(TVertexPositionStream), dataOffset);
+			outMesh.SkinnedPositionStreamLocation = VertexBufferView(pGeometryData->GetGPUAddress() + dataOffset, (uint32)meshData.PositionsStream.size(), sizeof(TVertexPositionStream), dataOffset);
 			dataOffset = Math::AlignUp(dataOffset + meshData.PositionsStream.size() * sizeof(TVertexPositionStream), bufferAlignment);
 		}
 	}
 
 	{
-		outMesh.NormalStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.NormalsStream.size(), sizeof(TVertexNormalStream), dataOffset);
+		outMesh.NormalStreamLocation = VertexBufferView(pGeometryData->GetGPUAddress() + dataOffset, (uint32)meshData.NormalsStream.size(), sizeof(TVertexNormalStream), dataOffset);
 		TVertexNormalStream* pTarget = (TVertexNormalStream*)(pMappedMemory + dataOffset);
 		for (size_t i = 0; i < meshData.NormalsStream.size(); ++i)
 		{
@@ -209,14 +209,14 @@ static void UploadMesh(GraphicsDevice* pDevice, const MeshData& meshData, Mesh& 
 
 		if (hasAnim)
 		{
-			outMesh.SkinnedNormalStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.NormalsStream.size(), sizeof(TVertexNormalStream), dataOffset);
+			outMesh.SkinnedNormalStreamLocation = VertexBufferView(pGeometryData->GetGPUAddress() + dataOffset, (uint32)meshData.NormalsStream.size(), sizeof(TVertexNormalStream), dataOffset);
 			dataOffset = Math::AlignUp(dataOffset + meshData.NormalsStream.size() * sizeof(TVertexNormalStream), bufferAlignment);
 		}
 	}
 
 	if (!meshData.ColorsStream.empty())
 	{
-		outMesh.ColorsStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.ColorsStream.size(), sizeof(TVertexColorStream), dataOffset);
+		outMesh.ColorsStreamLocation = VertexBufferView(pGeometryData->GetGPUAddress() + dataOffset, (uint32)meshData.ColorsStream.size(), sizeof(TVertexColorStream), dataOffset);
 		TVertexColorStream* pTarget = (TVertexColorStream*)(pMappedMemory + dataOffset);
 		for (const Vector4& color : meshData.ColorsStream)
 		{
@@ -227,7 +227,7 @@ static void UploadMesh(GraphicsDevice* pDevice, const MeshData& meshData, Mesh& 
 
 	if (!meshData.UVsStream.empty())
 	{
-		outMesh.UVStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.UVsStream.size(), sizeof(TVertexUVStream), dataOffset);
+		outMesh.UVStreamLocation = VertexBufferView(pGeometryData->GetGPUAddress() + dataOffset, (uint32)meshData.UVsStream.size(), sizeof(TVertexUVStream), dataOffset);
 		TVertexUVStream* pTarget = (TVertexUVStream*)(pMappedMemory + dataOffset);
 		for (const Vector2& uv : meshData.UVsStream)
 		{
@@ -238,7 +238,7 @@ static void UploadMesh(GraphicsDevice* pDevice, const MeshData& meshData, Mesh& 
 
 	if (!meshData.JointsStream.empty())
 	{
-		outMesh.JointsStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.JointsStream.size(), sizeof(TJointsStream), dataOffset);
+		outMesh.JointsStreamLocation = VertexBufferView(pGeometryData->GetGPUAddress() + dataOffset, (uint32)meshData.JointsStream.size(), sizeof(TJointsStream), dataOffset);
 		TJointsStream* pTarget = (TJointsStream*)(pMappedMemory + dataOffset);
 		for (const Vector4i& joint : meshData.JointsStream)
 		{
@@ -249,7 +249,7 @@ static void UploadMesh(GraphicsDevice* pDevice, const MeshData& meshData, Mesh& 
 
 	if (!meshData.WeightsStream.empty())
 	{
-		outMesh.WeightsStreamLocation = VertexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.WeightsStream.size(), sizeof(TWeightsStream), dataOffset);
+		outMesh.WeightsStreamLocation = VertexBufferView(pGeometryData->GetGPUAddress() + dataOffset, (uint32)meshData.WeightsStream.size(), sizeof(TWeightsStream), dataOffset);
 		TWeightsStream* pTarget = (TWeightsStream*)(pMappedMemory + dataOffset);
 		for (const Vector4& weight : meshData.WeightsStream)
 		{
@@ -261,7 +261,7 @@ static void UploadMesh(GraphicsDevice* pDevice, const MeshData& meshData, Mesh& 
 	{
 		bool smallIndices = meshData.PositionsStream.size() < std::numeric_limits<uint16>::max();
 		uint32 indexSize = smallIndices ? sizeof(uint16) : sizeof(uint32);
-		outMesh.IndicesLocation = IndexBufferView(pGeometryData->GetGpuHandle() + dataOffset, (uint32)meshData.Indices.size(), smallIndices ? ResourceFormat::R16_UINT : ResourceFormat::R32_UINT, dataOffset);
+		outMesh.IndicesLocation = IndexBufferView(pGeometryData->GetGPUAddress() + dataOffset, (uint32)meshData.Indices.size(), smallIndices ? ResourceFormat::R16_UINT : ResourceFormat::R32_UINT, dataOffset);
 		char* pTarget = (char*)(pMappedMemory + dataOffset);
 		for (uint32 index : meshData.Indices)
 		{

@@ -16,8 +16,7 @@ namespace GraphicsCommon
 	Ref<CommandSignature> pIndirectDrawSignature;
 	Ref<CommandSignature> pIndirectDispatchSignature;
 	Ref<CommandSignature> pIndirectDispatchMeshSignature;
-	Ref<RootSignature> pCommonRS_DEPRECATED;
-	Ref<RootSignature> pCommonRSV2;
+	Ref<RootSignature> pCommonRS;
 
 	static void AddCommonStaticSamplers(RootSignature* pRootSignature)
 	{
@@ -97,21 +96,12 @@ namespace GraphicsCommon
 			pIndirectDispatchMeshSignature = pDevice->CreateCommandSignature(sigDesc, "Default Indirect Dispatch Mesh");
 		}
 
-		pCommonRSV2 = new RootSignature(pDevice);
-		pCommonRSV2->AddRootSRV(0, 100);															// PerInstance
-		pCommonRSV2->AddRootSRV(1, 100);															// PerPass
-		pCommonRSV2->AddRootSRV(2, 100);															// PerView
-		AddCommonStaticSamplers(pCommonRSV2);
-		pCommonRSV2->Finalize("Common Rootsignature V2", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
-
-		pCommonRS_DEPRECATED = new RootSignature(pDevice);
-		pCommonRS_DEPRECATED->AddRootCBV(0, 100);													// PerInstance
-		pCommonRS_DEPRECATED->AddRootCBV(1, 100);													// PerPass
-		pCommonRS_DEPRECATED->AddRootSRV(2, 100);													// PerView
-		pCommonRS_DEPRECATED->AddDescriptorTable(0, 16, D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 0);		// UAV
-		pCommonRS_DEPRECATED->AddDescriptorTable(0, 64, D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 0);		// SRV
-		AddCommonStaticSamplers(pCommonRS_DEPRECATED);
-		pCommonRS_DEPRECATED->Finalize("Common Rootsignature DEPRECATED", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		pCommonRS = new RootSignature(pDevice);
+		pCommonRS->AddRootSRV(0, 100);															// PerInstance
+		pCommonRS->AddRootSRV(1, 100);															// PerPass
+		pCommonRS->AddRootSRV(2, 100);															// PerView
+		AddCommonStaticSamplers(pCommonRS);
+		pCommonRS->Finalize("Common Rootsignature", D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 	}
 
 	void Destroy()
@@ -124,8 +114,7 @@ namespace GraphicsCommon
 		pIndirectDispatchSignature.Reset();
 		pIndirectDrawSignature.Reset();
 		pIndirectDispatchMeshSignature.Reset();
-		pCommonRS_DEPRECATED.Reset();
-		pCommonRSV2.Reset();
+		pCommonRS.Reset();
 	}
 
 	Texture* GetDefaultTexture(DefaultTexture type)

@@ -20,7 +20,7 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	{
 		//Opaque
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetBlendMode(BlendMode::Replace, false);
 		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "CLUSTERED_FORWARD" });
 		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "CLUSTERED_FORWARD" });
@@ -48,7 +48,7 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	{
 		//Opaque
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "TILED_FORWARD" });
 		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "TILED_FORWARD" });
 		psoDesc.SetPixelShader("ForwardShading.hlsl", "ShadePS", { "TILED_FORWARD" });
@@ -90,7 +90,7 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const RenderView* p
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 				struct
 				{
@@ -150,7 +150,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 				Renderer::BindViewUniforms(context, *pView);
 

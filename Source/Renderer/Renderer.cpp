@@ -321,7 +321,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			// Upload PerView uniforms
 			Renderer::UploadViewUniforms(*pContext, m_MainView);
 
-			pContext->Execute();
+			m_pDevice->GetGraphicsQueue()->ExecuteCommandLists(pContext);
 		}
 
 		RGGraph graph;
@@ -431,7 +431,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Read(pSkinningMatrices)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pSkinPSO);
 
 								for (int i = 0; i < (int)skinDatas.size(); ++i)
@@ -488,7 +488,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 								Renderer::BindViewUniforms(context, *pView);
 								{
@@ -517,7 +517,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 					.Bind([=](CommandContext& context, const RGResources& resources)
 						{
 							Texture* pSkyTexture = resources.Get(pSky);
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pRenderSkyPSO);
 
 							struct
@@ -566,7 +566,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								.DepthStencil(pShadowmap, RenderPassDepthFlags::Clear)
 								.Bind([=](CommandContext& context, const RGResources& resources)
 									{
-										context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+										context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 										context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 										const ShadowView& view = m_ShadowViews[i];
@@ -604,7 +604,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								Texture* pSource = resources.Get(sceneTextures.pDepth);
 								Texture* pTarget = resources.Get(pReductionTarget);
 
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pPrepareReduceDepthPSO);
 								struct
 								{
@@ -631,7 +631,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 							.Bind([=](CommandContext& context, const RGResources& resources)
 								{
 									Texture* pTarget = resources.Get(pReductionTarget);
-									context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+									context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 									context.SetPipelineState(m_pReduceDepthPSO);
 
 									struct ReduceParams
@@ -677,7 +677,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						{
 							Texture* pVelocity = resources.Get(sceneTextures.pVelocity);
 
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pCameraMotionPSO);
 
 							struct
@@ -727,7 +727,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.RenderTarget(sceneTextures.pRoughness)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
-								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pVisibilityShadingGraphicsPSO);
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -770,7 +770,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.RenderTarget(sceneTextures.pGBuffer)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
-								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pVisibilityGBufferPSO);
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -798,7 +798,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Bind([=](CommandContext& context, const RGResources& resources) {
 							Texture* pTarget = resources.Get(sceneTextures.pColorTarget);
 
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDeferredShadePSO);
 
 							struct
@@ -840,7 +840,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 					.Bind([=](CommandContext& context, const RGResources& resources)
 						{
 							context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-							context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+							context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pSkyboxPSO);
 
 							Renderer::BindViewUniforms(context, *pView);
@@ -867,7 +867,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
 								Texture* pTarget = resources.Get(pTaaTarget);
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pTemporalResolvePSO);
 
 								struct
@@ -928,7 +928,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						{
 							Texture* pTarget = resources.Get(pDownscaleTarget);
 
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDownsampleColorPSO);
 
 							struct
@@ -959,7 +959,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 							context.ClearBufferUInt(pHistogram);
 
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pLuminanceHistogramPSO);
 
 							struct
@@ -989,7 +989,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 					.Write(pAverageLuminance)
 					.Bind([=](CommandContext& context, const RGResources& resources)
 						{
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pAverageLuminancePSO);
 
 							struct
@@ -1025,7 +1025,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								context.ClearTextureFloat(resources.Get(pHistogramDebugTexture));
 
 								context.SetPipelineState(m_pDrawHistogramPSO);
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
 								struct
 								{
@@ -1075,7 +1075,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Write(pDownscaleTarget)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(i == 0 ? m_pBloomDownsampleKarisAveragePSO : m_pBloomDownsamplePSO);
 								struct
 								{
@@ -1109,7 +1109,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Write(pUpscaleTarget)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pBloomUpsamplePSO);
 								struct
 								{
@@ -1150,7 +1150,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						Texture* pTarget = resources.Get(pTonemapTarget);
 
 						context.SetPipelineState(m_pToneMapPSO);
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
 						struct
 						{
@@ -1208,7 +1208,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 							{
 								Texture* pColorTarget = resources.Get(sceneTextures.pColorTarget);
 
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pVisibilityDebugRenderPSO);
 
 								struct
@@ -1288,7 +1288,7 @@ void Renderer::InitializePipelines()
 
 		{
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
 			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
 			psoDesc.SetDepthOnlyTarget(Renderer::DepthStencilFormat, 1);
@@ -1305,7 +1305,7 @@ void Renderer::InitializePipelines()
 
 		{
 			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
 			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
 			psoDesc.SetDepthOnlyTarget(Renderer::ShadowFormat, 1);
@@ -1324,23 +1324,23 @@ void Renderer::InitializePipelines()
 
 	ShaderDefineHelper tonemapperDefines;
 	tonemapperDefines.Set("NUM_HISTOGRAM_BINS", 256);
-	m_pLuminanceHistogramPSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
-	m_pDrawHistogramPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
-	m_pAverageLuminancePSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
-	m_pToneMapPSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
-	m_pDownsampleColorPSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "PostProcessing/DownsampleColor.hlsl", "CSMain");
+	m_pLuminanceHistogramPSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
+	m_pDrawHistogramPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
+	m_pAverageLuminancePSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
+	m_pToneMapPSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
+	m_pDownsampleColorPSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/DownsampleColor.hlsl", "CSMain");
 
-	m_pPrepareReduceDepthPSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "ReduceDepth.hlsl", "PrepareReduceDepth");
-	m_pReduceDepthPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "ReduceDepth.hlsl", "ReduceDepth");
+	m_pPrepareReduceDepthPSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
+	m_pReduceDepthPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
 
-	m_pCameraMotionPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "CameraMotionVectors.hlsl", "CSMain");
-	m_pTemporalResolvePSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "PostProcessing/TemporalResolve.hlsl", "CSMain");
+	m_pCameraMotionPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
+	m_pTemporalResolvePSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
 
 
 	//Sky
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
 		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
 		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, Renderer::DepthStencilFormat, 1);
@@ -1349,18 +1349,18 @@ void Renderer::InitializePipelines()
 		psoDesc.SetName("Skybox");
 		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
 
-		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "ProceduralSky.hlsl", "ComputeSkyCS");
+		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ProceduralSky.hlsl", "ComputeSkyCS");
 	}
 
 	//Bloom
-	m_pBloomDownsamplePSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "PostProcessing/Bloom.hlsl", "DownsampleCS");
-	m_pBloomDownsampleKarisAveragePSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "PostProcessing/Bloom.hlsl", "DownsampleCS", { "KARIS_AVERAGE=1" });
-	m_pBloomUpsamplePSO					= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "PostProcessing/Bloom.hlsl", "UpsampleCS");
+	m_pBloomDownsamplePSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
+	m_pBloomDownsampleKarisAveragePSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", { "KARIS_AVERAGE=1" });
+	m_pBloomUpsamplePSO					= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
 
 	//Visibility Shading
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
 		psoDesc.SetPixelShader("VisibilityShading.hlsl", "ShadePS");
 		psoDesc.SetRenderTargetFormats(Renderer::GBufferFormat, Renderer::DepthStencilFormat, 1);
@@ -1372,11 +1372,11 @@ void Renderer::InitializePipelines()
 		m_pVisibilityShadingGraphicsPSO = m_pDevice->CreatePipeline(psoDesc);
 	}
 
-	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "VisibilityDebugView.hlsl", "DebugRenderCS");
+	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
 
 	{
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
 		psoDesc.SetPixelShader("VisibilityGBuffer.hlsl", "ShadePS");
 		psoDesc.SetRenderTargetFormats(Renderer::DeferredGBufferFormat, Renderer::DepthStencilFormat, 1);
@@ -1387,11 +1387,11 @@ void Renderer::InitializePipelines()
 		psoDesc.SetName("Visibility Shading");
 		m_pVisibilityGBufferPSO = m_pDevice->CreatePipeline(psoDesc);
 
-		m_pDeferredShadePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "DeferredShading.hlsl", "ShadeCS");
+		m_pDeferredShadePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DeferredShading.hlsl", "ShadeCS");
 	}
 
 	{
-		m_pSkinPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "Skinning.hlsl", "CSMain");
+		m_pSkinPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "Skinning.hlsl", "CSMain");
 	}
 }
 
@@ -1693,7 +1693,7 @@ void Renderer::BindViewUniforms(CommandContext& context, const RenderView& view,
 	const Buffer* pViewBuffer = type == RenderView::Type::Default ? view.ViewCB : view.CullViewCB;
 	if (pViewBuffer)
 	{
-		context.BindRootSRV(BindingSlot::PerView, pViewBuffer->GetGpuHandle());
+		context.BindRootSRV(BindingSlot::PerView, pViewBuffer->GetGPUAddress());
 	}
 	else
 	{
@@ -1719,7 +1719,7 @@ void Renderer::MakeScreenshot(Texture* pSource)
 			pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_COPY_SOURCE);
 			pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
 
-			SyncPoint fence = pScreenshotContext->Execute();
+			SyncPoint fence = m_pDevice->GetGraphicsQueue()->ExecuteCommandLists(pScreenshotContext);
 			fence.Wait();
 
 			char* pData = (char*)pScreenshotBuffer->GetMappedData();

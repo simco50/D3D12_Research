@@ -49,7 +49,7 @@ void CommandContext::Reset()
 	gAssert(m_pCommandList);
 	if (m_pAllocator == nullptr)
 	{
-		m_pAllocator = GetParent()->GetCommandQueue(m_Type)->RequestAllocator();
+		m_pAllocator = GetParent()->AllocateCommandAllocator(m_Type);
 		m_pCommandList->Reset(m_pAllocator, nullptr);
 	}
 
@@ -60,33 +60,10 @@ void CommandContext::Reset()
 	ClearState();
 }
 
-SyncPoint CommandContext::Execute()
-{
-	return Execute({ this });
-}
-
-SyncPoint CommandContext::Execute(Span<CommandContext* const> contexts)
-{
-	gAssert(contexts.GetSize() > 0);
-	CommandQueue* pQueue = contexts[0]->GetParent()->GetCommandQueue(contexts[0]->GetType());
-	for(CommandContext* pContext : contexts)
-	{
-		gAssert(pContext->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
-			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContext->GetType()));
-		pContext->FlushResourceBarriers();
-	}
-	SyncPoint syncPoint = pQueue->ExecuteCommandLists(contexts);
-	for (CommandContext* pContext : contexts)
-	{
-		pContext->Free(syncPoint);
-	}
-	return syncPoint;
-}
-
 void CommandContext::Free(const SyncPoint& syncPoint)
 {
 	m_ScratchAllocator.Free(syncPoint);
-	GetParent()->GetCommandQueue(m_Type)->FreeAllocator(syncPoint, m_pAllocator);
+	GetParent()->FreeCommandAllocator(m_pAllocator, m_Type, syncPoint);
 	m_pAllocator = nullptr;
 	GetParent()->FreeCommandList(this);
 }

@@ -20,8 +20,8 @@ static constexpr int gVolumetricNumZSlices = 128;
 VolumetricFog::VolumetricFog(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
-	m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "VolumetricFog.hlsl", "InjectFogLightingCS");
-	m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "VolumetricFog.hlsl", "AccumulateFogCS");
+	m_pInjectVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VolumetricFog.hlsl", "InjectFogLightingCS");
+	m_pAccumulateVolumeLightPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VolumetricFog.hlsl", "AccumulateFogCS");
 }
 
 VolumetricFog::~VolumetricFog()
@@ -68,7 +68,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 			{
 				Texture* pTarget = resources.Get(pTargetVolume);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pInjectVolumeLightPSO);
 
 				struct
@@ -122,7 +122,7 @@ RGTexture* VolumetricFog::RenderFog(RGGraph& graph, const RenderView* pView, con
 			{
 				Texture* pFinalFog = resources.Get(pFinalVolumeFog);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pAccumulateVolumeLightPSO);
 
 				struct

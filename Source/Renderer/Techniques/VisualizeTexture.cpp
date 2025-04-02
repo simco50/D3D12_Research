@@ -20,7 +20,7 @@ struct PickingData
 
 CaptureTextureSystem::CaptureTextureSystem(GraphicsDevice* pDevice)
 {
-	m_pVisualizePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "ImageVisualize.hlsl", "CSMain");
+	m_pVisualizePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ImageVisualize.hlsl", "CSMain");
 }
 
 
@@ -44,7 +44,7 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 		.Write({ pTarget, pPickingBuffer })
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pVisualizePSO);
 
 				struct ConstantsData

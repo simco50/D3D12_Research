@@ -204,17 +204,17 @@ public:
 	Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12ResourceX* pResource);
 	~Texture();
 
-	uint32 GetWidth() const { return m_Desc.Width; }
-	uint32 GetHeight() const { return m_Desc.Height; }
-	uint32 GetDepth() const { return m_Desc.Depth; }
-	uint32 GetArraySize() const { return m_Desc.ArraySize; }
-	uint32 GetMipLevels() const { return m_Desc.Mips; }
-	ResourceFormat GetFormat() const { return m_Desc.Format; }
+	uint32				GetWidth() const { return m_Desc.Width; }
+	uint32				GetHeight() const { return m_Desc.Height; }
+	uint32				GetDepth() const { return m_Desc.Depth; }
+	uint32				GetArraySize() const { return m_Desc.ArraySize; }
+	uint32				GetMipLevels() const { return m_Desc.Mips; }
+	ResourceFormat		GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
-	const TextureDesc& GetDesc() const { return m_Desc; }
+	const TextureDesc&	GetDesc() const { return m_Desc; }
 
-	RWTextureView GetUAV(uint32 subresourceIndex = 0) const { gAssert(subresourceIndex < m_UAVs.size()); return m_UAVs[subresourceIndex]; }
-	TextureView GetSRV() const { return m_SRV; }
+	RWTextureView		GetUAV(uint32 subresourceIndex = 0) const { gAssert(subresourceIndex < m_UAVs.size()); return m_UAVs[subresourceIndex]; }
+	TextureView			GetSRV() const { return m_SRV; }
 
 private:
 	TextureDesc m_Desc;

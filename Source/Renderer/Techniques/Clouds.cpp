@@ -13,10 +13,10 @@
 Clouds::Clouds(GraphicsDevice* pDevice)
 {
 	const char* pCloudShapesShader = "CloudsShapes.hlsl";
-	m_pCloudShapeNoisePSO		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, pCloudShapesShader, "CloudShapeNoiseCS");
-	m_pCloudDetailNoisePSO		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, pCloudShapesShader, "CloudDetailNoiseCS");
-	m_pCloudHeighDensityLUTPSO	= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, pCloudShapesShader, "CloudHeightDensityCS");
-	m_pCloudsPSO				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "Clouds.hlsl", "CSMain");
+	m_pCloudShapeNoisePSO		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, pCloudShapesShader, "CloudShapeNoiseCS");
+	m_pCloudDetailNoisePSO		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, pCloudShapesShader, "CloudDetailNoiseCS");
+	m_pCloudHeighDensityLUTPSO	= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, pCloudShapesShader, "CloudHeightDensityCS");
+	m_pCloudsPSO				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "Clouds.hlsl", "CSMain");
 
 	pDevice->GetShaderManager()->OnShaderEditedEvent().AddLambda([this](Shader*) { m_pShapeNoise = nullptr; });
 }
@@ -111,7 +111,7 @@ RGTexture* Clouds::Render(RGGraph& graph, const RenderView* pView, RGTexture* pC
 					{
 						uint32 resolution = pNoiseTexture->GetDesc().Width >> i;
 
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 						context.SetPipelineState(m_pCloudShapeNoisePSO);
 
 						NoiseParams constants{};
@@ -132,7 +132,7 @@ RGTexture* Clouds::Render(RGGraph& graph, const RenderView* pView, RGTexture* pC
 					{
 						uint32 resolution = pDetailNoiseTexture->GetDesc().Width >> i;
 
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 						context.SetPipelineState(m_pCloudDetailNoisePSO);
 
 						NoiseParams constants;
@@ -152,7 +152,7 @@ RGTexture* Clouds::Render(RGGraph& graph, const RenderView* pView, RGTexture* pC
 				{
 					Texture* pTarget = resources.Get(pCloudTypeLUT);
 
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pCloudHeighDensityLUTPSO);
 
 					NoiseParams constants;
@@ -173,7 +173,7 @@ RGTexture* Clouds::Render(RGGraph& graph, const RenderView* pView, RGTexture* pC
 			{
 				Texture* pTarget = resources.Get(pIntermediateColor);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pCloudsPSO);
 
 				struct

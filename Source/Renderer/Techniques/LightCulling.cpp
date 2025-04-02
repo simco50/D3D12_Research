@@ -28,18 +28,18 @@ LightCulling::LightCulling(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
 	// Clustered
-	m_pClusteredCullPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "ClusteredLightCulling.hlsl", "LightCulling");
-	m_pClusteredVisualizeLightsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
+	m_pClusteredCullPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ClusteredLightCulling.hlsl", "LightCulling");
+	m_pClusteredVisualizeLightsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "CLUSTERED_FORWARD" });
 
 	// Tiled
-	m_pTiledCullPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "LightCulling.hlsl", "CSMain");
-	m_pTiledVisualizeLightsPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
+	m_pTiledCullPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LightCulling.hlsl", "CSMain");
+	m_pTiledVisualizeLightsPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisualizeLightCount.hlsl", "DebugLightDensityCS", { "TILED_FORWARD" });
 
 	PipelineStateInitializer psoDesc{};
 	psoDesc.SetVertexShader("FullscreenTriangle.hlsl", "WithTexCoordVS");
 	psoDesc.SetDepthEnabled(false);
 	psoDesc.SetRenderTargetFormats({ ResourceFormat::RGBA8_UNORM }, ResourceFormat::Unknown, 1);
-	psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+	psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 	psoDesc.SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 	psoDesc.SetBlendMode(BlendMode::Alpha, false);
 	psoDesc.SetName("Light Count Overhead View");
@@ -120,7 +120,7 @@ void LightCulling::ComputeClusteredLightCulling(RGGraph& graph, const RenderView
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				context.SetPipelineState(m_pClusteredCullPSO);
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
 				// Clear the light grid because we're accumulating the light count in the shader
 				Buffer* pLightGrid = resources.Get(cullData.pLightGrid);
@@ -217,7 +217,7 @@ void LightCulling::ComputeTiledLightCulling(RGGraph& graph, const RenderView* pV
 			{
 				Texture* pDepth = resources.Get(sceneTextures.pDepth);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTiledCullPSO);
 
 				Renderer::BindViewUniforms(context, *pView);
@@ -289,7 +289,7 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 			{
 				Texture* pTarget = resources.Get(pVisualizationTarget);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(visualize3d ? m_pClusteredVisualizeLightsPSO : m_pTiledVisualizeLightsPSO);
 
 				Renderer::BindViewUniforms(context, *pView);
@@ -316,7 +316,7 @@ RGTexture* LightCulling::VisualizeLightDensity(RGGraph& graph, const RenderView*
 				FloatRect rect(topLeft.x, topLeft.y, topLeft.x + size.x, topLeft.y + size.y);
 				context.SetViewport(rect);
 
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(visualize3d ? m_pClusteredVisualizeTopDownPSO : m_pTiledVisualizeTopDownPSO);
 
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

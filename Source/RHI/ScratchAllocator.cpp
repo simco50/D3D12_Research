@@ -41,7 +41,7 @@ ScratchAllocation ScratchAllocator::Allocate(uint64 size, int alignment)
 	{
 		Ref<Buffer> pPage = m_pPageManager->GetParent()->CreateBuffer(BufferDesc{ .Size = size, .Flags = BufferFlag::Upload }, "Large Page");
 		allocation.Offset = 0;
-		allocation.GpuHandle = pPage->GetGpuHandle();
+		allocation.GpuHandle = pPage->GetGPUAddress();
 		allocation.pBackingResource = pPage;
 		allocation.pMappedMemory = pPage->GetMappedData();
 	}
@@ -56,7 +56,7 @@ ScratchAllocation ScratchAllocator::Allocate(uint64 size, int alignment)
 			m_UsedPages.push_back(m_pCurrentPage);
 		}
 		allocation.Offset = m_CurrentOffset;
-		allocation.GpuHandle = m_pCurrentPage->GetGpuHandle() + m_CurrentOffset;
+		allocation.GpuHandle = m_pCurrentPage->GetGPUAddress() + m_CurrentOffset;
 		allocation.pBackingResource = m_pCurrentPage;
 		allocation.pMappedMemory = (char*)m_pCurrentPage->GetMappedData() + m_CurrentOffset;
 

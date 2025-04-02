@@ -53,6 +53,7 @@ public:
 	bool GetVSync() const { return m_Vsync; }
 
 private:
+	void ReleaseBackbuffers();
 	void RecreateSwapChain();
 
 	WindowHandle m_Window;
@@ -116,43 +117,48 @@ public:
 	GraphicsDevice(GraphicsDeviceOptions options);
 	~GraphicsDevice();
 
-	void TickFrame();
-	void IdleGPU();
+	void						TickFrame();
+	void						IdleGPU();
 
-	CommandQueue* GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const;
-	CommandContext* AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
-	void FreeCommandList(CommandContext* pCommandList);
+	CommandQueue*				GetGraphicsQueue() const { return m_GraphicsQueue; }
+	CommandQueue*				GetComputeQueue() const { return m_ComputeQueue; }
+	CommandQueue*				GetCopyQueue() const { return m_CopyQueue; }
 
-	void ReleaseResourceDescriptor(DescriptorHandle& handle);
-	DescriptorPtr FindResourceDescriptorPtr(DescriptorHandle handle);
+	CommandContext*				AllocateCommandContext(D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT);
+	void						FreeCommandList(CommandContext* pCommandList);
+	Ref<ID3D12CommandAllocator> AllocateCommandAllocator(D3D12_COMMAND_LIST_TYPE type);
+	void						FreeCommandAllocator(Ref<ID3D12CommandAllocator>& pAllocator, D3D12_COMMAND_LIST_TYPE type, const SyncPoint& syncPoint);
 
-	Ref<Texture> CreateTexture(const TextureDesc& desc, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
-	Ref<Texture> CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
-	Ref<Texture> CreateTextureForSwapchain(ID3D12ResourceX* pSwapchainResource, uint32 index);
-	Ref<Buffer> CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData = nullptr);
-	Ref<Buffer> CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
-	void DeferReleaseObject(ID3D12Object* pObject);
+	void						ReleaseResourceDescriptor(DescriptorHandle& handle);
+	DescriptorPtr				FindResourceDescriptorPtr(DescriptorHandle handle);
 
-	Ref<PipelineState> CreatePipeline(const PipelineStateInitializer& psoDesc);
-	Ref<PipelineState> CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
-	Ref<StateObject> CreateStateObject(const StateObjectInitializer& stateDesc);
-	BufferView CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
-	RWBufferView CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
-	TextureView CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
-	RWTextureView CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
-	Ref<CommandSignature> CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
+	Ref<Texture>				CreateTexture(const TextureDesc& desc, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
+	Ref<Texture>				CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData = {});
+	Ref<Texture>				CreateTextureForSwapchain(ID3D12ResourceX* pSwapchainResource, uint32 index);
+	Ref<Buffer>					CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData = nullptr);
+	Ref<Buffer>					CreateBuffer(const BufferDesc& desc, const char* pName, const void* pInitData = nullptr);
+	Ref<PipelineState>			CreatePipeline(const PipelineStateInitializer& psoDesc);
+	Ref<PipelineState>			CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	Ref<StateObject>			CreateStateObject(const StateObjectInitializer& stateDesc);
+	BufferView					CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
+	RWBufferView				CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
+	TextureView					CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
+	RWTextureView				CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
+	Ref<CommandSignature>		CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
 
-	ShaderResult GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", Span<ShaderDefine> defines = {});
-	ShaderResult GetLibrary(const char* pShaderPath, Span<ShaderDefine> defines = {});
+	void						DeferReleaseObject(ID3D12Object* pObject);
 
-	RingBufferAllocator* GetRingBuffer() const { return m_pRingBufferAllocator; }
-	GPUDescriptorHeap* GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
-	GPUDescriptorHeap* GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
-	ID3D12Device5* GetDevice() const { return m_pDevice.Get(); }
-	ShaderManager* GetShaderManager() const { return m_pShaderManager.get(); }
+	ShaderResult				GetShader(const char* pShaderPath, ShaderType shaderType, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+	ShaderResult				GetLibrary(const char* pShaderPath, Span<ShaderDefine> defines = {});
+
+	RingBufferAllocator*		GetRingBuffer() const { return m_pRingBufferAllocator; }
+	GPUDescriptorHeap*			GetGlobalViewHeap() const { return m_pGlobalViewHeap; }
+	GPUDescriptorHeap*			GetGlobalSamplerHeap() const { return m_pGlobalSamplerHeap; }
+	ID3D12Device5*				GetDevice() const { return m_pDevice.Get(); }
+	ShaderManager*				GetShaderManager() const { return m_pShaderManager.get(); }
 	const GraphicsCapabilities& GetCapabilities() const { return m_Capabilities; }
-	Fence* GetFrameFence() const { return m_pFrameFence; }
-	IDXGIFactory6* GetFactory() const { return m_pFactory; }
+	Fence*						GetFrameFence() const { return m_pFrameFence; }
+	IDXGIFactory6*				GetFactory() const { return m_pFactory; }
 
 private:
 	struct LiveObjectReporter
@@ -180,13 +186,16 @@ private:
 	StaticArray<uint64, NUM_BUFFERS> m_FrameFenceValues{};
 	uint32 m_FrameIndex = 0;
 
-	StaticArray<Ref<CommandQueue>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandQueues;
+	Ref<CommandQueue> m_GraphicsQueue;
+	Ref<CommandQueue> m_ComputeQueue;
+	Ref<CommandQueue> m_CopyQueue;
 
 	Ref<GPUDescriptorHeap> m_pGlobalViewHeap;
 	Ref<GPUDescriptorHeap> m_pGlobalSamplerHeap;
 
 	StaticArray<Array<Ref<CommandContext>>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandListPool;
 	StaticArray<std::queue<CommandContext*>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_FreeCommandLists;
+	StaticArray<FencedPool<Ref<ID3D12CommandAllocator>, true>, D3D12_COMMAND_LIST_TYPE_VIDEO_DECODE> m_CommandAllocatorPool;
 
 	class DeferredDeleteQueue : public DeviceObject
 	{

@@ -137,7 +137,7 @@ static Ref<Texture> sFontTexture;
 
 static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 {
-	context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+	context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 	context.SetPipelineState(sImGuiPSO);
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -339,7 +339,7 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 		{ "TEXCOORD", ResourceFormat::RG32_FLOAT },
 		{ "COLOR", ResourceFormat::RGBA8_UNORM },
 		});
-	psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+	psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 	psoDesc.SetVertexShader("ImGui.hlsl", "VSMain");
 	psoDesc.SetPixelShader("ImGui.hlsl", "PSMain");
 	psoDesc.SetBlendMode(BlendMode::Alpha, false);

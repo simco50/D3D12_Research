@@ -11,9 +11,9 @@
 
 SoftwareRaster::SoftwareRaster(GraphicsDevice* pDevice)
 {
-	m_pRasterPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "RasterCompute.hlsl", "RasterizeCS");
-	m_pRasterVisualizePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "RasterCompute.hlsl", "ResolveVisBufferCS");
-	m_pBuildRasterArgsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "RasterCompute.hlsl", "BuildRasterArgsCS");
+	m_pRasterPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RasterCompute.hlsl", "RasterizeCS");
+	m_pRasterVisualizePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RasterCompute.hlsl", "ResolveVisBufferCS");
+	m_pBuildRasterArgsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RasterCompute.hlsl", "BuildRasterArgsCS");
 }
 
 void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const RasterContext& rasterContext)
@@ -26,7 +26,7 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 		.Write({ pRasterArgs })
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBuildRasterArgsPSO);
 
 				struct
@@ -49,7 +49,7 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 			{
 				context.ClearTextureUInt(resources.Get(pRasterOutput));
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterPSO);
 
 				struct
@@ -73,7 +73,7 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 		.Write(pDebug)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterVisualizePSO);
 
 				struct

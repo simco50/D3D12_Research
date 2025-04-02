@@ -10,8 +10,8 @@
 
 SSAO::SSAO(GraphicsDevice* pDevice)
 {
-	m_pSSAOPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "PostProcessing/SSAO.hlsl", "CSMain");
-	m_pSSAOBlurPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "PostProcessing/SSAOBlur.hlsl", "CSMain");
+	m_pSSAOPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/SSAO.hlsl", "CSMain");
+	m_pSSAOBlurPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/SSAOBlur.hlsl", "CSMain");
 }
 
 RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDepth)
@@ -45,7 +45,7 @@ RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 			{
 				Texture* pTarget = resources.Get(pRawAmbientOcclusion);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSSAOPSO);
 
 				struct
@@ -81,7 +81,7 @@ RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				Texture* pAO = resources.Get(pRawAmbientOcclusion);
 				Texture* pTarget = resources.Get(pBlurTarget);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSSAOBlurPSO);
 
 				struct
@@ -115,7 +115,7 @@ RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				Texture* pTarget = resources.Get(pAmbientOcclusion);
 				Texture* pBlurSource = resources.Get(pBlurTarget);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pSSAOBlurPSO);
 
 				struct

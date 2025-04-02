@@ -24,7 +24,7 @@ RTReflections::RTReflections(GraphicsDevice* pDevice)
 		stateDesc.MaxPayloadSize = 6 * sizeof(float);
 		stateDesc.MaxAttributeSize = 2 * sizeof(float);
 		stateDesc.MaxRecursion = 2;
-		stateDesc.pGlobalRootSignature = GraphicsCommon::pCommonRSV2;
+		stateDesc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 		m_pRtSO = pDevice->CreateStateObject(stateDesc);
 	}
 }
@@ -40,7 +40,7 @@ void RTReflections::Execute(RGGraph& graph, const RenderView* pView, SceneTextur
 			{
 				Texture* pTarget = resources.Get(pReflectionsTarget);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRtSO);
 
 				struct

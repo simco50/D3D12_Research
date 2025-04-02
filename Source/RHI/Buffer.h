@@ -129,12 +129,12 @@ public:
 	Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12ResourceX* pResource);
 	~Buffer();
 
-	uint64 GetSize() const { return m_Desc.Size; }
-	uint32 GetNumElements() const { return m_Desc.NumElements(); }
+	uint64			  GetSize() const { return m_Desc.Size; }
+	uint32			  GetNumElements() const { return m_Desc.NumElements(); }
 	const BufferDesc& GetDesc() const { return m_Desc; }
-	RWBufferView GetUAV() const { return m_UAV; }
-	BufferView GetSRV() const { return m_SRV; }
-	void* GetMappedData() const { gAssert(m_pMappedData); return m_pMappedData; }
+	RWBufferView	  GetUAV() const { return m_UAV; }
+	BufferView		  GetSRV() const { return m_SRV; }
+	void*			  GetMappedData() const { gAssert(m_pMappedData); return m_pMappedData; }
 
 private:
 	RWBufferView m_UAV;
@@ -157,7 +157,7 @@ struct VertexBufferView
 	}
 
 	VertexBufferView(Buffer* pBuffer)
-		: Location(pBuffer->GetGpuHandle()), Elements(pBuffer->GetNumElements()), Stride(pBuffer->GetDesc().ElementSize), OffsetFromStart(0)
+		: Location(pBuffer->GetGPUAddress()), Elements(pBuffer->GetNumElements()), Stride(pBuffer->GetDesc().ElementSize), OffsetFromStart(0)
 	{}
 
 	bool IsValid() const { return Elements > 0; }

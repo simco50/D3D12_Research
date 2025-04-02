@@ -72,16 +72,16 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	defines.Set("NUM_CULL_MESHLETS_THREADS", Tweakables::CullMeshletThreadGroupSize);
 	defines.Set("NUM_RASTER_BINS", (int)PipelineBin::Count);
 
-	m_pClearCountersPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "ClearCountersCS", *defines);
+	m_pClearCountersPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "ClearCountersCS", *defines);
 
-	m_pBuildCullArgsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
+	m_pBuildCullArgsPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "BuildInstanceCullIndirectArgs", *defines);
 
 	// Raster PSOs for visibility buffer
 	{
 		ShaderDefineHelper rasterDefines(defines);
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetRenderTargetFormats(ResourceFormat::R32_UINT, Renderer::DepthStencilFormat, 1);
 		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
@@ -114,7 +114,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 		rasterDefines.Set("DEPTH_ONLY", true);
 
 		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRSV2);
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 		psoDesc.SetDepthOnlyTarget(Renderer::DepthStencilFormat, 1);
 		psoDesc.SetDepthBias(-10, 0, -4.0f);
@@ -135,34 +135,34 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 
 	// First Phase culling PSOs
 	defines.Set("OCCLUSION_FIRST_PASS", true);
-	m_pBuildMeshletCullArgsPSO[0]		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
-	m_pCullInstancesPSO[0]				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "CullInstancesCS", *defines);
-	m_pCullMeshletsPSO[0]				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
+	m_pBuildMeshletCullArgsPSO[0]		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
+	m_pCullInstancesPSO[0]				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
+	m_pCullMeshletsPSO[0]				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
 
 	// Second Phase culling PSOs
 	defines.Set("OCCLUSION_FIRST_PASS", false);
-	m_pBuildMeshletCullArgsPSO[1]		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
-	m_pCullInstancesPSO[1]				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "CullInstancesCS", *defines);
-	m_pCullMeshletsPSO[1]				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
+	m_pBuildMeshletCullArgsPSO[1]		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "BuildMeshletCullIndirectArgs", *defines);
+	m_pCullInstancesPSO[1]				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
+	m_pCullMeshletsPSO[1]				= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
 
 	// No-occlusion culling PSOs
 	defines.Set("OCCLUSION_CULL", false);
 	defines.Set("OCCLUSION_FIRST_PASS", true);
-	m_pCullInstancesNoOcclusionPSO		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "CullInstancesCS", *defines);
-	m_pCullMeshletsNoOcclusionPSO		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
+	m_pCullInstancesNoOcclusionPSO		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "CullInstancesCS", *defines);
+	m_pCullMeshletsNoOcclusionPSO		= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "CullMeshletsCS", *defines);
 
 	// Classification PSOs
-	m_pMeshletBinPrepareArgs			= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletBinning.hlsl", "PrepareArgsCS", *defines);
-	m_pMeshletAllocateBinRanges			= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletBinning.hlsl", "AllocateBinRangesCS");
-	m_pMeshletClassify					= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletBinning.hlsl", "ClassifyMeshletsCS", *defines);
-	m_pMeshletWriteBins					= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletBinning.hlsl", "WriteBinsCS", *defines);
+	m_pMeshletBinPrepareArgs			= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletBinning.hlsl", "PrepareArgsCS", *defines);
+	m_pMeshletAllocateBinRanges			= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletBinning.hlsl", "AllocateBinRangesCS");
+	m_pMeshletClassify					= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletBinning.hlsl", "ClassifyMeshletsCS", *defines);
+	m_pMeshletWriteBins					= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletBinning.hlsl", "WriteBinsCS", *defines);
 
 	// HZB PSOs
-	m_pHZBInitializePSO					= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "HZB.hlsl", "HZBInitCS");
-	m_pHZBCreatePSO						= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "HZB.hlsl", "HZBCreateCS");
+	m_pHZBInitializePSO					= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "HZB.hlsl", "HZBInitCS");
+	m_pHZBCreatePSO						= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "HZB.hlsl", "HZBCreateCS");
 
 	// Debug PSOs
-	m_pPrintStatsPSO					= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCull.hlsl", "PrintStatsCS", *defines);
+	m_pPrintStatsPSO					= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
 	if (m_pDevice->GetCapabilities().SupportsWorkGraphs())
 	{
@@ -172,7 +172,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 
 			StateObjectInitializer so;
 			so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
-			so.pGlobalRootSignature = GraphicsCommon::pCommonRSV2;
+			so.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 			so.AddLibrary("MeshletCullWG.hlsl", {}, *defines);
 			so.Name = "WG";
 			m_pWorkGraphSO[0] = pDevice->CreateStateObject(so);
@@ -183,7 +183,7 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 
 			StateObjectInitializer so;
 			so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
-			so.pGlobalRootSignature = GraphicsCommon::pCommonRSV2;
+			so.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 			so.AddLibrary("MeshletCullWG.hlsl", {}, * defines);
 			so.Name = "WG";
 			m_pWorkGraphSO[1] = pDevice->CreateStateObject(so);
@@ -194,13 +194,13 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 
 			StateObjectInitializer so;
 			so.Type = D3D12_STATE_OBJECT_TYPE_EXECUTABLE;
-			so.pGlobalRootSignature = GraphicsCommon::pCommonRSV2;
+			so.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 			so.AddLibrary("MeshletCullWG.hlsl", {}, * defines);
 			so.Name = "WG";
 			m_pWorkGraphNoOcclusionSO = pDevice->CreateStateObject(so);
 		}
 
-		m_pClearRasterBins = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "MeshletCullWG.hlsl", "ClearRasterBins", *defines);
+		m_pClearRasterBins = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCullWG.hlsl", "ClearRasterBins", *defines);
 	}
 }
 
@@ -274,7 +274,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 			.Write({ pMeshletOffsetAndCounts })
 			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pClearRasterBins);
 
 					struct
@@ -299,14 +299,14 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 			.Write({ rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
 			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
 					D3D12_SET_PROGRAM_DESC programDesc{
 						.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH,
 						.WorkGraph {
 							.ProgramIdentifier = pCullWorkGraphSO->GetStateObjectProperties()->GetProgramIdentifier(L"WG"),
 							.Flags = resources.Get(pWorkGraphBuffer) != m_pWorkGraphBuffer[psoPhaseIndex] ? D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE : D3D12_SET_WORK_GRAPH_FLAG_NONE,
-							.BackingMemory = { resources.Get(pWorkGraphBuffer)->GetGpuHandle(), resources.Get(pWorkGraphBuffer)->GetSize() },
+							.BackingMemory = { resources.Get(pWorkGraphBuffer)->GetGPUAddress(), resources.Get(pWorkGraphBuffer)->GetSize() },
 							.NodeLocalRootArgumentsTable = {},
 						}
 					};
@@ -380,7 +380,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 				.Write({ pInstanceCullArgs })
 				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 						context.SetPipelineState(m_pBuildCullArgsPSO);
 
 						struct
@@ -403,7 +403,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 			.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pOccludedInstances, rasterContext.pOccludedInstancesCounter })
 			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(pCullInstancePSO);
 
 					struct
@@ -444,7 +444,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 			.Write(pMeshletCullArgs)
 			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pBuildMeshletCullArgsPSO[psoPhaseIndex]);
 
 					struct
@@ -467,7 +467,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 			.Write({ rasterContext.pCandidateMeshlets, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshlets, rasterContext.pVisibleMeshletsCounter })
 			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(pCullMeshletPSO);
 
 					struct
@@ -533,7 +533,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 				.Read(rasterContext.pVisibleMeshletsCounter)
 				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 						context.SetPipelineState(m_pMeshletBinPrepareArgs);
 
 						ClassifyParams params{
@@ -557,7 +557,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 				.Write(pMeshletCounts)
 				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 						context.SetPipelineState(m_pMeshletClassify);
 
 						ClassifyParams params{
@@ -580,7 +580,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 				.Write({ pGlobalCount, pMeshletOffsetAndCounts })
 				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 						context.SetPipelineState(m_pMeshletAllocateBinRanges);
 
 						ClassifyParams params{
@@ -604,7 +604,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 				.Write({ pMeshletOffsetAndCounts, pBinnedMeshlets })
 				.Bind([=](CommandContext& context, const RGResources& resources)
 					{
-						context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 						context.SetPipelineState(m_pMeshletWriteBins);
 
 						ClassifyParams params{
@@ -632,7 +632,7 @@ void MeshletRasterizer::CullAndRasterize(RGGraph& graph, const RenderView* pView
 		.DepthStencil(rasterContext.pDepth, depthFlags)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 				context.SetStencilRef((uint32)StencilBit::VisibilityBuffer);
 
 				Renderer::BindViewUniforms(context, *pView);
@@ -719,7 +719,7 @@ void MeshletRasterizer::Render(RGGraph& graph, const RenderView* pView, RasterCo
 				if (outResult.pDebugData)
 					context.ClearTextureUInt(resources.Get(outResult.pDebugData));
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pClearCountersPSO);
 
 				struct
@@ -764,7 +764,7 @@ void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, cons
 		.Read({ rasterContext.pOccludedInstancesCounter, rasterContext.pCandidateMeshletsCounter, rasterContext.pVisibleMeshletsCounter, pBins0, pBins1 })
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pPrintStatsPSO);
 
 				struct
@@ -811,7 +811,7 @@ void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 		.Write(pHZB)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pHZBInitializePSO);
 
 				struct
@@ -836,7 +836,7 @@ void MeshletRasterizer::BuildHZB(RGGraph& graph, RGTexture* pDepth, RGTexture* p
 			{
 				context.ClearBufferUInt(resources.Get(pSPDCounter));
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pHZBCreatePSO);
 
 				varAU2(dispatchThreadGroupCountXY);

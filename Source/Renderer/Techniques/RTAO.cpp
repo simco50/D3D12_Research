@@ -19,13 +19,13 @@ RTAO::RTAO(GraphicsDevice* pDevice)
 		stateDesc.AddLibrary("RayTracing/SharedRaytracingLib.hlsl", { "OcclusionMS" });
 		stateDesc.Name = "RT AO";
 		stateDesc.MaxPayloadSize = sizeof(float);
-		stateDesc.pGlobalRootSignature = GraphicsCommon::pCommonRSV2;
+		stateDesc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 		stateDesc.RayGenShader = "RayGen";
 		stateDesc.AddMissShader("OcclusionMS");
 		m_pTraceRaysSO = pDevice->CreateStateObject(stateDesc);
 
-		m_pDenoisePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
-		m_pBilateralBlurPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "PostProcessing/SSAOBlur.hlsl", "CSMain");
+		m_pDenoisePSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RayTracing/RTAODenoise.hlsl", "DenoiseCS");
+		m_pBilateralBlurPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/SSAOBlur.hlsl", "CSMain");
 	}
 }
 
@@ -57,7 +57,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				Texture* pTarget = resources.Get(pRayTraceTarget);
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pTraceRaysSO);
 
 				struct
@@ -94,7 +94,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				Texture* pTarget = resources.Get(pDenoiseTarget);
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pDenoisePSO);
 
 				struct
@@ -127,7 +127,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
 				Texture* pTarget = resources.Get(pBlurTarget1);
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBilateralBlurPSO);
 
 				struct
@@ -159,7 +159,7 @@ RGTexture* RTAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 			{
 				Texture* pTarget = resources.Get(pFinalAOTarget);
 
-				context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBilateralBlurPSO);
 
 				struct

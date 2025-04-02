@@ -28,10 +28,10 @@ PathTracing::PathTracing(GraphicsDevice* pDevice)
 	desc.AddHitGroup("MaterialHG", "MaterialCHS", "MaterialAHS");
 	desc.AddMissShader("MaterialMS");
 	desc.AddMissShader("OcclusionMiss");
-	desc.pGlobalRootSignature = GraphicsCommon::pCommonRSV2;
+	desc.pGlobalRootSignature = GraphicsCommon::pCommonRS;
 	m_pSO = pDevice->CreateStateObject(desc);
 
-	m_pBlitPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRSV2, "RayTracing/PathTracing.hlsl", "BlitAccumulationCS", { "BLIT_SHADER"});
+	m_pBlitPSO = pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "RayTracing/PathTracing.hlsl", "BlitAccumulationCS", { "BLIT_SHADER"});
 
 	m_OnShaderCompiledHandle = pDevice->GetShaderManager()->OnShaderEditedEvent().AddLambda([this](Shader*) { Reset(); });
 }
@@ -94,7 +94,7 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 			.Write(pTarget)
 			.Bind([=](CommandContext& context, const RGResources& resources)
 				{
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pBlitPSO);
 
 					PassParams parameters{};
@@ -118,7 +118,7 @@ void PathTracing::Render(RGGraph& graph, const RenderView* pView, RGTexture* pTa
 				{
 					Texture* pRTTarget = resources.Get(pTarget);
 
-					context.SetComputeRootSignature(GraphicsCommon::pCommonRSV2);
+					context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 					context.SetPipelineState(m_pSO);
 
 					PassParams parameters{};
