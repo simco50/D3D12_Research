@@ -61,7 +61,7 @@ bool RingBufferAllocator::Allocate(uint32 size, RingBufferAllocation& allocation
 	allocation.pContext = GetParent()->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 	allocation.Offset = offset;
 	allocation.Size = size;
-	allocation.GpuHandle = m_pBuffer->GetGPUAddress() + offset;
+	allocation.GPUAddress = m_pBuffer->GetGPUAddress() + offset;
 	allocation.pBackingResource = m_pBuffer;
 	allocation.pMappedMemory = (char*)m_pBuffer->GetMappedData() + offset;
 	return true;

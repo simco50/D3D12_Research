@@ -59,7 +59,6 @@ void ShaderBindingTable::Commit(CommandContext& context, D3D12_DISPATCH_RAYS_DES
 	uint32 hitSectionAligned = Math::AlignUp<uint32>(hitSection, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
 	totalSize = Math::AlignUp<uint32>(rayGenSectionAligned + missSectionAligned + hitSectionAligned, 256);
 	ScratchAllocation allocation = context.AllocateScratch(totalSize, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
-	allocation.Clear();
 
 	char* pStart = (char*)allocation.pMappedMemory;
 	char* pData = pStart;
@@ -89,12 +88,12 @@ void ShaderBindingTable::Commit(CommandContext& context, D3D12_DISPATCH_RAYS_DES
 		pData += m_HitRecordSize;
 	}
 
-	desc.RayGenerationShaderRecord.StartAddress = allocation.GpuHandle;
+	desc.RayGenerationShaderRecord.StartAddress = allocation.GPUAddress;
 	desc.RayGenerationShaderRecord.SizeInBytes = rayGenSection;
-	desc.MissShaderTable.StartAddress = allocation.GpuHandle + rayGenSectionAligned;
+	desc.MissShaderTable.StartAddress = allocation.GPUAddress + rayGenSectionAligned;
 	desc.MissShaderTable.SizeInBytes = missSection;
 	desc.MissShaderTable.StrideInBytes = m_MissRecordSize;
-	desc.HitGroupTable.StartAddress = allocation.GpuHandle + rayGenSectionAligned + missSectionAligned;
+	desc.HitGroupTable.StartAddress = allocation.GPUAddress + rayGenSectionAligned + missSectionAligned;
 	desc.HitGroupTable.SizeInBytes = hitSection;
 	desc.HitGroupTable.StrideInBytes = m_HitRecordSize;
 

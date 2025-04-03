@@ -157,11 +157,11 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 
 	uint32 vertexOffset = 0;
 	ScratchAllocation vertexData = context.AllocateScratch(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
-	context.SetVertexBuffers(VertexBufferView(vertexData.GpuHandle, pDrawData->TotalVtxCount, sizeof(ImDrawVert), 0));
+	context.SetVertexBuffers(VertexBufferView(vertexData.GPUAddress, pDrawData->TotalVtxCount, sizeof(ImDrawVert), 0));
 
 	uint32 indexOffset = 0;
 	ScratchAllocation indexData = context.AllocateScratch(sizeof(ImDrawIdx) * pDrawData->TotalIdxCount);
-	context.SetIndexBuffer(IndexBufferView(indexData.GpuHandle, pDrawData->TotalIdxCount, ResourceFormat::R16_UINT, 0));
+	context.SetIndexBuffer(IndexBufferView(indexData.GPUAddress, pDrawData->TotalIdxCount, ResourceFormat::R16_UINT, 0));
 
 	ImVec2 clipOff = pDrawData->DisplayPos;
 	for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)

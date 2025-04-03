@@ -386,9 +386,9 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 
 		gAssert(!pRootSignature->IsRootConstant(rootIndex));
 		if (m_CurrentCommandContext == CommandListContext::Graphics)
-			m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
+			m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GPUAddress);
 		else
-			m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
+			m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GPUAddress);
 	}
 }
 
@@ -397,7 +397,7 @@ void CommandContext::BindRootSRV(uint32 rootIndex, const void* pData, uint32 dat
 {
 	ScratchAllocation allocation = AllocateScratch(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 	memcpy(allocation.pMappedMemory, pData, dataSize);
-	BindRootSRV(rootIndex, allocation.GpuHandle);
+	BindRootSRV(rootIndex, allocation.GPUAddress);
 }
 
 
@@ -750,7 +750,7 @@ void CommandContext::BindDynamicVertexBuffer(uint32 rootIndex, uint32 elementCou
 	ScratchAllocation allocation = AllocateScratch(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_VERTEX_BUFFER_VIEW view = {
-		.BufferLocation = allocation.GpuHandle,
+		.BufferLocation = allocation.GPUAddress,
 		.SizeInBytes	= bufferSize,
 		.StrideInBytes	= elementSize,
 	};
@@ -763,7 +763,7 @@ void CommandContext::BindDynamicIndexBuffer(uint32 elementCount, const void* pDa
 	ScratchAllocation allocation = AllocateScratch(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_INDEX_BUFFER_VIEW view = {
-		.BufferLocation	= allocation.GpuHandle,
+		.BufferLocation	= allocation.GPUAddress,
 		.SizeInBytes	= bufferSize,
 		.Format			= D3D::ConvertFormat(format),
 	};

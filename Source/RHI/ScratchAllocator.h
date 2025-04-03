@@ -6,17 +6,13 @@ class SyncPoint;
 
 struct ScratchAllocation
 {
-	Ref<Buffer> pBackingResource;
-	D3D12_GPU_VIRTUAL_ADDRESS GpuHandle{ 0 };
-	uint64 Offset = 0;
-	uint64 Size = 0;
-	void* pMappedMemory = nullptr;
-	void Clear(uint32 value = 0)
-	{
-		memset(pMappedMemory, value, Size);
-	}
+	Ref<Buffer>				  pBackingResource;
+	D3D12_GPU_VIRTUAL_ADDRESS GPUAddress{ 0 };
+	uint64					  Offset		= 0;
+	uint64					  Size			= 0;
+	void*					  pMappedMemory = nullptr;
 
-	template<typename T>
+	template <typename T>
 	T& As()
 	{
 		gAssert(sizeof(T) <= Size);
