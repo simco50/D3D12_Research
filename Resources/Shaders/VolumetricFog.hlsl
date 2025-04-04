@@ -86,7 +86,7 @@ void InjectFogLightingCS(uint3 threadId : SV_DispatchThreadID)
 	uint i;
 	for(i = 0; i < cInjectParams.NumFogVolumes; ++i)
 	{
-		FogVolume fogVolume = cInjectParams.FogVolumes.Load(i);
+		FogVolume fogVolume = cInjectParams.FogVolumes[i];
 
 		float3 posFogLocal = (worldPosition - fogVolume.Location) / fogVolume.Extents;
 		float heightNormalized = posFogLocal.y * 0.5f + 0.5f;

@@ -659,7 +659,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Write(pReadbackTarget)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
-								context.CopyTexture(resources.Get(pReductionTarget), resources.Get(pReadbackTarget), CD3DX12_BOX(0, 1));
+								context.CopyTexture(resources.Get(pReductionTarget), resources.Get(pReadbackTarget), Vector3u::Zero(), Vector3u::One());
 							});
 				}
 
@@ -1717,7 +1717,7 @@ void Renderer::MakeScreenshot(Texture* pSource)
 			m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 			Ref<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
 			pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_COPY_SOURCE);
-			pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
+			pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, Vector3u::Zero(), Vector3u(width, height, 1));
 
 			SyncPoint fence = m_pDevice->GetGraphicsQueue()->ExecuteCommandLists(pScreenshotContext);
 			fence.Wait();

@@ -22,6 +22,12 @@
 
 #define NODISCARD [[nodiscard]]
 
+#ifdef _DEBUG
+#define IF_DEBUG(x) x
+#else
+#define IF_DEBUG(x)
+#endif
+
 using int8 = int8_t;
 using int16 = int16_t;
 using int32 = int32_t;

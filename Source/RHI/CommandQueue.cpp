@@ -19,8 +19,6 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 
 	VERIFY_HR_EX(pParent->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pCommandQueue.Get(), Sprintf("%s CommandQueue", D3D::CommandlistTypeToString(type)).c_str());
-
-	VERIFY_HR(m_pCommandQueue->GetTimestampFrequency(&m_TimestampFrequency));
 }
 
 SyncPoint CommandQueue::ExecuteCommandLists(Span<CommandContext* const> contexts)

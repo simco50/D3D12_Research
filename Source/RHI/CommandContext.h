@@ -113,8 +113,8 @@ public:
 	void FlushResourceBarriers();
 
 	void CopyResource(const DeviceResource* pSource, const DeviceResource* pTarget);
-	void CopyTexture(const Texture* pSource, const Buffer* pDestination, const D3D12_BOX& sourceRegion, uint32 sourceSubresource = 0, uint32 destinationOffset = 0);
-	void CopyTexture(const Texture* pSource, const Texture* pDestination, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubresource = 0, uint32 destinationSubregion = 0);
+	void CopyTexture(const Texture* pSource, const Buffer* pDestination, const Vector3u& sourceOrigin, const Vector3u sourceSize, uint32 sourceMip = 0, uint32 sourceArrayIndex = 0, uint32 destinationOffset = 0);
+	void CopyTexture(const Texture* pSource, const Texture* pDestination, const Vector3u& sourceOrigin, const Vector3u sourceSize, const Vector3u& destinationOrigin, uint32 sourceMip = 0, uint32 sourceArrayIndex = 0, uint32 destinationMip = 0, uint32 destinationArrayIndex = 0);
 	void CopyBuffer(const Buffer* pSource, const Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset);
 
 	void Dispatch(uint32 groupCountX, uint32 groupCountY = 1, uint32 groupCountZ = 1);
@@ -126,8 +126,6 @@ public:
 	void DrawIndexedInstanced(uint32 indexCount, uint32 indexStart, uint32 instanceCount, uint32 minVertex = 0, uint32 instanceStart = 0);
 	void DispatchRays(ShaderBindingTable& table, uint32 width = 1, uint32 height = 1, uint32 depth = 1);
 	void DispatchGraph(const D3D12_DISPATCH_GRAPH_DESC& graphDesc);
-
-	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, ResourceFormat format);
 
 	void BeginRenderPass(const RenderPassInfo& renderPassInfo);
 	void EndRenderPass();
@@ -187,7 +185,7 @@ public:
 
 private:
 	void PrepareDraw();
-	void AddBarrier(const D3D12_RESOURCE_BARRIER& barrier);
+	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, ResourceFormat format);
 
 	D3D12_RESOURCE_STATES GetLocalResourceState(const DeviceResource* pResource, uint32 subResource) const
 	{
@@ -211,9 +209,7 @@ private:
 	uint32														m_RTVSize = 0;
 	Ref<ID3D12DescriptorHeap>									m_pDSVHeap;
 
-	static constexpr uint32										MaxNumBatchedBarriers = 64;
-	StaticArray<D3D12_RESOURCE_BARRIER, MaxNumBatchedBarriers>	m_BatchedBarriers{};
-	uint32														m_NumBatchedBarriers = 0;
+	Array<D3D12_RESOURCE_BARRIER>								m_BatchedBarriers;
 	Array<PendingBarrier>										m_PendingBarriers;
 	HashMap<const DeviceResource*, ResourceState>				m_ResourceStates;
 

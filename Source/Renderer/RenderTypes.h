@@ -2,7 +2,7 @@
 #include "RHI/RHI.h"
 #include "Core/BitField.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
-#include <RHI/DescriptorHandle.h>
+#include "RHI/DescriptorHandle.h"
 
 #include "ShaderInterop.h"
 

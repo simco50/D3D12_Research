@@ -213,7 +213,7 @@ public:
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
 	const TextureDesc&	GetDesc() const { return m_Desc; }
 
-	RWTextureView		GetUAV(uint32 subresourceIndex = 0) const { gAssert(subresourceIndex < m_UAVs.size()); return m_UAVs[subresourceIndex]; }
+	RWTextureView		GetUAV(uint32 mipIndex = 0) const { gAssert(mipIndex < m_UAVs.size()); return m_UAVs[mipIndex]; }
 	TextureView			GetSRV() const { return m_SRV; }
 
 private:

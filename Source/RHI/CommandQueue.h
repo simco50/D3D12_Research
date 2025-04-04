@@ -18,13 +18,11 @@ public:
 
 	Fence* GetFence() const { return m_pFence; }
 	D3D12_COMMAND_LIST_TYPE GetType() const { return m_Type; }
-	uint64 GetTimestampFrequency() const { return m_TimestampFrequency; }
 
 private:
 	Ref<ID3D12CommandQueue> m_pCommandQueue;
-	Ref<Fence> m_pFence;
-	SyncPoint m_SyncPoint;
+	Ref<Fence>				m_pFence;
+	SyncPoint				m_SyncPoint;
 	D3D12_COMMAND_LIST_TYPE m_Type;
-	uint64 m_TimestampFrequency;
-	std::mutex m_ExecuteLock;
+	std::mutex				m_ExecuteLock;
 };

@@ -31,7 +31,7 @@ GPUDescriptorHeap::GPUDescriptorHeap(GraphicsDevice* pParent, D3D12_DESCRIPTOR_H
 		D3D::SetObjectName(m_pCPUHeap.Get(), type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV ? "GPU CBV/SRV/UAV CPU Opaque Descriptor Heap" : "GPU Sampler CPU Opaque Descriptor Heap");
 	}
 
-	m_Owners.resize(numDescriptors);
+	IF_DEBUG(m_Owners.resize(numDescriptors);)
 
 	m_DescriptorSize = pParent->GetDevice()->GetDescriptorHandleIncrementSize(type);
 	m_StartPtr		 = DescriptorPtr{
@@ -56,7 +56,7 @@ DescriptorPtr GPUDescriptorHeap::Allocate(const DeviceResource* pOwner)
 	gAssert(m_Handles.CanAllocate(), "Out of persistent descriptor heap space (%d), increase heap size", m_NumDescriptors);
 
 	DescriptorPtr ptr = m_StartPtr.Offset(m_Handles.Allocate(), m_DescriptorSize);
-	m_Owners[ptr.HeapIndex] = pOwner;
+	IF_DEBUG(m_Owners[ptr.HeapIndex] = pOwner;)
 	return ptr;
 }
 
@@ -65,7 +65,7 @@ void GPUDescriptorHeap::Free(DescriptorHandle& handle)
 	gAssert(handle.IsValid());
 	std::lock_guard lock(m_AllocationLock);
 	m_DeletionQueue.emplace(handle, GetParent()->GetFrameFence()->GetCurrentValue());
-	m_Owners[handle.HeapIndex] = nullptr;
+	IF_DEBUG(m_Owners[handle.HeapIndex] = nullptr;)
 	handle.Reset();
 }
 
