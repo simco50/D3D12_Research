@@ -149,39 +149,58 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			pPass->IsCulled = false;
 	}
 
-	// Tell the resources when they're first/last accessed and apply usage flags
-	for (const RGPass* pPass : m_Passes)
 	{
-		if (pPass->IsCulled)
-			continue;
+		PROFILE_CPU_SCOPE("Compute Resource Usage");
 
-		for (const RGPass::ResourceAccess& access : pPass->Accesses)
+		RGPassID firstPass(0xFFFF);
+		RGPassID lastPass(0);
+
+		// Tell the resources when they're first/last accessed and apply usage flags
+		for (const RGPass* pPass : m_Passes)
 		{
-			RGResource* pResource = access.pResource;
-			pResource->FirstAccess = pResource->FirstAccess.IsValid() ? pResource->FirstAccess : pPass->ID;
-			pResource->LastAccess = pPass->ID;
+			if (pPass->IsCulled)
+				continue;
 
-			D3D12_RESOURCE_STATES state = access.Access;
-			if (pResource->GetType() == RGResourceType::Buffer)
+			firstPass = pPass->ID.GetIndex() < firstPass.GetIndex() ? pPass->ID : firstPass;
+			lastPass  = pPass->ID.GetIndex() > lastPass.GetIndex() ? pPass->ID : lastPass;
+
+			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
-				BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
-				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
-					desc.Flags |= BufferFlag::UnorderedAccess;
-				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
-					desc.Flags |= BufferFlag::ShaderResource;
+				RGResource* pResource  = access.pResource;
+				pResource->FirstAccess = pResource->FirstAccess.IsValid() ? pResource->FirstAccess : pPass->ID;
+				pResource->LastAccess  = pPass->ID;
+
+				D3D12_RESOURCE_STATES state = access.Access;
+				if (pResource->GetType() == RGResourceType::Buffer)
+				{
+					BufferDesc& desc = static_cast<RGBuffer*>(pResource)->Desc;
+					if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
+						desc.Flags |= BufferFlag::UnorderedAccess;
+					if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
+						desc.Flags |= BufferFlag::ShaderResource;
+				}
+				else if (pResource->GetType() == RGResourceType::Texture)
+				{
+					TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
+					if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
+						desc.Flags |= TextureFlag::UnorderedAccess;
+					if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
+						desc.Flags |= TextureFlag::ShaderResource;
+					if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_DEPTH_WRITE))
+						desc.Flags |= TextureFlag::DepthStencil;
+					if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_RENDER_TARGET))
+						desc.Flags |= TextureFlag::RenderTarget;
+				}
 			}
-			else if (pResource->GetType() == RGResourceType::Texture)
-			{
-				TextureDesc& desc = static_cast<RGTexture*>(pResource)->Desc;
-				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
-					desc.Flags |= TextureFlag::UnorderedAccess;
-				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE))
-					desc.Flags |= TextureFlag::ShaderResource;
-				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_DEPTH_WRITE))
-					desc.Flags |= TextureFlag::DepthStencil;
-				if (EnumHasAnyFlags(state, D3D12_RESOURCE_STATE_RENDER_TARGET))
-					desc.Flags |= TextureFlag::RenderTarget;
-			}
+		}
+
+		// Extend the lifetime of Imported and Exported resources
+		for (RGResource* pResource : m_Resources)
+		{
+			if (pResource->IsExported)
+				pResource->LastAccess = lastPass;
+			if (pResource->IsImported)
+				pResource->FirstAccess = firstPass;
 		}
 	}
 

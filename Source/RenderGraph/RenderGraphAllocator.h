@@ -152,13 +152,13 @@ private:
 
 		for (RGResource* pResource : graphResources)
 		{
-			if (pResource->IsImported || pResource->IsExported || !pResource->GetPhysicalUnsafe())
+			if (pResource->IsImported || !pResource->GetPhysicalUnsafe())
 				continue;
 
 			Resource& resource = outResources.emplace_back();
-			resource.Lifetime = pResource->GetLifetime();
-			resource.ID = pResource->ID.GetIndex();
-			resource.Name = pResource->GetName();
+			resource.Lifetime  = pResource->GetLifetime();
+			resource.ID		   = pResource->ID.GetIndex();
+			resource.Name	   = pResource->GetName();
 			resource.Type	   = pResource->GetType();
 			if (pResource->GetType() == RGResourceType::Texture)
 				resource.TextureDesc = static_cast<RGTexture*>(pResource)->GetDesc();
