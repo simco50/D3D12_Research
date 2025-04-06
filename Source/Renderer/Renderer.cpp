@@ -46,6 +46,8 @@
 #include <IconsFontAwesome4.h>
 #include "RenderGraph/RenderGraphAllocator.h"
 
+RGAllocator gRenderGraphAllocator;
+
 namespace Tweakables
 {
 	// Post processing
@@ -148,6 +150,8 @@ void Renderer::Init(GraphicsDevice* pDevice, World* pWorld)
 void Renderer::Shutdown()
 {
 	DebugRenderer::Get()->Shutdown();
+
+	gRenderGraphAllocator.Shutdown();
 }
 
 
@@ -1258,6 +1262,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 		// Compile graph
 		graph.Compile(*m_RenderGraphPool, graphOptions);
+		gRenderGraphAllocator.AliasingExperiment(m_pDevice, graph.GetResources());
 
 		// Debug options
 		graph.DrawResourceTracker(Tweakables::gRenderGraphResourceTracker.Get());
@@ -1268,8 +1273,6 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			graph.DumpDebugGraph(Sprintf("%sRenderGraph_%s", Paths::SavedDir(), Utils::GetTimeString()).c_str());
 			Tweakables::gDumpRenderGraphNextFrame = false;
 		}
-
-		RGAllocator::AliasingExperiment(m_pDevice, graph.GetResources());
 
 		// Execute
 		graph.Execute(m_pDevice);
