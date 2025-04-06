@@ -186,6 +186,7 @@ public:
 private:
 	void PrepareDraw();
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, ResourceFormat format);
+	void AddBarrier(const D3D12_RESOURCE_BARRIER& inBarrier);
 
 	D3D12_RESOURCE_STATES GetLocalResourceState(const DeviceResource* pResource, uint32 subResource) const
 	{

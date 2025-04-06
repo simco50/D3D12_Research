@@ -136,7 +136,7 @@ void CommandContext::InsertResourceBarrier(DeviceResource* pResource, D3D12_RESO
 					return;
 				}
 			}
-			m_BatchedBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pResource->GetResource(),
+			AddBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource->GetResource(),
 						beforeState,
 						afterState,
 						subResource,
@@ -150,12 +150,12 @@ void CommandContext::InsertResourceBarrier(DeviceResource* pResource, D3D12_RESO
 
 void CommandContext::InsertAliasingBarrier(const DeviceResource* pResource)
 {
-	m_BatchedBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Aliasing(nullptr, pResource->GetResource()));
+	AddBarrier(CD3DX12_RESOURCE_BARRIER::Aliasing(nullptr, pResource->GetResource()));
 }
 
 void CommandContext::InsertUAVBarrier(const DeviceResource* pResource /*= nullptr*/)
 {
-	m_BatchedBarriers.push_back(CD3DX12_RESOURCE_BARRIER::UAV(pResource ? pResource->GetResource() : nullptr));
+	AddBarrier(CD3DX12_RESOURCE_BARRIER::UAV(pResource ? pResource->GetResource() : nullptr));
 }
 
 void CommandContext::FlushResourceBarriers()
@@ -664,6 +664,11 @@ void CommandContext::ResolveResource(Texture* pSource, uint32 sourceSubResource,
 {
 	FlushResourceBarriers();
 	m_pCommandList->ResolveSubresource(pTarget->GetResource(), targetSubResource, pSource->GetResource(), sourceSubResource, D3D::ConvertFormat(format));
+}
+
+void CommandContext::AddBarrier(const D3D12_RESOURCE_BARRIER& inBarrier)
+{
+	m_BatchedBarriers.push_back(inBarrier);
 }
 
 void CommandContext::PrepareDraw()
