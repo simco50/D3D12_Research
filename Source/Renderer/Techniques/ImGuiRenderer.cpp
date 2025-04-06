@@ -137,7 +137,7 @@ static Ref<Texture> sFontTexture;
 
 static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 {
-	context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSWithIA);
+	context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 	context.SetPipelineState(sImGuiPSO);
 	context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -146,7 +146,7 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 	struct
 	{
 		Vector4 ScaleOffset;
-		uint32 mTextureIndex;
+		TextureView Texture;
 	} params;
 
 	params.ScaleOffset = Vector4(
@@ -157,11 +157,11 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 
 	uint32 vertexOffset = 0;
 	ScratchAllocation vertexData = context.AllocateScratch(sizeof(ImDrawVert) * pDrawData->TotalVtxCount);
-	context.SetVertexBuffers(VertexBufferView(vertexData.GpuHandle, pDrawData->TotalVtxCount, sizeof(ImDrawVert), 0));
+	context.SetVertexBuffers(VertexBufferView(vertexData.GPUAddress, pDrawData->TotalVtxCount, sizeof(ImDrawVert), 0));
 
 	uint32 indexOffset = 0;
 	ScratchAllocation indexData = context.AllocateScratch(sizeof(ImDrawIdx) * pDrawData->TotalIdxCount);
-	context.SetIndexBuffer(IndexBufferView(indexData.GpuHandle, pDrawData->TotalIdxCount, ResourceFormat::R16_UINT, 0));
+	context.SetIndexBuffer(IndexBufferView(indexData.GPUAddress, pDrawData->TotalIdxCount, ResourceFormat::R16_UINT, 0));
 
 	ImVec2 clipOff = pDrawData->DisplayPos;
 	for (int cmdList = 0; cmdList < pDrawData->CmdListsCount; ++cmdList)
@@ -193,10 +193,9 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 					pTexture = sFontTexture;
 
 				gAssert(pTexture->GetSRV());
+				params.Texture = pTexture->GetSRV();
 
-				params.mTextureIndex = pTexture->GetSRVIndex();
-
-				context.BindRootCBV(BindingSlot::PerInstance, params);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
 				context.SetScissorRect(FloatRect(clip_min.x, clip_min.y, clip_max.x, clip_max.y));
 				context.DrawIndexedInstanced(pCmd->ElemCount, pCmd->IdxOffset + indexOffset, 1, pCmd->VtxOffset + vertexOffset, 0);
 			}
@@ -340,11 +339,12 @@ void ImGuiRenderer::Initialize(GraphicsDevice* pDevice, WindowHandle window)
 		{ "TEXCOORD", ResourceFormat::RG32_FLOAT },
 		{ "COLOR", ResourceFormat::RGBA8_UNORM },
 		});
-	psoDesc.SetRootSignature(GraphicsCommon::pCommonRSWithIA);
+	psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 	psoDesc.SetVertexShader("ImGui.hlsl", "VSMain");
 	psoDesc.SetPixelShader("ImGui.hlsl", "PSMain");
 	psoDesc.SetBlendMode(BlendMode::Alpha, false);
 	psoDesc.SetDepthWrite(false);
+	psoDesc.SetDepthEnabled(false);
 	psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
 	psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA8_UNORM, ResourceFormat::Unknown, 1);
 	psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);

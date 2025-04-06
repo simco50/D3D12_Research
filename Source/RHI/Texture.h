@@ -1,4 +1,5 @@
 #pragma once
+#include "DescriptorHandle.h"
 #include "DeviceResource.h"
 
 enum class TextureFlag : uint8
@@ -161,6 +162,40 @@ struct TextureDesc
 	}
 };
 
+
+struct TextureSRVDesc
+{
+	TextureSRVDesc(uint8 mipLevel, uint8 numMipLevels)
+		: MipLevel(mipLevel), NumMipLevels(numMipLevels)
+	{}
+
+	uint8 MipLevel;
+	uint8 NumMipLevels;
+
+	bool operator==(const TextureSRVDesc& other) const
+	{
+		return MipLevel == other.MipLevel &&
+			NumMipLevels == other.NumMipLevels;
+	}
+};
+
+
+struct TextureUAVDesc
+{
+	explicit TextureUAVDesc(uint8 mipLevel)
+		: MipLevel(mipLevel)
+	{}
+
+	uint8 MipLevel;
+
+	bool operator==(const TextureUAVDesc& other) const
+	{
+		return MipLevel == other.MipLevel;
+	}
+};
+
+
+
 class Texture : public DeviceResource
 {
 public:
@@ -169,23 +204,21 @@ public:
 	Texture(GraphicsDevice* pParent, const TextureDesc& desc, ID3D12ResourceX* pResource);
 	~Texture();
 
-	uint32 GetWidth() const { return m_Desc.Width; }
-	uint32 GetHeight() const { return m_Desc.Height; }
-	uint32 GetDepth() const { return m_Desc.Depth; }
-	uint32 GetArraySize() const { return m_Desc.ArraySize; }
-	uint32 GetMipLevels() const { return m_Desc.Mips; }
-	ResourceFormat GetFormat() const { return m_Desc.Format; }
+	uint32				GetWidth() const { return m_Desc.Width; }
+	uint32				GetHeight() const { return m_Desc.Height; }
+	uint32				GetDepth() const { return m_Desc.Depth; }
+	uint32				GetArraySize() const { return m_Desc.ArraySize; }
+	uint32				GetMipLevels() const { return m_Desc.Mips; }
+	ResourceFormat		GetFormat() const { return m_Desc.Format; }
 	const ClearBinding& GetClearBinding() const { return m_Desc.ClearBindingValue; }
-	const TextureDesc& GetDesc() const { return m_Desc; }
+	const TextureDesc&	GetDesc() const { return m_Desc; }
 
-	UnorderedAccessView* GetUAV(uint32 subresourceIndex = 0) const;
-	ShaderResourceView* GetSRV() const { return m_pSRV; }
-	uint32 GetUAVIndex(uint32 subresourceIndex = 0) const;
-	uint32 GetSRVIndex() const;
+	RWTextureView		GetUAV(uint32 mipIndex = 0) const { gAssert(mipIndex < m_UAVs.size()); return m_UAVs[mipIndex]; }
+	TextureView			GetSRV() const { return m_SRV; }
 
 private:
 	TextureDesc m_Desc;
 
-	Ref<ShaderResourceView> m_pSRV;
-	Array<Ref<UnorderedAccessView>> m_UAVs;
+	TextureView m_SRV;
+	Array<RWTextureView> m_UAVs;
 };

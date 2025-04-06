@@ -14,6 +14,22 @@ using int2 = Vector2i;
 using int3 = Vector3i;
 using int4 = Vector4i;
 using float4x4 = Matrix;
+
+template<typename ComponentType> using Texture1DH = TextureView;
+template<typename ComponentType> using Texture2DH = TextureView;
+template<typename ComponentType> using Texture3DH = TextureView;
+template<typename ComponentType> using TextureCubeH = TextureView;
+template<typename ComponentType> using RWTexture1DH = RWTextureView;
+template<typename ComponentType> using RWTexture2DH = RWTextureView;
+template<typename ComponentType> using RWTexture3DH = RWTextureView;
+
+template<typename ComponentType> using StructuredBufferH = BufferView;
+template<typename ComponentType> using RWStructuredBufferH = RWBufferView;
+template<typename ComponentType> using TypedBufferH = BufferView;
+template<typename ComponentType> using RWTypedBufferH = RWBufferView;
+								using ByteBufferH = BufferView;
+								using RWByteBufferH = RWBufferView;
+								using TLASH = TLASView;
 #endif
 
 #define CONCAT_IMPL( x, y ) x##y
@@ -26,10 +42,10 @@ static const int MESHLET_MAX_VERTICES = 64;
 // Per material shader data
 struct MaterialData
 {
-	uint Diffuse;
-	uint Normal;
-	uint RoughnessMetalness;
-	uint Emissive;
+	Texture2DH<float4> Diffuse;
+	Texture2DH<float3> Normal;
+	Texture2DH<float4> RoughnessMetalness;
+	Texture2DH<float4> Emissive;
 	float4 BaseColorFactor;
 	float4 EmissiveFactor;
 	float MetalnessFactor;
@@ -40,7 +56,7 @@ struct MaterialData
 
 struct MeshData
 {
-	uint BufferIndex;
+	ByteBufferH DataBuffer;
 	uint PositionsOffset;
 	uint UVsOffset;
 	uint NormalsOffset;
@@ -100,9 +116,9 @@ struct Light
 	float Range;
 	float InvShadowSize;
 
-	uint ShadowMapIndex;
+	Texture2DH<float> ShadowMap;
 	uint MatrixIndex;
-	uint MaskTexture;
+	Texture2DH<float> MaskTexture;
 
 	// flags
 	uint IsEnabled : 1;
@@ -124,10 +140,10 @@ struct DDGIVolume
 	float3 ProbeSize;
 	uint MaxRaysPerProbe;
 	uint3 ProbeVolumeDimensions;
-	uint IrradianceIndex;
-	uint DepthIndex;
-	uint ProbeOffsetIndex;
-	uint ProbeStatesIndex;
+	Texture2DH<float4> IrradianceTexture;
+	Texture2DH<float2> DepthTexture;
+	TypedBufferH<float4> ProbeOffsetBuffer;
+	TypedBufferH<float> ProbeStatesBuffer;
 	uint pad0;
 };
 
@@ -138,6 +154,15 @@ struct FogVolume
 	float3 Color;
 	float DensityChange;
 	float DensityBase;
+};
+
+struct Glyph
+{
+	float2 MinUV;
+	float2 MaxUV;
+	float2 Dimensions;
+	float2 Offset;
+	float AdvanceX;
 };
 
 struct ViewUniforms
@@ -153,9 +178,7 @@ struct ViewUniforms
 	float4x4 WorldToClipUnjittered;
 
 	float3 ViewLocation;
-	uint pad0;
 	float3 ViewLocationPrev;
-	uint pad1;
 
 	float2 ViewportDimensions;
 	float2 ViewportDimensionsInv;
@@ -165,7 +188,6 @@ struct ViewUniforms
 	float NearZ;
 	float FarZ;
 	float FoV;
-	uint pad2;
 
 	float4 CascadeDepths;
 	uint NumCascades;
@@ -177,17 +199,17 @@ struct ViewUniforms
 	uint LightCount;
 	uint NumDDGIVolumes;
 
-	uint InstancesIndex;
-	uint MeshesIndex;
-	uint MaterialsIndex;
-	uint LightsIndex;
-	uint LightMatricesIndex;
-	uint SkyIndex;
-	uint DDGIVolumesIndex;
-	uint TLASIndex;
+	StructuredBufferH<InstanceData> InstancesBuffer;
+	StructuredBufferH<MeshData> MeshesBuffer;
+	StructuredBufferH<MaterialData> MaterialsBuffer;
+	StructuredBufferH<Light> LightsBuffer;
+	StructuredBufferH<float4x4> LightMatricesBuffer;
+	TextureCubeH<float4> SkyTexture;
+	StructuredBufferH<DDGIVolume> DDGIVolumesBuffer;
+	TLASH TLAS;
 
-	uint DebugRenderDataIndex;
-	uint FontDataIndex;
+	RWByteBufferH DebugRenderData;
+	StructuredBufferH<Glyph> FontData;
 	uint FontSize;
 };
 

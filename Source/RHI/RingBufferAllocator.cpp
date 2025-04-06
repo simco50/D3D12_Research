@@ -5,7 +5,7 @@
 #include "CommandContext.h"
 
 RingBufferAllocator::RingBufferAllocator(GraphicsDevice* pDevice, uint32 size)
-	: DeviceObject(pDevice), m_pQueue(pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)), m_Size(size), m_ConsumeOffset(0), m_ProduceOffset(0)
+	: DeviceObject(pDevice), m_pQueue(pDevice->GetCopyQueue()), m_Size(size), m_ConsumeOffset(0), m_ProduceOffset(0)
 {
 	m_pBuffer = pDevice->CreateBuffer(BufferDesc{ .Size = size, .Flags = BufferFlag::Upload }, "RingBuffer");
 }
@@ -61,7 +61,7 @@ bool RingBufferAllocator::Allocate(uint32 size, RingBufferAllocation& allocation
 	allocation.pContext = GetParent()->AllocateCommandContext(D3D12_COMMAND_LIST_TYPE_COPY);
 	allocation.Offset = offset;
 	allocation.Size = size;
-	allocation.GpuHandle = m_pBuffer->GetGpuHandle() + offset;
+	allocation.GPUAddress = m_pBuffer->GetGPUAddress() + offset;
 	allocation.pBackingResource = m_pBuffer;
 	allocation.pMappedMemory = (char*)m_pBuffer->GetMappedData() + offset;
 	return true;
@@ -74,7 +74,7 @@ void RingBufferAllocator::Free(RingBufferAllocation& allocation)
 	RetiredAllocation retired;
 	retired.Offset = allocation.Offset;
 	retired.Size = allocation.Size;
-	retired.Sync = allocation.pContext->Execute();
+	retired.Sync = GetParent()->GetCopyQueue()->ExecuteCommandLists(allocation.pContext);
 	m_RetiredAllocations.push(retired);
 
 	allocation.pBackingResource = nullptr;

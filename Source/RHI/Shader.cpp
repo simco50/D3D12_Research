@@ -42,7 +42,7 @@ namespace ShaderCompiler
 
 	struct CompileResult
 	{
-		static constexpr int Version = 7;
+		static constexpr int Version = 8;
 
 		String ErrorMessage;
 		ShaderBlob pBlob;
@@ -668,6 +668,10 @@ ShaderResult ShaderManager::GetShader(const char* pShaderPath, ShaderType shader
 	job.MinVersion = m_ShaderModelMinor;
 	job.Target = ShaderCompiler::GetShaderTarget(shaderType);
 	job.EnableDebugMode = CommandLine::GetBool("debugshaders");
+
+	// DXC hangs on compiling RT shaders without optimizations
+	if (shaderType == ShaderType::MAX)
+		job.EnableDebugMode = false;
 
 	ShaderCompiler::CompileResult result = ShaderCompiler::Compile(job);
 

@@ -108,15 +108,15 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 
 				if (!pBLASScratch)
 				{
-					pBLASScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT), BufferFlag::UnorderedAccess | BufferFlag::NoBindless), "BLAS.ScratchBuffer");
+					pBLASScratch = pDevice->CreateBuffer(BufferDesc::CreateByteAddress(Math::AlignUp<uint64>(info.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT), BufferFlag::UnorderedAccess), "BLAS.ScratchBuffer");
 					pMesh->pBLASScratch = pBLASScratch;
 				}
 
 				D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
 				asDesc.Inputs = prebuildInfo;
-				asDesc.DestAccelerationStructureData = pBLAS->GetGpuHandle();
-				asDesc.ScratchAccelerationStructureData = pBLASScratch->GetGpuHandle();
-				asDesc.SourceAccelerationStructureData = doUpdate ? pBLAS->GetGpuHandle() : 0;	// Allowed to be in-place
+				asDesc.DestAccelerationStructureData = pBLAS->GetGPUAddress();
+				asDesc.ScratchAccelerationStructureData = pBLASScratch->GetGPUAddress();
+				asDesc.SourceAccelerationStructureData = doUpdate ? pBLAS->GetGPUAddress() : 0;	// Allowed to be in-place
 
 				pCmd->BuildRaytracingAccelerationStructure(&asDesc, 0, nullptr);
 
@@ -127,7 +127,7 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 			if (pMesh->pBLAS)
 			{
 				BLASInstance& blasInstance = blasInstances.emplace_back();
-				blasInstance.GPUAddress		= pMesh->pBLAS->GetGpuHandle();
+				blasInstance.GPUAddress		= pMesh->pBLAS->GetGPUAddress();
 				blasInstance.Flags			= D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
 				blasInstance.WorldMatrix	= batch.InstanceID;
 				blasInstance.InstanceMask	= 0xFF;
@@ -170,7 +170,7 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 			uint32 numInstances = Math::AlignUp(Math::Max(1u, (uint32)blasInstances.size()), 128u);
 			if (!m_pBLASInstancesSourceBuffer || m_pBLASInstancesSourceBuffer->GetNumElements() < numInstances)
 			{
-				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::ShaderResource), "TLAS.BLASInstanceSourceDescs");
+				m_pBLASInstancesSourceBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(BLASInstance), BufferFlag::ShaderResource), "TLAS.BLASInstanceSourceDescs");
 				m_pBLASInstancesTargetBuffer = pDevice->CreateBuffer(BufferDesc::CreateStructured(numInstances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), BufferFlag::UnorderedAccess), "TLAS.BLASInstanceTargetDescs");
 			}
 
@@ -187,13 +187,20 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pUpdateTLASPSO);
-				context.BindRootCBV(BindingSlot::PerInstance, (uint32)blasInstances.size());
-				context.BindResources(BindingSlot::UAV, m_pBLASInstancesTargetBuffer->GetUAV());
-				context.BindResources(BindingSlot::SRV,
-					{
-						pInstancesBuffer->GetSRV(),
-						m_pBLASInstancesSourceBuffer->GetSRV(),
-					});
+
+				struct
+				{
+					uint32		 NumInstances;
+					BufferView	 InstanceData;
+					BufferView	 InputInstances;
+					RWBufferView OutputInstances;
+				} params{
+					.NumInstances	 = (uint32)blasInstances.size(),
+					.InstanceData	 = pInstancesBuffer->GetSRV(),
+					.InputInstances	 = m_pBLASInstancesSourceBuffer->GetSRV(),
+					.OutputInstances = m_pBLASInstancesTargetBuffer->GetUAV(),
+				};
+				context.BindRootSRV(BindingSlot::PerInstance, params);
 				context.Dispatch(ComputeUtils::GetNumThreadGroups((uint32)blasInstances.size(), 32));
 			}
 		}
@@ -202,12 +209,12 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 			PROFILE_GPU_SCOPE(context.GetCommandList(), "Build TLAS");
 
 			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC asDesc{};
-			asDesc.DestAccelerationStructureData = m_pTLAS->GetGpuHandle();
-			asDesc.ScratchAccelerationStructureData = m_pScratch->GetGpuHandle();
+			asDesc.DestAccelerationStructureData = m_pTLAS->GetGPUAddress();
+			asDesc.ScratchAccelerationStructureData = m_pScratch->GetGPUAddress();
 			asDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 			asDesc.Inputs.Flags = buildFlags;
 			asDesc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-			asDesc.Inputs.InstanceDescs = m_pBLASInstancesTargetBuffer->GetGpuHandle();
+			asDesc.Inputs.InstanceDescs = m_pBLASInstancesTargetBuffer->GetGPUAddress();
 			asDesc.Inputs.NumDescs = (uint32)blasInstances.size();
 			asDesc.SourceAccelerationStructureData = 0;
 
@@ -219,13 +226,13 @@ void AccelerationStructure::Build(CommandContext& context, const Buffer* pInstan
 	}
 }
 
-ShaderResourceView* AccelerationStructure::GetSRV() const
+TLASView AccelerationStructure::GetSRV() const
 {
 	if (m_pTLAS)
 	{
-		return m_pTLAS->GetSRV();
+		return TLASView(m_pTLAS->GetSRV());
 	}
-	return nullptr;
+	return TLASView::Invalid();
 }
 
 void AccelerationStructure::ProcessCompaction(CommandContext& context)
@@ -242,7 +249,7 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 		{
 			gAssert(pPostCompactSizes->CompactedSizeInBytes > 0);
 			Ref<Buffer> pTargetBLAS = context.GetParent()->CreateBuffer(BufferDesc::CreateBLAS(pPostCompactSizes->CompactedSizeInBytes), "BLAS.Compacted");
-			context.GetCommandList()->CopyRaytracingAccelerationStructure(pTargetBLAS->GetGpuHandle(), (*pSourceBLAS)->GetGpuHandle(), D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
+			context.GetCommandList()->CopyRaytracingAccelerationStructure(pTargetBLAS->GetGPUAddress(), (*pSourceBLAS)->GetGPUAddress(), D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT);
 			*pSourceBLAS = pTargetBLAS;
 			pPostCompactSizes++;
 		}
@@ -273,10 +280,10 @@ void AccelerationStructure::ProcessCompaction(CommandContext& context)
 		Array<D3D12_GPU_VIRTUAL_ADDRESS> blasAddresses;
 		blasAddresses.reserve(m_ActiveRequests.size());
 		for (Ref<Buffer>* pSourceBLAS : m_ActiveRequests)
-			blasAddresses.push_back((*pSourceBLAS)->GetGpuHandle());
+			blasAddresses.push_back((*pSourceBLAS)->GetGPUAddress());
 
 		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC desc;
-		desc.DestBuffer = m_pPostBuildInfoBuffer->GetGpuHandle();
+		desc.DestBuffer = m_pPostBuildInfoBuffer->GetGPUAddress();
 		desc.InfoType = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE;
 
 		// UAV barrier to ensure BLAS creation is finished

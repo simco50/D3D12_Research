@@ -19,14 +19,20 @@ CommandQueue::CommandQueue(GraphicsDevice* pParent, D3D12_COMMAND_LIST_TYPE type
 
 	VERIFY_HR_EX(pParent->GetDevice()->CreateCommandQueue(&desc, IID_PPV_ARGS(m_pCommandQueue.GetAddressOf())), pParent->GetDevice());
 	D3D::SetObjectName(m_pCommandQueue.Get(), Sprintf("%s CommandQueue", D3D::CommandlistTypeToString(type)).c_str());
-
-	VERIFY_HR(m_pCommandQueue->GetTimestampFrequency(&m_TimestampFrequency));
 }
 
 SyncPoint CommandQueue::ExecuteCommandLists(Span<CommandContext* const> contexts)
 {
 	PROFILE_CPU_SCOPE();
 	gAssert(contexts.GetSize());
+
+	for(CommandContext* pContext : contexts)
+	{
+		gAssert(pContext->GetType() == m_Type, "Commandlist of type %s is submitted on queue with type %s", D3D::CommandlistTypeToString(pContext->GetType()), D3D::CommandlistTypeToString(m_Type));
+		gAssert(pContext->GetType() == m_Type, "All commandlist types must match. Expected %s, got %s",
+			D3D::CommandlistTypeToString(m_Type), D3D::CommandlistTypeToString(pContext->GetType()));
+		pContext->FlushResourceBarriers();
+	}
 
 	// Commandlists can be recorded in parallel.
 	// The before state of a resource transition can't be known so commandlists keep local resource states
@@ -70,25 +76,12 @@ SyncPoint CommandQueue::ExecuteCommandLists(Span<CommandContext* const> contexts
 
 	pBarrierCommandlist->Free(m_SyncPoint);
 
+	for (CommandContext* pContext : contexts)
+	{
+		pContext->Free(m_SyncPoint);
+	}
+
 	return m_SyncPoint;
-}
-
-Ref<ID3D12CommandAllocator> CommandQueue::RequestAllocator()
-{
-	auto CreateAllocator = [this]() {
-		Ref<ID3D12CommandAllocator> pAllocator;
-		GetParent()->GetDevice()->CreateCommandAllocator(m_Type, IID_PPV_ARGS(pAllocator.GetAddressOf()));
-		D3D::SetObjectName(pAllocator.Get(), Sprintf("Pooled Allocator %d - %s", (int)m_AllocatorPool.GetSize(), D3D::CommandlistTypeToString(m_Type)).c_str());
-		return pAllocator;
-	};
-	Ref<ID3D12CommandAllocator> pAllocator = m_AllocatorPool.Allocate(CreateAllocator);
-	pAllocator->Reset();
-	return pAllocator;
-}
-
-void CommandQueue::FreeAllocator(const SyncPoint& syncPoint, Ref<ID3D12CommandAllocator>& pAllocator)
-{
-	m_AllocatorPool.Free(std::move(pAllocator), syncPoint);
 }
 
 void CommandQueue::InsertWait(const SyncPoint& syncPoint)

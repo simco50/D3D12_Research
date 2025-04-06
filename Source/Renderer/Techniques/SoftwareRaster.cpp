@@ -3,7 +3,6 @@
 #include "Core/Image.h"
 #include "RHI/Texture.h"
 #include "RHI/Buffer.h"
-#include "RHI/ResourceViews.h"
 #include "RHI/PipelineState.h"
 #include "RHI/Device.h"
 #include "Renderer/Renderer.h"
@@ -30,8 +29,15 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBuildRasterArgsPSO);
 
-				context.BindResources(BindingSlot::UAV, resources.GetUAV(pRasterArgs));
-				context.BindResources(BindingSlot::SRV, resources.GetUAV(rasterContext.pVisibleMeshletsCounter));
+				struct
+				{
+					BufferView	 Counter_VisibleMeshlets;
+					RWBufferView DispatchArguments;
+				} params;
+				params.Counter_VisibleMeshlets = resources.GetSRV(rasterContext.pVisibleMeshletsCounter);
+				params.DispatchArguments	   = resources.GetUAV(pRasterArgs);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
+
 				context.Dispatch(1);
 			});
 
@@ -46,11 +52,16 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterPSO);
 
+				struct
+				{
+					BufferView	  Counter_VisibleMeshlets;
+					RWTextureView Output;
+				} params;
+				params.Counter_VisibleMeshlets = resources.GetSRV(rasterContext.pVisibleMeshletsCounter);
+				params.Output				   = resources.GetUAV(pRasterOutput);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
+
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindResources(BindingSlot::UAV, resources.GetUAV(pRasterOutput));
-				context.BindResources(BindingSlot::SRV, {
-						resources.GetSRV(rasterContext.pVisibleMeshlets),
-					});
 
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDispatchSignature, 1, resources.Get(pRasterArgs));
 			});
@@ -65,9 +76,16 @@ void SoftwareRaster::Render(RGGraph& graph, const RenderView* pView, const Raste
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pRasterVisualizePSO);
 
+				struct
+				{
+					TextureView	  Visibility;
+					RWTextureView Output;
+				} params;
+				params.Visibility = resources.GetSRV(pRasterOutput);
+				params.Output	  = resources.GetUAV(pDebug);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
+
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindResources(BindingSlot::UAV, resources.GetUAV(pDebug));
-				context.BindResources(BindingSlot::SRV, resources.GetSRV(pRasterOutput));
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pDebug->GetDesc().Width, 16, pDebug->GetDesc().Height, 16));
 			});

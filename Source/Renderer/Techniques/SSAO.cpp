@@ -53,18 +53,20 @@ RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 					float Power;
 					float Radius;
 					float Threshold;
-					int Samples;
+					uint32 Samples;
+					TextureView DepthTexture;
+					RWTextureView OutputTexture;
 				} shaderParameters{};
 
 				shaderParameters.Power = g_AoPower;
 				shaderParameters.Radius = g_AoRadius;
 				shaderParameters.Threshold = g_AoThreshold;
 				shaderParameters.Samples = g_AoSamples;
+				shaderParameters.DepthTexture = resources.GetSRV(pDepth);
+				shaderParameters.OutputTexture = pTarget->GetUAV();
+				context.BindRootSRV(0, shaderParameters);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindRootCBV(BindingSlot::PerInstance, shaderParameters);
-				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-				context.BindResources(BindingSlot::SRV, resources.GetSRV(pDepth));
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 			});
@@ -86,17 +88,19 @@ RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				{
 					Vector2 DimensionsInv;
 					uint32 Horizontal;
+					TextureView SceneDepth;
+					TextureView Input;
+					RWTextureView Output;
 				} shaderParameters;
 
 				shaderParameters.Horizontal = 1;
 				shaderParameters.DimensionsInv = Vector2(1.0f / pAO->GetWidth(), 1.0f / pAO->GetHeight());
+				shaderParameters.SceneDepth = resources.GetSRV(pDepth);
+				shaderParameters.Input = pAO->GetSRV();
+				shaderParameters.Output = pTarget->GetUAV();
+				context.BindRootSRV(BindingSlot::PerInstance, shaderParameters);
 
-				context.BindRootCBV(BindingSlot::PerInstance, shaderParameters);
-				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pDepth),
-					pAO->GetSRV(),
-					});
+				Renderer::BindViewUniforms(context, *pView);
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 256, pTarget->GetHeight(), 1));
 			});
@@ -118,17 +122,19 @@ RGTexture* SSAO::Execute(RGGraph& graph, const RenderView* pView, RGTexture* pDe
 				{
 					Vector2 DimensionsInv;
 					uint32 Horizontal;
+					TextureView SceneDepth;
+					TextureView Input;
+					RWTextureView Output;
 				} shaderParameters;
 
 				shaderParameters.DimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
 				shaderParameters.Horizontal = 0;
+				shaderParameters.SceneDepth = resources.GetSRV(pDepth);
+				shaderParameters.Input = pBlurSource->GetSRV();
+				shaderParameters.Output = pTarget->GetUAV();
+				context.BindRootSRV(BindingSlot::PerInstance, shaderParameters);
 
-				context.BindRootCBV(BindingSlot::PerInstance, shaderParameters);
-				context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pDepth),
-					pBlurSource->GetSRV(),
-					});
+				Renderer::BindViewUniforms(context, *pView);
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(pBlurSource->GetWidth(), 1, pBlurSource->GetHeight(), 256));
 			});

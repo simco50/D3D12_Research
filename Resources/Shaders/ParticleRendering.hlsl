@@ -13,8 +13,12 @@ struct ParticleData
 	float Size;
 };
 
-StructuredBuffer<ParticleData> tParticleData : register(t0);
-StructuredBuffer<uint> tAliveList : register(t1);
+struct PassParams
+{
+	StructuredBufferH<ParticleData> ParticleData;
+	StructuredBufferH<uint> AliveList;
+};
+DEFINE_CONSTANTS(PassParams, 0);
 
 struct InterpolantsVSToPS
 {
@@ -27,8 +31,8 @@ InterpolantsVSToPS VSMain(uint instanceId : SV_InstanceID, uint vertexId : SV_Ve
 {
 	InterpolantsVSToPS output;
 
-	uint particleIndex = tAliveList[instanceId];
-	ParticleData particle = tParticleData[particleIndex];
+	uint particleIndex = cPassParams.AliveList[instanceId];
+	ParticleData particle = cPassParams.ParticleData[particleIndex];
 
 	float3 p = particle.Size * SPHERE[vertexId].xyz;
 

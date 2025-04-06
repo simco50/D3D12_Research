@@ -2,6 +2,7 @@
 #include "RHI/RHI.h"
 #include "Core/BitField.h"
 #include "RenderGraph/RenderGraphDefinitions.h"
+#include "RHI/DescriptorHandle.h"
 
 #include "ShaderInterop.h"
 
@@ -149,8 +150,6 @@ struct BindingSlot
 	static constexpr uint32 PerInstance = 0;
 	static constexpr uint32 PerPass = 1;
 	static constexpr uint32 PerView = 2;
-	static constexpr uint32 UAV = 3;
-	static constexpr uint32 SRV = 4;
 };
 
 namespace GraphicsCommon
@@ -165,7 +164,6 @@ namespace GraphicsCommon
 	extern Ref<CommandSignature> pIndirectDispatchSignature;
 	extern Ref<CommandSignature> pIndirectDispatchMeshSignature;
 	extern Ref<RootSignature> pCommonRS;
-	extern Ref<RootSignature> pCommonRSWithIA;
 
 	Ref<Texture> CreateTextureFromImage(GraphicsDevice* pDevice, const Image& image, bool sRGB, const char* pName = nullptr);
 	Ref<Texture> CreateTextureFromFile(GraphicsDevice* pDevice, const char* pFilePath, bool sRGB, const char* pName = nullptr);

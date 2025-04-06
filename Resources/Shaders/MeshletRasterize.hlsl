@@ -23,15 +23,12 @@
 struct RasterParams
 {
 	uint BinIndex;
+	StructuredBufferH<MeshletCandidate> VisibleMeshlets;
+	StructuredBufferH<uint> BinnedMeshlets;
+	StructuredBufferH<uint4> MeshletBinData;
+	RWTexture2DH<uint> DebugData;
 };
-ConstantBuffer<RasterParams> cRasterParams 				: register(b0);
-
-StructuredBuffer<MeshletCandidate> tVisibleMeshlets 	: register(t0);
-StructuredBuffer<uint> tBinnedMeshlets 					: register(t1);
-StructuredBuffer<uint4> tMeshletBinData 				: register(t2);
-
-RWTexture2D<uint> uDebugData 							: register(u0);
-
+DEFINE_CONSTANTS(RasterParams, 0);
 
 struct PrimitiveAttribute
 {
@@ -71,26 +68,26 @@ VertexAttribute FetchVertexAttributes(MeshData mesh, float4x4 world, uint vertex
 {
 	uint meshletIndex = groupID;
 	// Find actual meshlet index by offsetting based on classification data
-	meshletIndex += tMeshletBinData[cRasterParams.BinIndex].w;
-	meshletIndex = tBinnedMeshlets[meshletIndex];
+	meshletIndex += cRasterParams.MeshletBinData[cRasterParams.BinIndex].w;
+	meshletIndex = cRasterParams.BinnedMeshlets[meshletIndex];
 
-	MeshletCandidate candidate = tVisibleMeshlets[meshletIndex];
+	MeshletCandidate candidate = cRasterParams.VisibleMeshlets[meshletIndex];
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
-	Meshlet meshlet = ByteBufferLoad<Meshlet>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletOffset);
+	Meshlet meshlet = mesh.DataBuffer.LoadStructure<Meshlet>(candidate.MeshletIndex, mesh.MeshletOffset);
 
 	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
 
 	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
-		uint vertexId = ByteBufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
+		uint vertexId = mesh.DataBuffer.LoadStructure<uint>(i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
 		VertexAttribute result = FetchVertexAttributes(mesh, instance.LocalToWorld, vertexId);
 		verts[i] = result;
 	}
 
 	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += NUM_MESHLET_THREADS)
 	{
-		Meshlet::Triangle tri = ByteBufferLoad<Meshlet::Triangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		Meshlet::Triangle tri =  mesh.DataBuffer.LoadStructure<Meshlet::Triangle>(i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
 
 		PrimitiveAttribute pri;
@@ -109,12 +106,12 @@ void PSMain(
 )
 {
 #if ALPHA_MASK
-	MeshletCandidate candidate = tVisibleMeshlets[primitiveData.CandidateIndex];
+	MeshletCandidate candidate = cRasterParams.VisibleMeshlets[primitiveData.CandidateIndex];
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	float opacity = material.BaseColorFactor.a;
-	if(material.Diffuse != INVALID_HANDLE)
-		opacity = Sample2D(material.Diffuse, sMaterialSampler, vertexData.UV).w;
+	if(material.Diffuse.IsValid())
+		opacity = material.Diffuse.Sample(sMaterialSampler, vertexData.UV).w;
 	if(opacity < material.AlphaCutoff)
 		discard;
 #endif
@@ -124,6 +121,6 @@ void PSMain(
 #endif
 
 #if ENABLE_DEBUG_DATA
-	InterlockedAdd(uDebugData[(uint2)vertexData.Position.xy], 1);
+	InterlockedAdd(cRasterParams.DebugData.Get()[(uint2)vertexData.Position.xy], 1);
 #endif
 }

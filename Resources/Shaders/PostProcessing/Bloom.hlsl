@@ -8,16 +8,15 @@
 #define KARIS_AVERAGE 0
 #endif
 
-Texture2D<float4> tSource : register(t0);
-Texture2D<float4> tPreviousSource : register(t1);
-RWTexture2D<float4> uTarget : register(u0);
 
 struct DownsampleParams
 {
 	float2 TargetDimensionsInv;
 	uint SourceMip;
+	Texture2DH<float4> Source;
+	RWTexture2DH<float4> Target;
 };
-ConstantBuffer<DownsampleParams> cDownsampleParams : register(b0);
+DEFINE_CONSTANTS(DownsampleParams, 0);
 
 float3 ComputePartialAverage(float3 v0, float3 v1, float3 v2, float3 v3)
 {
@@ -41,20 +40,20 @@ void DownsampleCS(uint3 threadId : SV_DispatchThreadID)
 	uint mip = cDownsampleParams.SourceMip;
 
 	float3 outColor = 0;
-	float3 M0 = tSource.SampleLevel(sSampler, uv, mip, int2(-1.0f,  1.0f)).xyz;
-	float3 M1 = tSource.SampleLevel(sSampler, uv, mip, int2( 1.0f,  1.0f)).xyz;
-	float3 M2 = tSource.SampleLevel(sSampler, uv, mip, int2(-1.0f, -1.0f)).xyz;
-	float3 M3 = tSource.SampleLevel(sSampler, uv, mip, int2( 1.0f, -1.0f)).xyz;
+	float3 M0 = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2(-1.0f,  1.0f)).xyz;
+	float3 M1 = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2( 1.0f,  1.0f)).xyz;
+	float3 M2 = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2(-1.0f, -1.0f)).xyz;
+	float3 M3 = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2( 1.0f, -1.0f)).xyz;
 
-	float3 TL = tSource.SampleLevel(sSampler, uv, mip, int2(-2.0f, 2.0f)).xyz;
-	float3 T  = tSource.SampleLevel(sSampler, uv, mip, int2( 0.0f, 2.0f)).xyz;
-	float3 TR = tSource.SampleLevel(sSampler, uv, mip, int2( 2.0f, 2.0f)).xyz;
-	float3 L  = tSource.SampleLevel(sSampler, uv, mip, int2(-2.0f, 0.0f)).xyz;
-	float3 C  = tSource.SampleLevel(sSampler, uv, mip, int2( 0.0f, 0.0f)).xyz;
-	float3 R  = tSource.SampleLevel(sSampler, uv, mip, int2( 2.0f, 0.0f)).xyz;
-	float3 BL = tSource.SampleLevel(sSampler, uv, mip, int2(-2.0f,-2.0f)).xyz;
-	float3 B  = tSource.SampleLevel(sSampler, uv, mip, int2( 0.0f,-2.0f)).xyz;
-	float3 BR = tSource.SampleLevel(sSampler, uv, mip, int2( 2.0f,-2.0f)).xyz;
+	float3 TL = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2(-2.0f, 2.0f)).xyz;
+	float3 T  = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2( 0.0f, 2.0f)).xyz;
+	float3 TR = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2( 2.0f, 2.0f)).xyz;
+	float3 L  = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2(-2.0f, 0.0f)).xyz;
+	float3 C  = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2( 0.0f, 0.0f)).xyz;
+	float3 R  = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2( 2.0f, 0.0f)).xyz;
+	float3 BL = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2(-2.0f,-2.0f)).xyz;
+	float3 B  = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2( 0.0f,-2.0f)).xyz;
+	float3 BR = cDownsampleParams.Source.SampleLevel(sSampler, uv, mip, int2( 2.0f,-2.0f)).xyz;
 
 	outColor += ComputePartialAverage(M0, M1, M2, M3) * 0.5f;
 	outColor += ComputePartialAverage(TL, T, C, L) * 0.125f;
@@ -62,7 +61,7 @@ void DownsampleCS(uint3 threadId : SV_DispatchThreadID)
 	outColor += ComputePartialAverage(BL, B, C, L) * 0.125f;
 	outColor += ComputePartialAverage(BR, B, C, R) * 0.125f;
 
-	uTarget[threadId.xy] = float4(outColor, 1);
+	cDownsampleParams.Target.Store(threadId.xy, float4(outColor, 1));
 }
 
 struct UpsampleParams
@@ -71,27 +70,30 @@ struct UpsampleParams
 	uint SourceCurrentMip;
 	uint SourcePreviousMip;
 	float Radius;
+	Texture2DH<float4> Source;
+	Texture2DH<float4> PreviousSource;
+	RWTexture2DH<float4> Target;
 };
-ConstantBuffer<UpsampleParams> cUpsampleParams : register(b0);
+DEFINE_CONSTANTS(UpsampleParams, 0);
 
 [numthreads(8, 8, 1)]
 void UpsampleCS(uint3 threadId : SV_DispatchThreadID)
 {
 	float2 uv = TexelToUV(threadId.xy, cUpsampleParams.TargetDimensionsInv);
-	float3 currentColor = tSource.SampleLevel(sPointClamp, uv, cUpsampleParams.SourceCurrentMip).xyz;
+	float3 currentColor = cUpsampleParams.Source.SampleLevel(sPointClamp, uv, cUpsampleParams.SourceCurrentMip).xyz;
 
 	SamplerState sSampler = sLinearBorder;
 	uint mip = cUpsampleParams.SourcePreviousMip;
 
 	float3 outColor = 0;
-	outColor += 0.0625f * tPreviousSource.SampleLevel(sSampler, uv, mip, int2( -1.0f,  1.0f)).xyz;
-	outColor += 0.125f  * tPreviousSource.SampleLevel(sSampler, uv, mip, int2(  0.0f,  1.0f)).xyz;
-	outColor += 0.0625f * tPreviousSource.SampleLevel(sSampler, uv, mip, int2(  1.0f,  1.0f)).xyz;
-	outColor += 0.125f  * tPreviousSource.SampleLevel(sSampler, uv, mip, int2( -1.0f,  0.0f)).xyz;
-	outColor += 0.25f   * tPreviousSource.SampleLevel(sSampler, uv, mip, int2(  0.0f,  0.0f)).xyz;
-	outColor += 0.125f  * tPreviousSource.SampleLevel(sSampler, uv, mip, int2(  1.0f,  0.0f)).xyz;
-	outColor += 0.0625f * tPreviousSource.SampleLevel(sSampler, uv, mip, int2( -1.0f, -1.0f)).xyz;
-	outColor += 0.125f  * tPreviousSource.SampleLevel(sSampler, uv, mip, int2(  0.0f, -1.0f)).xyz;
-	outColor += 0.0625f * tPreviousSource.SampleLevel(sSampler, uv, mip, int2(  1.0f, -1.0f)).xyz;
-	uTarget[threadId.xy] = float4(lerp(currentColor, outColor, cUpsampleParams.Radius) , 1);
+	outColor += 0.0625f * cUpsampleParams.PreviousSource.SampleLevel(sSampler, uv, mip, int2( -1.0f,  1.0f)).xyz;
+	outColor += 0.125f  * cUpsampleParams.PreviousSource.SampleLevel(sSampler, uv, mip, int2(  0.0f,  1.0f)).xyz;
+	outColor += 0.0625f * cUpsampleParams.PreviousSource.SampleLevel(sSampler, uv, mip, int2(  1.0f,  1.0f)).xyz;
+	outColor += 0.125f  * cUpsampleParams.PreviousSource.SampleLevel(sSampler, uv, mip, int2( -1.0f,  0.0f)).xyz;
+	outColor += 0.25f   * cUpsampleParams.PreviousSource.SampleLevel(sSampler, uv, mip, int2(  0.0f,  0.0f)).xyz;
+	outColor += 0.125f  * cUpsampleParams.PreviousSource.SampleLevel(sSampler, uv, mip, int2(  1.0f,  0.0f)).xyz;
+	outColor += 0.0625f * cUpsampleParams.PreviousSource.SampleLevel(sSampler, uv, mip, int2( -1.0f, -1.0f)).xyz;
+	outColor += 0.125f  * cUpsampleParams.PreviousSource.SampleLevel(sSampler, uv, mip, int2(  0.0f, -1.0f)).xyz;
+	outColor += 0.0625f * cUpsampleParams.PreviousSource.SampleLevel(sSampler, uv, mip, int2(  1.0f, -1.0f)).xyz;
+	cUpsampleParams.Target.Store(threadId.xy, float4(lerp(currentColor, outColor, cUpsampleParams.Radius) , 1));
 }

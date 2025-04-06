@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "DeviceResource.h"
-#include "ResourceViews.h"
 #include "Device.h"
 
 DeviceResource::DeviceResource(GraphicsDevice* pParent, ID3D12ResourceX* pResource)
@@ -11,17 +10,8 @@ DeviceResource::DeviceResource(GraphicsDevice* pParent, ID3D12ResourceX* pResour
 DeviceResource::~DeviceResource()
 {
 	if (m_pResource)
-	{
-		if (m_ImmediateDelete)
-		{
-			m_pResource->Release();
-		}
-		else
-		{
-			GetParent()->DeferReleaseObject(m_pResource);
-		}
-		m_pResource = nullptr;
-	}
+		GetParent()->DeferReleaseObject(m_pResource);
+	m_pResource = nullptr;
 }
 
 void DeviceResource::SetName(const char* pName)
@@ -32,4 +22,11 @@ void DeviceResource::SetName(const char* pName)
 String DeviceResource::GetName() const
 {
 	return D3D::GetObjectName(m_pResource);
+}
+
+void DeviceResource::ReleaseImmediate()
+{
+	if (m_pResource)
+		m_pResource->Release();
+	m_pResource = nullptr;
 }

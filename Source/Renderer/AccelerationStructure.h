@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RHI/DescriptorHandle.h"
 #include "RHI/RHI.h"
 #include "RHI/Fence.h"
 
@@ -15,7 +16,7 @@ public:
 
 	void Init(GraphicsDevice* pDevice);
 	void Build(CommandContext& context, const Buffer* pInstancesBuffer, Span<const Batch> batches);
-	ShaderResourceView* GetSRV() const;
+	TLASView GetSRV() const;
 
 private:
 	void ProcessCompaction(CommandContext& context);

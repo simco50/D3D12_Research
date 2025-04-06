@@ -9,21 +9,21 @@
 
 #define BLOCK_SIZE 16
 
-struct PassParameters
+struct PassParams
 {
 	float WhitePoint;
 	uint Tonemapper;
 	float BloomIntensity;
 	float BloomBlendFactor;
 	float3 LensDirtTint;
-};
 
-ConstantBuffer<PassParameters> cPassData : register(b0);
-RWTexture2D<float4> uOutColor : register(u0);
-Texture2D tColor : register(t0);
-StructuredBuffer<float> tAverageLuminance : register(t1);
-Texture2D tBloom : register(t2);
-Texture2D tLensDirt : register(t3);
+	RWTexture2DH<float4> OutColor;
+	Texture2DH<float4> Color;
+	StructuredBufferH<float> AverageLuminance;
+	Texture2DH<float4> Bloom;
+	Texture2DH<float4> LensDirt;
+};
+DEFINE_CONSTANTS(PassParams, 0);
 
 template<typename T>
 T Reinhard(T x)
@@ -85,13 +85,13 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
 	float2 uv = (0.5f + dispatchThreadId.xy) * cView.ViewportDimensionsInv;
 
-	float3 rgb = tColor.Load(uint3(dispatchThreadId.xy, 0)).rgb;
+	float3 rgb = cPassParams.Color.Load(uint3(dispatchThreadId.xy, 0)).rgb;
 
-	if(cPassData.BloomIntensity > 0)
+	if(cPassParams.BloomIntensity > 0)
 	{
-		float3 lensDirt = tLensDirt.SampleLevel(sLinearClamp, float2(uv.x, 1.0f - uv.y), 0).rgb * cPassData.LensDirtTint;
-		float3 bloom = tBloom.SampleLevel(sLinearClamp, uv, 0).rgb * cPassData.BloomIntensity;
-		rgb = lerp(rgb, bloom + bloom * lensDirt, cPassData.BloomBlendFactor);
+		float3 lensDirt = cPassParams.LensDirt.SampleLevel(sLinearClamp, float2(uv.x, 1.0f - uv.y), 0).rgb * cPassParams.LensDirtTint;
+		float3 bloom = cPassParams.Bloom.SampleLevel(sLinearClamp, uv, 0).rgb * cPassParams.BloomIntensity;
+		rgb = lerp(rgb, bloom + bloom * lensDirt, cPassParams.BloomBlendFactor);
 	}
 
 #if TONEMAP_LUMINANCE
@@ -101,16 +101,16 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	float3 value = rgb;
 #endif
 
-	float exposure = tAverageLuminance[2];
+	float exposure = cPassParams.AverageLuminance[2];
 	value = value * (exposure + 1);
 
-	switch(cPassData.Tonemapper)
+	switch(cPassParams.Tonemapper)
 	{
 	case TONEMAP_REINHARD:
 		value = Reinhard(value);
 		break;
 	case TONEMAP_REINHARD_EXTENDED:
-		value = ReinhardExtended(value, cPassData.WhitePoint);
+		value = ReinhardExtended(value, cPassParams.WhitePoint);
 		break;
 	case TONEMAP_ACES_FAST:
 		value = ACES_Fast(value);
@@ -130,9 +130,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 	rgb = value;
 #endif
 
-	if(cPassData.Tonemapper != TONEMAP_UNREAL3)
+	if(cPassParams.Tonemapper != TONEMAP_UNREAL3)
 	{
 		rgb = LinearToSRGB(rgb);
 	}
-	uOutColor[dispatchThreadId.xy] = float4(rgb, 1);
+	cPassParams.OutColor.Store(dispatchThreadId.xy, float4(rgb, 1));
 }

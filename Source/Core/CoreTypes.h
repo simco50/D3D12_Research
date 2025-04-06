@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include <array>
+#include <algorithm>
 //Misc
 #include <mutex>
 #include <numeric>
@@ -20,6 +21,12 @@
 #define MACRO_CONCAT( x, y ) CONCAT_IMPL( x, y )
 
 #define NODISCARD [[nodiscard]]
+
+#ifdef _DEBUG
+#define IF_DEBUG(x) x
+#else
+#define IF_DEBUG(x)
+#endif
 
 using int8 = int8_t;
 using int16 = int16_t;

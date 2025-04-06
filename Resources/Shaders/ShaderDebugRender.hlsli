@@ -89,21 +89,11 @@ static const uint LINE_COUNTER_OFFSET = 4;
 static const uint TEXT_INSTANCES_OFFSET = MAX_NUM_COUNTERS * sizeof(uint);
 static const uint LINE_INSTANCES_OFFSET = TEXT_INSTANCES_OFFSET + MAX_NUM_TEXT * sizeof(CharacterInstance);
 
-struct Glyph
-{
-	float2 MinUV;
-	float2 MaxUV;
-	float2 Dimensions;
-	float2 Offset;
-	float AdvanceX;
-};
-
 namespace Private
 {
 	RWByteAddressBuffer GetRenderData()
 	{
-		RWByteAddressBuffer renderData = ResourceDescriptorHeap[cView.DebugRenderDataIndex];
-		return renderData;
+		return cView.DebugRenderData.Get();
 	}
 
 	bool ReserveLines(uint numLines, out uint offset)
@@ -272,8 +262,7 @@ struct TextWriter
 
 	void Text_(uint character, uint offset)
 	{
-		StructuredBuffer<Glyph> glyphBuffer = ResourceDescriptorHeap[cView.FontDataIndex];
-		Glyph glyph = glyphBuffer[character];
+		Glyph glyph = cView.FontData[character];
 		Private::AddCharacter(character, Cursor + glyph.Offset, Color, Scale, offset);
 		Cursor.x += glyph.AdvanceX * Scale;
 	}

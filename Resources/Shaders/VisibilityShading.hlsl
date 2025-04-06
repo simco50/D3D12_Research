@@ -5,13 +5,22 @@
 #include "RayTracing/DDGICommon.hlsli"
 #include "Noise.hlsli"
 
-Texture2D<uint> 					tVisibilityTexture	: register(t0);
-Texture2D<float> 					tAO 				: register(t1);
-Texture2D<float> 					tDepth 				: register(t2);
-Texture2D							tPreviousSceneColor	: register(t3);
-Texture3D<float4>					tFog 				: register(t4);
-StructuredBuffer<MeshletCandidate> 	tVisibleMeshlets 	: register(t5);
-StructuredBuffer<uint> 				tLightGrid 			: register(t6);
+struct PassParams
+{
+	Texture2DH<uint> 					VisibilityTexture;
+	Texture2DH<float> 					AO;
+	Texture2DH<float> 					Depth;
+	Texture2DH<float4>					PreviousSceneColor;
+	Texture3DH<float4>					Fog;
+	StructuredBufferH<MeshletCandidate> VisibleMeshlets;
+	StructuredBufferH<uint> 			LightGrid;
+
+	// For compute
+	RWTexture2DH<float4> 				ColorTarget;
+	RWTexture2DH<float2> 				NormalsTarget;
+	RWTexture2DH<float> 				RoughnessTarget;
+};
+DEFINE_CONSTANTS(PassParams, 0);
 
 float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
@@ -22,7 +31,7 @@ float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, flo
 	float3 lighting = 0;
 	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
-		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
+		uint bucket = cPassParams.LightGrid[lightGridOffset + bucketIndex];
 
 		bucket = WaveActiveBitOr(bucket);
 		bucket = WaveReadLaneFirst(bucket);
@@ -50,14 +59,14 @@ struct PSOut
 bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 {
 	uint candidateIndex, primitiveID;
-	if(!UnpackVisBuffer(tVisibilityTexture[texel], candidateIndex, primitiveID))
+	if(!UnpackVisBuffer(cPassParams.VisibilityTexture[texel], candidateIndex, primitiveID))
 		return false;
 
 	float2 uv = (0.5f + texel) * cView.ViewportDimensionsInv;
-	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, uv, 0);
+	float ambientOcclusion = cPassParams.AO.SampleLevel(sLinearClamp, uv, 0);
 	float dither = InterleavedGradientNoise(texel);
 
-	MeshletCandidate candidate = tVisibleMeshlets[candidateIndex];
+	MeshletCandidate candidate = cPassParams.VisibleMeshlets[candidateIndex];
     InstanceData instance = GetInstance(candidate.InstanceID);
 
 	// Vertex Shader
@@ -71,7 +80,7 @@ bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 
 	float3 V = normalize(cView.ViewLocation - vertex.Position);
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(vertex.Position, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(vertex.Position, surface.Normal, V, brdfData.Roughness, cPassParams.Depth.Get(), cPassParams.PreviousSceneColor.Get(), dither, ssrWeight);
 
 	float3 outRadiance = 0;
 	outRadiance += DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, vertex.Position, texel, linearDepth, dither);
@@ -80,7 +89,7 @@ bool VisibilityShadingCommon(uint2 texel, out PSOut output)
 	outRadiance += surface.Emissive;
 
 	float fogSlice = sqrt((linearDepth - cView.FarZ) / (cView.NearZ - cView.FarZ));
-	float4 scatteringTransmittance = tFog.SampleLevel(sLinearClamp, float3(uv, fogSlice), 0);
+	float4 scatteringTransmittance = cPassParams.Fog.SampleLevel(sLinearClamp, float3(uv, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
 	float reflectivity = saturate(Square(1 - brdfData.Roughness));
@@ -99,10 +108,6 @@ void ShadePS(
 	VisibilityShadingCommon((uint2)position.xy, output);
 }
 
-RWTexture2D<float4> uColorTarget : register(u0);
-RWTexture2D<float2> uNormalsTarget : register(u1);
-RWTexture2D<float> uRoughnessTarget : register(u2);
-
 [numthreads(8, 8, 1)]
 void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 {
@@ -111,8 +116,8 @@ void ShadeCS(uint3 threadId : SV_DispatchThreadID)
 	PSOut output;
 	if(VisibilityShadingCommon(texel, output))
 	{
-		uColorTarget[texel] = output.Color;
-		uNormalsTarget[texel] = output.Normal;
-		uRoughnessTarget[texel] = output.Roughness;
+		cPassParams.ColorTarget.Store(texel, output.Color);
+		cPassParams.NormalsTarget.Store(texel, output.Normal);
+		cPassParams.RoughnessTarget.Store(texel, output.Roughness);
 	}
 }

@@ -65,7 +65,7 @@ public:
 	DeviceResource(GraphicsDevice* pParent, ID3D12ResourceX* pResource);
 	~DeviceResource();
 
-	void SetImmediateDelete(bool immediate) { m_ImmediateDelete = immediate; }
+	void ReleaseImmediate();
 
 	void SetName(const char* pName);
 	String GetName() const;
@@ -73,7 +73,7 @@ public:
 	bool UseStateTracking() const { return m_pResourceState != nullptr; }
 
 	ID3D12ResourceX* GetResource() const { return m_pResource; }
-	D3D12_GPU_VIRTUAL_ADDRESS GetGpuHandle() const { return m_pResource->GetGPUVirtualAddress(); }
+	D3D12_GPU_VIRTUAL_ADDRESS GetGPUAddress() const { return m_pResource->GetGPUVirtualAddress(); }
 
 	void SetResourceState(D3D12_RESOURCE_STATES state, uint32 subResource) { m_pResourceState->Set(state, subResource); }
 	D3D12_RESOURCE_STATES GetResourceState(uint32 subResource = 0) const { return m_pResourceState->Get(subResource); }
@@ -81,5 +81,4 @@ public:
 protected:
 	ID3D12ResourceX*			m_pResource = nullptr;
 	UniquePtr<ResourceState>	m_pResourceState;
-	uint32						m_ImmediateDelete : 1 = 0;
 };

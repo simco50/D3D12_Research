@@ -12,9 +12,6 @@ class RootSignature;
 class CommandSignature;
 class CommandContext;
 class ShaderBindingTable;
-class ResourceView;
-class ShaderResourceView;
-class UnorderedAccessView;
 class PipelineStateInitializer;
 class StateObjectInitializer;
 
@@ -150,6 +147,8 @@ public:
 	}
 
 	bool CanAllocate() const { return m_NumAllocations < m_FreeList.size(); }
+	uint32 GetNumAllocations() const { return m_NumAllocations; }
+	uint32 GetCapacity() const { return (uint32)m_FreeList.size(); }
 
 private:
 	Array<uint32> m_FreeList;

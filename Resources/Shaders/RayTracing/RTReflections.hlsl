@@ -8,18 +8,16 @@
 #define RAY_CONE_TEXTURE_LOD 1
 #define SECONDARY_SHADOW_RAY 1
 
-struct PassParameters
+struct PassParams
 {
-	float ViewPixelSpreadAngle;
+	Texture2DH<float> Depth;
+	Texture2DH<float4> PreviousSceneColor;
+	Texture2DH<float2> SceneNormals;
+	Texture2DH<float> SceneRoughness;
+	RWTexture2DH<float4> Output;
 };
+DEFINE_CONSTANTS(PassParams, 0);
 
-Texture2D tDepth : register(t0);
-Texture2D tPreviousSceneColor :	register(t1);
-Texture2D<float2> tSceneNormals : register(t2);
-Texture2D<float> tSceneRoughness : register(t3);
-
-RWTexture2D<float4> uOutput : register(u0);
-ConstantBuffer<PassParameters> cPass : register(b0);
 
 [shader("raygeneration")]
 void RayGen()
@@ -28,10 +26,10 @@ void RayGen()
 	uint2 launchIndex = DispatchRaysIndex().xy;
 	float2 uv = TexelToUV(launchIndex, dimInv);
 
-	float depth = tDepth.SampleLevel(sPointClamp, uv, 0).r;
-	float4 colorSample = tPreviousSceneColor.SampleLevel(sLinearClamp, uv, 0);
-	float3 N = Octahedral::Unpack(tSceneNormals.SampleLevel(sLinearClamp, uv, 0));
-	float R = tSceneRoughness.SampleLevel(sLinearClamp, uv, 0);
+	float depth = cPassParams.Depth.SampleLevel(sPointClamp, uv, 0).r;
+	float4 colorSample = cPassParams.PreviousSceneColor.SampleLevel(sLinearClamp, uv, 0);
+	float3 N = Octahedral::Unpack(cPassParams.SceneNormals.SampleLevel(sLinearClamp, uv, 0));
+	float R = cPassParams.SceneRoughness.SampleLevel(sLinearClamp, uv, 0);
 
 	float3 worldPosition = WorldPositionFromDepth(uv, depth, cView.ClipToWorld);
 
@@ -49,8 +47,7 @@ void RayGen()
 		ray.Direction = R;
 		ray.TMin = RAY_BIAS;
 		ray.TMax = FLT_MAX;
-		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-		MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
+		MaterialRayPayload payload = TraceMaterialRay(ray, cView.TLAS.Get());
 
 		if(payload.IsHit())
 		{
@@ -74,7 +71,7 @@ void RayGen()
 
 #if SECONDARY_SHADOW_RAY
 				RayDesc rayDesc = CreateLightOcclusionRay(light, hitLocation);
-				attenuation *= TraceOcclusionRay(rayDesc, tlas);
+				attenuation *= TraceOcclusionRay(rayDesc, cView.TLAS.Get());
 #else
 				attenuation = 0.0f;
 #endif // SECONDARY_SHADOW_RAY
@@ -95,5 +92,5 @@ void RayGen()
 
 		colorSample += reflectivity * float4(radiance, 0);
 	}
-	uOutput[launchIndex] = colorSample;
+	cPassParams.Output.Store(launchIndex, colorSample);
 }

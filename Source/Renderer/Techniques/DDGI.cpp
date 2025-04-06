@@ -10,6 +10,7 @@
 #include "Renderer/Renderer.h"
 #include "Scene/World.h"
 
+
 DDGI::DDGI(GraphicsDevice* pDevice)
 {
 	if (pDevice->GetCapabilities().SupportsRaytracing())
@@ -63,18 +64,10 @@ void DDGI::Execute(RGGraph& graph, const RenderView* pView)
 					return;
 				++i;
 
-				struct
-				{
-					Vector3 RandomVector;
-					float RandomAngle;
-					float HistoryBlendWeight;
-					uint32 VolumeIndex;
-				} parameters;
-
-				parameters.RandomVector = Math::RandVector();
-				parameters.RandomAngle = Math::RandomRange(0.0f, 2.0f * Math::PI);
-				parameters.HistoryBlendWeight = 0.98f;
-				parameters.VolumeIndex = randomIndex;
+				Vector3 randomVector		  = Math::RandVector();
+				float	randomAngle			  = Math::RandomRange(0.0f, 2.0f * Math::PI);
+				float	historyBlendWeight	  = 0.98f;
+				uint32	volumeIndex			  = randomIndex;
 
 				const uint32 numProbes = ddgi.NumProbes.x * ddgi.NumProbes.y * ddgi.NumProbes.z;
 
@@ -111,77 +104,112 @@ void DDGI::Execute(RGGraph& graph, const RenderView* pView)
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pDDGITraceRaysSO);
 
-							Renderer::BindViewUniforms(context, *pView);
-							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindResources(BindingSlot::UAV, resources.GetUAV(pRayBuffer));
+							struct
+							{
+								Vector3		 RandomVector;
+								float		 RandomAngle;
+								uint32		 VolumeIndex;
+								RWBufferView RayHitInfo;
+							} params;
+							params.RandomVector		  = randomVector;
+							params.RandomAngle		  = randomAngle;
+						params.VolumeIndex	= volumeIndex;
+						params.RayHitInfo	= resources.GetUAV(pRayBuffer);
+						context.BindRootSRV(BindingSlot::PerInstance, params);
 
-							ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
-							bindingTable.BindRayGenShader("TraceRaysRGS");
-							bindingTable.BindMissShader("MaterialMS", 0);
-							bindingTable.BindMissShader("OcclusionMS", 1);
-							bindingTable.BindHitGroup("MaterialHG", 0);
+						Renderer::BindViewUniforms(context, *pView);
 
-							context.DispatchRays(bindingTable, ddgi.NumRays, numProbes);
-							context.InsertUAVBarrier(resources.Get(pRayBuffer));
-						});
+						ShaderBindingTable bindingTable(m_pDDGITraceRaysSO);
+						bindingTable.BindRayGenShader("TraceRaysRGS");
+						bindingTable.BindMissShader("MaterialMS", 0);
+						bindingTable.BindMissShader("OcclusionMS", 1);
+						bindingTable.BindHitGroup("MaterialHG", 0);
+
+						context.DispatchRays(bindingTable, ddgi.NumRays, numProbes);
+						context.InsertUAVBarrier(resources.Get(pRayBuffer));
+					});
 
 				graph.AddPass("Update Irradiance", RGPassFlag::Compute)
 					.Read({ pIrradianceHistory, pRayBuffer, pProbeStates })
 					.Write(pIrradianceTarget)
-					.Bind([=](CommandContext& context, const RGResources& resources)
+					.Bind([=](CommandContext& context, const RGResources& resources) {
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+						context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
+
+						struct
 						{
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-							context.SetPipelineState(m_pDDGIUpdateIrradianceColorPSO);
+							Vector3		  RandomVector;
+							float		  RandomAngle;
+							float		  HistoryBlendWeight;
+							uint32		  VolumeIndex;
+							BufferView	  RayHitInfo;
+							RWTextureView IrradianceMap;
+						} params;
+						params.RandomVector		  = randomVector;
+						params.RandomAngle		  = randomAngle;
+						params.HistoryBlendWeight = historyBlendWeight;
+						params.VolumeIndex		  = volumeIndex;
+						params.RayHitInfo		  = resources.GetSRV(pRayBuffer);
+						params.IrradianceMap	  = resources.GetUAV(pIrradianceTarget);
+						context.BindRootSRV(BindingSlot::PerInstance, params);
 
-							Renderer::BindViewUniforms(context, *pView);
-							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindResources(BindingSlot::UAV, resources.GetUAV(pIrradianceTarget));
-							context.BindResources(BindingSlot::SRV, {
-								resources.GetSRV(pRayBuffer),
-								});
+						Renderer::BindViewUniforms(context, *pView);
 
-							context.Dispatch(numProbes);
-							context.InsertUAVBarrier(resources.Get(pIrradianceTarget));
-						});
+						context.Dispatch(numProbes);
+						context.InsertUAVBarrier(resources.Get(pIrradianceTarget));
+					});
 
 				graph.AddPass("Update Depth", RGPassFlag::Compute)
 					.Read({ pDepthHistory, pRayBuffer, pProbeStates })
 					.Write(pDepthTarget)
-					.Bind([=](CommandContext& context, const RGResources& resources)
+					.Bind([=](CommandContext& context, const RGResources& resources) {
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+						context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
+
+						struct
 						{
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-							context.SetPipelineState(m_pDDGIUpdateIrradianceDepthPSO);
+							Vector3		  RandomVector;
+							float		  RandomAngle;
+							float		  HistoryBlendWeight;
+							uint32		  VolumeIndex;
+							BufferView	  RayHitInfo;
+							RWTextureView DepthMap;
+						} params;
+						params.RandomVector		  = randomVector;
+						params.RandomAngle		  = randomAngle;
+						params.HistoryBlendWeight = historyBlendWeight;
+						params.VolumeIndex		  = volumeIndex;
+						params.RayHitInfo		  = resources.GetSRV(pRayBuffer);
+						params.DepthMap			  = resources.GetUAV(pDepthTarget);
+						context.BindRootSRV(BindingSlot::PerInstance, params);
 
-							Renderer::BindViewUniforms(context, *pView);
-							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindResources(BindingSlot::UAV, {
-								resources.GetUAV(pDepthTarget),
-								});
-							context.BindResources(BindingSlot::SRV, {
-								resources.GetSRV(pRayBuffer),
-								});
+						Renderer::BindViewUniforms(context, *pView);
 
-							context.Dispatch(numProbes);
-							context.InsertUAVBarrier(resources.Get(pDepthTarget));
-						});
+						context.Dispatch(numProbes);
+						context.InsertUAVBarrier(resources.Get(pDepthTarget));
+					});
 
 				graph.AddPass("Update Probe States", RGPassFlag::Compute)
 					.Read(pRayBuffer)
 					.Write({ pProbeOffsets, pProbeStates })
-					.Bind([=](CommandContext& context, const RGResources& resources)
+					.Bind([=](CommandContext& context, const RGResources& resources) {
+						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+						context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
+
+						struct
 						{
-							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-							context.SetPipelineState(m_pDDGIUpdateProbeStatesPSO);
+							uint32		 VolumeIndex;
+							BufferView	 RayHitInfo;
+							RWBufferView ProbeOffsets;
+							RWBufferView ProbeStates;
+						} params;
+						params.VolumeIndex	= volumeIndex;
+							params.RayHitInfo	= resources.GetSRV(pRayBuffer);
+							params.ProbeOffsets = resources.GetUAV(pProbeOffsets);
+							params.ProbeStates	= resources.GetUAV(pProbeStates);
+							context.BindRootSRV(BindingSlot::PerInstance, params);
 
 							Renderer::BindViewUniforms(context, *pView);
-							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindResources(BindingSlot::UAV, {
-								resources.GetUAV(pProbeStates),
-								resources.GetUAV(pProbeOffsets),
-								});
-							context.BindResources(BindingSlot::SRV, {
-								resources.GetSRV(pRayBuffer),
-								});
 
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(numProbes, 32));
 						});
@@ -214,8 +242,8 @@ void DDGI::RenderVisualization(RGGraph& graph, const RenderView* pView, RGTextur
 							uint32 VolumeIndex;
 						} parameters;
 						parameters.VolumeIndex = i;
+						context.BindRootSRV(BindingSlot::PerInstance, parameters);
 
-						context.BindRootCBV(BindingSlot::PerInstance, parameters);
 						context.Draw(0, 2880, volume.NumProbes.x* volume.NumProbes.y* volume.NumProbes.z);
 					});
 			++i;

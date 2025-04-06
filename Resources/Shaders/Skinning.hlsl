@@ -1,6 +1,6 @@
 #include "Common.hlsli"
 
-struct SkinnedMeshData
+struct PassParams
 {
     uint SkinMatrixOffset;
     uint PositionsOffset;
@@ -10,31 +10,31 @@ struct SkinnedMeshData
     uint SkinnedPositionsOffset;
     uint SkinnedNormalsOffset;
     uint NumVertices;
-};
 
-ConstantBuffer<SkinnedMeshData>   cMeshInfo             : register(b0);
-RWByteAddressBuffer               uMeshData             : register(u0);
-StructuredBuffer<float4x4>        tSkinMatrices         : register(t0);
+    StructuredBufferH<float4x4> SkinMatrices;
+    RWByteBufferH               MeshData;
+};
+DEFINE_CONSTANTS(PassParams, 0);
 
 [numthreads(64, 1, 1)]
 void CSMain(uint threadID : SV_DispatchThreadID)
 {
-    if(threadID >= cMeshInfo.NumVertices)
+    if(threadID >= cPassParams.NumVertices)
         return;
 
-    float3 position = ByteBufferLoad<float3>(uMeshData, threadID, cMeshInfo.PositionsOffset);
+    float3 position = cPassParams.MeshData.LoadStructure<float3>(threadID, cPassParams.PositionsOffset);
 
-	uint2 normalData    = ByteBufferLoad<uint2>(uMeshData, threadID, cMeshInfo.NormalsOffset);
+	uint2 normalData    = cPassParams.MeshData.LoadStructure<uint2>(threadID, cPassParams.NormalsOffset);
 	float3 normal       = RGB10A2_SNORM::Unpack(normalData.x).xyz;
 	float4 tangent      = RGB10A2_SNORM::Unpack(normalData.y);
 
-    uint4 jointIndices   = ByteBufferLoad<uint16_t4>(uMeshData, threadID, cMeshInfo.JointsOffset);
-    float4 jointWeights  = RGBA16_FLOAT::Unpack(uMeshData.Load<uint2>(cMeshInfo.WeightsOffset + threadID * sizeof(uint2)));
+    uint4 jointIndices   = cPassParams.MeshData.LoadStructure<uint16_t4>(threadID, cPassParams.JointsOffset);
+    float4 jointWeights  = RGBA16_FLOAT::Unpack(cPassParams.MeshData.Load<uint2>(cPassParams.WeightsOffset + threadID * sizeof(uint2)));
 
     float4x4 skinTransform = 0;
     [unroll]
     for(int i = 0; i < 4; ++i)
-        skinTransform += tSkinMatrices[jointIndices[i] + cMeshInfo.SkinMatrixOffset] * jointWeights[i];
+        skinTransform += cPassParams.SkinMatrices[jointIndices[i] + cPassParams.SkinMatrixOffset] * jointWeights[i];
     
     float3 transformedPosition  = mul(float4(position, 1), skinTransform).xyz;
     float3 transformedNormal    = mul(normal, (float3x3)skinTransform);
@@ -44,6 +44,6 @@ void CSMain(uint threadID : SV_DispatchThreadID)
         RGB10A2_SNORM::Pack(float4(transformedNormal, 0)),
         RGB10A2_SNORM::Pack(transformedTangent));
 
-    ByteBufferStore<float3>(uMeshData, transformedPosition, threadID, cMeshInfo.SkinnedPositionsOffset);
-    ByteBufferStore<uint2>(uMeshData, packedNormal, threadID, cMeshInfo.SkinnedNormalsOffset);
+    cPassParams.MeshData.StoreStructure<float3>(threadID, cPassParams.SkinnedPositionsOffset, transformedPosition);
+    cPassParams.MeshData.StoreStructure<uint2>(threadID, cPassParams.SkinnedNormalsOffset, packedNormal);
 }

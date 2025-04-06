@@ -323,7 +323,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			// Upload PerView uniforms
 			Renderer::UploadViewUniforms(*pContext, m_MainView);
 
-			pContext->Execute();
+			m_pDevice->GetGraphicsQueue()->ExecuteCommandLists(pContext);
 		}
 
 		RGGraph graph;
@@ -346,6 +346,8 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 					uint32 SkinnedPositionsOffset;
 					uint32 SkinnedNormalsOffset;
 					uint32 NumVertices;
+					BufferView SkinMatrices;
+					RWBufferView MeshData;
 				};
 				Array<SkinningUpdateInfo> skinDatas;
 				Array<Matrix> skinningTransforms;
@@ -368,6 +370,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 							skinData.JointsOffset			= mesh.JointsStreamLocation.OffsetFromStart;
 							skinData.WeightsOffset			= mesh.WeightsStreamLocation.OffsetFromStart;
 							skinData.NumVertices			= mesh.PositionStreamLocation.Elements;
+							skinData.MeshData				= mesh.pBuffer->GetUAV();
 
 							const Animation& anim = m_pWorld->Animations[model.AnimationIndex];
 							const Skeleton& skeleton = m_pWorld->Skeletons[model.SkeletonIndex];
@@ -433,14 +436,14 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pSkinPSO);
 
-								context.BindResources(BindingSlot::SRV, resources.GetSRV(pSkinningMatrices));
-
 								for (int i = 0; i < (int)skinDatas.size(); ++i)
 								{
 									context.InsertResourceBarrier(meshes[i]->pBuffer, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
-									context.BindRootCBV(BindingSlot::PerInstance, skinDatas[i]);
-									context.BindResources(BindingSlot::UAV, { meshes[i]->pBuffer->GetUAV() });
+									SkinningUpdateInfo params = skinDatas[i];
+									params.SkinMatrices		  = resources.GetSRV(pSkinningMatrices);
+									context.BindRootSRV(BindingSlot::PerInstance, params);
+
 									context.Dispatch(ComputeUtils::GetNumThreadGroups(meshes[i]->PositionStreamLocation.Elements, 64));
 
 									context.InsertResourceBarrier(meshes[i]->pBuffer, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
@@ -465,7 +468,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			LightCull3DData lightCull3DData;
 			RasterResult rasterResult;
 
-			const bool doPrepass = true;
+			const bool doPrepass			= m_RenderPath != RenderPath::PathTracing;
 			const bool needVisibilityBuffer = m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred;
 
 			if (doPrepass)
@@ -522,12 +525,13 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 							struct
 							{
 								Vector2 DimensionsInv;
+								RWTextureView Sky;
 							} params;
 							params.DimensionsInv = Vector2(1.0f / pSkyTexture->GetWidth(), 1.0f / pSkyTexture->GetHeight());
+							params.Sky			 = pSkyTexture->GetUAV();
+							context.BindRootSRV(BindingSlot::PerInstance, params);
 
 							Renderer::BindViewUniforms(context, *pView);
-							context.BindRootCBV(BindingSlot::PerInstance, params);
-							context.BindResources(BindingSlot::UAV, pSkyTexture->GetUAV());
 
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pSkyTexture->GetWidth(), 16, pSkyTexture->GetHeight(), 16, 6));
 						});
@@ -604,10 +608,16 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pPrepareReduceDepthPSO);
+								struct
+								{
+									TextureView	  DepthMap;
+									RWTextureView OutputMap;
+								} params;
+								params.DepthMap = pSource->GetSRV();
+								params.OutputMap = pTarget->GetUAV();
+								context.BindRootSRV(BindingSlot::PerInstance, params);
 
 								Renderer::BindViewUniforms(context, *pView);
-								context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-								context.BindResources(BindingSlot::SRV, pSource->GetSRV());
 
 								context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 							});
@@ -625,8 +635,16 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 									Texture* pTarget = resources.Get(pReductionTarget);
 									context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 									context.SetPipelineState(m_pReduceDepthPSO);
-									context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-									context.BindResources(BindingSlot::SRV, resources.GetSRV(pReductionSource));
+
+									struct ReduceParams
+									{
+										TextureView	  ReductionMap;
+										RWTextureView OutputMap;
+									} params;
+									params.ReductionMap = resources.GetSRV(pReductionSource);
+									params.OutputMap = pTarget->GetUAV();
+									context.BindRootSRV(BindingSlot::PerInstance, params);
+
 									context.Dispatch(pTarget->GetWidth(), pTarget->GetHeight());
 								});
 
@@ -643,7 +661,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Write(pReadbackTarget)
 						.Bind([=](CommandContext& context, const RGResources& resources)
 							{
-								context.CopyTexture(resources.Get(pReductionTarget), resources.Get(pReadbackTarget), CD3DX12_BOX(0, 1));
+								context.CopyTexture(resources.Get(pReductionTarget), resources.Get(pReadbackTarget), Vector3u::Zero(), Vector3u::One());
 							});
 				}
 
@@ -664,9 +682,16 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 							context.SetPipelineState(m_pCameraMotionPSO);
 
+							struct
+							{
+								TextureView	  DepthTexture;
+								RWTextureView Velocity;
+							} params;
+							params.DepthTexture = resources.GetSRV(sceneTextures.pDepth);
+							params.Velocity		= pVelocity->GetUAV();
+							context.BindRootSRV(BindingSlot::PerInstance, params);
+
 							Renderer::BindViewUniforms(context, *pView);
-							context.BindResources(BindingSlot::UAV, pVelocity->GetUAV());
-							context.BindResources(BindingSlot::SRV, resources.GetSRV(sceneTextures.pDepth));
 
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pVelocity->GetWidth(), 8, pVelocity->GetHeight(), 8));
 						});
@@ -709,16 +734,32 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+								struct PassParams
+								{
+									TextureView VisibilityTexture;
+									TextureView AO;
+									TextureView Depth;
+									TextureView PreviousSceneColor;
+									TextureView Fog;
+									BufferView	VisibleMeshlets;
+									BufferView	LightGrid;
+
+									// For compute
+									RWTextureView ColorTarget;
+									RWTextureView NormalsTarget;
+									RWTextureView RoughnessTarget;
+								} params{};
+								params.VisibilityTexture  = resources.GetSRV(rasterResult.pVisibilityBuffer);
+								params.AO				  = resources.GetSRV(pAO);
+								params.Depth			  = resources.GetSRV(sceneTextures.pDepth);
+								params.PreviousSceneColor = resources.GetSRV(sceneTextures.pPreviousColor);
+								params.Fog				  = resources.GetSRV(pFog);
+								params.VisibleMeshlets	  = resources.GetSRV(rasterResult.pVisibleMeshlets);
+								params.LightGrid		  = resources.GetSRV(lightCull2DData.pLightListOpaque);
+								context.BindRootSRV(BindingSlot::PerInstance, params);
+
 								Renderer::BindViewUniforms(context, *pView);
-								context.BindResources(BindingSlot::SRV, {
-									resources.GetSRV(rasterResult.pVisibilityBuffer),
-									resources.GetSRV(pAO),
-									resources.GetSRV(sceneTextures.pDepth),
-									resources.GetSRV(sceneTextures.pPreviousColor),
-									resources.GetSRV(pFog),
-									resources.GetSRV(rasterResult.pVisibleMeshlets),
-									resources.GetSRV(lightCull2DData.pLightListOpaque),
-									});
+
 								context.Draw(0, 3);
 							});
 					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, pAO, true);
@@ -736,11 +777,17 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								context.SetStencilRef((uint8)StencilBit::VisibilityBuffer);
 								context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+								struct
+								{
+									TextureView VisibilityTexture;
+									BufferView	VisibleMeshlets;
+								} params;
+								params.VisibilityTexture = resources.GetSRV(rasterResult.pVisibilityBuffer);
+								params.VisibleMeshlets	 = resources.GetSRV(rasterResult.pVisibleMeshlets);
+								context.BindRootSRV(BindingSlot::PerInstance, params);
+
 								Renderer::BindViewUniforms(context, *pView);
-								context.BindResources(BindingSlot::SRV, {
-									resources.GetSRV(rasterResult.pVisibilityBuffer),
-									resources.GetSRV(rasterResult.pVisibleMeshlets),
-									});
+
 								context.Draw(0, 3);
 							});
 
@@ -750,26 +797,35 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						.Read({ lightCull2DData.pLightListOpaque })
 						.Read({ sceneTextures.pGBuffer })
 						.Write(sceneTextures.pColorTarget)
-						.Bind([=](CommandContext& context, const RGResources& resources)
+						.Bind([=](CommandContext& context, const RGResources& resources) {
+							Texture* pTarget = resources.Get(sceneTextures.pColorTarget);
+
+							context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+							context.SetPipelineState(m_pDeferredShadePSO);
+
+							struct
 							{
-								Texture* pTarget = resources.Get(sceneTextures.pColorTarget);
+								TextureView	  GBuffer;
+								TextureView	  Depth;
+								TextureView	  PreviousSceneColor;
+								TextureView	  Fog;
+								BufferView	  LightGrid;
+								TextureView	  AO;
+								RWTextureView Output;
+							} params;
+							params.GBuffer			  = resources.GetSRV(sceneTextures.pGBuffer);
+							params.Depth			  = resources.GetSRV(sceneTextures.pDepth);
+							params.PreviousSceneColor = resources.GetSRV(sceneTextures.pPreviousColor);
+							params.Fog				  = resources.GetSRV(pFog);
+							params.LightGrid		  = resources.GetSRV(lightCull2DData.pLightListOpaque);
+							params.AO				  = resources.GetSRV(pAO);
+							params.Output			  = resources.GetUAV(sceneTextures.pColorTarget);
+							context.BindRootSRV(BindingSlot::PerInstance, params);
 
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-								context.SetPipelineState(m_pDeferredShadePSO);
+							Renderer::BindViewUniforms(context, *pView);
 
-								Renderer::BindViewUniforms(context, *pView);
-								context.BindResources(BindingSlot::UAV, resources.GetUAV(sceneTextures.pColorTarget));
-								context.BindResources(BindingSlot::SRV, {
-									resources.GetSRV(sceneTextures.pGBuffer),
-									resources.GetSRV(sceneTextures.pDepth),
-									resources.GetSRV(sceneTextures.pPreviousColor),
-									resources.GetSRV(pFog),
-									resources.GetSRV(lightCull2DData.pLightListOpaque),
-									resources.GetSRV(pAO),
-									});
-
-								context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
-							});
+							context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
+					});
 
 					m_pForwardRenderer->RenderForwardClustered(graph, pView, sceneTextures, lightCull3DData, pFog, pAO, true);
 				}
@@ -818,20 +874,22 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 								struct
 								{
-									float MinBlendFactor;
+									float		  MinBlendFactor;
+									TextureView	  Motion;
+									TextureView	  PreviousColor;
+									TextureView	  CurrentColor;
+									TextureView	  SceneDepth;
+									RWTextureView Output;
 								} params;
 								params.MinBlendFactor = pView->CameraCut ? 1.0f : 0.0f;
+								params.Motion		  = resources.GetSRV(sceneTextures.pVelocity);
+								params.PreviousColor  = resources.GetSRV(sceneTextures.pPreviousColor);
+								params.CurrentColor	  = resources.GetSRV(sceneTextures.pColorTarget);
+								params.SceneDepth	  = resources.GetSRV(sceneTextures.pDepth);
+								params.Output		  = pTarget->GetUAV();
+								context.BindRootSRV(BindingSlot::PerInstance, params);
 
 								Renderer::BindViewUniforms(context, *pView);
-								context.BindRootCBV(BindingSlot::PerInstance, params);
-								context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-								context.BindResources(BindingSlot::SRV,
-									{
-										resources.GetSRV(sceneTextures.pVelocity),
-										resources.GetSRV(sceneTextures.pPreviousColor),
-										resources.GetSRV(sceneTextures.pColorTarget),
-										resources.GetSRV(sceneTextures.pDepth),
-									});
 
 								context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 8, pTarget->GetHeight(), 8));
 							});
@@ -877,16 +935,17 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 							struct
 							{
-								Vector2i TargetDimensions;
-								Vector2 TargetDimensionsInv;
+								Vector2i	  TargetDimensions;
+								Vector2		  TargetDimensionsInv;
+								RWTextureView Output;
+								TextureView	  Input;
 							} parameters;
-							parameters.TargetDimensions.x = pTarget->GetWidth();
-							parameters.TargetDimensions.y = pTarget->GetHeight();
+							parameters.TargetDimensions.x  = pTarget->GetWidth();
+							parameters.TargetDimensions.y  = pTarget->GetHeight();
 							parameters.TargetDimensionsInv = Vector2(1.0f / pTarget->GetWidth(), 1.0f / pTarget->GetHeight());
-
-							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-							context.BindResources(BindingSlot::SRV, resources.GetSRV(pColor));
+							parameters.Output			   = pTarget->GetUAV();
+							parameters.Input			   = resources.GetSRV(pColor);
+							context.BindRootSRV(BindingSlot::PerInstance, parameters);
 
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(parameters.TargetDimensions.x, 8, parameters.TargetDimensions.y, 8));
 						});
@@ -911,15 +970,16 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								uint32 Height;
 								float MinLogLuminance;
 								float OneOverLogLuminanceRange;
+								TextureView HDRTexture;
+								RWBufferView LuminanceHistogram;
 							} parameters;
 							parameters.Width = pColorSource->GetWidth();
 							parameters.Height = pColorSource->GetHeight();
 							parameters.MinLogLuminance = Tweakables::gMinLogLuminance.Get();
 							parameters.OneOverLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance.Get() - Tweakables::gMinLogLuminance.Get());
-
-							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindResources(BindingSlot::UAV, pHistogram->GetUAV());
-							context.BindResources(BindingSlot::SRV, pColorSource->GetSRV());
+							parameters.HDRTexture = pColorSource->GetSRV();
+							parameters.LuminanceHistogram = pHistogram->GetUAV();
+							context.BindRootSRV(BindingSlot::PerInstance, parameters);
 
 							context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorSource->GetWidth(), 16, pColorSource->GetHeight(), 16));
 						});
@@ -936,22 +996,22 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 							struct
 							{
-								int32 PixelCount;
-								float MinLogLuminance;
-								float LogLuminanceRange;
-								float TimeDelta;
-								float Tau;
+								int32		 PixelCount;
+								float		 MinLogLuminance;
+								float		 LogLuminanceRange;
+								float		 TimeDelta;
+								float		 Tau;
+								BufferView	 LuminanceHistogram;
+								RWBufferView LuminanceOutput;
 							} parameters;
-
-							parameters.PixelCount = numPixels;
-							parameters.MinLogLuminance = Tweakables::gMinLogLuminance;
-							parameters.LogLuminanceRange = Tweakables::gMaxLogLuminance - Tweakables::gMinLogLuminance;
-							parameters.TimeDelta = Time::DeltaTime();
-							parameters.Tau = Tweakables::gTau.Get();
-
-							context.BindRootCBV(BindingSlot::PerInstance, parameters);
-							context.BindResources(BindingSlot::UAV, resources.GetUAV(pAverageLuminance));
-							context.BindResources(BindingSlot::SRV, resources.GetSRV(pLuminanceHistogram));
+							parameters.PixelCount		  = numPixels;
+							parameters.MinLogLuminance	  = Tweakables::gMinLogLuminance;
+							parameters.LogLuminanceRange  = Tweakables::gMaxLogLuminance - Tweakables::gMinLogLuminance;
+							parameters.TimeDelta		  = Time::DeltaTime();
+							parameters.Tau				  = Tweakables::gTau.Get();
+							parameters.LuminanceHistogram = resources.GetSRV(pLuminanceHistogram);
+							parameters.LuminanceOutput	  = resources.GetUAV(pAverageLuminance);
+							context.BindRootSRV(BindingSlot::PerInstance, parameters);
 
 							context.Dispatch(1);
 						});
@@ -971,22 +1031,21 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 								struct
 								{
-									float MinLogLuminance;
-									float InverseLogLuminanceRange;
-									Vector2 InvTextureDimensions;
+									float		  MinLogLuminance;
+									float		  InverseLogLuminanceRange;
+									Vector2		  InvTextureDimensions;
+									BufferView	  LuminanceHistogram;
+									BufferView	  AverageLuminance;
+									RWTextureView OutTexture;
 								} parameters;
-
 								parameters.MinLogLuminance = Tweakables::gMinLogLuminance;
 								parameters.InverseLogLuminanceRange = 1.0f / (Tweakables::gMaxLogLuminance - Tweakables::gMinLogLuminance);
 								parameters.InvTextureDimensions.x = 1.0f / pHistogramDebugTexture->GetDesc().Width;
 								parameters.InvTextureDimensions.y = 1.0f / pHistogramDebugTexture->GetDesc().Height;
-
-								context.BindRootCBV(BindingSlot::PerInstance, parameters);
-								context.BindResources(BindingSlot::UAV, resources.GetUAV(pHistogramDebugTexture));
-								context.BindResources(BindingSlot::SRV, {
-									resources.GetSRV(pLuminanceHistogram),
-									resources.GetSRV(pAverageLuminance),
-									});
+								parameters.LuminanceHistogram	  = resources.GetSRV(pLuminanceHistogram);
+								parameters.AverageLuminance		  = resources.GetSRV(pAverageLuminance);
+								parameters.OutTexture			  = resources.GetUAV(pHistogramDebugTexture);
+								context.BindRootSRV(BindingSlot::PerInstance, parameters);
 
 								context.Dispatch(1, resources.Get(pLuminanceHistogram)->GetNumElements());
 							});
@@ -1022,15 +1081,17 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								context.SetPipelineState(i == 0 ? m_pBloomDownsampleKarisAveragePSO : m_pBloomDownsamplePSO);
 								struct
 								{
-									Vector2 TargetDimensionsInv;
-									uint32 SourceMip;
-								} parameters;
-								parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
-								parameters.SourceMip = i == 0 ? 0 : i - 1;
+									Vector2		  TargetDimensionsInv;
+									uint32		  SourceMip;
+									TextureView	  Source;
+									RWTextureView Target;
+								} params;
+								params.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
+								params.SourceMip		   = i == 0 ? 0 : i - 1;
+								params.Source = static_cast<Texture*>(resources.GetResourceUnsafe(pSourceTexture))->GetSRV();
+								params.Target = resources.GetUAV(pDownscaleTarget, i);
+								context.BindRootSRV(BindingSlot::PerInstance, params);
 
-								context.BindRootCBV(BindingSlot::PerInstance, parameters);
-								context.BindResources(BindingSlot::UAV, resources.GetUAV(pDownscaleTarget, i));
-								context.BindResources(BindingSlot::SRV, static_cast<Texture*>(resources.GetResourceUnsafe(pSourceTexture))->GetSRV());
 								context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
 								context.InsertUAVBarrier();
 							});
@@ -1054,22 +1115,23 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								context.SetPipelineState(m_pBloomUpsamplePSO);
 								struct
 								{
-									Vector2 TargetDimensionsInv;
-									uint32 SourceCurrentMip;
-									uint32 SourcePreviousMip;
-									float Radius;
-								} parameters;
-								parameters.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
-								parameters.SourceCurrentMip = i;
-								parameters.SourcePreviousMip = i + 1;
-								parameters.Radius = Tweakables::gBloomInteralBlendFactor;
+									Vector2		  TargetDimensionsInv;
+									uint32		  SourceCurrentMip;
+									uint32		  SourcePreviousMip;
+									float		  Radius;
+									TextureView	  Source;
+									TextureView	  PreviousSource;
+									RWTextureView Target;
+								} params;
+								params.TargetDimensionsInv = Vector2(1.0f / targetDimensions.x, 1.0f / targetDimensions.y);
+								params.SourceCurrentMip	   = i;
+								params.SourcePreviousMip   = i + 1;
+								params.Radius			   = Tweakables::gBloomInteralBlendFactor;
+								params.Source			   = resources.GetSRV(pDownscaleTarget);
+								params.PreviousSource	   = resources.Get(pPreviousSource)->GetSRV();
+								params.Target			   = resources.Get(pUpscaleTarget)->GetUAV(i);
+								context.BindRootSRV(BindingSlot::PerInstance, params);
 
-								context.BindRootCBV(BindingSlot::PerInstance, parameters);
-								context.BindResources(BindingSlot::UAV, resources.Get(pUpscaleTarget)->GetUAV(i));
-								context.BindResources(BindingSlot::SRV, {
-									resources.GetSRV(pDownscaleTarget),
-									resources.Get(pPreviousSource)->GetSRV(),
-									});
 								context.Dispatch(ComputeUtils::GetNumThreadGroups(targetDimensions.x, 8, targetDimensions.y, 8));
 								context.InsertUAVBarrier();
 							});
@@ -1089,32 +1151,37 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 					{
 						Texture* pTarget = resources.Get(pTonemapTarget);
 
-						struct
-						{
-							float WhitePoint;
-							uint32 Tonemapper;
-							float BloomIntensity;
-							float BloomBlendFactor;
-							Vector3 LensDirtTint;
-						} parameters;
-						parameters.WhitePoint = Tweakables::gWhitePoint.Get();
-						parameters.Tonemapper = Tweakables::gToneMapper.Get();
-						parameters.BloomIntensity = Tweakables::gBloomIntensity.Get();
-						parameters.BloomBlendFactor = Tweakables::gBloomBlendFactor.Get();
-						parameters.LensDirtTint = m_LensDirtTint;
-
 						context.SetPipelineState(m_pToneMapPSO);
 						context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 
+						struct
+						{
+							float	WhitePoint;
+							uint32	Tonemapper;
+							float	BloomIntensity;
+							float	BloomBlendFactor;
+							Vector3 LensDirtTint;
+
+							RWTextureView OutColor;
+							TextureView	  Color;
+							BufferView	  AverageLuminance;
+							TextureView	  Bloom;
+							TextureView	  LensDirt;
+						} parameters;
+						parameters.WhitePoint		= Tweakables::gWhitePoint.Get();
+						parameters.Tonemapper		= Tweakables::gToneMapper.Get();
+						parameters.BloomIntensity	= Tweakables::gBloomIntensity.Get();
+						parameters.BloomBlendFactor = Tweakables::gBloomBlendFactor.Get();
+						parameters.LensDirtTint		= m_LensDirtTint;
+						parameters.OutColor			= pTarget->GetUAV();
+						parameters.Color			= resources.GetSRV(sceneTextures.pColorTarget);
+						parameters.AverageLuminance = resources.GetSRV(pAverageLuminance);
+						parameters.Bloom			= resources.GetSRV(pBloomTexture);
+						parameters.LensDirt			= m_pLensDirtTexture->GetSRV();
+						context.BindRootSRV(BindingSlot::PerInstance, parameters);
+						
 						Renderer::BindViewUniforms(context, *pView);
-						context.BindRootCBV(BindingSlot::PerInstance, parameters);
-						context.BindResources(BindingSlot::UAV, pTarget->GetUAV());
-						context.BindResources(BindingSlot::SRV, {
-							resources.GetSRV(sceneTextures.pColorTarget),
-							resources.GetSRV(pAverageLuminance),
-							resources.GetSRV(pBloomTexture),
-							m_pLensDirtTexture->GetSRV(),
-							});
+						
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 					});
 
@@ -1146,16 +1213,23 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 								context.SetPipelineState(m_pVisibilityDebugRenderPSO);
 
+								struct
+								{
+									uint32		  Mode;
+									TextureView	  VisibilityTexture;
+									BufferView	  MeshletCandidates;
+									TextureView	  DebugData;
+									RWTextureView Output;
+								} params;
+								params.Mode				 = Tweakables::gVisibilityDebugMode;
+								params.VisibilityTexture = resources.GetSRV(rasterResult.pVisibilityBuffer),
+								params.MeshletCandidates = resources.GetSRV(rasterResult.pVisibleMeshlets),
+								params.DebugData		 = resources.GetSRV(rasterResult.pDebugData),
+								params.Output			 = pColorTarget->GetUAV();
+								context.BindRootSRV(BindingSlot::PerInstance, params);
+
 								Renderer::BindViewUniforms(context, *pView);
 
-								uint32 mode = Tweakables::gVisibilityDebugMode;
-								context.BindRootCBV(BindingSlot::PerInstance, mode);
-								context.BindResources(BindingSlot::UAV, pColorTarget->GetUAV());
-								context.BindResources(BindingSlot::SRV, {
-									resources.GetSRV(rasterResult.pVisibilityBuffer),
-									resources.GetSRV(rasterResult.pVisibleMeshlets),
-									resources.GetSRV(rasterResult.pDebugData),
-									});
 								context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
 							});
 				}
@@ -1373,18 +1447,18 @@ void Renderer::GetViewUniforms(const RenderView& view, ShaderInterop::ViewUnifor
 	outUniforms.CascadeDepths			= m_ShadowCascadeDepths;
 	outUniforms.NumCascades				= m_NumShadowCascades;
 
-	outUniforms.TLASIndex				= m_AccelerationStructure.GetSRV() ? m_AccelerationStructure.GetSRV()->GetHeapIndex() : DescriptorHandle::InvalidHeapIndex;
-	outUniforms.MeshesIndex				= m_MeshBuffer.pBuffer->GetSRVIndex();
-	outUniforms.MaterialsIndex			= m_MaterialBuffer.pBuffer->GetSRVIndex();
-	outUniforms.InstancesIndex			= m_InstanceBuffer.pBuffer->GetSRVIndex();
-	outUniforms.LightsIndex				= m_LightBuffer.pBuffer->GetSRVIndex();
-	outUniforms.LightMatricesIndex		= m_LightMatricesBuffer.pBuffer->GetSRVIndex();
-	outUniforms.SkyIndex				= m_pSky ? m_pSky->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-	outUniforms.DDGIVolumesIndex		= m_DDGIVolumesBuffer.pBuffer->GetSRVIndex();
+	outUniforms.TLAS					= m_AccelerationStructure.GetSRV();
+	outUniforms.MeshesBuffer			= m_MeshBuffer.pBuffer->GetSRV();
+	outUniforms.MaterialsBuffer			= m_MaterialBuffer.pBuffer->GetSRV();
+	outUniforms.InstancesBuffer			= m_InstanceBuffer.pBuffer->GetSRV();
+	outUniforms.LightsBuffer			= m_LightBuffer.pBuffer->GetSRV();
+	outUniforms.LightMatricesBuffer		= m_LightMatricesBuffer.pBuffer->GetSRV();
+	outUniforms.SkyTexture				= m_pSky ? m_pSky->GetSRV() : TextureView::Invalid();
+	outUniforms.DDGIVolumesBuffer		= m_DDGIVolumesBuffer.pBuffer->GetSRV();
 	outUniforms.NumDDGIVolumes			= m_DDGIVolumesBuffer.Count;
 
-	outUniforms.FontDataIndex			= m_DebugRenderData.FontDataSRV;
-	outUniforms.DebugRenderDataIndex	= m_DebugRenderData.RenderDataUAV;
+	outUniforms.FontData				= m_DebugRenderData.FontDataSRV;
+	outUniforms.DebugRenderData			= m_DebugRenderData.RenderDataUAV;
 	outUniforms.FontSize				= m_DebugRenderData.FontSize;
 }
 
@@ -1490,7 +1564,7 @@ void Renderer::UploadSceneData(CommandContext& context)
 		for (const Mesh& mesh : pWorld->Meshes)
 		{
 			ShaderInterop::MeshData& meshData = meshes.emplace_back();
-			meshData.BufferIndex = mesh.pBuffer->GetSRVIndex();
+			meshData.DataBuffer = mesh.pBuffer->GetSRV();
 			meshData.IndexByteSize = mesh.IndicesLocation.Stride();
 			meshData.IndicesOffset = (uint32)mesh.IndicesLocation.OffsetFromStart;
 			meshData.PositionsOffset = mesh.SkinnedPositionStreamLocation.IsValid() ? (uint32)mesh.SkinnedPositionStreamLocation.OffsetFromStart : (uint32)mesh.PositionStreamLocation.OffsetFromStart;
@@ -1514,10 +1588,10 @@ void Renderer::UploadSceneData(CommandContext& context)
 		for (const Material& material : pWorld->Materials)
 		{
 			ShaderInterop::MaterialData& materialData = materials.emplace_back();
-			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRVIndex() : -1;
-			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRVIndex() : -1;
-			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRVIndex() : -1;
-			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRVIndex() : -1;
+			materialData.Diffuse = material.pDiffuseTexture ? material.pDiffuseTexture->GetSRV() : TextureView::Invalid();
+			materialData.Normal = material.pNormalTexture ? material.pNormalTexture->GetSRV() : TextureView::Invalid();
+			materialData.RoughnessMetalness = material.pRoughnessMetalnessTexture ? material.pRoughnessMetalnessTexture->GetSRV() : TextureView::Invalid();
+			materialData.Emissive = material.pEmissiveTexture ? material.pEmissiveTexture->GetSRV() : TextureView::Invalid();
 			materialData.BaseColorFactor = material.BaseColorFactor;
 			materialData.MetalnessFactor = material.MetalnessFactor;
 			materialData.RoughnessFactor = material.RoughnessFactor;
@@ -1545,10 +1619,10 @@ void Renderer::UploadSceneData(CommandContext& context)
 					ddgi.BoundsMin = transform.Position - volume.Extents;
 					ddgi.ProbeSize = 2 * volume.Extents / (Vector3((float)volume.NumProbes.x, (float)volume.NumProbes.y, (float)volume.NumProbes.z) - Vector3::One);
 					ddgi.ProbeVolumeDimensions = Vector3u(volume.NumProbes.x, volume.NumProbes.y, volume.NumProbes.z);
-					ddgi.IrradianceIndex = volume.pIrradianceHistory ? volume.pIrradianceHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.DepthIndex = volume.pDepthHistory ? volume.pDepthHistory->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.ProbeOffsetIndex = volume.pProbeOffset ? volume.pProbeOffset->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-					ddgi.ProbeStatesIndex = volume.pProbeStates ? volume.pProbeStates->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+					ddgi.IrradianceTexture = volume.pIrradianceHistory ? volume.pIrradianceHistory->GetSRV() : TextureView::Invalid();
+					ddgi.DepthTexture = volume.pDepthHistory ? volume.pDepthHistory->GetSRV() : TextureView::Invalid();
+					ddgi.ProbeOffsetBuffer = volume.pProbeOffset ? volume.pProbeOffset->GetSRV() : BufferView::Invalid();
+					ddgi.ProbeStatesBuffer = volume.pProbeStates ? volume.pProbeStates->GetSRV() : BufferView::Invalid();
 					ddgi.NumRaysPerProbe = volume.NumRays;
 					ddgi.MaxRaysPerProbe = volume.MaxNumRays;
 				});
@@ -1570,8 +1644,8 @@ void Renderer::UploadSceneData(CommandContext& context)
 				data.Color = Math::Pack_RGBA8_UNORM(light.Colour);
 				data.Intensity = light.Intensity;
 				data.Range = light.Range;
-				data.ShadowMapIndex = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
-				data.MaskTexture = light.pLightTexture ? light.pLightTexture->GetSRVIndex() : DescriptorHandle::InvalidHeapIndex;
+				data.ShadowMap = light.CastShadows && light.ShadowMaps.size() ? light.ShadowMaps[0]->GetSRV() : TextureView::Invalid();
+				data.MaskTexture = light.pLightTexture ? light.pLightTexture->GetSRV() : TextureView::Invalid();
 				data.MatrixIndex = light.MatrixIndex;
 				data.InvShadowSize = 1.0f / light.ShadowMapSize;
 				data.IsEnabled = light.Intensity > 0 ? 1 : 0;
@@ -1611,7 +1685,7 @@ void Renderer::DrawScene(CommandContext& context, Span<const Batch> batches, con
 	{
 		if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 		{
-			context.BindRootCBV(BindingSlot::PerInstance, b.InstanceID);
+			context.BindRootSRV(BindingSlot::PerInstance, b.InstanceID);
 			context.DispatchMesh(Math::DivideAndRoundUp(b.pMesh->NumMeshlets, 32));
 		}
 	}
@@ -1623,13 +1697,13 @@ void Renderer::BindViewUniforms(CommandContext& context, const RenderView& view,
 	const Buffer* pViewBuffer = type == RenderView::Type::Default ? view.ViewCB : view.CullViewCB;
 	if (pViewBuffer)
 	{
-		context.BindRootCBV(BindingSlot::PerView, pViewBuffer);
+		context.BindRootSRV(BindingSlot::PerView, pViewBuffer->GetGPUAddress());
 	}
 	else
 	{
 		ShaderInterop::ViewUniforms viewUniforms;
 		view.pRenderer->GetViewUniforms(view, viewUniforms);
-		context.BindRootCBV(BindingSlot::PerView, viewUniforms);
+		context.BindRootSRV(BindingSlot::PerView, viewUniforms);
 	}
 }
 
@@ -1647,9 +1721,9 @@ void Renderer::MakeScreenshot(Texture* pSource)
 			m_pDevice->GetDevice()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &textureFootprint, nullptr, nullptr, nullptr);
 			Ref<Buffer> pScreenshotBuffer = m_pDevice->CreateBuffer(BufferDesc::CreateReadback(textureFootprint.Footprint.RowPitch * textureFootprint.Footprint.Height), "Screenshot Texture");
 			pScreenshotContext->InsertResourceBarrier(pSource, D3D12_RESOURCE_STATE_UNKNOWN, D3D12_RESOURCE_STATE_COPY_SOURCE);
-			pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, CD3DX12_BOX(0, 0, width, height));
+			pScreenshotContext->CopyTexture(pSource, pScreenshotBuffer, Vector3u::Zero(), Vector3u(width, height, 1));
 
-			SyncPoint fence = pScreenshotContext->Execute();
+			SyncPoint fence = m_pDevice->GetGraphicsQueue()->ExecuteCommandLists(pScreenshotContext);
 			fence.Wait();
 
 			char* pData = (char*)pScreenshotBuffer->GetMappedData();
@@ -1905,7 +1979,7 @@ void Renderer::DrawImGui()
 		ImGui::Begin("Luminance Histogram");
 		ImVec2 cursor = ImGui::GetCursorPos();
 		ImVec2 size = ImGui::GetAutoSize(ImVec2((float)m_pDebugHistogramTexture->GetWidth(), (float)m_pDebugHistogramTexture->GetHeight()));
-		ImGui::Image(m_pDebugHistogramTexture, size);
+		ImGui::Image((ImTextureID)m_pDebugHistogramTexture.Get(), size);
 		ImGui::GetWindowDrawList()->AddText(cursor, IM_COL32(255, 255, 255, 255), Sprintf("%.2f", Tweakables::gMinLogLuminance.Get()).c_str());
 		ImGui::End();
 	}
@@ -1941,7 +2015,7 @@ void Renderer::DrawImGui()
 					corners[c] = ImVec2(corner.x, corner.y) * cascadeImageSize;
 				}
 
-				pDraw->AddImage(sunLight.ShadowMaps[i], cursor, cursor + ImVec2(cascadeImageSize, cascadeImageSize));
+				pDraw->AddImage((ImTextureID)sunLight.ShadowMaps[i], cursor, cursor + ImVec2(cascadeImageSize, cascadeImageSize));
 
 				ImColor clr(0.7f, 1.0f, 1.0f, 0.5f);
 				pDraw->AddLine(cursor + corners[0], cursor + corners[4], clr);

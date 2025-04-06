@@ -5,20 +5,28 @@
 #include "HZB.hlsli"
 #include "Noise.hlsli"
 
-struct PerViewData
+struct PassParams
 {
+#if CLUSTERED_FORWARD
 	uint4 ClusterDimensions;
 	uint2 ClusterSize;
 	float2 LightGridParams;
-};
+#endif
 
-struct InstanceIndex
+	Texture2DH<float> AO;
+	Texture2DH<float> Depth;
+	Texture2DH<float4> PreviousSceneColor;
+	Texture3DH<float4> LightScattering;
+	TypedBufferH<uint> LightGrid;
+};
+DEFINE_CONSTANTS(PassParams, 1);
+
+struct InstanceParams
 {
 	uint ID;
 };
+DEFINE_CONSTANTS(InstanceParams, 0);
 
-ConstantBuffer<InstanceIndex> cObject : register(b0);
-ConstantBuffer<PerViewData> cPass : register(b1);
 
 struct InterpolantsVSToPS
 {
@@ -32,16 +40,10 @@ struct InterpolantsVSToPS
 #endif
 };
 
-Texture2D<float> tAO :	register(t0);
-Texture2D<float> tDepth : register(t1);
-Texture2D tPreviousSceneColor :	register(t2);
-Texture3D<float4> tLightScattering : register(t3);
-Buffer<uint> tLightGrid : register(t4);
-
 #if CLUSTERED_FORWARD
 uint GetSliceFromDepth(float depth)
 {
-	return floor(log(depth) * cPass.LightGridParams.x - cPass.LightGridParams.y);
+	return floor(log(depth) * cPassParams.LightGridParams.x - cPassParams.LightGridParams.y);
 }
 #endif
 
@@ -56,7 +58,7 @@ float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, flo
 	float3 lighting = 0.0f;
 	for(uint bucketIndex = 0; bucketIndex < TILED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
-		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
+		uint bucket = cPassParams.LightGrid[lightGridOffset + bucketIndex];
 		while(bucket)
 		{
 			uint bitIndex = firstbitlow(bucket);
@@ -74,14 +76,14 @@ float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, flo
 
 float3 DoLight(float3 specularColor, float R, float3 diffuseColor, float3 N, float3 V, float3 worldPos, float2 pixel, float linearDepth, float dither)
 {
-	uint3 clusterIndex3D = uint3(floor(pixel / cPass.ClusterSize), GetSliceFromDepth(linearDepth));
-	uint tileIndex = Flatten3D(clusterIndex3D, cPass.ClusterDimensions.xy);
+	uint3 clusterIndex3D = uint3(floor(pixel / cPassParams.ClusterSize), GetSliceFromDepth(linearDepth));
+	uint tileIndex = Flatten3D(clusterIndex3D, cPassParams.ClusterDimensions.xy);
 	uint lightGridOffset = tileIndex * CLUSTERED_LIGHTING_NUM_BUCKETS;
 
 	float3 lighting = 0.0f;
 	for(uint bucketIndex = 0; bucketIndex < CLUSTERED_LIGHTING_NUM_BUCKETS; ++bucketIndex)
 	{
-		uint bucket = tLightGrid[lightGridOffset + bucketIndex];
+		uint bucket = cPassParams.LightGrid[lightGridOffset + bucketIndex];
 		while(bucket)
 		{
 			uint bitIndex = firstbitlow(bucket);
@@ -140,11 +142,11 @@ void ASMain(uint threadId : SV_DispatchThreadID)
 {
 	bool visible = false;
 
-	InstanceData instance = GetInstance(cObject.ID);
-	MeshData mesh = GetMesh(instance.MeshIndex);;
+	InstanceData instance = GetInstance(cInstanceParams.ID);
+	MeshData mesh = GetMesh(instance.MeshIndex);
 	if (threadId < mesh.MeshletCount)
 	{
-		Meshlet::Bounds bounds = ByteBufferLoad<Meshlet::Bounds>(mesh.BufferIndex, threadId, mesh.MeshletBoundsOffset);
+		Meshlet::Bounds bounds = mesh.DataBuffer.LoadStructure<Meshlet::Bounds>(threadId, mesh.MeshletBoundsOffset);
 		FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.WorldToClip);
 		visible = cullData.IsVisible;
 	}
@@ -171,27 +173,27 @@ void MSMain(
 	out vertices InterpolantsVSToPS verts[MESHLET_MAX_VERTICES],
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES])
 {
-	InstanceData instance = GetInstance(cObject.ID);
+	InstanceData instance = GetInstance(cInstanceParams.ID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
 
 	uint meshletIndex = payload.Indices[groupID];
 	if(meshletIndex >= mesh.MeshletCount)
 		return;
 
-	Meshlet meshlet = ByteBufferLoad<Meshlet>(mesh.BufferIndex, meshletIndex, mesh.MeshletOffset);
+	Meshlet meshlet = mesh.DataBuffer.LoadStructure<Meshlet>(meshletIndex, mesh.MeshletOffset);
 
 	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
 
 	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
-		uint vertexId = ByteBufferLoad<uint>(mesh.BufferIndex, i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
+		uint vertexId = mesh.DataBuffer.LoadStructure<uint>(i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
 		InterpolantsVSToPS result = LoadVertex(mesh, instance.LocalToWorld, vertexId);
 		verts[i] = result;
 	}
 
 	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += NUM_MESHLET_THREADS)
 	{
-		Meshlet::Triangle tri = ByteBufferLoad<Meshlet::Triangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		Meshlet::Triangle tri = mesh.DataBuffer.LoadStructure<Meshlet::Triangle>(i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
 	}
 }
@@ -200,9 +202,9 @@ void MSMain(
 
 void DepthOnlyPS(InterpolantsVSToPS input)
 {
-	InstanceData instance = GetInstance(cObject.ID);
+	InstanceData instance = GetInstance(cInstanceParams.ID);
 	MaterialData material = GetMaterial(instance.MaterialIndex);
-	if(Sample2D(material.Diffuse, sMaterialSampler, input.UV).a < material.AlphaCutoff)
+	if(material.Diffuse.Sample(sMaterialSampler, input.UV).a < material.AlphaCutoff)
 	{
 		discard;
 	}
@@ -214,32 +216,32 @@ MaterialProperties EvaluateMaterial(MaterialData material, InterpolantsVSToPS at
 {
 	MaterialProperties properties;
 	float4 baseColor = material.BaseColorFactor * RGBA8_UNORM::Unpack(attributes.Color);
-	if(material.Diffuse != INVALID_HANDLE)
+	if(material.Diffuse.IsValid())
 	{
-		baseColor *= Sample2D(material.Diffuse, sMaterialSampler, attributes.UV);
+		baseColor *= material.Diffuse.Sample(sMaterialSampler, attributes.UV);
 	}
 	properties.BaseColor = baseColor.rgb;
 	properties.Opacity = baseColor.a;
 
 	properties.Metalness = material.MetalnessFactor;
 	properties.Roughness = material.RoughnessFactor;
-	if(material.RoughnessMetalness != INVALID_HANDLE)
+	if(material.RoughnessMetalness.IsValid())
 	{
-		float4 roughnessMetalnessSample = Sample2D(material.RoughnessMetalness, sMaterialSampler, attributes.UV);
+		float4 roughnessMetalnessSample = material.RoughnessMetalness.Sample(sMaterialSampler, attributes.UV);
 		properties.Metalness *= roughnessMetalnessSample.b;
 		properties.Roughness *= roughnessMetalnessSample.g;
 	}
 	properties.Emissive = material.EmissiveFactor.rgb;
-	if(material.Emissive != INVALID_HANDLE)
+	if(material.Emissive.IsValid())
 	{
-		properties.Emissive *= Sample2D(material.Emissive, sMaterialSampler, attributes.UV).rgb;
+		properties.Emissive *= material.Emissive.Sample(sMaterialSampler, attributes.UV).rgb;
 	}
 	properties.Specular = 0.5f;
 
 	properties.Normal = normalize(attributes.Normal);
-	if(material.Normal != INVALID_HANDLE)
+	if(material.Normal.IsValid())
 	{
-		float3 normalTS = Sample2D(material.Normal, sMaterialSampler, attributes.UV).rgb;
+		float3 normalTS = material.Normal.Sample(sMaterialSampler, attributes.UV).rgb;
 		float3x3 TBN = CreateTangentToWorld(properties.Normal, float4(normalize(attributes.Tangent.xyz), attributes.Tangent.w));
 		properties.Normal = TangentSpaceNormalMapping(normalTS, TBN);
 	}
@@ -256,11 +258,11 @@ struct PSOut
 void ShadePS(InterpolantsVSToPS input, out PSOut output)
 {
 	float2 screenUV = (float2)input.Position.xy * cView.ViewportDimensionsInv;
-	float ambientOcclusion = tAO.SampleLevel(sLinearClamp, screenUV, 0);
+	float ambientOcclusion = cPassParams.AO.SampleLevel(sLinearClamp, screenUV, 0);
 	float linearDepth = input.Position.w;
 	float dither = InterleavedGradientNoise(input.Position.xy);
 
-	InstanceData instance = GetInstance(cObject.ID);
+	InstanceData instance = GetInstance(cInstanceParams.ID);
 
 	MaterialData material = GetMaterial(instance.MaterialIndex);
 	MaterialProperties surface = EvaluateMaterial(material, input);
@@ -268,7 +270,7 @@ void ShadePS(InterpolantsVSToPS input, out PSOut output)
 
 	float3 V = normalize(cView.ViewLocation - input.PositionWS);
 	float ssrWeight = 0;
-	float3 ssr = ScreenSpaceReflections(input.PositionWS, surface.Normal, V, brdfData.Roughness, tDepth, tPreviousSceneColor, dither, ssrWeight);
+	float3 ssr = ScreenSpaceReflections(input.PositionWS, surface.Normal, V, brdfData.Roughness, cPassParams.Depth.Get(), cPassParams.PreviousSceneColor.Get(), dither, ssrWeight);
 
 	float3 outRadiance = 0;
 	outRadiance += DoLight(brdfData.Specular, brdfData.Roughness, brdfData.Diffuse, surface.Normal, V, input.PositionWS, input.Position.xy, linearDepth, dither);
@@ -277,7 +279,7 @@ void ShadePS(InterpolantsVSToPS input, out PSOut output)
 	outRadiance += surface.Emissive;
 
 	float fogSlice = sqrt((linearDepth - cView.FarZ) / (cView.NearZ - cView.FarZ));
-	float4 scatteringTransmittance = tLightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
+	float4 scatteringTransmittance = cPassParams.LightScattering.SampleLevel(sLinearClamp, float3(screenUV, fogSlice), 0);
 	outRadiance = outRadiance * scatteringTransmittance.w + scatteringTransmittance.rgb;
 
 	float reflectivity = saturate(scatteringTransmittance.w * ambientOcclusion * Square(1 - brdfData.Roughness));

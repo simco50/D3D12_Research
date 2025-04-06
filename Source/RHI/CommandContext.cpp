@@ -7,14 +7,12 @@
 #include "RootSignature.h"
 #include "Buffer.h"
 #include "Texture.h"
-#include "ResourceViews.h"
 #include "ShaderBindingTable.h"
 #include "StateObject.h"
 #include "Core/Profiler.h"
 
-CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, GPUDescriptorHeap* pDescriptorHeap, ScratchAllocationManager* pScratchAllocationManager)
+CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> pCommandList, D3D12_COMMAND_LIST_TYPE type, ScratchAllocationManager* pScratchAllocationManager)
 	: DeviceObject(pParent),
-	m_ShaderResourceDescriptorAllocator(pDescriptorHeap),
 	m_Type(type)
 {
 	m_ScratchAllocator.Init(pScratchAllocationManager);
@@ -22,16 +20,27 @@ CommandContext::CommandContext(GraphicsDevice* pParent, Ref<ID3D12CommandList> p
 	gVerify(pCommandList.As(&m_pCommandList), == true);
 
 	// Create DSV and RTV description heap per commandlist to create on-the-fly descriptors
-	ID3D12Device* pDevice = pParent->GetDevice();
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	heapDesc.NumDescriptors = 1;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-	VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pDSVHeap.GetAddressOf())));
+	ID3D12Device*			   pDevice = pParent->GetDevice();
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC heapDesc{
+			.Type			= D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+			.NumDescriptors = 1,
+			.Flags			= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+		};
+		VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pDSVHeap.GetAddressOf())));
+		D3D::SetObjectName(m_pRTVHeap, "DSV Heap");
+	}
 
-	heapDesc.NumDescriptors = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-	VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pRTVHeap.GetAddressOf())));
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC heapDesc{
+			.Type			= D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+			.NumDescriptors = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT,
+			.Flags			= D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+		};
+		VERIFY_HR(pDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_pRTVHeap.GetAddressOf())));
+		D3D::SetObjectName(m_pRTVHeap, "RTV Heap");
+	}
+
 	m_RTVSize = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 }
 
@@ -40,51 +49,23 @@ void CommandContext::Reset()
 	gAssert(m_pCommandList);
 	if (m_pAllocator == nullptr)
 	{
-		m_pAllocator = GetParent()->GetCommandQueue(m_Type)->RequestAllocator();
+		m_pAllocator = GetParent()->AllocateCommandAllocator(m_Type);
 		m_pCommandList->Reset(m_pAllocator, nullptr);
 	}
 
-	gAssert(m_NumBatchedBarriers == 0);
+	gAssert(m_BatchedBarriers.empty());
 	gAssert(m_PendingBarriers.empty());
 	m_ResourceStates.clear();
 
 	ClearState();
 }
 
-SyncPoint CommandContext::Execute()
-{
-	return Execute({ this });
-}
-
-SyncPoint CommandContext::Execute(Span<CommandContext* const> contexts)
-{
-	gAssert(contexts.GetSize() > 0);
-	CommandQueue* pQueue = contexts[0]->GetParent()->GetCommandQueue(contexts[0]->GetType());
-	for(CommandContext* pContext : contexts)
-	{
-		gAssert(pContext->GetType() == pQueue->GetType(), "All commandlist types must match. Expected %s, got %s",
-			D3D::CommandlistTypeToString(pQueue->GetType()), D3D::CommandlistTypeToString(pContext->GetType()));
-		pContext->FlushResourceBarriers();
-	}
-	SyncPoint syncPoint = pQueue->ExecuteCommandLists(contexts);
-	for (CommandContext* pContext : contexts)
-	{
-		pContext->Free(syncPoint);
-	}
-	return syncPoint;
-}
-
 void CommandContext::Free(const SyncPoint& syncPoint)
 {
 	m_ScratchAllocator.Free(syncPoint);
-	GetParent()->GetCommandQueue(m_Type)->FreeAllocator(syncPoint, m_pAllocator);
+	GetParent()->FreeCommandAllocator(m_pAllocator, m_Type, syncPoint);
 	m_pAllocator = nullptr;
 	GetParent()->FreeCommandList(this);
-
-	if (m_Type != D3D12_COMMAND_LIST_TYPE_COPY)
-	{
-		m_ShaderResourceDescriptorAllocator.ReleaseUsedHeaps(syncPoint);
-	}
 }
 
 void CommandContext::ClearState()
@@ -142,10 +123,10 @@ void CommandContext::InsertResourceBarrier(DeviceResource* pResource, D3D12_RESO
 	{
 		if (D3D::NeedsTransition(beforeState, afterState, true))
 		{
-			if (m_NumBatchedBarriers > 0)
+			if (!m_BatchedBarriers.empty())
 			{
 				// If the previous barrier is for the same resource, see if we can combine the barrier.
-				D3D12_RESOURCE_BARRIER& last = m_BatchedBarriers[m_NumBatchedBarriers - 1];
+				D3D12_RESOURCE_BARRIER& last = m_BatchedBarriers.back();
 				if (last.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION
 					&& last.Transition.pResource == pResource->GetResource()
 					&& last.Transition.StateBefore == beforeState
@@ -179,10 +160,10 @@ void CommandContext::InsertUAVBarrier(const DeviceResource* pResource /*= nullpt
 
 void CommandContext::FlushResourceBarriers()
 {
-	if (m_NumBatchedBarriers > 0)
+	if (!m_BatchedBarriers.empty())
 	{
-		m_pCommandList->ResourceBarrier(m_NumBatchedBarriers, m_BatchedBarriers.data());
-		m_NumBatchedBarriers = 0;
+		m_pCommandList->ResourceBarrier((UINT)m_BatchedBarriers.size(), m_BatchedBarriers.data());
+		m_BatchedBarriers.clear();
 	}
 }
 
@@ -195,46 +176,51 @@ void CommandContext::CopyResource(const DeviceResource* pSource, const DeviceRes
 	m_pCommandList->CopyResource(pTarget->GetResource(), pSource->GetResource());
 }
 
-void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pTarget, const D3D12_BOX& sourceRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationOffset /*= 0*/)
+void CommandContext::CopyTexture(const Texture* pSource, const Buffer* pDestination, const Vector3u& sourceOrigin, const Vector3u sourceSize, uint32 sourceMip, uint32 sourceArrayIndex, uint32 destinationOffset)
 {
 	gAssert(pSource && pSource->GetResource(), "Source is invalid");
-	gAssert(pTarget && pTarget->GetResource(), "Target is invalid");
+	gAssert(pDestination && pDestination->GetResource(), "Target is invalid");
 
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT textureFootprint = {
-		.Offset = 0,
+		.Offset	   = 0,
 		.Footprint = {
-			.Format		= D3D::ConvertFormat(pSource->GetFormat()),
-			.Width		= sourceRegion.right - sourceRegion.left,
-			.Height		= sourceRegion.bottom - sourceRegion.top,
-			.Depth		= sourceRegion.back - sourceRegion.front,
-			.RowPitch	= Math::AlignUp<uint32>((uint32)RHI::GetRowPitch(pSource->GetFormat(), textureFootprint.Footprint.Width), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT),
+			.Format	  = D3D::ConvertFormat(pSource->GetFormat()),
+			.Width	  = sourceSize.x,
+			.Height	  = sourceSize.y,
+			.Depth	  = sourceSize.z,
+			.RowPitch = Math::AlignUp<uint32>((uint32)RHI::GetRowPitch(pSource->GetFormat(), sourceSize.x), D3D12_TEXTURE_DATA_PITCH_ALIGNMENT),
 		}
 	};
 
-	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
-	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pTarget->GetResource(), textureFootprint);
+	uint32						  subresource = D3D12CalcSubresource(sourceMip, sourceArrayIndex, 0, pSource->GetMipLevels(), pSource->GetArraySize());
+	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), subresource);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), textureFootprint);
 	FlushResourceBarriers();
+	CD3DX12_BOX sourceRegion(sourceOrigin.x, sourceOrigin.y, sourceOrigin.z, sourceOrigin.x + sourceSize.x, sourceOrigin.y + sourceSize.y, sourceOrigin.z + sourceSize.z);
 	m_pCommandList->CopyTextureRegion(&dstLocation, destinationOffset, 0, 0, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyTexture(const Texture* pSource, const Texture* pTarget, const D3D12_BOX& sourceRegion, const D3D12_BOX& destinationRegion, uint32 sourceSubresource /*= 0*/, uint32 destinationSubregion /*= 0*/)
+void CommandContext::CopyTexture(const Texture* pSource, const Texture* pDestination, const Vector3u& sourceOrigin, const Vector3u sourceSize, const Vector3u& destinationOrigin, uint32 sourceMip, uint32 sourceArrayIndex, uint32 destinationMip, uint32 destinationArrayIndex)
 {
 	gAssert(pSource && pSource->GetResource(), "Source is invalid");
-	gAssert(pTarget && pTarget->GetResource(), "Target is invalid");
+	gAssert(pDestination && pDestination->GetResource(), "Target is invalid");
 
+	uint32						  sourceSubresource		 = D3D12CalcSubresource(sourceMip, sourceArrayIndex, 0, pSource->GetMipLevels(), pSource->GetArraySize());
+	uint32						  destinationSubresource = D3D12CalcSubresource(destinationMip, destinationArrayIndex, 0, pDestination->GetMipLevels(), pDestination->GetArraySize());
 	CD3DX12_TEXTURE_COPY_LOCATION srcLocation(pSource->GetResource(), sourceSubresource);
-	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pTarget->GetResource(), destinationSubregion);
+	CD3DX12_TEXTURE_COPY_LOCATION dstLocation(pDestination->GetResource(), destinationSubresource);
 	FlushResourceBarriers();
-	m_pCommandList->CopyTextureRegion(&dstLocation, destinationRegion.left, destinationRegion.top, destinationRegion.front, &srcLocation, &sourceRegion);
+	CD3DX12_BOX sourceRegion(sourceOrigin.x, sourceOrigin.y, sourceOrigin.z, sourceOrigin.x + sourceSize.x, sourceOrigin.y + sourceSize.y, sourceOrigin.z + sourceSize.z);
+	m_pCommandList->CopyTextureRegion(&dstLocation, sourceOrigin.x, sourceOrigin.y, sourceOrigin.z, &srcLocation, &sourceRegion);
 }
 
-void CommandContext::CopyBuffer(const Buffer* pSource, const Buffer* pTarget, uint64 size, uint64 sourceOffset, uint64 destinationOffset)
+void CommandContext::CopyBuffer(const Buffer* pSource, const Buffer* pDestination, uint64 size, uint64 sourceOffset, uint64 destinationOffset)
 {
 	gAssert(pSource && pSource->GetResource(), "Source is invalid");
-	gAssert(pTarget && pTarget->GetResource(), "Target is invalid");
+	gAssert(pDestination && pDestination->GetResource(), "Target is invalid");
 
 	FlushResourceBarriers();
-	m_pCommandList->CopyBufferRegion(pTarget->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
+	m_pCommandList->CopyBufferRegion(pDestination->GetResource(), destinationOffset, pSource->GetResource(), sourceOffset, size);
 }
 
 void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 groupCountZ)
@@ -243,12 +229,12 @@ void CommandContext::Dispatch(uint32 groupCountX, uint32 groupCountY, uint32 gro
 	gAssert(m_CurrentCommandContext == CommandListContext::Compute);
 	gAssert(
 		groupCountX <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
-		groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
-		groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+			groupCountY <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION &&
+			groupCountZ <= D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
 		"Dispatch group size (%d x %d x %d) can not exceed %d", groupCountX, groupCountY, groupCountZ, D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION);
 
 	PrepareDraw();
-	if(groupCountX > 0 && groupCountY > 0 && groupCountZ > 0)
+	if (groupCountX > 0 && groupCountY > 0 && groupCountZ > 0)
 		m_pCommandList->Dispatch(groupCountX, groupCountY, groupCountZ);
 }
 
@@ -279,78 +265,54 @@ void CommandContext::ExecuteIndirect(const CommandSignature* pCommandSignature, 
 	m_pCommandList->ExecuteIndirect(pCommandSignature->GetCommandSignature(), maxCount, pIndirectArguments->GetResource(), argumentsOffset, pCountBuffer ? pCountBuffer->GetResource() : nullptr, countOffset);
 }
 
-void CommandContext::ClearBufferFloat(Buffer* pBuffer, float value)
+void CommandContext::ClearBufferFloat(const Buffer* pBuffer, float value)
 {
 	gAssert(pBuffer);
-	UnorderedAccessView* pUAV = pBuffer->GetUAV();
-	gAssert(pUAV);
-
-	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
-	if (gpuHandle.IsNull())
-	{
-		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
+	DescriptorHandle gpuHandle = pBuffer->GetUAV();
+	gAssert(gpuHandle.IsValid());
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
 	float values[4] = { value, value, value, value };
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pBuffer->GetResource(), values, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewFloat(ptr.GPUHandle, ptr.CPUOpaqueHandle, pBuffer->GetResource(), values, 0, nullptr);
 }
 
-void CommandContext::ClearBufferUInt(Buffer* pBuffer, uint32 value)
+void CommandContext::ClearBufferUInt(const Buffer* pBuffer, uint32 value)
 {
 	gAssert(pBuffer);
-	UnorderedAccessView* pUAV = pBuffer->GetUAV();
-	gAssert(pUAV);
-
-	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
-	if (gpuHandle.IsNull())
-	{
-		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
+	DescriptorHandle gpuHandle = pBuffer->GetUAV();
+	gAssert(gpuHandle.IsValid());
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
 	uint32 values[4] = { value, value, value, value };
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pBuffer->GetResource(), values, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewUint(ptr.GPUHandle, ptr.CPUOpaqueHandle, pBuffer->GetResource(), values, 0, nullptr);
 }
 
-void CommandContext::ClearTextureUInt(Texture* pTexture, const Vector4u& values)
+void CommandContext::ClearTextureUInt(const Texture* pTexture, const Vector4u& values)
 {
 	gAssert(pTexture);
-	UnorderedAccessView* pUAV = pTexture->GetUAV();
-	gAssert(pUAV);
-
-	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
-	if (gpuHandle.IsNull())
-	{
-		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
+	DescriptorHandle gpuHandle = pTexture->GetUAV();
+	gAssert(gpuHandle.IsValid());
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
-	m_pCommandList->ClearUnorderedAccessViewUint(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pTexture->GetResource(), &values.x, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewUint(ptr.GPUHandle, ptr.CPUOpaqueHandle, pTexture->GetResource(), &values.x, 0, nullptr);
 }
 
-void CommandContext::ClearTextureFloat(Texture* pTexture, const Vector4& values)
+void CommandContext::ClearTextureFloat(const Texture* pTexture, const Vector4& values)
 {
 	gAssert(pTexture);
-	UnorderedAccessView* pUAV = pTexture->GetUAV();
-	gAssert(pUAV);
-
-	DescriptorHandle gpuHandle = pUAV->GetGPUDescriptor();
-	if (gpuHandle.IsNull())
-	{
-		gpuHandle = m_ShaderResourceDescriptorAllocator.Allocate(1);
-		GetParent()->GetDevice()->CopyDescriptorsSimple(1, gpuHandle.CpuHandle, pUAV->GetDescriptor(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	}
+	DescriptorHandle gpuHandle = pTexture->GetUAV();
+	gAssert(gpuHandle.IsValid());
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
-	m_pCommandList->ClearUnorderedAccessViewFloat(gpuHandle.GpuHandle, pUAV->GetDescriptor(), pTexture->GetResource(), &values.x, 0, nullptr);
+	m_pCommandList->ClearUnorderedAccessViewFloat(ptr.GPUHandle, ptr.CPUOpaqueHandle, pTexture->GetResource(), &values.x, 0, nullptr);
 }
 
 void CommandContext::SetComputeRootSignature(const RootSignature* pRootSignature)
@@ -359,7 +321,6 @@ void CommandContext::SetComputeRootSignature(const RootSignature* pRootSignature
 	if (pRootSignature != m_pCurrentComputeRS)
 	{
 		m_pCommandList->SetComputeRootSignature(pRootSignature->GetRootSignature());
-		m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 		m_pCurrentComputeRS = pRootSignature;
 	}
 }
@@ -370,7 +331,6 @@ void CommandContext::SetGraphicsRootSignature(const RootSignature* pRootSignatur
 	if (pRootSignature != m_pCurrentGraphicsRS)
 	{
 		m_pCommandList->SetGraphicsRootSignature(pRootSignature->GetRootSignature());
-		m_ShaderResourceDescriptorAllocator.ParseRootSignature(pRootSignature);
 		m_pCurrentGraphicsRS = pRootSignature;
 	}
 }
@@ -399,8 +359,8 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 {
 	gAssert(m_CurrentCommandContext != CommandListContext::Invalid);
 
-	const RootSignature* pRootSignature = m_CurrentCommandContext == CommandListContext::Graphics ? m_pCurrentGraphicsRS : m_pCurrentComputeRS;
-	bool isRootConstants = pRootSignature->IsRootConstant(rootIndex);
+	const RootSignature* pRootSignature	 = m_CurrentCommandContext == CommandListContext::Graphics ? m_pCurrentGraphicsRS : m_pCurrentComputeRS;
+	bool				 isRootConstants = pRootSignature->IsRootConstant(rootIndex);
 	if (isRootConstants)
 	{
 		gAssert(dataSize % sizeof(uint32) == 0);
@@ -415,7 +375,7 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 			memset(pLocalData, (int)0xCDCDCDCD, rootConstantsSize);
 			memcpy(pLocalData, pData, dataSize);
 			dataSize = rootConstantsSize;
-			pData = pLocalData;
+			pData	 = pLocalData;
 		}
 #endif
 
@@ -431,14 +391,20 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const void* pData, uint32 dat
 
 		gAssert(!pRootSignature->IsRootConstant(rootIndex));
 		if (m_CurrentCommandContext == CommandListContext::Graphics)
-			m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GpuHandle);
+			m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, allocation.GPUAddress);
 		else
-			m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GpuHandle);
+			m_pCommandList->SetComputeRootConstantBufferView(rootIndex, allocation.GPUAddress);
 	}
 }
 
+void CommandContext::BindRootSRV(uint32 rootIndex, const void* pData, uint32 dataSize)
+{
+	ScratchAllocation allocation = AllocateScratch(dataSize, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+	memcpy(allocation.pMappedMemory, pData, dataSize);
+	BindRootSRV(rootIndex, allocation.GPUAddress);
+}
 
-void CommandContext::BindRootCBV(uint32 rootIndex, const Buffer* pBuffer)
+void CommandContext::BindRootCBV(uint32 rootIndex, D3D12_GPU_VIRTUAL_ADDRESS address)
 {
 #if ENABLE_ASSERTS
 	const RootSignature* pRootSignature = m_CurrentCommandContext == CommandListContext::Graphics ? m_pCurrentGraphicsRS : m_pCurrentComputeRS;
@@ -446,15 +412,9 @@ void CommandContext::BindRootCBV(uint32 rootIndex, const Buffer* pBuffer)
 #endif
 
 	if (m_CurrentCommandContext == CommandListContext::Graphics)
-		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, pBuffer->GetGpuHandle());
+		m_pCommandList->SetGraphicsRootConstantBufferView(rootIndex, address);
 	else
-		m_pCommandList->SetComputeRootConstantBufferView(rootIndex, pBuffer->GetGpuHandle());
-}
-
-
-void CommandContext::BindResources(uint32 rootIndex, Span<const ResourceView*> pViews, uint32 offset)
-{
-	m_ShaderResourceDescriptorAllocator.SetDescriptors(rootIndex, offset, pViews);
+		m_pCommandList->SetComputeRootConstantBufferView(rootIndex, address);
 }
 
 void CommandContext::SetShadingRate(D3D12_SHADING_RATE shadingRate /*= D3D12_SHADING_RATE_1X1*/)
@@ -466,7 +426,6 @@ void CommandContext::SetShadingRateImage(Texture* pTexture)
 {
 	m_pCommandList->RSSetShadingRateImage(pTexture->GetResource());
 }
-
 
 ScratchAllocation CommandContext::AllocateScratch(uint64 size, uint32 alignment /*= 16*/)
 {
@@ -483,19 +442,19 @@ void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 
 	for (const PendingBarrier& pending : m_PendingBarriers)
 	{
-		uint32 subResource = pending.Subresource;
-		DeviceResource* pResource = pending.pResource;
+		uint32			subResource = pending.Subresource;
+		DeviceResource* pResource	= pending.pResource;
 
 		// Retrieve the last known resource state
 		D3D12_RESOURCE_STATES beforeState = pResource->GetResourceState(subResource);
 		gAssert(D3D::IsTransitionAllowed(m_Type, beforeState),
-			"Resource (%s) can not be transitioned from this state (%s) on this queue (%s). Insert a barrier on another queue before executing this one.",
-			pResource->GetName(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
+				"Resource (%s) can not be transitioned from this state (%s) on this queue (%s). Insert a barrier on another queue before executing this one.",
+				pResource->GetName(), D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
 
 		// Get the after state of the first use in the current cmdlist
 		D3D12_RESOURCE_STATES afterState = pending.State;
-		if(D3D::NeedsTransition(beforeState, afterState, false))
-			resolveContext.AddBarrier(CD3DX12_RESOURCE_BARRIER::Transition(pResource->GetResource(), beforeState, afterState, subResource));
+		if (D3D::NeedsTransition(beforeState, afterState, false))
+			resolveContext.m_BatchedBarriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(pResource->GetResource(), beforeState, afterState, subResource));
 
 		// Update the resource with the last known state of the current cmdlist
 		D3D12_RESOURCE_STATES end_state = GetLocalResourceState(pending.pResource, subResource);
@@ -707,11 +666,15 @@ void CommandContext::ResolveResource(Texture* pSource, uint32 sourceSubResource,
 	m_pCommandList->ResolveSubresource(pTarget->GetResource(), targetSubResource, pSource->GetResource(), sourceSubResource, D3D::ConvertFormat(format));
 }
 
+void CommandContext::AddBarrier(const D3D12_RESOURCE_BARRIER& inBarrier)
+{
+	m_BatchedBarriers.push_back(inBarrier);
+}
+
 void CommandContext::PrepareDraw()
 {
 	gAssert(m_CurrentCommandContext != CommandListContext::Invalid);
 	FlushResourceBarriers();
-	m_ShaderResourceDescriptorAllocator.BindStagedDescriptors(*this, m_CurrentCommandContext);
 }
 
 void CommandContext::SetPipelineState(PipelineState* pPipelineState)
@@ -794,7 +757,7 @@ void CommandContext::BindDynamicVertexBuffer(uint32 rootIndex, uint32 elementCou
 	ScratchAllocation allocation = AllocateScratch(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_VERTEX_BUFFER_VIEW view = {
-		.BufferLocation = allocation.GpuHandle,
+		.BufferLocation = allocation.GPUAddress,
 		.SizeInBytes	= bufferSize,
 		.StrideInBytes	= elementSize,
 	};
@@ -807,7 +770,7 @@ void CommandContext::BindDynamicIndexBuffer(uint32 elementCount, const void* pDa
 	ScratchAllocation allocation = AllocateScratch(bufferSize);
 	memcpy(allocation.pMappedMemory, pData, bufferSize);
 	D3D12_INDEX_BUFFER_VIEW view = {
-		.BufferLocation	= allocation.GpuHandle,
+		.BufferLocation	= allocation.GPUAddress,
 		.SizeInBytes	= bufferSize,
 		.Format			= D3D::ConvertFormat(format),
 	};
@@ -828,13 +791,6 @@ void CommandContext::SetScissorRect(const FloatRect& rect)
 void CommandContext::SetStencilRef(uint32 stencilRef)
 {
 	m_pCommandList->OMSetStencilRef(stencilRef);
-}
-
-void CommandContext::AddBarrier(const D3D12_RESOURCE_BARRIER& barrier)
-{
-	m_BatchedBarriers[m_NumBatchedBarriers++] = barrier;
-	if(m_NumBatchedBarriers >= MaxNumBatchedBarriers)
-		FlushResourceBarriers();
 }
 
 CommandSignature::CommandSignature(GraphicsDevice* pParent, ID3D12CommandSignature* pCmdSignature)

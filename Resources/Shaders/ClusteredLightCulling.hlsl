@@ -2,12 +2,6 @@
 
 #define THREAD_COUNT 4
 
-struct PassData
-{
-	int4 ClusterDimensions;
-	int2 ClusterSize;
-};
-
 struct PrecomputedLightData
 {
 	float3 ViewSpacePosition;
@@ -20,11 +14,14 @@ struct PrecomputedLightData
 	uint IsDirectional : 1;
 };
 
-ConstantBuffer<PassData> cPass : register(b0);
-
-StructuredBuffer<PrecomputedLightData> tLightData : register(t0);
-
-RWBuffer<uint> uLightGrid : register(u0);
+struct PassParams
+{
+	int4 ClusterDimensions;
+	int2 ClusterSize;
+	RWTypedBufferH<uint> LightGrid;
+	StructuredBufferH<PrecomputedLightData> LightData;
+};
+DEFINE_CONSTANTS(PassParams, 0);
 
 bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, float2 coneAngleSinCos, Sphere sphere)
 {
@@ -40,7 +37,7 @@ bool ConeInSphere(float3 conePosition, float3 coneDirection, float coneRange, fl
 
 float GetDepthFromSlice(uint slice)
 {
-	return cView.FarZ * pow(cView.NearZ / cView.FarZ, (float)slice / cPass.ClusterDimensions.z);
+	return cView.FarZ * pow(cView.NearZ / cView.FarZ, (float)slice / cPassParams.ClusterDimensions.z);
 }
 
 float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
@@ -52,8 +49,8 @@ float3 LineFromOriginZIntersection(float3 lineFromOrigin, float depth)
 
 AABB ComputeAABB(uint3 clusterIndex3D)
 {
-	float2 minPoint_SS = float2(clusterIndex3D.x * cPass.ClusterSize.x, clusterIndex3D.y * cPass.ClusterSize.y);
-	float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cPass.ClusterSize.x, (clusterIndex3D.y + 1) * cPass.ClusterSize.y);
+	float2 minPoint_SS = float2(clusterIndex3D.x * cPassParams.ClusterSize.x, clusterIndex3D.y * cPassParams.ClusterSize.y);
+	float2 maxPoint_SS = float2((clusterIndex3D.x + 1) * cPassParams.ClusterSize.x, (clusterIndex3D.y + 1) * cPassParams.ClusterSize.y);
 
 	float3 minPoint_VS = ScreenToView(float4(minPoint_SS, 0, 1), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
 	float3 maxPoint_VS = ScreenToView(float4(maxPoint_SS, 0, 1), cView.ViewportDimensionsInv, cView.ClipToView).xyz;
@@ -76,7 +73,7 @@ AABB ComputeAABB(uint3 clusterIndex3D)
 void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
 	uint3 clusterIndex3D = dispatchThreadId;
-	if(any(clusterIndex3D >= cPass.ClusterDimensions.xyz))
+	if(any(clusterIndex3D >= cPassParams.ClusterDimensions.xyz))
 		return;
 
 	AABB clusterAABB = ComputeAABB(clusterIndex3D);
@@ -92,7 +89,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 		[loop]
 		for(uint i = 0; i < 32 && lightIndex < cView.LightCount; ++i)
 		{
-			PrecomputedLightData lightData = tLightData[lightIndex];
+			PrecomputedLightData lightData = cPassParams.LightData[lightIndex];
 			++lightIndex;
 
 			if(lightData.IsPoint)
@@ -127,7 +124,7 @@ void LightCulling(uint3 dispatchThreadId : SV_DispatchThreadID)
 			}
 		}
 
-		uint clusterIndex = Flatten3D(dispatchThreadId, cPass.ClusterDimensions.xy);
-		uLightGrid[clusterIndex * CLUSTERED_LIGHTING_NUM_BUCKETS + bucketIndex] = lightMask;
+		uint clusterIndex = Flatten3D(dispatchThreadId, cPassParams.ClusterDimensions.xy);
+		cPassParams.LightGrid.Store(clusterIndex * CLUSTERED_LIGHTING_NUM_BUCKETS + bucketIndex, lightMask);
 	}
 }

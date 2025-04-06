@@ -1464,7 +1464,7 @@ inline const CD3DX12_RESOURCE_DESC1* D3DX12ConditionallyExpandAPIDesc(
                 }
                 return uiRet;
             };
-            auto Max = [](UINT64 const & a, UINT64 const & b)
+            auto Max = [](UINT64 const& a, UINT64 const& b)
             {
                 return (a < b) ? b : a;
             };
@@ -1494,6 +1494,7 @@ inline const CD3DX12_RESOURCE_DESC1* D3DX12ConditionallyExpandAPIDesc(
         return pDesc;
     }
 }
+
 
 //------------------------------------------------------------------------------------------------
 struct CD3DX12_VIEW_INSTANCING_DESC : public D3D12_VIEW_INSTANCING_DESC
@@ -1533,3 +1534,4 @@ struct CD3DX12_RT_FORMAT_ARRAY : public D3D12_RT_FORMAT_ARRAY
         // assumes ARRAY_SIZE(pFormats) == ARRAY_SIZE(RTFormats)
     }
 };
+

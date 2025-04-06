@@ -77,7 +77,7 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 		D3D12_DRAW_ARGUMENTS LineArgs;
 	};
 
-	RGBuffer* pDrawArgs = graph.Create("Indirect Draw Args", BufferDesc::CreateIndirectArguments<DrawArgs>());
+	RGBuffer* pDrawArgs = graph.Create("Indirect Draw Args", BufferDesc::CreateIndirectArguments<D3D12_DRAW_ARGUMENTS>(2));
 
 	graph.AddPass("Build Draw Args", RGPassFlag::Compute)
 		.Write({ pDrawArgs, pRenderData })
@@ -88,10 +88,15 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 				context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
 				context.SetPipelineState(m_pBuildIndirectDrawArgsPSO);
 
-				context.BindResources(BindingSlot::UAV, {
-					resources.GetUAV(pRenderData),
-					resources.GetUAV(pDrawArgs),
-					});
+				struct
+				{
+					RWBufferView RenderData;
+					RWBufferView DrawArgs;
+				} params;
+				params.RenderData = resources.GetUAV(pRenderData);
+				params.DrawArgs	  = resources.GetUAV(pDrawArgs);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
+
 				context.Dispatch(1);
 			});
 
@@ -105,13 +110,23 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 				context.SetPipelineState(m_pRenderLinesPSO);
 				context.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
+				struct
+				{
+					Vector2		TargetDimensionsInv;
+					TextureView FontAtlas;
+					BufferView	GlyphData;
+					BufferView	RenderData;
+					TextureView Depth;
+				} params;
+				params.TargetDimensionsInv = Vector2::One / Vector2(pTarget->GetDesc().Size2D());
+				params.FontAtlas		   = m_pFontAtlas->GetSRV();
+				params.GlyphData		   = m_pGlyphData->GetSRV();
+				params.RenderData		   = resources.GetSRV(pRenderData);
+				params.Depth			   = resources.GetSRV(pDepth);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
+
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindResources(BindingSlot::SRV, {
-					m_pFontAtlas->GetSRV(),
-					m_pGlyphData->GetSRV(),
-					resources.GetSRV(pRenderData),
-					resources.GetSRV(pDepth),
-					});
+
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pDrawArgs), nullptr, offsetof(DrawArgs, LineArgs));
 			});
 
@@ -126,17 +141,20 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 
 				struct
 				{
-					Vector2 AtlasDimensionsInv;
-					Vector2 TargetDimensionsInv;
-				} parameters;
-				parameters.AtlasDimensionsInv = Vector2::One / Vector2(m_pFontAtlas->GetDesc().Size2D());
-				parameters.TargetDimensionsInv = Vector2::One / Vector2(pTarget->GetDesc().Size2D());
-				context.BindRootCBV(BindingSlot::PerInstance, parameters);
-				context.BindResources(BindingSlot::SRV, {
-					m_pFontAtlas->GetSRV(),
-					m_pGlyphData->GetSRV(),
-					resources.GetSRV(pRenderData)
-					});
+					Vector2		TargetDimensionsInv;
+					TextureView FontAtlas;
+					BufferView	GlyphData;
+					BufferView	RenderData;
+					TextureView Depth{};
+				} params;
+				params.TargetDimensionsInv = Vector2::One / Vector2(pTarget->GetDesc().Size2D());
+				params.FontAtlas		   = m_pFontAtlas->GetSRV();
+				params.GlyphData		   = m_pGlyphData->GetSRV();
+				params.RenderData		   = resources.GetSRV(pRenderData);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
+
+				Renderer::BindViewUniforms(context, *pView);
+
 				context.ExecuteIndirect(GraphicsCommon::pIndirectDrawSignature, 1, resources.Get(pDrawArgs), nullptr, offsetof(DrawArgs, TextArgs));
 			});
 
@@ -146,9 +164,9 @@ void ShaderDebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGText
 
 void ShaderDebugRenderer::GetGPUData(GPUDebugRenderData* pData) const
 {
-	pData->RenderDataUAV = m_pRenderDataBuffer->GetUAVIndex();
-	pData->FontDataSRV = m_pGlyphData->GetSRVIndex();
-	pData->FontSize = m_FontSize;
+	pData->RenderDataUAV = m_pRenderDataBuffer->GetUAV();
+	pData->FontDataSRV	 = m_pGlyphData->GetSRV();
+	pData->FontSize		 = m_FontSize;
 }
 
 void ShaderDebugRenderer::BuildFontAtlas(GraphicsDevice* pDevice)

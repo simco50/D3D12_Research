@@ -54,60 +54,75 @@ static const int MeshletCounterIndex = COUNTER_PHASE2_CANDIDATE_MESHLETS;	// Ind
 static const int VisibleMeshletCounter = COUNTER_PHASE2_VISIBLE_MESHLETS;	// Index of counter for visible meshlets in current phase.
 #endif
 
-struct CullParams
-{
-	uint2 HZBDimensions;
-};
-
-ConstantBuffer<CullParams> cCullParams								: register(b0);
-
-RWStructuredBuffer<MeshletCandidate> uCandidateMeshlets 			: register(u0);	// List of meshlets to process
-RWStructuredBuffer<uint> uCounter_CandidateMeshlets 				: register(u1);	// Number of meshlets to process
-RWStructuredBuffer<uint> uPhaseTwoInstances 						: register(u2);	// List of instances which need to be tested in Phase 2
-RWStructuredBuffer<uint> uCounter_PhaseTwoInstances 				: register(u3);	// Number of instances which need to be tested in Phase 2
-RWStructuredBuffer<MeshletCandidate> uVisibleMeshlets 				: register(u4);	// List of meshlets to rasterize
-RWStructuredBuffer<uint> uCounter_VisibleMeshlets 					: register(u5);	// Number of meshlets to rasterize
-
-RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments 	: register(u0); // General purpose dispatch args
-
-StructuredBuffer<uint> tCounter_CandidateMeshlets 					: register(t0);	// Number of meshlets to process
-StructuredBuffer<uint> tCounter_PhaseTwoInstances 					: register(t1);	// Number of instances which need to be tested in Phase 2
-StructuredBuffer<uint> tCounter_VisibleMeshlets 					: register(t2);	// List of meshlets to rasterize
-Texture2D<float> tHZB 												: register(t2);	// Current HZB texture
-
-StructuredBuffer<uint4> tBinnedMeshletOffsetAndCounts[2] 			: register(t3);
-
-
 // Returns the offset in the candidate meshlet buffer for the current phase
-uint GetCandidateMeshletOffset(bool phase2)
+uint GetCandidateMeshletOffset(bool phase2, RWStructuredBufferH<uint> candidateMeshletsCounter)
 {
-	return phase2 ? uCounter_CandidateMeshlets[COUNTER_PHASE1_CANDIDATE_MESHLETS] : 0u;
+	return phase2 ? candidateMeshletsCounter[COUNTER_PHASE1_CANDIDATE_MESHLETS] : 0u;
 }
 
+
+struct ClearUAVParams
+{
+	RWStructuredBufferH<uint> Counter_CandidateMeshlets;	// Number of meshlets to process
+	RWStructuredBufferH<uint> Counter_PhaseTwoInstances;	// Number of instances which need to be tested in Phase 2
+	RWStructuredBufferH<uint> Counter_VisibleMeshlets;		// Number of meshlets to rasterize
+};
+DEFINE_CONSTANTS(ClearUAVParams, 0);
 
 [numthreads(1, 1, 1)]
 void ClearCountersCS()
 {
-	uCounter_CandidateMeshlets[0] = 0;
-	uCounter_CandidateMeshlets[1] = 0;
-	uCounter_CandidateMeshlets[2] = 0;
+	ClearUAVParams params = cClearUAVParams;
+	params.Counter_CandidateMeshlets.Store(0, 0);
+	params.Counter_CandidateMeshlets.Store(1, 0);
+	params.Counter_CandidateMeshlets.Store(2, 0);
 
-	uCounter_PhaseTwoInstances[0] = 0;
+	params.Counter_PhaseTwoInstances.Store(0, 0);
 
-	uCounter_VisibleMeshlets[0] = 0;
-	uCounter_VisibleMeshlets[1] = 0;
+	params.Counter_VisibleMeshlets.Store(0, 0);
+	params.Counter_VisibleMeshlets.Store(1, 0);
 }
+
+
+struct InstanceCullArgsParams
+{
+	StructuredBufferH<uint> Counter_PhaseTwoInstances;					// Number of instances which need to be tested in Phase 2
+	RWStructuredBufferH<D3D12_DISPATCH_ARGUMENTS> DispatchArguments; 	// General purpose dispatch args
+};
+DEFINE_CONSTANTS(InstanceCullArgsParams, 0);
+
+[numthreads(1, 1, 1)]
+void BuildInstanceCullIndirectArgs()
+{
+	InstanceCullArgsParams params = cInstanceCullArgsParams;
+    uint numInstances = min(params.Counter_PhaseTwoInstances[0], MAX_NUM_INSTANCES);
+    D3D12_DISPATCH_ARGUMENTS args;
+    args.ThreadGroupCount = uint3(DivideAndRoundUp(numInstances, NUM_CULL_INSTANCES_THREADS), 1, 1);
+    params.DispatchArguments.Store(0, args);
+}
+
 
 /*
 	Per-instance culling
 */
+struct InstanceCullParams
+{
+	uint2 HZBDimensions;
+	RWStructuredBufferH<MeshletCandidate> CandidateMeshlets;	// List of meshlets to process
+	RWStructuredBufferH<uint> Counter_CandidateMeshlets;		// Number of meshlets to process
+	RWStructuredBufferH<uint> PhaseTwoInstances;				// List of instances which need to be tested in Phase 2
+	RWStructuredBufferH<uint> Counter_PhaseTwoInstances;		// Number of instances which need to be tested in Phase 2
+	Texture2DH<float> HZB;										// Current HZB texture
+};
+DEFINE_CONSTANTS(InstanceCullParams, 0);
+
 [numthreads(NUM_CULL_INSTANCES_THREADS, 1, 1)]
 void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 {
 #if OCCLUSION_FIRST_PASS
 	uint numInstances = cView.NumInstances;
 #else
-	uint numInstances = uCounter_PhaseTwoInstances[0];
+	uint numInstances = cInstanceCullParams.Counter_PhaseTwoInstances[0];
 #endif
 
 	if(threadID >= numInstances)
@@ -115,7 +130,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 
 	uint instanceIndex = threadID;
 #if !OCCLUSION_FIRST_PASS
-	instanceIndex = uPhaseTwoInstances[instanceIndex];
+	instanceIndex = cInstanceCullParams.PhaseTwoInstances[instanceIndex];
 #endif
 
 	InstanceData instance = GetInstance(instanceIndex);
@@ -142,7 +157,7 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		if (prevCullData.IsVisible)
 		{
 			// Occlusion test instance against the HZB
-			wasOccluded = !HZBCull(prevCullData, tHZB, cCullParams.HZBDimensions);
+			wasOccluded = !HZBCull(prevCullData, cInstanceCullParams.HZB.Get(), cInstanceCullParams.HZBDimensions);
 		}
 
 		// If the instance was occluded the previous frame, we can't be sure it's still occluded this frame.
@@ -150,13 +165,13 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 		if(wasOccluded)
 		{
 			uint elementOffset = 0;
-			InterlockedAdd_WaveOps(uCounter_PhaseTwoInstances, 0, 1, elementOffset);
+			InterlockedAdd_WaveOps(cInstanceCullParams.Counter_PhaseTwoInstances.Get(), 0, 1, elementOffset);
 			if(elementOffset < MAX_NUM_INSTANCES)
-				uPhaseTwoInstances[elementOffset] = instance.ID;
+				cInstanceCullParams.PhaseTwoInstances.Store(elementOffset, instance.ID);
 		}
 #else
 		// Occlusion test instance against the updated HZB
-		isVisible = HZBCull(cullData, tHZB, cCullParams.HZBDimensions);
+		isVisible = HZBCull(cullData, cInstanceCullParams.HZB.Get(), cInstanceCullParams.HZBDimensions);
 #endif
 	}
 #endif
@@ -166,20 +181,20 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
     {
 		// Limit meshlet count to how large our buffer is
 		uint globalMeshletIndex;
-        InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_CANDIDATE_MESHLETS, mesh.MeshletCount, globalMeshletIndex);
+        InterlockedAdd_Varying_WaveOps(cInstanceCullParams.Counter_CandidateMeshlets.Get(), COUNTER_TOTAL_CANDIDATE_MESHLETS, mesh.MeshletCount, globalMeshletIndex);
 		int clampedNumMeshlets = min(globalMeshletIndex + mesh.MeshletCount, MAX_NUM_MESHLETS);
 		int numMeshletsToAdd = max(clampedNumMeshlets - (int)globalMeshletIndex, 0);
 
 		// Add all meshlets of current instance to the candidate meshlets
 		uint elementOffset;
-		InterlockedAdd_Varying_WaveOps(uCounter_CandidateMeshlets, MeshletCounterIndex, numMeshletsToAdd, elementOffset);
-		uint meshletCandidateOffset = GetCandidateMeshletOffset(!OCCLUSION_FIRST_PASS);
+		InterlockedAdd_Varying_WaveOps(cInstanceCullParams.Counter_CandidateMeshlets.Get(), MeshletCounterIndex, numMeshletsToAdd, elementOffset);
+		uint meshletCandidateOffset = GetCandidateMeshletOffset(!OCCLUSION_FIRST_PASS, cInstanceCullParams.Counter_CandidateMeshlets);
 		for(uint i = 0; i < numMeshletsToAdd; ++i)
 		{
 			MeshletCandidate meshlet;
 			meshlet.InstanceID = instance.ID;
 			meshlet.MeshletIndex = i;
-			uCandidateMeshlets[meshletCandidateOffset + elementOffset + i] = meshlet;
+			cInstanceCullParams.CandidateMeshlets.Store(meshletCandidateOffset + elementOffset + i, meshlet);
 		}
     }
 
@@ -191,39 +206,51 @@ void CullInstancesCS(uint threadID : SV_DispatchThreadID)
 #endif
 }
 
+
+struct MeshletCullArgsParams
+{
+	RWStructuredBufferH<D3D12_DISPATCH_ARGUMENTS> DispatchArguments; 	// General purpose dispatch args
+	StructuredBufferH<uint> Counter_CandidateMeshlets;					// Number of meshlets to process	
+};
+DEFINE_CONSTANTS(MeshletCullArgsParams, 0);
+
+
 [numthreads(1, 1, 1)]
 void BuildMeshletCullIndirectArgs()
 {
-    uint numMeshlets = tCounter_CandidateMeshlets[MeshletCounterIndex];
+    uint numMeshlets = cMeshletCullArgsParams.Counter_CandidateMeshlets[MeshletCounterIndex];
     D3D12_DISPATCH_ARGUMENTS args;
     args.ThreadGroupCount = uint3(DivideAndRoundUp(numMeshlets, NUM_CULL_MESHLETS_THREADS), 1, 1);
-    uDispatchArguments[0] = args;
+    cMeshletCullArgsParams.DispatchArguments.Store(0, args);
 }
 
-[numthreads(1, 1, 1)]
-void BuildInstanceCullIndirectArgs()
-{
-    uint numInstances = min(tCounter_PhaseTwoInstances[0], MAX_NUM_INSTANCES);
-    D3D12_DISPATCH_ARGUMENTS args;
-    args.ThreadGroupCount = uint3(DivideAndRoundUp(numInstances, NUM_CULL_INSTANCES_THREADS), 1, 1);
-    uDispatchArguments[0] = args;
-}
 
 /*
 	Per-meshlet culling
 */
+struct MeshletCullParams
+{
+	uint2 HZBDimensions;
+	RWStructuredBufferH<MeshletCandidate> CandidateMeshlets;	// List of meshlets to process
+	RWStructuredBufferH<uint> Counter_CandidateMeshlets;		// Number of meshlets to process
+	RWStructuredBufferH<MeshletCandidate> VisibleMeshlets;		// List of meshlets to rasterize
+	RWStructuredBufferH<uint> Counter_VisibleMeshlets;			// Number of meshlets to rasterize	
+	Texture2DH<float> HZB;										// Current HZB texture
+};
+DEFINE_CONSTANTS(MeshletCullParams, 0);
+
 [numthreads(NUM_CULL_MESHLETS_THREADS, 1, 1)]
 void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 {
-	if(threadID < uCounter_CandidateMeshlets[MeshletCounterIndex])
+	if(threadID < cMeshletCullParams.Counter_CandidateMeshlets[MeshletCounterIndex])
 	{
-		uint candidateIndex = GetCandidateMeshletOffset(!OCCLUSION_FIRST_PASS) + threadID;
-		MeshletCandidate candidate = uCandidateMeshlets[candidateIndex];
+		uint candidateIndex = GetCandidateMeshletOffset(!OCCLUSION_FIRST_PASS, cMeshletCullParams.Counter_CandidateMeshlets) + threadID;
+		MeshletCandidate candidate = cMeshletCullParams.CandidateMeshlets[candidateIndex];
 		InstanceData instance = GetInstance(candidate.InstanceID);
 		MeshData mesh = GetMesh(instance.MeshIndex);
 
 		// Frustum test meshlet against the current view
-		Meshlet::Bounds bounds = ByteBufferLoad<Meshlet::Bounds>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletBoundsOffset);
+		Meshlet::Bounds bounds = mesh.DataBuffer.LoadStructure<Meshlet::Bounds>(candidate.MeshletIndex, mesh.MeshletBoundsOffset);
 		FrustumCullData cullData = FrustumCull(bounds.LocalCenter, bounds.LocalExtents, instance.LocalToWorld, cView.WorldToClip);
 		bool isVisible = cullData.IsVisible;
 		bool wasOccluded = false;
@@ -237,7 +264,7 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 			if(prevCullData.IsVisible)
 			{
 				// Occlusion test meshlet against the HZB
-				wasOccluded = !HZBCull(prevCullData, tHZB, cCullParams.HZBDimensions);
+				wasOccluded = !HZBCull(prevCullData, cMeshletCullParams.HZB.Get(), cMeshletCullParams.HZBDimensions);
 			}
 
 			// If the meshlet was occluded the previous frame, we can't be sure it's still occluded this frame.
@@ -246,17 +273,17 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 			{
 				// Limit how many meshlets we're writing based on the buffer size
 				uint globalMeshletIndex;
-        		InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_TOTAL_CANDIDATE_MESHLETS, 1, globalMeshletIndex);
+        		InterlockedAdd_WaveOps(cMeshletCullParams.Counter_CandidateMeshlets.Get(), COUNTER_TOTAL_CANDIDATE_MESHLETS, 1, globalMeshletIndex);
 				if(globalMeshletIndex < MAX_NUM_MESHLETS)
 				{
 					uint elementOffset;
-					InterlockedAdd_WaveOps(uCounter_CandidateMeshlets, COUNTER_PHASE2_CANDIDATE_MESHLETS, 1, elementOffset);
-					uCandidateMeshlets[GetCandidateMeshletOffset(true) + elementOffset] = candidate;
+					InterlockedAdd_WaveOps(cMeshletCullParams.Counter_CandidateMeshlets.Get(), COUNTER_PHASE2_CANDIDATE_MESHLETS, 1, elementOffset);
+					cMeshletCullParams.CandidateMeshlets.Store(GetCandidateMeshletOffset(true, cMeshletCullParams.Counter_CandidateMeshlets) + elementOffset, candidate);
 				}
 			}
 #else
 			// Occlusion test meshlet against the updated HZB
-			isVisible = HZBCull(cullData, tHZB, cCullParams.HZBDimensions);
+			isVisible = HZBCull(cullData, cMeshletCullParams.HZB.Get(), cMeshletCullParams.HZBDimensions);
 #endif
 		}
 #endif
@@ -265,23 +292,26 @@ void CullMeshletsCS(uint threadID : SV_DispatchThreadID)
 		if(isVisible && !wasOccluded)
 		{
 			uint elementOffset;
-			InterlockedAdd_WaveOps(uCounter_VisibleMeshlets, VisibleMeshletCounter, 1, elementOffset);
+			InterlockedAdd_WaveOps(cMeshletCullParams.Counter_VisibleMeshlets.Get(), VisibleMeshletCounter, 1, elementOffset);
 
 #if !OCCLUSION_FIRST_PASS
-			elementOffset += uCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
+			elementOffset += cMeshletCullParams.Counter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
 #endif
-			uVisibleMeshlets[elementOffset] = candidate;
+			cMeshletCullParams.VisibleMeshlets.Store(elementOffset, candidate);
 		}
 	}
 }
 
-struct PrintParams
+struct StatsParams
 {
 	float2 Pos;
 	uint NumBins;
+	StructuredBufferH<uint> Counter_CandidateMeshlets;	// Number of meshlets to process
+	StructuredBufferH<uint> Counter_PhaseTwoInstances;	// Number of instances which need to be tested in Phase 2
+	StructuredBufferH<uint> Counter_VisibleMeshlets;	// Number of meshlets to rasterize
+	StructuredBufferH<uint4> BinnedMeshletOffsetAndCounts[2];
 };
-
-ConstantBuffer<PrintParams> cPrintParams : register(b0);
+DEFINE_CONSTANTS(StatsParams, 0);
 
 /*
 	Debug statistics
@@ -298,15 +328,15 @@ void PrintStatsCS()
 		numMeshlets += mesh.MeshletCount;
 	}
 
-	uint occludedInstances = tCounter_PhaseTwoInstances[0];
+	uint occludedInstances = cStatsParams.Counter_PhaseTwoInstances[0];
 	uint visibleInstances = numInstances - occludedInstances;
-	uint processedMeshlets = tCounter_CandidateMeshlets[COUNTER_TOTAL_CANDIDATE_MESHLETS];
-	uint phase1CandidateMeshlets = tCounter_CandidateMeshlets[COUNTER_PHASE1_CANDIDATE_MESHLETS];
-	uint phase2CandidateMeshlets = tCounter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];
-	uint phase1VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
-	uint phase2VisibleMeshlets = tCounter_VisibleMeshlets[COUNTER_PHASE2_VISIBLE_MESHLETS];
+	uint processedMeshlets = cStatsParams.Counter_CandidateMeshlets[COUNTER_TOTAL_CANDIDATE_MESHLETS];
+	uint phase1CandidateMeshlets = cStatsParams.Counter_CandidateMeshlets[COUNTER_PHASE1_CANDIDATE_MESHLETS];
+	uint phase2CandidateMeshlets = cStatsParams.Counter_CandidateMeshlets[COUNTER_PHASE2_CANDIDATE_MESHLETS];
+	uint phase1VisibleMeshlets = cStatsParams.Counter_VisibleMeshlets[COUNTER_PHASE1_VISIBLE_MESHLETS];
+	uint phase2VisibleMeshlets = cStatsParams.Counter_VisibleMeshlets[COUNTER_PHASE2_VISIBLE_MESHLETS];
 
-	TextWriter writer = CreateTextWriter(cPrintParams.Pos);
+	TextWriter writer = CreateTextWriter(cStatsParams.Pos);
 
 	uint align = 280;
 
@@ -403,14 +433,14 @@ void PrintStatsCS()
 		writer.Text(TEXT("Phase "));
 		writer.Int(p + 1);
 		writer.NewLine();
-		for(int i = 0; i < cPrintParams.NumBins; ++i)
+		for(int i = 0; i < cStatsParams.NumBins; ++i)
 		{
 			writer.Text(TEXT("Bin "));
 			writer.Int(i, false);
 			writer.Text(':');
 			writer.Text(' ');
 
-			uint4 offsetAndCount  = tBinnedMeshletOffsetAndCounts[p][i];
+			uint4 offsetAndCount  = cStatsParams.BinnedMeshletOffsetAndCounts[p][i];
 			writer.Text(TEXT("Count: "));
 			writer.Int(offsetAndCount.x);
 

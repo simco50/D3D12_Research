@@ -1,11 +1,6 @@
 #include "Common.hlsli"
 #include "D3D12.hlsli"
 
-struct PassParameters
-{
-	uint NumInstances;
-};
-
 struct BLASInstance
 {
 	D3D12_GPU_VIRTUAL_ADDRESS AccelerationStructure;
@@ -14,25 +9,30 @@ struct BLASInstance
 	uint InstanceMask		: 8;
 };
 
-ConstantBuffer<PassParameters> cPass : register(b0);
-StructuredBuffer<InstanceData> tInstanceData : register(t0);
-StructuredBuffer<BLASInstance> tInputInstances : register(t1);
-RWStructuredBuffer<D3D12_RAYTRACING_INSTANCE_DESC> uOutputInstances : register(u0);
+struct PassParams
+{
+	uint NumInstances;
+	StructuredBufferH<InstanceData> InstanceData;
+	StructuredBufferH<BLASInstance> InputInstances;
+	RWStructuredBufferH<D3D12_RAYTRACING_INSTANCE_DESC> OutputInstances;
+};
+
+DEFINE_CONSTANTS(PassParams, 0);
 
 [numthreads(32, 1, 1)]
 void UpdateTLASCS(uint threadID : SV_DispatchThreadID)
 {
-	if(threadID < cPass.NumInstances)
+	if(threadID < cPassParams.NumInstances)
 	{
-		BLASInstance blasDesc = tInputInstances[threadID];
+		BLASInstance blasDesc = cPassParams.InputInstances[threadID];
 		D3D12_RAYTRACING_INSTANCE_DESC output;
 		output.InstanceID = blasDesc.InstanceID;
 		output.InstanceMask = blasDesc.InstanceMask;
 		output.InstanceContributionToHitGroupIndex = 0;
 		output.Flags = blasDesc.Flags;
 		output.AccelerationStructure = blasDesc.AccelerationStructure;
-		InstanceData instance = tInstanceData[blasDesc.InstanceID];
+		InstanceData instance = cPassParams.InstanceData[blasDesc.InstanceID];
 		output.Transform = (float3x4)transpose(instance.LocalToWorld);
-		uOutputInstances[threadID] = output;
+		cPassParams.OutputInstances.Store(threadID, output);
 	}
 }

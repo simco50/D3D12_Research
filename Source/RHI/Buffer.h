@@ -1,6 +1,7 @@
 #pragma once
 #include "DeviceResource.h"
 #include "D3D.h"
+#include "DescriptorHandle.h"
 
 enum class BufferFlag : uint8
 {
@@ -12,7 +13,6 @@ enum class BufferFlag : uint8
 	ByteAddress =			1 << 4,
 	AccelerationStructure = 1 << 5,
 	IndirectArguments =		1 << 6,
-	NoBindless =			1 << 7,
 };
 DECLARE_BITMASK_TYPE(BufferFlag)
 
@@ -40,7 +40,7 @@ struct BufferDesc
 	static BufferDesc CreateReadback(uint64 bytes)
 	{
 		gAssert(bytes % 4 == 0);
-		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::Readback | BufferFlag::NoBindless };
+		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::Readback };
 	}
 
 	static BufferDesc CreateByteAddress(uint64 bytes, BufferFlag flags = BufferFlag::None)
@@ -52,7 +52,7 @@ struct BufferDesc
 	static BufferDesc CreateBLAS(uint64 bytes)
 	{
 		gAssert(bytes % 4 == 0);
-		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess | BufferFlag::NoBindless };
+		return { .Size = bytes, .ElementSize = 4, .Flags = BufferFlag::AccelerationStructure | BufferFlag::UnorderedAccess };
 	}
 
 	static BufferDesc CreateTLAS(uint64 bytes)
@@ -90,25 +90,55 @@ struct BufferDesc
 	}
 };
 
+
+struct BufferUAVDesc
+{
+	BufferUAVDesc(ResourceFormat format = ResourceFormat::Unknown, bool raw = false, bool counter = false)
+		: Format(format), Raw(raw), Counter(counter)
+	{}
+
+	static BufferUAVDesc CreateRaw()
+	{
+		return BufferUAVDesc(ResourceFormat::Unknown, true, false);
+	}
+
+	ResourceFormat Format;
+	bool Raw;
+	bool Counter;
+};
+
+struct BufferSRVDesc
+{
+	BufferSRVDesc(ResourceFormat format = ResourceFormat::Unknown, bool raw = false, uint32 elementOffset = 0, uint32 numElements = 0)
+		: Format(format), Raw(raw), ElementOffset(elementOffset), NumElements(numElements)
+	{}
+
+	ResourceFormat Format;
+	bool Raw;
+	uint32 ElementOffset;
+	uint32 NumElements;
+};
+
+
+
 class Buffer : public DeviceResource
 {
 public:
 	friend class GraphicsDevice;
 
 	Buffer(GraphicsDevice* pParent, const BufferDesc& desc, ID3D12ResourceX* pResource);
+	~Buffer();
 
-	inline uint64 GetSize() const { return m_Desc.Size; }
-	inline uint32 GetNumElements() const { return m_Desc.NumElements(); }
-	inline const BufferDesc& GetDesc() const { return m_Desc; }
-	UnorderedAccessView* GetUAV() const { return m_pUAV; }
-	ShaderResourceView* GetSRV() const { return m_pSRV; }
-	uint32 GetUAVIndex() const;
-	uint32 GetSRVIndex() const;
-	void* GetMappedData() const { gAssert(m_pMappedData); return m_pMappedData; }
+	uint64			  GetSize() const { return m_Desc.Size; }
+	uint32			  GetNumElements() const { return m_Desc.NumElements(); }
+	const BufferDesc& GetDesc() const { return m_Desc; }
+	RWBufferView	  GetUAV() const { return m_UAV; }
+	BufferView		  GetSRV() const { return m_SRV; }
+	void*			  GetMappedData() const { gAssert(m_pMappedData); return m_pMappedData; }
 
 private:
-	Ref<UnorderedAccessView> m_pUAV;
-	Ref<ShaderResourceView> m_pSRV;
+	RWBufferView m_UAV;
+	BufferView m_SRV;
 	void* m_pMappedData = nullptr;
 
 	const BufferDesc m_Desc;
@@ -127,7 +157,7 @@ struct VertexBufferView
 	}
 
 	VertexBufferView(Buffer* pBuffer)
-		: Location(pBuffer->GetGpuHandle()), Elements(pBuffer->GetNumElements()), Stride(pBuffer->GetDesc().ElementSize), OffsetFromStart(0)
+		: Location(pBuffer->GetGPUAddress()), Elements(pBuffer->GetNumElements()), Stride(pBuffer->GetDesc().ElementSize), OffsetFromStart(0)
 	{}
 
 	bool IsValid() const { return Elements > 0; }

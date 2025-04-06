@@ -2,17 +2,15 @@
 #include "RaytracingCommon.hlsli"
 #include "Random.hlsli"
 
-RWTexture2D<float> uOutput : register(u0);
-Texture2D<float> tSceneDepth : register(t0);
-
 struct PassData
 {
 	float Power;
 	float Radius;
 	uint Samples;
+	RWTexture2DH<float> Output;
+	Texture2DH<float> SceneDepth;
 };
-
-ConstantBuffer<PassData> cPass : register(b0);
+DEFINE_CONSTANTS(PassData, 0);
 
 float3x3 TangentMatrix(float3 z)
 {
@@ -31,8 +29,8 @@ void RayGen()
 	uint launchIndex1d = launchIndex.x + launchIndex.y * launchDim.x;
 	float2 uv = TexelToUV(launchIndex, dimInv);
 
-	float3 world = WorldPositionFromDepth(uv, tSceneDepth.SampleLevel(sPointClamp, uv, 0).r, cView.ClipToWorld);
-	float3 viewNormal = ViewNormalFromDepth(uv, tSceneDepth, NormalReconstructMethod::Taps5);
+	float3 world = WorldPositionFromDepth(uv, cPassData.SceneDepth.SampleLevel(sPointClamp, uv, 0).r, cView.ClipToWorld);
+	float3 viewNormal = ViewNormalFromDepth(uv, cPassData.SceneDepth.Get(), NormalReconstructMethod::Taps5);
 	float3 normal = mul(viewNormal, (float3x3)cView.ViewToWorld);
 
 	uint seed = SeedThread(launchIndex, launchDim, cView.FrameIndex);
@@ -42,7 +40,7 @@ void RayGen()
 	// Diffuse reflections integral is over (1 / PI) * Li * NdotL
 	// We sample a cosine weighted distribution over the hemisphere which has a PDF which conveniently cancels out the inverse PI and NdotL terms.
 
-	uint numSamples = cPass.Samples;
+	uint numSamples = cPassData.Samples;
 	float accumulatedAo = 0.0f;
 	for(int i = 0; i < numSamples; ++i)
 	{
@@ -54,12 +52,11 @@ void RayGen()
 		ray.Origin = world;
 		ray.Direction = randomDirection;
 		ray.TMin = RAY_BIAS;
-		ray.TMax = cPass.Radius;
-		RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-		float hit = TraceOcclusionRay(ray, tlas);
+		ray.TMax = cPassData.Radius;
+		float hit = TraceOcclusionRay(ray, cView.TLAS.Get());
 
 		accumulatedAo += hit;
 	}
 	accumulatedAo /= numSamples;
-	uOutput[launchIndex] = 1 - (saturate(1 - accumulatedAo) * cPass.Power);
+	cPassData.Output.Store(launchIndex, 1 - (saturate(1 - accumulatedAo) * cPassData.Power));
 }

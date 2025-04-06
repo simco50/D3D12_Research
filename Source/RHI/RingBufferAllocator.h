@@ -9,7 +9,7 @@ struct RingBufferAllocation
 {
 	CommandContext* pContext;
 	Ref<Buffer> pBackingResource;
-	D3D12_GPU_VIRTUAL_ADDRESS GpuHandle{ 0 };
+	D3D12_GPU_VIRTUAL_ADDRESS GPUAddress{ 0 };
 	uint32 Offset = 0;
 	uint32 Size = 0;
 	void* pMappedMemory = nullptr;

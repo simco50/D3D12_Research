@@ -504,12 +504,12 @@ namespace D3D
 		pObject->SetPrivateData(ResourceCallstackGUID, sizeof(callstack), &callstack);
 	}
 
-	static Callstack<6> GetResourceCallstack(ID3D12Object* pObject)
+	static bool GetResourceCallstack(ID3D12Object* pObject, Callstack<6>& outCallstack)
 	{
-		Callstack<6> callstack;
-		uint32 size = sizeof(callstack);
-		pObject->GetPrivateData(ResourceCallstackGUID, &size, &callstack);
-		return callstack;
+		uint32 size = sizeof(outCallstack);
+		if (SUCCEEDED(pObject->GetPrivateData(ResourceCallstackGUID, &size, &outCallstack)))
+			return true;
+		return false;
 	}
 
 	static Utils::ForceFunctionToBeLinked forceLink(GetResourceDescription);

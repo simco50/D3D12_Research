@@ -8,7 +8,6 @@
 #include "RHI/Device.h"
 #include "RHI/CommandContext.h"
 #include "RHI/Texture.h"
-#include "RHI/ResourceViews.h"
 #include "Renderer/Light.h"
 #include "Renderer/Renderer.h"
 #include "Renderer/Techniques/LightCulling.h"
@@ -95,25 +94,27 @@ void ForwardRenderer::RenderForwardClustered(RGGraph& graph, const RenderView* p
 
 				struct
 				{
-					Vector4i ClusterDimensions;
-					Vector2i ClusterSize;
-					Vector2 LightGridParams;
-				} frameData;
+					Vector4i	ClusterDimensions;
+					Vector2i	ClusterSize;
+					Vector2		LightGridParams;
+					TextureView AO;
+					TextureView Depth;
+					TextureView PreviousSceneColor;
+					TextureView LightScattering;
+					BufferView	LightGrid;
+				} passParams;
 
-				frameData.ClusterDimensions = Vector4i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y, lightCullData.ClusterCount.z, 0);
-				frameData.ClusterSize = Vector2i(lightCullData.ClusterSize, lightCullData.ClusterSize);
-				frameData.LightGridParams = lightCullData.LightGridParams;
+				passParams.ClusterDimensions  = Vector4i(lightCullData.ClusterCount.x, lightCullData.ClusterCount.y, lightCullData.ClusterCount.z, 0);
+				passParams.ClusterSize		  = Vector2i(lightCullData.ClusterSize, lightCullData.ClusterSize);
+				passParams.LightGridParams	  = lightCullData.LightGridParams;
+				passParams.AO				  = resources.GetSRV(pAO);
+				passParams.Depth			  = resources.GetSRV(sceneTextures.pDepth);
+				passParams.PreviousSceneColor = resources.GetSRV(sceneTextures.pPreviousColor);
+				passParams.LightScattering	  = resources.GetSRV(pFogTexture);
+				passParams.LightGrid		  = resources.GetSRV(lightCullData.pLightGrid);
+				context.BindRootSRV(BindingSlot::PerPass, passParams);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindRootCBV(BindingSlot::PerPass, frameData);
-
-				context.BindResources(BindingSlot::SRV, {
-					resources.GetSRV(pAO),
-					resources.GetSRV(sceneTextures.pDepth),
-					resources.GetSRV(sceneTextures.pPreviousColor),
-					resources.GetSRV(pFogTexture),
-					resources.GetSRV(lightCullData.pLightGrid),
-					});
 
 				if (!translucentOnly)
 				{
@@ -153,14 +154,23 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 
 				Renderer::BindViewUniforms(context, *pView);
 
+				struct
 				{
-					context.BindResources(BindingSlot::SRV, {
-						resources.GetSRV(pAO),
-						resources.GetSRV(sceneTextures.pDepth),
-						resources.GetSRV(sceneTextures.pPreviousColor),
-						resources.GetSRV(pFogTexture),
-						resources.GetSRV(lightCullData.pLightListOpaque),
-						});
+					TextureView AO;
+					TextureView Depth;
+					TextureView PreviousSceneColor;
+					TextureView LightScattering;
+					BufferView	LightGrid;
+				} passParams;
+
+				{
+
+					passParams.AO				  = resources.GetSRV(pAO);
+					passParams.Depth			  = resources.GetSRV(sceneTextures.pDepth);
+					passParams.PreviousSceneColor = resources.GetSRV(sceneTextures.pPreviousColor);
+					passParams.LightScattering	  = resources.GetSRV(pFogTexture);
+					passParams.LightGrid		  = resources.GetSRV(lightCullData.pLightListOpaque);
+					context.BindRootSRV(BindingSlot::PerPass, passParams);
 
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
@@ -176,13 +186,12 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 				}
 
 				{
-					context.BindResources(BindingSlot::SRV, {
-						resources.GetSRV(pAO),
-						resources.GetSRV(sceneTextures.pDepth),
-						resources.GetSRV(sceneTextures.pPreviousColor),
-						resources.GetSRV(pFogTexture),
-						resources.GetSRV(lightCullData.pLightListTransparent),
-						});
+					passParams.AO				  = resources.GetSRV(pAO);
+					passParams.Depth			  = resources.GetSRV(sceneTextures.pDepth);
+					passParams.PreviousSceneColor = resources.GetSRV(sceneTextures.pPreviousColor);
+					passParams.LightScattering	  = resources.GetSRV(pFogTexture);
+					passParams.LightGrid		  = resources.GetSRV(lightCullData.pLightListTransparent);
+					context.BindRootSRV(BindingSlot::PerPass, passParams);
 
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Transparant");

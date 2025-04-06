@@ -28,11 +28,14 @@ struct PrecomputedLightData
 	float SphereRadius;
 };
 
-Texture2D tDepthTexture 							: register(t0);
-StructuredBuffer<PrecomputedLightData> tLightData 	: register(t1);
-
-RWBuffer<uint> uLightListOpaque 					: register(u0);
-RWBuffer<uint> uLightListTransparent 				: register(u1);
+struct PassParams
+{
+	Texture2DH<float> DepthTexture;
+	StructuredBufferH<PrecomputedLightData> LightData;
+	RWTypedBufferH<uint> LightListOpaque;
+	RWTypedBufferH<uint> LightListTransparent;
+};
+DEFINE_CONSTANTS(PassParams, 0);
 
 groupshared uint 	gsMinDepth;
 groupshared uint 	gsMaxDepth;
@@ -121,7 +124,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	GroupMemoryBarrierWithGroupSync();
 
 	int2 uv = min(threadID.xy, cView.ViewportDimensions.xy - 1);
-	float fDepth = tDepthTexture[uv].r;
+	float fDepth = cPassParams.DepthTexture[uv].r;
 
 	// Get the min/max depth in the wave
 	float waveMin = WaveActiveMin(fDepth);
@@ -188,7 +191,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	// Perform the light culling
 	for(uint i = groupIndex; i < cView.LightCount; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
 	{
-		PrecomputedLightData lightData = tLightData[i];
+		PrecomputedLightData lightData = cPassParams.LightData[i];
 		Sphere sphere;
 		sphere.Position = lightData.SphereViewPosition;
 		sphere.Radius = lightData.SphereRadius;
@@ -216,7 +219,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadID : SV_DispatchThreadID, ui
 	uint lightGridOffset = tileIndex * TILED_LIGHTING_NUM_BUCKETS;
 	for(uint i = groupIndex; i < TILED_LIGHTING_NUM_BUCKETS; i += TILED_LIGHTING_TILE_SIZE * TILED_LIGHTING_TILE_SIZE)
 	{
-		uLightListTransparent[lightGridOffset + i] = gsLightBucketsTransparent[i];
-		uLightListOpaque[lightGridOffset + i] = gsLightBucketsOpaque[i];
+		cPassParams.LightListTransparent.Store(lightGridOffset + i, gsLightBucketsTransparent[i]);
+		cPassParams.LightListOpaque.Store(lightGridOffset + i, gsLightBucketsOpaque[i]);
 	}
 }

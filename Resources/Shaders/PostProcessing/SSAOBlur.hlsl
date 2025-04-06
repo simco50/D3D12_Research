@@ -9,12 +9,11 @@ struct PassData
 {
 	float2 InvDimensions;
 	int Horizontal;
+	Texture2DH<float> SceneDepth;
+	Texture2DH<float> Input;
+	RWTexture2DH<float> Output;
 };
-
-ConstantBuffer<PassData> cPass : register(b0);
-Texture2D tSceneDepth : register(t0);
-Texture2D<float> tAmbientOcclusion : register(t1);
-RWTexture2D<float> uAmbientOcclusion : register(u0);
+DEFINE_CONSTANTS(PassData, 0);
 
 static const float s_BlurWeights[KERNEL_LENGTH + 1] = { 1.0f, 0.9f, 0.6f, 0.15f, 0.1f };
 static const float s_NormalizationFactor = 1.0f / (s_BlurWeights[0] + 2.0f * (s_BlurWeights[1] + s_BlurWeights[2] + s_BlurWeights[3] + s_BlurWeights[4]));
@@ -35,16 +34,17 @@ groupshared float gDepthCache[GS_CACHE_SIZE];
 [numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 {
-	float2 direction = float2(cPass.Horizontal, 1 - cPass.Horizontal);
+	PassData passData = cPassData;
+	float2 direction = float2(passData.Horizontal, 1 - passData.Horizontal);
 	uint2 multiplier = direction * THREAD_GROUP_SIZE + 1 * (1 - direction);
 	uint2 groupBegin = groupId.xy * multiplier;
 
 	int i;
 	for (i = groupIndex; i < GS_CACHE_SIZE; i += THREAD_GROUP_SIZE)
 	{
-		float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * cPass.InvDimensions;
-		gAoCache[i] = tAmbientOcclusion.SampleLevel(sLinearClamp, uv, 0).r;
-		gDepthCache[i] = LinearizeDepth01(tSceneDepth.SampleLevel(sPointClamp, uv, 0).r);
+		float2 uv = ((float2)groupBegin + 0.5f + direction * (i - KERNEL_LENGTH)) * passData.InvDimensions;
+		gAoCache[i] = passData.Input.SampleLevel(sLinearClamp, uv, 0).r;
+		gDepthCache[i] = LinearizeDepth01(passData.SceneDepth.SampleLevel(sPointClamp, uv, 0).r);
 	}
 
 	GroupMemoryBarrierWithGroupSync();
@@ -63,6 +63,5 @@ void CSMain(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 	}
 
 	int2 pixel = groupBegin + groupIndex * direction;
-	uAmbientOcclusion[pixel] = avgOcclusion
-	;
+	passData.Output.Store(pixel, avgOcclusion);
 }

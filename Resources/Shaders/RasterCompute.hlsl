@@ -3,20 +3,33 @@
 #include "D3D12.hlsli"
 #include "VisibilityBuffer.hlsli"
 
-RWTexture2D<uint64_t> uOutput : register(u0);
+struct BuildArgsParams
+{
+    TypedBufferH<uint> Counter_VisibleMeshlets;
+    RWStructuredBufferH<D3D12_DISPATCH_ARGUMENTS> DispatchArguments;
+};
+DEFINE_CONSTANTS(BuildArgsParams, 0);
 
-Texture2D<uint64_t> tVisibility : register(t0);
-globallycoherent RWTexture2D<float4> uColorOutput : register(u0);
+struct RasterParams
+{
+    StructuredBufferH<MeshletCandidate> VisibleMeshlets;
+    RWTexture2DH<uint64_t> Output;
+};
+DEFINE_CONSTANTS(RasterParams, 0);
 
-Buffer<uint> tCounter_VisibleMeshlets : register(t0);
-RWStructuredBuffer<D3D12_DISPATCH_ARGUMENTS> uDispatchArguments : register(u0);
-StructuredBuffer<MeshletCandidate> tVisibleMeshlets : register(t0);
+struct OutputParams
+{
+    Texture2DH<uint64_t> Visibility;
+    RWTexture2DH<float4> ColorOutput;
+};
+DEFINE_CONSTANTS(OutputParams, 0);
+
 
 void WritePixel(uint2 coord, uint value, float depth)
 {
     uint depthInt = asuint(depth);
     uint64_t packed = ((uint64_t)depthInt << 32) | value;
-    InterlockedMax(uOutput[coord], packed);
+    InterlockedMax(cRasterParams.Output.Get()[coord], packed);
 }
 
 struct InterpolantsVSToPS
@@ -123,19 +136,19 @@ void RasterTriangle(float3 p0, float3 p1, float3 p2, uint value)
 [numthreads(64, 1, 1)]
 void RasterizeCS(uint groupThreadID : SV_GroupIndex, uint groupID : SV_GroupID)
 {
-	MeshletCandidate candidate = tVisibleMeshlets[groupID];
+	MeshletCandidate candidate = cRasterParams.VisibleMeshlets[groupID];
 	InstanceData instance = GetInstance(candidate.InstanceID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
-	Meshlet meshlet = ByteBufferLoad<Meshlet>(mesh.BufferIndex, candidate.MeshletIndex, mesh.MeshletOffset);
+	Meshlet meshlet = mesh.DataBuffer.LoadStructure<Meshlet>(candidate.MeshletIndex, mesh.MeshletOffset);
 
 	for(uint i = groupThreadID; i < meshlet.TriangleCount; i += 64)
 	{
-		Meshlet::Triangle tri = ByteBufferLoad<Meshlet::Triangle>(mesh.BufferIndex, i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		Meshlet::Triangle tri = mesh.DataBuffer.LoadStructure<Meshlet::Triangle>(i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 
 		uint3 indices = uint3(
-			ByteBufferLoad<uint>(mesh.BufferIndex, tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
-			ByteBufferLoad<uint>(mesh.BufferIndex, tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
-			ByteBufferLoad<uint>(mesh.BufferIndex, tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
+			mesh.DataBuffer.LoadStructure<uint>(tri.V0 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+			mesh.DataBuffer.LoadStructure<uint>(tri.V1 + meshlet.VertexOffset, mesh.MeshletVertexOffset),
+			mesh.DataBuffer.LoadStructure<uint>(tri.V2 + meshlet.VertexOffset, mesh.MeshletVertexOffset)
 		);
 
 		float3 p0 = LoadVertex(mesh, indices[0]).Position;
@@ -153,19 +166,19 @@ void RasterizeCS(uint groupThreadID : SV_GroupIndex, uint groupID : SV_GroupID)
 [numthreads(1, 1, 1)]
 void BuildRasterArgsCS()
 {
-    uint numMeshlets = tCounter_VisibleMeshlets[0];
+    uint numMeshlets = cBuildArgsParams.Counter_VisibleMeshlets[0];
     D3D12_DISPATCH_ARGUMENTS args;
     args.ThreadGroupCount = uint3(numMeshlets, 1, 1);
-    uDispatchArguments[0] = args;
+    cBuildArgsParams.DispatchArguments.Store(0, args);
 }
 
 [numthreads(16, 16, 1)]
 void ResolveVisBufferCS(uint3 threadID : SV_DispatchThreadID)
 {
     uint2 pixel = threadID.xy;
-    uint64_t visibility = tVisibility[pixel];
+    uint64_t visibility = cOutputParams.Visibility[pixel];
 
     uint triangleID = (uint)(visibility & 0xFFFFFFFF);
     uint seed = SeedThread(triangleID);
-    uColorOutput[pixel] = float4(RandomColor(seed), 1.0f);
+    cOutputParams.ColorOutput[pixel] = float4(RandomColor(seed), 1.0f);
 }

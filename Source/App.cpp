@@ -121,9 +121,9 @@ static void InitializeProfiler(GraphicsDevice* pDevice)
 
 	ID3D12CommandQueue* pQueues[] =
 	{
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)->GetCommandQueue(),
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandQueue(),
-		pDevice->GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY)->GetCommandQueue(),
+		pDevice->GetGraphicsQueue()->GetCommandQueue(),
+		pDevice->GetComputeQueue()->GetCommandQueue(),
+		pDevice->GetCopyQueue()->GetCommandQueue(),
 	};
 	gGPUProfiler.Initialize(pDevice->GetDevice(), pQueues, frameHistory, 3, maxGPUEvents, maxGPUCopyEvents, maxGPUActiveCmdLists);
 
@@ -209,7 +209,7 @@ void App::Update_Internal()
 		CommandContext* pContext = m_pDevice->AllocateCommandContext();
 		ImGuiRenderer::Render(*pContext, m_pSwapchain->GetBackBuffer());
 		pContext->InsertResourceBarrier(m_pSwapchain->GetBackBuffer(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-		pContext->Execute();
+		m_pDevice->GetGraphicsQueue()->ExecuteCommandLists(pContext);
 	}
 
 	{

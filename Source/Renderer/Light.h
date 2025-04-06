@@ -25,7 +25,7 @@ struct Light
 	float Intensity = 1;
 	float Range = 1;
 	bool VolumetricLighting = false;
-	uint32 MatrixIndex = DescriptorHandle::InvalidHeapIndex;
+	uint32 MatrixIndex = 0;
 	Array<Texture*> ShadowMaps;
 	Ref<Texture> pLightTexture = nullptr;
 	int ShadowMapSize = 512;

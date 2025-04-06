@@ -18,11 +18,11 @@ enum class BlendMode
 
 struct VertexElementDesc
 {
-	const char* pSemantic;
+	const char*	   pSemantic;
 	ResourceFormat Format;
-	uint32 ByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-	uint32 InputSlot = 0;
-	uint32 InstanceStepRate = 0;
+	uint32		   ByteOffset		= D3D12_APPEND_ALIGNED_ELEMENT;
+	uint32		   InputSlot		= 0;
+	uint32		   InstanceStepRate = 0;
 };
 
 class PipelineStateInitializer

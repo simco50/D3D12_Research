@@ -17,25 +17,50 @@ struct ParticleData
 #define ALIVE_LIST_2_COUNTER 8
 #define EMIT_COUNT 12
 
-struct InitializeParameters
+struct InitializeParams
 {
 	uint MaxNumParticles;
+	RWByteBufferH Counters;
+	RWStructuredBufferH<uint> DeadList;
 };
+DEFINE_CONSTANTS(InitializeParams, 0);
 
-struct IndirectArgsParameters
+struct PrepareParams
 {
 	int EmitCount;
+	RWByteBufferH Counters;
+	RWByteBufferH IndirectArguments;
 };
+DEFINE_CONSTANTS(PrepareParams, 0);
 
-struct EmitParameters
+struct EmitParams
 {
-	float4 Origin;
+	float3 Origin;
+	RWByteBufferH Counters;
+	RWStructuredBufferH<uint> CurrentAliveList;
+	RWStructuredBufferH<ParticleData> ParticleData;
+	StructuredBufferH<uint> DeadList;
 };
+DEFINE_CONSTANTS(EmitParams, 0);
 
-struct SimulateParameters
+struct SimulateParams
 {
 	float ParticleLifeTime;
+	RWByteBufferH Counters;
+	RWStructuredBufferH<uint> DeadList;
+	RWStructuredBufferH<uint> NewAliveList;
+	RWStructuredBufferH<ParticleData> ParticleData;
+	StructuredBufferH<uint> CurrentAliveList;
+	Texture2DH<float> SceneDepth;
 };
+DEFINE_CONSTANTS(SimulateParams, 0);
+
+struct SimulateEndParams
+{
+	RWByteBufferH IndirectArguments;
+	ByteBufferH Counters;
+};
+DEFINE_CONSTANTS(SimulateEndParams, 0);
 
 enum IndirectArgOffsets
 {
@@ -45,51 +70,34 @@ enum IndirectArgOffsets
 	SizeArgs = DrawArgs + 4 * sizeof(uint),
 };
 
-ConstantBuffer<InitializeParameters> cInitializeParams : register(b0);
-ConstantBuffer<IndirectArgsParameters> cIndirectArgsParams : register(b0);
-ConstantBuffer<EmitParameters> cEmitParams : register(b0);
-ConstantBuffer<SimulateParameters> cSimulateParams : register(b0);
-
-RWByteAddressBuffer uCounters : register(u0);
-RWStructuredBuffer<uint> uDeadList : register(u1);
-RWStructuredBuffer<uint> uAliveList1 : register(u2);
-RWStructuredBuffer<uint> uAliveList2 : register(u3);
-RWStructuredBuffer<ParticleData> uParticleData : register(u4);
-RWByteAddressBuffer uIndirectArguments : register(u5);
-
-ByteAddressBuffer tCounters : register(t0);
-StructuredBuffer<uint> tDeadList : register(t1);
-StructuredBuffer<uint> tAliveList1 : register(t2);
-
-Texture2D<float> tSceneDepth : register(t3);
-
 [numthreads(32, 1, 1)]
 void InitializeDataCS(uint threadID : SV_DispatchThreadID)
 {
-	uint numParticles = cInitializeParams.MaxNumParticles;
+	InitializeParams initParams = cInitializeParams;
+	uint numParticles = initParams.MaxNumParticles;
 	if(threadID >= numParticles)
 		return;
 	if(threadID == 0)
-		uCounters.Store(0, numParticles);
-	uDeadList[threadID] = threadID;
+		initParams.Counters.Store(0, numParticles);
+	initParams.DeadList.Store(threadID, threadID);
 }
 
 [numthreads(1, 1, 1)]
-void UpdateSimulationParameters()
+void PrepareArgumentsCS()
 {
-	uint deadCount = uCounters.Load(DEAD_LIST_COUNTER);
-	uint aliveParticleCount = uCounters.Load(ALIVE_LIST_2_COUNTER);
+	uint deadCount = cPrepareParams.Counters.Load<uint>(DEAD_LIST_COUNTER);
+	uint aliveParticleCount = cPrepareParams.Counters.Load<uint>(ALIVE_LIST_2_COUNTER);
 
-	uint emitCount = min(deadCount, cIndirectArgsParams.EmitCount);
+	uint emitCount = min(deadCount, cPrepareParams.EmitCount);
 
-	uIndirectArguments.Store3(IndirectArgOffsets::EmitArgs, uint3(ceil((float)emitCount / 128), 1, 1));
+	cPrepareParams.IndirectArguments.Store<uint3>(IndirectArgOffsets::EmitArgs, uint3(ceil((float)emitCount / 128), 1, 1));
 
 	uint simulateCount = ceil((float)(aliveParticleCount + emitCount) / 128);
-	uIndirectArguments.Store3(IndirectArgOffsets::SimulateArgs, uint3(simulateCount, 1, 1));
+	cPrepareParams.IndirectArguments.Store<uint3>(IndirectArgOffsets::SimulateArgs, uint3(simulateCount, 1, 1));
 
-	uCounters.Store(ALIVE_LIST_1_COUNTER, aliveParticleCount);
-	uCounters.Store(ALIVE_LIST_2_COUNTER, 0);
-	uCounters.Store(EMIT_COUNT, emitCount);
+	cPrepareParams.Counters.Store(ALIVE_LIST_1_COUNTER, aliveParticleCount);
+	cPrepareParams.Counters.Store(ALIVE_LIST_2_COUNTER, 0);
+	cPrepareParams.Counters.Store(EMIT_COUNT, emitCount);
 }
 
 float3 RandomDirection(uint seed)
@@ -104,12 +112,12 @@ float3 RandomDirection(uint seed)
 [numthreads(128, 1, 1)]
 void Emit(uint threadID : SV_DispatchThreadID)
 {
-	uint emitCount = uCounters.Load(EMIT_COUNT);
+	uint emitCount = cEmitParams.Counters.Load<uint>(EMIT_COUNT);
 	if(threadID < emitCount)
 	{
 		uint deadSlot;
-		uCounters.InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
-		uint particleIndex = tDeadList[deadSlot - 1];
+		cEmitParams.Counters.Get().InterlockedAdd(DEAD_LIST_COUNTER, -1, deadSlot);
+		uint particleIndex = cEmitParams.DeadList[deadSlot - 1];
 
 		uint seed = SeedThread(deadSlot * particleIndex);
 
@@ -118,22 +126,22 @@ void Emit(uint threadID : SV_DispatchThreadID)
 		p.Position = cEmitParams.Origin.xyz;
 		p.Velocity = (RandomDirection(seed) - 0.5f) * 2;
 		p.Size = 0.02f;//(float)Random(deadSlot, 10, 30) / 100.0f;
-		uParticleData[particleIndex] = p;
+		cEmitParams.ParticleData.Store(particleIndex, p);
 
 		uint aliveSlot;
-		uCounters.InterlockedAdd(ALIVE_LIST_1_COUNTER, 1, aliveSlot);
-		uAliveList1[aliveSlot] = particleIndex;
+		cEmitParams.Counters.Get().InterlockedAdd(ALIVE_LIST_1_COUNTER, 1, aliveSlot);
+		cEmitParams.CurrentAliveList.Store(aliveSlot, particleIndex);
 	}
 }
 
 [numthreads(128, 1, 1)]
 void Simulate(uint threadID : SV_DispatchThreadID)
 {
-	uint aliveCount = uCounters.Load(ALIVE_LIST_1_COUNTER);
+	uint aliveCount = cSimulateParams.Counters.Load<uint>(ALIVE_LIST_1_COUNTER);
 	if(threadID < aliveCount)
 	{
-		uint particleIndex = tAliveList1[threadID];
-		ParticleData p = uParticleData[particleIndex];
+		uint particleIndex = cSimulateParams.CurrentAliveList[threadID];
+		ParticleData p = cSimulateParams.ParticleData[particleIndex];
 
 		if(p.LifeTime < cSimulateParams.ParticleLifeTime)
 		{
@@ -154,8 +162,7 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 
 			DrawLine(ray.Origin, ray.Origin + ray.Direction * ray.TMax);
 
-			RaytracingAccelerationStructure tlas = ResourceDescriptorHeap[cView.TLASIndex];
-			MaterialRayPayload payload = TraceMaterialRay(ray, tlas);
+			MaterialRayPayload payload = TraceMaterialRay(ray, cView.TLAS.Get());
 			float3 hitPos = ray.Origin + payload.HitT * ray.Direction;
 			if(payload.IsHit() && distance(hitPos, ray.Origin) < 0.1f)
 			{
@@ -169,13 +176,13 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 			if(screenPos.x > -1 && screenPos.y < 1 && screenPos.y > -1 && screenPos.y < 1)
 			{
 				float2 uv = ClipToUV(screenPos.xy);
-				float depth = tSceneDepth.SampleLevel(sPointClamp, uv, 0);
+				float depth = cSimulateParams.SceneDepth.SampleLevel(sPointClamp, uv, 0);
 				float linearDepth = LinearizeDepth(depth);
 				const float thickness = 1;
 
 				if(screenPos.w + p.Size > linearDepth && screenPos.w - p.Size - thickness < linearDepth)
 				{
-					float3 viewNormal = ViewNormalFromDepth(uv, tSceneDepth);
+					float3 viewNormal = ViewNormalFromDepth(uv, cSimulateParams.SceneDepth.Get());
 					float3 normal = mul(viewNormal, (float3x3)cView.ViewToWorld);
 					if(dot(normal, p.Velocity) < 0)
 					{
@@ -189,17 +196,17 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 			p.Position += p.Velocity * cView.DeltaTime;
 			p.LifeTime += cView.DeltaTime;
 
-			uParticleData[particleIndex] = p;
+			cSimulateParams.ParticleData.Store(particleIndex, p);
 
 			uint aliveSlot;
-			uCounters.InterlockedAdd(ALIVE_LIST_2_COUNTER, 1, aliveSlot);
-			uAliveList2[aliveSlot] = particleIndex;
+			cSimulateParams.Counters.Get().InterlockedAdd(ALIVE_LIST_2_COUNTER, 1, aliveSlot);
+			cSimulateParams.NewAliveList.Store(aliveSlot, particleIndex);
 		}
 		else
 		{
 			uint deadSlot;
-			uCounters.InterlockedAdd(DEAD_LIST_COUNTER, 1, deadSlot);
-			uDeadList[deadSlot] = particleIndex;
+			cSimulateParams.Counters.Get().InterlockedAdd(DEAD_LIST_COUNTER, 1, deadSlot);
+			cSimulateParams.DeadList.Store(deadSlot, particleIndex);
 		}
 	}
 }
@@ -207,6 +214,6 @@ void Simulate(uint threadID : SV_DispatchThreadID)
 [numthreads(1, 1, 1)]
 void SimulateEnd()
 {
-	uint particleCount = tCounters.Load(ALIVE_LIST_2_COUNTER);
-	uIndirectArguments.Store4(IndirectArgOffsets::DrawArgs, uint4(ArraySize(SPHERE), particleCount, 0, 0));
+	uint particleCount = cSimulateEndParams.Counters.Load<uint>(ALIVE_LIST_2_COUNTER);
+	cSimulateEndParams.IndirectArguments.Store<uint4>(IndirectArgOffsets::DrawArgs, uint4(ArraySize(SPHERE), particleCount, 0, 0));
 }

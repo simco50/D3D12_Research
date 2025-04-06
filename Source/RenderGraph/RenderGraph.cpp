@@ -4,6 +4,7 @@
 #include "Core/TaskQueue.h"
 #include "RHI/Device.h"
 #include "RHI/CommandContext.h"
+#include "RHI/CommandQueue.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
@@ -443,7 +444,7 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 		contexts.push_back(pContext);
 	}
 
-	CommandContext::Execute(contexts);
+	pDevice->GetGraphicsQueue()->ExecuteCommandLists(contexts);
 
 	// Update exported resource names
 	for (ExportedTexture& exportResource : m_ExportTextures)

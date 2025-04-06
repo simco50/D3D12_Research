@@ -59,20 +59,19 @@ float3 TangentSpaceNormalMapping(float3 sampledNormal, float3x3 TBN)
 
 float4x4 GetLightMatrix(uint index)
 {
-	StructuredBuffer<float4x4> matrices = ResourceDescriptorHeap[cView.LightMatricesIndex];
-	return matrices[index];
+	return cView.LightMatricesBuffer[index];
 }
 
 float LightTextureMask(Light light, float3 worldPosition)
 {
 	float mask = 1.0f;
-	if(light.MaskTexture != INVALID_HANDLE)
+	if(light.MaskTexture.IsValid())
 	{
 		uint matrixIndex = light.MatrixIndex;
 		float4 lightPos = mul(float4(worldPosition, 1), GetLightMatrix(matrixIndex));
 		lightPos.xyz /= lightPos.w;
 		lightPos.xy = (lightPos.xy + 1) / 2;
-		mask = SampleLevel2D(light.MaskTexture, sLinearClamp, lightPos.xy, 0).r;
+		mask = light.MaskTexture.SampleLevel(sLinearClamp, lightPos.xy, 0);
 	}
 	return mask;
 }
@@ -300,8 +299,7 @@ float3 ScreenSpaceReflections(float3 worldPosition, float3 N, float3 V, float R,
 float3 GetSky(float3 rayDir)
 {
 	float3 uv = normalize(rayDir);
-	TextureCube<float4> skyTexture = ResourceDescriptorHeap[cView.SkyIndex];
-	return skyTexture.SampleLevel(sLinearWrap, uv, 0).rgb;
+	return cView.SkyTexture.SampleLevel(sLinearWrap, uv, 0).rgb;
 }
 
 float3 DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, float3 N, float3 V, float3 worldPosition, float linearDepth, float dither)
@@ -344,7 +342,7 @@ float3 DoLight(Light light, float3 specularColor, float3 diffuseColor, float R, 
 		}
 #endif
 
-		attenuation *= Shadow3x3PCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMapIndex + shadowIndex, light.InvShadowSize);
+		attenuation *= Shadow3x3PCF(worldPosition, light.MatrixIndex + shadowIndex, light.ShadowMap.GetIndex() + shadowIndex, light.InvShadowSize);
 		if(attenuation <= 0)
 			return 0;
 	}

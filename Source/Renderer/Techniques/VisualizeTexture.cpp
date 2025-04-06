@@ -52,21 +52,23 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 					Vector2u HoveredPixel;
 					Vector2u Dimensions;
 					Vector2 ValueRange;
-					uint32 TextureSource;
-					uint32 TextureTarget;
+					TextureView TextureSource;
+					RWTextureView TextureTarget;
 					uint32 TextureType;
 					uint32 ChannelMask;
 					uint32 MipLevel;
 					uint32 Slice;
 					uint32 IsIntegerFormat;
 					uint32 IntAsID;
+
+					RWBufferView PickingBuffer;
 				} constants;
 
 				const FormatInfo& formatInfo = RHI::GetFormatInfo(desc.Format);
 
 				constants.HoveredPixel		= captureContext.HoveredPixel;
-				constants.TextureSource		= resources.GetSRV(pSource)->GetHeapIndex();
-				constants.TextureTarget		= resources.GetUAV(pTarget)->GetHeapIndex();
+				constants.TextureSource		= resources.GetSRV(pSource);
+				constants.TextureTarget		= resources.GetUAV(pTarget);
 				constants.Dimensions		= mipSize;
 				constants.TextureType		= (uint32)pSource->GetDesc().Type;
 				constants.ValueRange		= Vector2(captureContext.RangeMin, captureContext.RangeMax);
@@ -79,9 +81,9 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 				constants.Slice				= desc.Type == TextureType::TextureCube ? captureContext.CubeFaceIndex : (uint32)captureContext.Slice;
 				constants.IsIntegerFormat	= formatInfo.Type == FormatType::Integer;
 				constants.IntAsID			= captureContext.IntAsID;
+				constants.PickingBuffer		= resources.GetUAV(pPickingBuffer);
 
-				context.BindRootCBV(BindingSlot::PerInstance, constants);
-				context.BindResources(BindingSlot::UAV, resources.GetUAV(pPickingBuffer));
+				context.BindRootSRV(BindingSlot::PerInstance, constants);
 
 				context.Dispatch(ComputeUtils::GetNumThreadGroups(desc.Width, 8, desc.Height, 8));
 			});
@@ -419,7 +421,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 				// Add checkerboard background
 				ImVec2 checkersSize = ImMax(ImGui::GetContentRegionAvail(), imageSize);
 				ImVec2 c = ImGui::GetCursorScreenPos();
-				ImGui::GetWindowDrawList()->AddImage(GraphicsCommon::GetDefaultTexture(DefaultTexture::CheckerPattern), c, c + ImGui::GetContentRegionAvail(), ImVec2(0.0f, 0.0f), checkersSize / 50.0f, ImColor(0.1f, 0.1f, 0.1f, 1.0f));
+				ImGui::GetWindowDrawList()->AddImage((ImTextureID)GraphicsCommon::GetDefaultTexture(DefaultTexture::CheckerPattern), c, c + ImGui::GetContentRegionAvail(), ImVec2(0.0f, 0.0f), checkersSize / 50.0f, ImColor(0.1f, 0.1f, 0.1f, 1.0f));
 
 				bool imageHovered = false;
 				if (captureContext.XRay)
@@ -429,7 +431,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 					ImGui::ItemSize(bb);
 					if (ImGui::ItemAdd(bb, ImGui::GetID("##Image")))
 					{
-						ImGui::GetWindowDrawList()->AddImage(captureContext.pTextureTarget, viewportOrigin, viewportOrigin + viewportSize);
+						ImGui::GetWindowDrawList()->AddImage((ImTextureID)captureContext.pTextureTarget.Get(), viewportOrigin, viewportOrigin + viewportSize);
 					}
 
 					imageHovered = ImGui::IsItemHovered();
@@ -438,7 +440,7 @@ void CaptureTextureSystem::RenderUI(CaptureTextureContext& captureContext, const
 				else
 				{
 					ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-					ImGui::ImageButton("##Image", captureContext.pTextureTarget, imageSize);
+					ImGui::ImageButton("##Image", (ImTextureID)captureContext.pTextureTarget.Get(), imageSize);
 					ImGui::PopStyleVar();
 
 					imageHovered = ImGui::IsItemHovered();

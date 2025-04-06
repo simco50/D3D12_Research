@@ -42,7 +42,7 @@ DebugRenderer* DebugRenderer::Get()
 void DebugRenderer::Initialize(GraphicsDevice* pDevice)
 {
 	PipelineStateInitializer psoDesc;
-	psoDesc.SetRootSignature(GraphicsCommon::pCommonRSWithIA);
+	psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 	psoDesc.SetVertexShader("DebugRenderer.hlsl", "VSMain");
 	psoDesc.SetPixelShader("DebugRenderer.hlsl", "PSMain");
 	psoDesc.SetInputLayout({
@@ -81,10 +81,16 @@ void DebugRenderer::Render(RGGraph& graph, const RenderView* pView, RGTexture* p
 		.Read(pDepth)
 		.Bind([=](CommandContext& context, const RGResources& resources)
 			{
-				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRSWithIA);
+				context.SetGraphicsRootSignature(GraphicsCommon::pCommonRS);
 
 				Renderer::BindViewUniforms(context, *pView);
-				context.BindResources(BindingSlot::UAV, resources.GetSRV(pDepth));
+
+				struct
+				{
+					TextureView Depth;
+				} params;
+				params.Depth = resources.GetSRV(pDepth);
+				context.BindRootSRV(BindingSlot::PerInstance, params);
 
 				if (numLines != 0)
 				{

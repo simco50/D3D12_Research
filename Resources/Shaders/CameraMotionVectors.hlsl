@@ -1,7 +1,11 @@
 #include "Common.hlsli"
 
-Texture2D tDepthTexture : register(t0);
-RWTexture2D<float2> uVelocity  : register(u0);
+struct PassParams
+{
+	Texture2DH<float> DepthTexture;
+	RWTexture2DH<float2> Velocity;
+};
+DEFINE_CONSTANTS(PassParams, 0);
 
 [numthreads(8, 8, 1)]
 void CSMain(uint3 threadID : SV_DispatchThreadID)
@@ -9,7 +13,7 @@ void CSMain(uint3 threadID : SV_DispatchThreadID)
 	if(any(threadID.xy >= cView.ViewportDimensions))
 		return;
 
-	float depth = tDepthTexture[threadID.xy].r;
+	float depth = cPassParams.DepthTexture[threadID.xy];
 	float2 uv = TexelToUV(threadID.xy, cView.ViewportDimensionsInv);
 
 	// Compute world space position from depth
@@ -28,5 +32,5 @@ void CSMain(uint3 threadID : SV_DispatchThreadID)
 	velocity += cView.ViewJitter - cView.ViewJitterPrev;
 	
 	// NDC to UV offset
-	uVelocity[threadID.xy] = velocity * float2(0.5f, -0.5f);
+	cPassParams.Velocity.Store(threadID.xy, velocity * float2(0.5f, -0.5f));
 }
