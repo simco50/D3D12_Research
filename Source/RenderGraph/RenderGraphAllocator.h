@@ -33,6 +33,7 @@ private:
 
 	struct Heap
 	{
+		uint32							   ID;
 		Array<Resource*>				   Allocations;
 		uint64							   Size;
 		uint32							   LastUsedFrame = 0;
@@ -40,9 +41,6 @@ private:
 		Array<UniquePtr<RGDeviceResource>> PhysicalResources;
 		Ref<ID3D12Heap>					   pHeap;
 	};
-
-	Array<Heap> m_Heaps;
-	Array<Resource> m_CachedResources;
 
 public:
 
@@ -57,14 +55,14 @@ public:
 		}
 
 		for (Heap& heap : m_Heaps)
-			heap.Allocations = {};
+			heap.Allocations.clear();
 
 		if (m_UsePlacedResources)
 			ComputeAliasing_PlacedResources_V1(m_CachedResources, m_Heaps);
 		else
 			ComputeAliasing_CommittedResources(m_CachedResources, m_Heaps);
 
-		ClearUnusedResources(m_Heaps, 100);
+		ClearUnusedResources(m_Heaps);
 
 		if (m_LiveCapture)
 			AllocateResources(pDevice, m_Heaps);
@@ -219,11 +217,10 @@ private:
 		}
 	}
 
-	void ClearUnusedResources(Array<Heap>& heaps, uint32 latency)
+	void ClearUnusedResources(Array<Heap>& heaps)
 	{
 		PROFILE_CPU_SCOPE();
 
-		if (0)
 		{
 			for (Heap& heap : heaps)
 			{
@@ -231,7 +228,7 @@ private:
 				while (i < (uint32)heap.PhysicalResources.size())
 				{
 					RGDeviceResource* pResource = heap.PhysicalResources[i].get();
-					if (pResource->LastUsedFrame + latency < m_FrameIndex)
+					if (pResource->LastUsedFrame + cResourceCleanupLatency < m_FrameIndex)
 					{
 						std::swap(heap.PhysicalResources[i], heap.PhysicalResources[heap.PhysicalResources.size() - 1]);
 						heap.PhysicalResources.pop_back();
@@ -248,7 +245,7 @@ private:
 			while (i < (uint32)heaps.size())
 			{
 				Heap& heap = heaps[i];
-				if (heap.LastUsedFrame + latency < m_FrameIndex)
+				if (heap.LastUsedFrame + cHeapCleanupLatency < m_FrameIndex)
 				{
 					heaps.erase(heaps.begin() + i);
 				}
@@ -265,15 +262,22 @@ private:
 		PROFILE_CPU_SCOPE();
 
 		// Sort resources largest to smallest, then largest alignment to smallest.
-		std::sort(resources.begin(), resources.end(), [](const Resource& a, const Resource& b)
+		std::sort(resources.begin(), resources.end(), [](const Resource& a, const Resource& b) {
+			if (a.Size == b.Size)
 			{
-				if (a.Size == b.Size)
-					return a.Alignment > b.Alignment;
-				return a.Size > b.Size;
-			});
+				if (a.Alignment == b.Alignment)
+					return a.ID < b.ID;
+				return a.Alignment > b.Alignment;
+			}
+			return a.Size > b.Size;
+		});
 
 		// Sort heaps largest to smallest, so smaller heaps can be removed.
-		std::sort(heaps.begin(), heaps.end(), [](const Heap& a, const Heap& b) { return a.Size > b.Size; });
+		std::sort(heaps.begin(), heaps.end(), [](const Heap& a, const Heap& b) {
+			if (a.Size == b.Size)
+				return a.ID < b.ID;
+			return a.Size > b.Size;
+		});
 
 		struct HeapOffset
 		{
@@ -284,14 +288,18 @@ private:
 
 		for (Resource& resource : resources)
 		{
+			if (resource.pPhysicalResource)
+				continue;
+
 			if (resource.Size == 0)
-				break;
+				continue;
 
 			Heap* pHeap = nullptr;
 			for (Heap& heap : heaps)
 			{
+				// If the resource is larger than the heap, bail out. Heaps are sorted by size so if this one doesn't fit, none will
 				if (resource.Size > heap.Size)
-					continue;
+					break;
 
 				// Keep track of which memory ranges in the heap for the lifetime of the current resource are free
 				freeRanges.clear();
@@ -314,6 +322,8 @@ private:
 
 				// Sort the markup by offset.
 				std::sort(freeRanges.begin(), freeRanges.end(), [](const HeapOffset& a, const HeapOffset& b) { return a.Offset < b.Offset; });
+
+				RGDeviceResource* pExistingResource = nullptr;
 
 				// Algorithm: Keep track of how many "free" marks we've come across
 				// If we hit the end of a free mark and the range is closed (== 0), then this range is free
@@ -349,14 +359,15 @@ private:
 									return false;
 								});
 
+								// Found an existing physical resource that matches the description. Finished
 								if (it != heap.PhysicalResources.end())
 								{
-									resource.pPhysicalResource = it->get();
-									resource.Offset			   = resource.pPhysicalResource->Offset;
-									pHeap					   = &heap;
+									pHeap			  = &heap;
+									pExistingResource = it->get();
 									break;
 								}
 
+								// No unused existing resource found, allocate resource in a new region
 								uint64 rangeSize = endOffset - alignedOffset;
 								if (rangeSize < smallestRange)
 								{
@@ -372,40 +383,52 @@ private:
 						}
 					}
 				}
+
 				if (pHeap)
 				{
-					// If the heap is too big, don't allocate into it to allow shrinking
+					// If the found heap has no allocations and it's very large for the resource, don't allocate into it and instead continue searching so this heap has the chance to be released
 					if (pHeap->Allocations.empty() && Math::AlignUp<uint64>(resource.Size, cHeapAlignment) < pHeap->Size)
 					{
 						pHeap = nullptr;
 						continue;
 					}
 
+					// If an existing resource was found, assign it to the resource and mark it as used
+					if (pExistingResource)
+					{
+						resource.pPhysicalResource		 = pExistingResource;
+						resource.Offset					 = pExistingResource->Offset;
+						pExistingResource->LastUsedFrame = m_FrameIndex;
+					}
+
 					break;
 				}
 			}
 
+			// If no heap was found, that means the resource wasn't placed and a new heap is needed
 			if (!pHeap)
 			{
 				if (m_PreferHeaps)
 				{
-					Heap& heap = heaps.emplace_back();
-					heap.Size = Math::AlignUp<uint64>(resource.Size, cHeapAlignment);
+					Heap& heap		= heaps.emplace_back();
+					heap.ID			= m_HeapID++;
+					heap.Size		= Math::AlignUp<uint64>(resource.Size, cHeapAlignment);
 					resource.Offset = 0;
-					pHeap = &heap;
+					pHeap			= &heap;
 				}
 				else
 				{
 					if (heaps.empty())
-						heaps.push_back({ {}, 0 });
-					Heap& heap = heaps.back();
+						heaps.push_back({ m_HeapID++, {}, 0 });
+					Heap&  heap			 = heaps.back();
 					uint64 alignedOffset = Math::AlignUp<uint64>(heap.Size, resource.Alignment);
-					resource.Offset = alignedOffset;
-					heap.Size = alignedOffset + resource.Size;
-					pHeap = &heap;
+					resource.Offset		 = alignedOffset;
+					heap.Size			 = alignedOffset + resource.Size;
+					pHeap				 = &heap;
 				}
 			}
 
+			// Assign the resource and mark the heap as used this frame
 			pHeap->Allocations.push_back(&resource);
 			pHeap->LastUsedFrame = m_FrameIndex;
 		}
@@ -452,18 +475,22 @@ private:
 					else
 						pDevice->CreateBuffer(pResource->BufferDesc, heap.pHeap, pResource->Offset, pResource->Name.c_str());
 				}
-				pResource->pPhysicalResource->LastUsedFrame = m_FrameIndex;
 			}
 		}
 	}
 
-	bool   m_LiveCapture		= false;
-	bool   m_PreferHeaps		= true;
-	bool   m_BestFit			= false;
-	bool   m_UsePlacedResources = true;
-	uint32 m_FrameIndex			= 0;
+	bool			m_LiveCapture		 = true;
+	bool			m_PreferHeaps		 = true;
+	bool			m_BestFit			 = false;
+	bool			m_UsePlacedResources = true;
+	uint32			m_FrameIndex		 = 0;
+	Array<Heap>		m_Heaps;
+	Array<Resource> m_CachedResources;
+	uint32			m_HeapID = 0;
 
-	static constexpr uint64 cHeapAlignment = 4 * Math::MegaBytesToBytes;
+	static constexpr uint32 cHeapCleanupLatency		= 3;
+	static constexpr uint32 cResourceCleanupLatency = 1024;
+	static constexpr uint64 cHeapAlignment			= 2 * Math::MegaBytesToBytes;
 
 	/****************/
 	/*	 Debug UI	*/
@@ -599,35 +626,49 @@ private:
 				ClearAll();
 			}
 
-			if (ImGui::BeginTable("TestTable", 5))
+			if (ImGui::BeginTable("TestTable", 6, ImGuiTableFlags_Resizable))
 			{
 				ImGui::TableHeader("Header");
-				ImGui::TableSetupColumn("Color");
+				ImGui::TableSetupColumn("Name");
 				ImGui::TableSetupColumn("Size");
+				ImGui::TableSetupColumn("Offset");
 				ImGui::TableSetupColumn("Alignment");
 				ImGui::TableSetupColumn("Lifetime");
 				ImGui::TableSetupColumn("Remove?");
 				ImGui::TableHeadersRow();
 				int idx = 0;
+
+				std::vector<Resource*> sortedResources(resources.size());
 				for (Resource& resource : resources)
 				{
-					ImGui::PushID(resource.ID);
+					sortedResources.resize(Math::Max(resource.ID + 1, (uint32)sortedResources.size()));
+					sortedResources[resource.ID] = &resource;
+				}
+
+				for (Resource* pResource : sortedResources)
+				{
+					if (!pResource)
+						continue;
+
+					ImGui::PushID(pResource->ID);
 					ImGui::TableNextColumn();
-					ImGui::ColorButton("##color", sGetResourceColor(resource));
+					ImGui::ColorButton("##color", sGetResourceColor(*pResource));
 					ImGui::SameLine();
-					ImGui::Text("%s", resource.Name.c_str());
+					ImGui::Text("%s", pResource->Name.c_str());
 					ImGui::TableNextColumn();
-					int size = (int)resource.Size;
+					int size = (int)pResource->Size;
 					if (ImGui::SliderInt("##size", &size, 0, Math::MegaBytesToBytes * 10))
-						resource.Size = size;
+						pResource->Size = size;
 					ImGui::TableNextColumn();
-					int alignment = (int)resource.Alignment;
+					ImGui::Text("%d", pResource->Offset);
+					ImGui::TableNextColumn();
+					int alignment = (int)pResource->Alignment;
 					if (ImGui::SliderInt("##alignment", &alignment, 16, Math::KilobytesToBytes * 64))
-						resource.Alignment = alignment;
+						pResource->Alignment = alignment;
 					ImGui::TableNextColumn();
-					IRange lifetime(resource.Lifetime.Begin, resource.Lifetime.End);
+					IRange lifetime(pResource->Lifetime.Begin, pResource->Lifetime.End);
 					ImGui::DragIntRange2("##lifetime", &lifetime.Begin, &lifetime.End, 1.0f, 0, lastPassID);
-					resource.Lifetime = URange(lifetime.Begin, lifetime.End);
+					pResource->Lifetime = URange(lifetime.Begin, lifetime.End);
 					ImGui::TableNextColumn();
 					if (ImGui::Button("Remove"))
 						remove = idx;
