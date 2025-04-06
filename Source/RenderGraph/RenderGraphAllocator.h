@@ -19,11 +19,11 @@ private:
 	struct Resource
 	{
 		std::string			Name;
-		int					Size;
-		int					Alignment;
+		uint64				Size;
+		uint32 				Alignment;
 		URange				Lifetime;
 		uint64				Offset = 0xFFFFFFFF;
-		int					ID;
+		uint32				ID;
 		D3D12_RESOURCE_DESC ResourceDesc;
 		RGDeviceResource*	pPhysicalResource = nullptr;
 		RGResourceType		Type;
@@ -35,12 +35,13 @@ private:
 	{
 		Array<Resource*>				   Allocations;
 		uint64							   Size;
-		Ref<ID3D12Heap>					   pHeap;
-		Array<UniquePtr<RGDeviceResource>> PhysicalResources;
 		uint32							   LastUsedFrame = 0;
-	};
-	Array<Heap> m_Heaps;
 
+		Array<UniquePtr<RGDeviceResource>> PhysicalResources;
+		Ref<ID3D12Heap>					   pHeap;
+	};
+
+	Array<Heap> m_Heaps;
 	Array<Resource> m_CachedResources;
 
 public:
@@ -63,10 +64,10 @@ public:
 		else
 			ComputeAliasing_CommittedResources(m_CachedResources, m_Heaps);
 
-		ClearUnusedResources(m_Heaps);
+		ClearUnusedResources(m_Heaps, 100);
 
-		AllocateResources(pDevice, m_Heaps);
-
+		if (m_LiveCapture)
+			AllocateResources(pDevice, m_Heaps);
 
 		DrawDebugView(m_CachedResources, m_Heaps);
 	}
@@ -218,7 +219,7 @@ private:
 		}
 	}
 
-	void ClearUnusedResources(Array<Heap>& heaps)
+	void ClearUnusedResources(Array<Heap>& heaps, uint32 latency)
 	{
 		PROFILE_CPU_SCOPE();
 
@@ -230,7 +231,7 @@ private:
 				while (i < (uint32)heap.PhysicalResources.size())
 				{
 					RGDeviceResource* pResource = heap.PhysicalResources[i].get();
-					if (pResource->LastUsedFrame + 100 < m_FrameIndex)
+					if (pResource->LastUsedFrame + latency < m_FrameIndex)
 					{
 						std::swap(heap.PhysicalResources[i], heap.PhysicalResources[heap.PhysicalResources.size() - 1]);
 						heap.PhysicalResources.pop_back();
@@ -247,7 +248,7 @@ private:
 			while (i < (uint32)heaps.size())
 			{
 				Heap& heap = heaps[i];
-				if (heap.LastUsedFrame + 100 < m_FrameIndex)
+				if (heap.LastUsedFrame + latency < m_FrameIndex)
 				{
 					heaps.erase(heaps.begin() + i);
 				}
@@ -270,6 +271,9 @@ private:
 					return a.Alignment > b.Alignment;
 				return a.Size > b.Size;
 			});
+
+		// Sort heaps largest to smallest, so smaller heaps can be removed.
+		std::sort(heaps.begin(), heaps.end(), [](const Heap& a, const Heap& b) { return a.Size > b.Size; });
 
 		struct HeapOffset
 		{
@@ -369,7 +373,16 @@ private:
 					}
 				}
 				if (pHeap)
+				{
+					// If the heap is too big, don't allocate into it to allow shrinking
+					if (pHeap->Allocations.empty() && Math::AlignUp<uint64>(resource.Size, cHeapAlignment) < pHeap->Size)
+					{
+						pHeap = nullptr;
+						continue;
+					}
+
 					break;
+				}
 			}
 
 			if (!pHeap)
@@ -377,7 +390,7 @@ private:
 				if (m_PreferHeaps)
 				{
 					Heap& heap = heaps.emplace_back();
-					heap.Size = Math::AlignUp<uint64>(resource.Size, 4ull*Math::MegaBytesToBytes);
+					heap.Size = Math::AlignUp<uint64>(resource.Size, cHeapAlignment);
 					resource.Offset = 0;
 					pHeap = &heap;
 				}
@@ -450,6 +463,7 @@ private:
 	bool   m_UsePlacedResources = true;
 	uint32 m_FrameIndex			= 0;
 
+	static constexpr uint64 cHeapAlignment = 4 * Math::MegaBytesToBytes;
 
 	/****************/
 	/*	 Debug UI	*/
@@ -603,9 +617,13 @@ private:
 					ImGui::SameLine();
 					ImGui::Text("%s", resource.Name.c_str());
 					ImGui::TableNextColumn();
-					ImGui::SliderInt("##size", &resource.Size, 0, Math::MegaBytesToBytes * 10);
+					int size = (int)resource.Size;
+					if (ImGui::SliderInt("##size", &size, 0, Math::MegaBytesToBytes * 10))
+						resource.Size = size;
 					ImGui::TableNextColumn();
-					ImGui::SliderInt("##alignment", &resource.Alignment, 16, Math::KilobytesToBytes * 64);
+					int alignment = (int)resource.Alignment;
+					if (ImGui::SliderInt("##alignment", &alignment, 16, Math::KilobytesToBytes * 64))
+						resource.Alignment = alignment;
 					ImGui::TableNextColumn();
 					IRange lifetime(resource.Lifetime.Begin, resource.Lifetime.End);
 					ImGui::DragIntRange2("##lifetime", &lifetime.Begin, &lifetime.End, 1.0f, 0, lastPassID);
@@ -622,7 +640,7 @@ private:
 				ImGui::EndTable();
 			}
 
-			static int ID = 0xFFFF;
+			static uint32 ID = 0xFFFF;
 			if (ImGui::Button("Add resource"))
 			{
 				resources.push_back({ "New Resource", 100000028, 1, {0,100}, 0, ID++ });
