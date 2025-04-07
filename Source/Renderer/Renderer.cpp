@@ -1262,7 +1262,8 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 		// Compile graph
 		graph.Compile(*m_RenderGraphPool, graphOptions);
-		gRenderGraphAllocator.AliasingExperiment(m_pDevice, graph.GetResources());
+		gRenderGraphAllocator.AllocateResources(m_pDevice, graph.GetResources());
+		gRenderGraphAllocator.DrawDebugView();
 
 		// Debug options
 		graph.DrawResourceTracker(Tweakables::gRenderGraphResourceTracker.Get());

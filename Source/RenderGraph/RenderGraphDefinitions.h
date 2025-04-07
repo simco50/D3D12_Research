@@ -8,7 +8,7 @@ class RGPass;
 class RGGraph;
 class RGResource;
 
-enum class RGResourceType
+enum class RGResourceType : uint8
 {
 	Texture,
 	Buffer,
