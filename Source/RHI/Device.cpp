@@ -129,14 +129,14 @@ GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 				const D3D12_AUTO_BREADCRUMB_NODE1* pNode = pDredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
 				while (pNode && pNode->pLastBreadcrumbValue)
 				{
-					int32 lastCompletedOp = *pNode->pLastBreadcrumbValue;
+					uint32 lastCompletedOp = *pNode->pLastBreadcrumbValue;
 
 					if (lastCompletedOp != (int)pNode->BreadcrumbCount && lastCompletedOp != 0)
 					{
 						E_LOG(Warning, "[DRED] Commandlist \"%s\" on CommandQueue \"%s\", %d completed of %d", pNode->pCommandListDebugNameA, pNode->pCommandQueueDebugNameA, lastCompletedOp, pNode->BreadcrumbCount);
 
-						int32 firstOp = Math::Max(lastCompletedOp - 100, 0);
-						int32 lastOp = Math::Min(lastCompletedOp + 20, int32(pNode->BreadcrumbCount) - 1);
+						int32 firstOp = Math::Max(lastCompletedOp - 100, 0u);
+						int32 lastOp = Math::Min(lastCompletedOp + 20, pNode->BreadcrumbCount - 1);
 
 						contextStrings.clear();
 						for (uint32 breadcrumbContext = firstOp; breadcrumbContext < pNode->BreadcrumbContextsCount; ++breadcrumbContext)
@@ -157,7 +157,7 @@ GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 							}
 
 							const char* opName = (breadcrumbOp < ARRAYSIZE(OpNames)) ? OpNames[breadcrumbOp] : "Unknown Op";
-							E_LOG(Warning, "\tOp: %d, %s%s%s", op, opName, contextString.c_str(), (op + 1 == lastCompletedOp) ? " - Last completed" : "");
+							E_LOG(Warning, "\tOp: %d, %s%s%s", op, opName, contextString.c_str(), (op + 1u == lastCompletedOp) ? " - Last completed" : "");
 						}
 					}
 					pNode = pNode->pNext;
@@ -200,7 +200,7 @@ GraphicsDevice::DRED::DRED(GraphicsDevice* pDevice)
 
 	m_pFence = new Fence(pDevice, "Device Removed Fence");
 	m_WaitHandle = CreateEventA(nullptr, false, false, nullptr);
-	m_pFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_WaitHandle);
+	VERIFY_HR(m_pFence->GetFence()->SetEventOnCompletion(UINT64_MAX, m_WaitHandle));
 	gVerify(RegisterWaitForSingleObject(&m_WaitHandle, m_WaitHandle, OnDeviceRemovedCallback, pDevice->GetDevice(), INFINITE, 0), == TRUE);
 }
 
@@ -273,12 +273,11 @@ static void MessageCallback(D3D12_MESSAGE_CATEGORY category, D3D12_MESSAGE_SEVER
 	case D3D12_MESSAGE_ID_LIVE_VIDEOENCODER:
 	case D3D12_MESSAGE_ID_LIVE_VIDEOENCODERHEAP: {
 		E_LOG(Warning, "D3D12 Resource Leak: %s", pDescription);
-		const char* search_str	= "Live ID3D12Resource at 0x";
-		const char*	find_result = strstr(pDescription, search_str);
-		if (find_result != nullptr)
+		const char*	pFindResult = strstr(pDescription, "Live ID3D12Resource at 0x");
+		if (pFindResult != nullptr)
 		{
 			intptr_t address;
-			if (sscanf_s(find_result, "Live ID3D12Resource at 0x%llx", &address) == 1)
+			if (sscanf_s(pFindResult, "Live ID3D12Resource at 0x%llx", &address) == 1)
 			{
 				ID3D12Resource* resource  = reinterpret_cast<ID3D12Resource*>(address);
 				Callstack<6>	callstack;
@@ -508,7 +507,7 @@ void GraphicsDevice::TickFrame()
 {
 	m_DeleteQueue.Clean();
 	uint64 fenceValue = m_pFrameFence->Signal(m_GraphicsQueue);
-	
+
 	m_FrameFenceValues[m_FrameIndex % NUM_BUFFERS] = fenceValue;
 	++m_FrameIndex;
 	m_pFrameFence->CpuWait(m_FrameFenceValues[m_FrameIndex % NUM_BUFFERS]);

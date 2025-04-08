@@ -2,7 +2,6 @@
 
 #include <imgui_internal.h>
 #include "RenderGraphDefinitions.h"
-#include "RenderGraph.h"
 
 class RGAllocator
 {
@@ -297,7 +296,6 @@ private:
 				// If we hit the end of a free mark and the range is closed (== 0), then this range is free
 				uint32 freeRangeCounter = 0;
 				uint64 lastBeginOffset = 0;
-				uint64 smallestRange = ~0ull;
 				for (HeapOffset& heapOffset : freeRanges)
 				{
 					if (heapOffset.IsFreeBegin)
@@ -335,16 +333,9 @@ private:
 								}
 
 								// No unused existing resource found, allocate resource in a new region
-								uint64 rangeSize = endOffset - alignedOffset;
-								if (rangeSize < smallestRange)
-								{
-									smallestRange = rangeSize;
-									resource.Offset = alignedOffset;
-									pHeap = &heap;
-
-									// We're done
-									break;
-								}
+								resource.Offset = alignedOffset;
+								pHeap = &heap;
+								break;
 							}
 						}
 					}
