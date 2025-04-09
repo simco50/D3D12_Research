@@ -8,6 +8,7 @@
 
 class RGGraph;
 class RGPass;
+class RGAllocator;
 
 // Flags assigned to a pass that can determine various things
 enum class RGPassFlag : uint8
@@ -248,31 +249,6 @@ private:
 	Array<RGPassID>			PassDependencies;
 };
 
-class RGResourcePool : public DeviceObject
-{
-public:
-	RGResourcePool(GraphicsDevice* pDevice)
-		: DeviceObject(pDevice)
-	{}
-
-	NO_DISCARD Ref<Texture> Allocate(const char* pName, const TextureDesc& desc);
-	NO_DISCARD Ref<Buffer> Allocate(const char* pName, const BufferDesc& desc);
-	void Tick();
-
-private:
-	template<typename T>
-	struct PooledResource
-	{
-		Ref<T> pResource;
-		uint32 LastUsedFrame;
-	};
-	using PooledTexture = PooledResource<Texture>;
-	using PooledBuffer = PooledResource<Buffer>;
-	Array<PooledTexture> m_TexturePool;
-	Array<PooledBuffer> m_BufferPool;
-	uint32 m_FrameIndex = 0;
-};
-
 struct RGGraphOptions
 {
 	bool ResourceAliasing		= true;
@@ -291,7 +267,7 @@ public:
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
-	void Compile(RGResourcePool& resourcePool, const RGGraphOptions& options);
+	void Compile(RGAllocator& resourceAllocator, const RGGraphOptions& options);
 
 	void Execute(GraphicsDevice* pDevice);
 
@@ -399,11 +375,11 @@ private:
 	void PrepareResources(const RGPass* pPass, CommandContext& context) const;
 	void DestroyData();
 
-	bool								m_IsCompiled		= false;
-	Array<RGEventID>				m_PendingEvents;
+	bool						m_IsCompiled		= false;
+	Array<RGEventID>			m_PendingEvents;
 	Array<RGEvent>				m_Events;
 
-	RGGraphAllocator					m_Allocator;
+	RGGraphAllocator			m_Allocator;
 
 	Array<Span<const RGPass*>>	m_PassExecuteGroups;
 	Array<RGPass*>				m_Passes;
@@ -421,7 +397,7 @@ private:
 		RGBuffer*		pBuffer;
 		Ref<Buffer>*	pTarget;
 	};
-	Array<ExportedBuffer>			m_ExportBuffers;
+	Array<ExportedBuffer>		m_ExportBuffers;
 };
 
 class RGGraphScope

@@ -223,7 +223,7 @@ struct TRange
 	{
 		gAssert(lhs.Begin < lhs.End);
 		gAssert(rhs.Begin < rhs.End);
-		return lhs.Begin <= rhs.End && lhs.End >= rhs.Begin;
+		return lhs.Begin < rhs.End && lhs.End > rhs.Begin;
 	}
 
 	static bool Combine(const TRange& lhs, const TRange& rhs, TRange& combinedRange)

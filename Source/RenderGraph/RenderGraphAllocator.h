@@ -1,6 +1,7 @@
 #pragma once
 
 #include <imgui_internal.h>
+#include "RHI/RHI.h"
 #include "RenderGraphDefinitions.h"
 
 class RGAllocator
@@ -10,39 +11,25 @@ private:
 	struct RGPhysicalResource
 	{
 		Ref<DeviceResource> pResource;
-		D3D12_RESOURCE_DESC Desc;
-		uint64				Offset;
-		uint64				Size;
+		uint32				Offset;
+		uint32				Size;
 		uint32				LastUsedFrame = 0;
+		TextureDesc			ResourceTextureDesc;
+		BufferDesc			ResourceBufferDesc;
 
-		bool IsCompatible(const D3D12_RESOURCE_DESC& desc)
+		bool IsCompatible(const RGResource* pResource) const
 		{
-			D3D::ResourceDescEqual eq;
-			return eq(Desc, desc);
+			if (pResource->GetType() == RGResourceType::Texture)
+				return ResourceTextureDesc == static_cast<const RGTexture*>(pResource)->GetDesc();
+			return ResourceBufferDesc == static_cast<const RGBuffer*>(pResource)->GetDesc();
 		}
-	};
-
-	// Represents a render graph resource (to be replaced with RGResource)
-	struct Resource
-	{
-		std::string			Name;
-		uint64				Size;
-		uint32 				Alignment;
-		URange				Lifetime;
-		uint64				Offset = 0xFFFFFFFF;
-		uint32				ID;
-		D3D12_RESOURCE_DESC ResourceDesc;
-		RGPhysicalResource*	pPhysicalResource = nullptr;
-		RGResourceType		Type;
-		BufferDesc			BufferDesc;
-		TextureDesc			TextureDesc;
 	};
 
 	// Represents a physical resource heap
 	struct RGHeap
 	{
 		uint32							   ID;
-		Array<Resource*>				   Allocations;
+		Array<RGResource*>				   Allocations;
 		uint64							   Size;
 		uint32							   LastUsedFrame = 0;
 
@@ -51,42 +38,48 @@ private:
 	};
 
 public:
+	void Init(GraphicsDevice* pDevice)
+	{
+		m_pDevice = pDevice;
+	}
+
 	void Shutdown()
 	{
 		ClearAll();
 	}
 
-	void AllocateResources(GraphicsDevice* pDevice, Span<RGResource*> graphResources)
+	void AllocateResources(Span<RGResource*> graphResources)
 	{
 		PROFILE_CPU_SCOPE();
 
-		if (m_LiveCapture)
+		for (RGResource* pResource : graphResources)
 		{
-			m_CachedResources = {};
-			GetResources(pDevice, graphResources, m_CachedResources);
+			uint64 size, alignment;
+			D3D::GetResourceAllocationInfo(m_pDevice->GetDevice(), sGetResourceDesc(pResource), size, alignment);
+			pResource->Size		 = (int)size;
+			pResource->Alignment = (int)alignment;
+			pResource->Offset	 = 0;
 		}
 
-		for (RGHeap& heap : m_Heaps)
-			heap.Allocations.clear();
+		Array<RGResource*> resources = graphResources.Copy();
+		ComputeResourceAliasing(resources, m_Heaps);
 
-		ComputeResourceAliasing(m_CachedResources, m_Heaps);
+		DrawDebugView(resources, m_Heaps);
+	}
 
+	void Tick()
+	{
 		ClearUnusedResources(m_Heaps);
-
-		if (m_LiveCapture && m_AllocateResources)
-			AllocatePhysicalResources(pDevice, m_Heaps);
-
 		++m_FrameIndex;
 	}
 
 	void DrawDebugView()
 	{
-		DrawDebugView(m_CachedResources, m_Heaps);
+		//DrawDebugView(m_Heaps);
 	}
 
 	void ClearAll()
 	{
-		m_CachedResources.clear();
 		m_Heaps.clear();
 	}
 
@@ -160,35 +153,6 @@ private:
 			return desc;
 		}
 	}
-
-	static void GetResources(GraphicsDevice* pDevice, Span<RGResource*> graphResources, Array<Resource>& outResources)
-	{
-		PROFILE_CPU_SCOPE();
-
-		for (RGResource* pResource : graphResources)
-		{
-			if (pResource->IsImported || !pResource->GetPhysicalUnsafe())
-				continue;
-
-			Resource& resource = outResources.emplace_back();
-			resource.Lifetime  = pResource->GetLifetime();
-			resource.ID		   = pResource->ID.GetIndex();
-			resource.Name	   = pResource->GetName();
-			resource.Type	   = pResource->GetType();
-			if (pResource->GetType() == RGResourceType::Texture)
-				resource.TextureDesc = static_cast<RGTexture*>(pResource)->GetDesc();
-			else
-				resource.BufferDesc = static_cast<RGBuffer*>(pResource)->GetDesc();
-
-			resource.ResourceDesc = sGetResourceDesc(pResource);
-
-			uint64 size, alignment;
-			D3D::GetResourceAllocationInfo(pDevice->GetDevice(), resource.ResourceDesc, size, alignment);
-
-			resource.Size = (int)size;
-			resource.Alignment = (int)alignment;
-		}
-	}
 private:
 	void ClearUnusedResources(Array<RGHeap>& heaps)
 	{
@@ -224,19 +188,56 @@ private:
 		}
 	}
 
-	void ComputeResourceAliasing(Array<Resource>& resources, Array<RGHeap>& heaps)
+	RGPhysicalResource* FindExistingResource(const DeviceResource* pResource, RGHeap** pOutHeap)
+	{
+		for (RGHeap& heap : m_Heaps)
+		{
+			for (UniquePtr<RGPhysicalResource>& resource : heap.PhysicalResources)
+			{
+				if (resource->pResource == pResource)
+				{
+					*pOutHeap = &heap;
+					return resource.get();
+				}
+			}
+		}
+		return nullptr;
+	}
+
+
+	void ComputeResourceAliasing(Array<RGResource*>& resources, Array<RGHeap>& heaps)
 	{
 		PROFILE_CPU_SCOPE();
 
-		// Sort resources largest to smallest, then largest alignment to smallest.
-		std::sort(resources.begin(), resources.end(), [](const Resource& a, const Resource& b) {
-			if (a.Size == b.Size)
+		// Clear all allocations and mark imported resources as allocations
+		for (RGHeap& heap : m_Heaps)
+			heap.Allocations.clear();
+
+		for (RGResource* pResource : resources)
+		{
+			if (pResource->IsAllocated())
 			{
-				if (a.Alignment == b.Alignment)
-					return a.ID < b.ID;
-				return a.Alignment > b.Alignment;
+				gAssert(pResource->IsImported && pResource->pPhysicalResource);
+
+				RGHeap* pHeap = nullptr;
+				RGPhysicalResource* pPhysicalResource = FindExistingResource(pResource->GetPhysicalUnsafe(), &pHeap);
+				if (pPhysicalResource)
+				{
+					pResource->Offset = pPhysicalResource->Offset;
+					pHeap->Allocations.push_back(pResource);
+				}
 			}
-			return a.Size > b.Size;
+		}
+
+		// Sort resources largest to smallest, then largest alignment to smallest.
+		std::sort(resources.begin(), resources.end(), [](const RGResource* a, const RGResource* b) {
+			if (a->Size == b->Size)
+			{
+				if (a->Alignment == b->Alignment)
+					return a->ID.GetIndex() < b->ID.GetIndex();
+				return a->Alignment > b->Alignment;
+			}
+			return a->Size > b->Size;
 		});
 
 		// Sort heaps largest to smallest, so smaller heaps can be removed.
@@ -253,20 +254,23 @@ private:
 		};
 		Array<HeapOffset> freeRanges;
 
-		for (Resource& resource : resources)
+		for (RGResource* pResource : resources)
 		{
-			if (resource.pPhysicalResource)
+			if (pResource->IsAllocated())
 				continue;
 
-			if (resource.Size == 0)
-				continue;
+			gAssert(pResource->Size != 0);
 
 			RGHeap* pHeap = nullptr;
 			for (RGHeap& heap : heaps)
 			{
 				// If the resource is larger than the heap, bail out. Heaps are sorted by size so if this one doesn't fit, none will
-				if (resource.Size > heap.Size)
+				if (pResource->Size > heap.Size)
 					break;
+
+				// Shrinking: If the found heap has no allocations and it's very large for the resource, don't allocate into it and instead continue searching so this heap has the chance to be released
+				if (heap.Allocations.empty() && Math::AlignUp<uint64>(pResource->Size, cHeapAlignment) < heap.Size)
+					continue;
 
 				// Keep track of which memory ranges in the heap for the lifetime of the current resource are free
 				freeRanges.clear();
@@ -275,12 +279,12 @@ private:
 				freeRanges.push_back({ 0, true });
 
 				// For each allocated resource, if the lifetime overlaps, mark it as "not free"
-				for (Resource* existing : heap.Allocations)
+				for (RGResource* pAllocatedResource : heap.Allocations)
 				{
-					if (existing->Lifetime.Overlaps(resource.Lifetime))
+					if (pAllocatedResource->GetLifetime().Overlaps(pResource->GetLifetime()))
 					{
-						freeRanges.push_back({ existing->Offset, false });
-						freeRanges.push_back({ existing->Offset + existing->Size, true });
+						freeRanges.push_back({ pAllocatedResource->Offset, false });
+						freeRanges.push_back({ pAllocatedResource->Offset + pAllocatedResource->Size, true });
 					}
 				}
 
@@ -310,30 +314,27 @@ private:
 						if (freeRangeCounter == 0)
 						{
 							// Test whether the free region is large enough
-							uint64 alignedOffset = Math::AlignUp<uint64>(lastBeginOffset, resource.Alignment);
+							uint64 alignedOffset = Math::AlignUp<uint64>(lastBeginOffset, pResource->Alignment);
 							uint64 endOffset = heapOffset.Offset;
-							if (alignedOffset + resource.Size <= heapOffset.Offset)
+							if (alignedOffset + pResource->Size <= heapOffset.Offset)
 							{
 								// Try to find an already existing physical resource that fits the space and description
 								gAssert(heap.pHeap || heap.PhysicalResources.empty(), "Heap can't have physical resources without an allocated heap");
-								auto it = std::find_if(heap.PhysicalResources.begin(), heap.PhysicalResources.end(), [&](const std::unique_ptr<RGPhysicalResource>& pPhysicalResource) {
-									return
-										pPhysicalResource->LastUsedFrame != m_FrameIndex &&						// Must not already be used by another resource
+								for (const std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
+								{
+									if (pPhysicalResource->LastUsedFrame != m_FrameIndex &&						// Must not already be used by another resource
 										pPhysicalResource->Offset >= alignedOffset &&							// The physical resource must be within the region of the free range
 										pPhysicalResource->Offset + pPhysicalResource->Size <= endOffset &&		// The physical resource must be within the region of the free range
-										pPhysicalResource->IsCompatible(resource.ResourceDesc);					// The physical resource description must match the vritual resource
-								});
-
-								// Found an existing physical resource that matches the description. Finished
-								if (it != heap.PhysicalResources.end())
-								{
-									pHeap			  = &heap;
-									pExistingResource = it->get();
-									break;
+										pPhysicalResource->IsCompatible(pResource))								// The physical resource description must match the vritual resource
+									{
+										pExistingResource = pPhysicalResource.get();
+										pHeap			  = &heap;
+										break;
+									}
 								}
 
 								// No unused existing resource found, allocate resource in a new region
-								resource.Offset = alignedOffset;
+								pResource->Offset = alignedOffset;
 								pHeap = &heap;
 								break;
 							}
@@ -343,18 +344,11 @@ private:
 
 				if (pHeap)
 				{
-					// Shrinking: If the found heap has no allocations and it's very large for the resource, don't allocate into it and instead continue searching so this heap has the chance to be released
-					if (pHeap->Allocations.empty() && Math::AlignUp<uint64>(resource.Size, cHeapAlignment) < pHeap->Size)
-					{
-						pHeap = nullptr;
-						continue;
-					}
-
 					// If an existing resource was found, assign it to the resource and mark it as used
 					if (pExistingResource)
 					{
-						resource.pPhysicalResource		 = pExistingResource;
-						resource.Offset					 = pExistingResource->Offset;
+						pResource->SetResource(pExistingResource->pResource);
+						pResource->Offset					 = pExistingResource->Offset;
 						pExistingResource->LastUsedFrame = m_FrameIndex;
 					}
 
@@ -365,22 +359,38 @@ private:
 			// If no heap was found, that means the resource wasn't placed and a new heap is needed
 			if (!pHeap)
 			{
-				RGHeap& heap	= heaps.emplace_back();
-				heap.ID			= m_HeapID++;
-				heap.Size		= Math::AlignUp<uint64>(resource.Size, cHeapAlignment);
-				resource.Offset = 0;
-				pHeap			= &heap;
+				RGHeap& heap = heaps.emplace_back();
+				heap.ID		 = m_HeapID++;
+				heap.Size	 = Math::AlignUp<uint64>(pResource->Size, cHeapAlignment);
+				pHeap		 = &heap;
 			}
 
+			gAssert(pResource->Offset + pResource->Size <= pHeap->Size);
+
 			// Assign the resource and mark the heap as used this frame
-			pHeap->Allocations.push_back(&resource);
+			pHeap->Allocations.push_back(pResource);
 			pHeap->LastUsedFrame = m_FrameIndex;
 		}
-	}
 
-	void AllocatePhysicalResources(GraphicsDevice* pDevice, Array<RGHeap>& heaps)
-	{
-		PROFILE_CPU_SCOPE();
+		// Validation
+		for (RGHeap& heap : heaps)
+		{
+			for (const RGResource* pResource : heap.Allocations)
+			{
+				auto it = std::find_if(heap.Allocations.begin(), heap.Allocations.end(), [pResource](RGResource* pOther) {
+					if (pOther == pResource)
+						return false;
+					return pResource->GetLifetime().Overlaps(pOther->GetLifetime()) && pResource->GetMemoryRange().Overlaps(pOther->GetMemoryRange());
+				});
+				RGResource* pOverlappingResource = it == heap.Allocations.end() ? nullptr : *it;
+				gAssert(pOverlappingResource == nullptr,
+					"Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu]) overlaps with Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu])",
+					pResource->pName, pResource->GetLifetime().Begin, pResource->GetLifetime().End, pResource->GetMemoryRange().Begin, pResource->GetMemoryRange().End,
+					pOverlappingResource->pName, pOverlappingResource->GetLifetime().Begin, pOverlappingResource->GetLifetime().End, pOverlappingResource->GetMemoryRange().Begin, pOverlappingResource->GetMemoryRange().End);
+			}
+		}
+
+
 
 		for (RGHeap& heap : heaps)
 		{
@@ -398,35 +408,43 @@ private:
 					.Alignment = 0,
 					.Flags	   = D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
 				};
-				VERIFY_HR(pDevice->GetDevice()->CreateHeap(&heapDesc, IID_PPV_ARGS(heap.pHeap.GetAddressOf())));
+				VERIFY_HR(m_pDevice->GetDevice()->CreateHeap(&heapDesc, IID_PPV_ARGS(heap.pHeap.GetAddressOf())));
 			}
 
-			for (Resource* pResource : heap.Allocations)
+			for (RGResource* pResource : heap.Allocations)
 			{
-				if (!pResource->pPhysicalResource)
+				if (!pResource->IsAllocated())
 				{
-					heap.PhysicalResources.emplace_back(new RGPhysicalResource);
-					RGPhysicalResource* pPhysical	 = heap.PhysicalResources.back().get();
-					pPhysical->Desc				 = pResource->ResourceDesc;
-					pPhysical->Offset			 = pResource->Offset;
-					pPhysical->Size				 = pResource->Size;
-					pPhysical->LastUsedFrame	 = m_FrameIndex;
-					pResource->pPhysicalResource = pPhysical;
+					heap.PhysicalResources.emplace_back(std::make_unique<RGPhysicalResource>());
+					RGPhysicalResource* pPhysical = heap.PhysicalResources.back().get();
+					pPhysical->Offset			  = pResource->Offset;
+					pPhysical->Size				  = pResource->Size;
+					pPhysical->LastUsedFrame	  = m_FrameIndex;
 
-					if (pResource->Type == RGResourceType::Texture)
-						pDevice->CreateTexture(pResource->TextureDesc, heap.pHeap, pResource->Offset, pResource->Name.c_str());
+					if (pResource->GetType() == RGResourceType::Texture)
+					{
+						RGTexture* pTexture			   = static_cast<RGTexture*>(pResource);
+						pPhysical->ResourceTextureDesc = pTexture->GetDesc();
+						pPhysical->pResource		   = m_pDevice->CreateTexture(pTexture->GetDesc(), heap.pHeap, pResource->Offset, pResource->GetName());
+					}
 					else
-						pDevice->CreateBuffer(pResource->BufferDesc, heap.pHeap, pResource->Offset, pResource->Name.c_str());
+					{
+						RGBuffer* pBuffer			  = static_cast<RGBuffer*>(pResource);
+						pPhysical->ResourceBufferDesc = pBuffer->GetDesc();
+						pPhysical->pResource		  = m_pDevice->CreateBuffer(pBuffer->GetDesc(), heap.pHeap, pResource->Offset, pResource->GetName());
+					}
+					pResource->SetResource(pPhysical->pResource);
 				}
 			}
 		}
 	}
 
+
+	GraphicsDevice* m_pDevice			 = nullptr;
 	bool			m_LiveCapture = true;
 	bool			m_AllocateResources = true;
 	uint32			m_FrameIndex		 = 0;
 	Array<RGHeap>	m_Heaps;
-	Array<Resource> m_CachedResources;
 	uint32			m_HeapID = 0;
 
 	static constexpr uint32 cHeapCleanupLatency		= 3;
@@ -437,13 +455,13 @@ private:
 	/*	 Debug UI	*/
 	/****************/
 
-	static ImColor sGetResourceColor(const Resource& resource)
+	static ImColor sGetResourceColor(const RGResource* pResource)
 	{
 		float		hueMin	   = 0.0f;
 		float		hueMax	   = 1.0f;
 		const float saturation = 0.5f;
 		const float value	   = 0.6f;
-		float		hue		   = (float)std::hash<std::string>{}(resource.Name) / std::numeric_limits<size_t>::max();
+		float		hue		   = (float)std::hash<std::string>{}(pResource->GetName()) / std::numeric_limits<size_t>::max();
 		hue					   = hueMin + hue * (hueMax - hueMin);
 		float R				   = std::max(std::min(fabs(hue * 6 - 3) - 1, 1.0f), 0.0f);
 		float G				   = std::max(std::min(2 - fabs(hue * 6 - 2), 1.0f), 0.0f);
@@ -456,23 +474,23 @@ private:
 		return ImColor(R, G, B, 1.0f);
 	}
 
-	void DrawDebugView(Array<Resource>& resources, Array<RGHeap>& heaps)
+	void DrawDebugView(Span<RGResource*> resources, const Array<RGHeap>& heaps)
 	{
 		PROFILE_CPU_SCOPE();
 
 		uint32 lastPassID = 0;
-		for (Resource& resource : resources)
-			lastPassID = Math::Max(resource.Lifetime.End, lastPassID);
+		for (const RGResource* pResource : resources)
+			lastPassID = Math::Max(pResource->GetLifetime().End, lastPassID);
 
 		// Show allocation sizes and heap layout
 		if (ImGui::Begin("Heap Layout"))
 		{
 			uint64 totalResourcesSize = 0;
-			for (Resource& resource : resources)
-				totalResourcesSize += resource.Size;
+			for (const RGResource* pResource : resources)
+				totalResourcesSize += pResource->Size;
 
 			uint64 totalHeapSize = 0;
-			for (RGHeap& heap : heaps)
+			for (const RGHeap& heap : heaps)
 				totalHeapSize += heap.Size;
 
 			if (ImGui::BeginTable("Size Stats", 4))
@@ -509,7 +527,7 @@ private:
 
 			float width = ImGui::GetContentRegionAvail().x;
 			float widthScale = width / lastPassID;
-			for (RGHeap& heap : heaps)
+			for (const RGHeap& heap : heaps)
 			{
 				ImGui::Text("Heap (Size: %s - Allocations: %d - Resources: %d)", Math::PrettyPrintDataSize(heap.Size).c_str(), heap.Allocations.size(), heap.PhysicalResources.size());
 				ImDrawList* pDraw = ImGui::GetWindowDrawList();
@@ -520,23 +538,23 @@ private:
 				auto GetBarHeight = [&](uint64 size) { return (float)size / heap.Size * heapHeight; };
 
 				pDraw->AddRectFilled(cursor, cursor + ImVec2(widthScale * (lastPassID + 1), heapHeight), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
-				for (Resource* resource : heap.Allocations)
+				for (const RGResource* pResource : heap.Allocations)
 				{
 					ImRect barRect(
-						cursor + ImVec2(widthScale * resource->Lifetime.Begin, GetBarHeight(resource->Offset)),
-						cursor + ImVec2(widthScale * (resource->Lifetime.End + 1), GetBarHeight(resource->Size + resource->Offset))
+						cursor + ImVec2(widthScale * pResource->GetLifetime().Begin, GetBarHeight(pResource->Offset)),
+						cursor + ImVec2(widthScale * pResource->GetLifetime().End, GetBarHeight(pResource->Size + pResource->Offset))
 					);
 
-					if (ImGui::ItemAdd(barRect, resource->ID))
+					if (ImGui::ItemAdd(barRect, pResource->ID.GetIndex()))
 					{
-						ImColor color = sGetResourceColor(*resource);
+						ImColor color = sGetResourceColor(pResource);
 						if (ImGui::IsItemHovered() && ImGui::BeginTooltip())
 						{
 							color.Value.x *= 1.5f;
 							color.Value.y *= 1.5f;
 							color.Value.z *= 1.5f;
-							ImGui::Text("Name: %s", resource->Name.c_str());
-							ImGui::Text("Size: %s", Math::PrettyPrintDataSize(resource->Size).c_str());
+							ImGui::Text("Name: %s", pResource->pName);
+							ImGui::Text("Size: %s", Math::PrettyPrintDataSize(pResource->Size).c_str());
 							ImGui::EndTooltip();
 						}
 
@@ -553,16 +571,7 @@ private:
 		// Show data of all captured resources
 		if (ImGui::Begin("Resource Table"))
 		{
-			int remove = -1;
-			int duplicate = -1;
-			ImGui::Checkbox("Live Capture", &m_LiveCapture);
-			ImGui::SameLine();
-			if (ImGui::Button("Clear All"))
-			{
-				ClearAll();
-			}
-
-			if (ImGui::BeginTable("TestTable", 6, ImGuiTableFlags_Resizable))
+			if (ImGui::BeginTable("TestTable", 5, ImGuiTableFlags_Resizable))
 			{
 				ImGui::TableHeader("Header");
 				ImGui::TableSetupColumn("Name");
@@ -570,69 +579,36 @@ private:
 				ImGui::TableSetupColumn("Offset");
 				ImGui::TableSetupColumn("Alignment");
 				ImGui::TableSetupColumn("Lifetime");
-				ImGui::TableSetupColumn("Remove?");
 				ImGui::TableHeadersRow();
-				int idx = 0;
 
-				std::vector<Resource*> sortedResources(resources.size());
-				for (Resource& resource : resources)
+				std::vector<const RGResource*> sortedResources(resources.GetSize());
+				for (const RGResource* resource : resources)
 				{
-					sortedResources.resize(Math::Max(resource.ID + 1, (uint32)sortedResources.size()));
-					sortedResources[resource.ID] = &resource;
+					sortedResources.resize(Math::Max<uint32>(resource->ID.GetIndex() + 1, (uint32)sortedResources.size()));
+					sortedResources[resource->ID.GetIndex()] = resource;
 				}
 
-				for (Resource* pResource : sortedResources)
+				for (const RGResource* pResource : sortedResources)
 				{
 					if (!pResource)
 						continue;
 
-					ImGui::PushID(pResource->ID);
+					ImGui::PushID(pResource->ID.GetIndex());
 					ImGui::TableNextColumn();
-					ImGui::ColorButton("##color", sGetResourceColor(*pResource));
+					ImGui::ColorButton("##color", sGetResourceColor(pResource));
 					ImGui::SameLine();
-					ImGui::Text("%s", pResource->Name.c_str());
+					ImGui::Text("%s", pResource->pName);
 					ImGui::TableNextColumn();
-					int size = (int)pResource->Size;
-					if (ImGui::SliderInt("##size", &size, 0, Math::MegaBytesToBytes * 10))
-						pResource->Size = size;
+					ImGui::Text("%s", Math::PrettyPrintDataSize(pResource->Size).c_str());
 					ImGui::TableNextColumn();
-					ImGui::Text("%d", pResource->Offset);
+					ImGui::Text("%s", Math::PrettyPrintDataSize(pResource->Offset).c_str());
 					ImGui::TableNextColumn();
-					int alignment = (int)pResource->Alignment;
-					if (ImGui::SliderInt("##alignment", &alignment, 16, Math::KilobytesToBytes * 64))
-						pResource->Alignment = alignment;
+					ImGui::Text("%s", Math::PrettyPrintDataSize(pResource->Alignment).c_str());
 					ImGui::TableNextColumn();
-					IRange lifetime(pResource->Lifetime.Begin, pResource->Lifetime.End);
-					ImGui::DragIntRange2("##lifetime", &lifetime.Begin, &lifetime.End, 1.0f, 0, lastPassID);
-					pResource->Lifetime = URange(lifetime.Begin, lifetime.End);
-					ImGui::TableNextColumn();
-					if (ImGui::Button("Remove"))
-						remove = idx;
-					ImGui::SameLine();
-					if (ImGui::Button("Duplicate"))
-						duplicate = idx;
-					++idx;
+					ImGui::Text("%d -> %d", pResource->GetLifetime().Begin, pResource->GetLifetime().End);
 					ImGui::PopID();
 				}
 				ImGui::EndTable();
-			}
-
-			static uint32 ID = 0xFFFF;
-			if (ImGui::Button("Add resource"))
-			{
-				resources.push_back({ "New Resource", 100000028, 1, {0,100}, 0, ID++ });
-			}
-
-			if (remove >= 0)
-			{
-				std::swap(resources[remove], resources[resources.size() - 1]);
-				resources.erase(resources.begin() + remove);
-			}
-			if (duplicate >= 0)
-			{
-				Resource newResource = resources[duplicate];
-				newResource.ID = ID++;
-				resources.insert(resources.begin() + duplicate + 1, newResource);
 			}
 		}
 		ImGui::End();

@@ -118,7 +118,7 @@ void Renderer::Init(GraphicsDevice* pDevice, World* pWorld)
 	m_pDevice = pDevice;
 	m_pWorld = pWorld;
 
-	m_RenderGraphPool = std::make_unique<RGResourcePool>(m_pDevice);
+	gRenderGraphAllocator.Init(pDevice);
 
 	DebugRenderer::Get()->Initialize(m_pDevice);
 	m_pShaderDebugRenderer	= std::make_unique<ShaderDebugRenderer>(m_pDevice);
@@ -157,6 +157,8 @@ void Renderer::Shutdown()
 
 void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Texture* pTarget)
 {
+	gRenderGraphAllocator.Tick();
+
 	uint32 w = pTarget->GetWidth();
 	uint32 h = pTarget->GetHeight();
 
@@ -176,8 +178,6 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 			m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
 
 		m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
-
-		m_RenderGraphPool->Tick();
 
 		RenderPath newRenderPath = m_RenderPath;
 		if (!ImGui::IsAnyItemActive())
@@ -1183,9 +1183,9 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						parameters.Bloom			= resources.GetSRV(pBloomTexture);
 						parameters.LensDirt			= m_pLensDirtTexture->GetSRV();
 						context.BindRootSRV(BindingSlot::PerInstance, parameters);
-						
+
 						Renderer::BindViewUniforms(context, *pView);
-						
+
 						context.Dispatch(ComputeUtils::GetNumThreadGroups(pTarget->GetWidth(), 16, pTarget->GetHeight(), 16));
 					});
 
@@ -1261,8 +1261,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 		graphOptions.CommandlistGroupSize = Tweakables::gRenderGraphPassGroupSize;
 
 		// Compile graph
-		graph.Compile(*m_RenderGraphPool, graphOptions);
-		gRenderGraphAllocator.AllocateResources(m_pDevice, graph.GetResources());
+		graph.Compile(gRenderGraphAllocator, graphOptions);
 		gRenderGraphAllocator.DrawDebugView();
 
 		// Debug options

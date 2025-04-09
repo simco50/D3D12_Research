@@ -5,6 +5,7 @@
 #include "RHI/Device.h"
 #include "RHI/CommandContext.h"
 #include "RHI/CommandQueue.h"
+#include "RenderGraph/RenderGraphAllocator.h"
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
 {
@@ -90,7 +91,7 @@ RGGraph::~RGGraph()
 	DestroyData();
 }
 
-void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& options)
+void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& options)
 {
 	PROFILE_CPU_SCOPE();
 
@@ -198,9 +199,17 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		for (RGResource* pResource : m_Resources)
 		{
 			if (pResource->IsExported)
-				pResource->LastAccess = lastPass;
-			if (pResource->IsImported)
+			{
+				// TEMP: Shouldn't have to extend the lifetime of an exported resource to the start of the frame
 				pResource->FirstAccess = firstPass;
+				pResource->LastAccess  = lastPass;
+			}
+			if (pResource->IsImported)
+			{
+				// TEMP: Shouldn't have to extend the lifetime of an imported resource to the end of the frame
+				pResource->FirstAccess = firstPass;
+				pResource->LastAccess  = lastPass;
+			}
 		}
 	}
 
@@ -212,6 +221,8 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 		// It's important to make the distinction between the Ref allocation and the Raw resource itself.
 		// A de-allocate returns the resource back to the pool by resetting the Ref however the Raw resource keeps a reference to it to use during execution.
 		// This is how we can "alias" resources (exact match only for now) and allocate our resources during compilation so that execution is thread-safe.
+
+		Array<RGResource*> activeResources;
 		for (RGPass* pPass : m_Passes)
 		{
 			if (pPass->IsCulled)
@@ -220,22 +231,21 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
 				RGResource* pResource = access.pResource;
-				if (!pResource->GetPhysicalUnsafe())
-				{
-					gAssert(pResource->FirstAccess == pPass->ID);
+				if (std::find(activeResources.begin(), activeResources.end(), pResource) == activeResources.end())
+					activeResources.push_back(pResource);
+			}
+		}
 
-					Ref<DeviceResource> pPhysicalResource;
-					if (pResource->GetType() == RGResourceType::Texture)
-						pPhysicalResource = resourcePool.Allocate(pResource->GetName(), static_cast<RGTexture*>(pResource)->GetDesc());
-					else if (pResource->GetType() == RGResourceType::Buffer)
-						pPhysicalResource = resourcePool.Allocate(pResource->GetName(), static_cast<RGBuffer*>(pResource)->GetDesc());
-					else
-						gUnreachable();
-					pResource->SetResource(pPhysicalResource);
-				}
-				gAssert(pResource->GetPhysicalUnsafe());
+		resourceAllocator.AllocateResources(activeResources);
 
+		for (RGPass* pPass : m_Passes)
+		{
+			if (pPass->IsCulled)
+				continue;
 
+			for (const RGPass::ResourceAccess& access : pPass->Accesses)
+			{
+				RGResource* pResource = access.pResource;
 				if (pResource->GetPhysicalUnsafe()->UseStateTracking())
 				{
 					uint32 subResource = 0xFFFFFFFF;
@@ -244,7 +254,7 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 					if (options.StateTracking)
 					{
 						D3D12_RESOURCE_STATES beforeState = pResource->GetPhysicalUnsafe()->GetResourceState(subResource);
-						D3D12_RESOURCE_STATES afterState = access.Access;
+						D3D12_RESOURCE_STATES afterState  = access.Access;
 						if (D3D::NeedsTransition(beforeState, afterState, true))
 						{
 							pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = beforeState, .AfterState = afterState, .SubResource = subResource });
@@ -255,30 +265,6 @@ void RGGraph::Compile(RGResourcePool& resourcePool, const RGGraphOptions& option
 					{
 						pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = D3D12_RESOURCE_STATE_UNKNOWN, .AfterState = access.Access, .SubResource = subResource });
 					}
-				}
-			}
-
-			if (options.ResourceAliasing)
-			{
-				for (const RGPass::ResourceAccess& access : pPass->Accesses)
-				{
-					RGResource* pResource = access.pResource;
-					if (!pResource->IsImported && !pResource->IsExported && pResource->LastAccess == pPass->ID)
-					{
-						pResource->Release();
-					}
-				}
-			}
-		}
-
-		// If not aliasing resources, all resources still have a referece, so release it.
-		if (!options.ResourceAliasing)
-		{
-			for (RGResource* pResource : m_Resources)
-			{
-				if (!pResource->IsImported && !pResource->IsExported && pResource->IsAllocated())
-				{
-					pResource->Release();
 				}
 			}
 		}
@@ -521,12 +507,34 @@ void RGGraph::ExecutePass(const RGPass* pPass, CommandContext& context) const
 
 void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) const
 {
+	for (const RGPass::ResourceAccess& access : pPass->Accesses)
+	{
+		if (!access.pResource->IsImported && access.pResource->FirstAccess == pPass->ID)
+		{
+			context.InsertAliasingBarrier(access.pResource->GetPhysicalUnsafe());
+		}
+	}
+
+	context.FlushResourceBarriers();
+
+	for (const RGPass::ResourceAccess& access : pPass->Accesses)
+	{
+		if (!access.pResource->IsImported && access.pResource->FirstAccess == pPass->ID)
+		{
+			if (access.pResource->GetType() == RGResourceType::Texture)
+			{
+				RGTexture* pTexture = static_cast<RGTexture*>(access.pResource);
+				if (EnumHasAnyFlags(pTexture->GetDesc().Flags, TextureFlag::RenderTarget | TextureFlag::DepthStencil))
+					context.GetCommandList()->DiscardResource(pTexture->GetPhysicalUnsafe()->GetResource(), nullptr);
+			}
+		}
+	}
+
 	for (const RGPass::ResourceTransition& transition : pPass->Transitions)
 	{
 		RGResource* pResource = transition.pResource;
 
 		gAssert(pResource->GetPhysicalUnsafe(), "Resource was not allocated during the graph compile phase");
-		gAssert(pResource->IsImported || pResource->IsExported || !pResource->IsAllocated(), "If resource is not external, it's reference should be released during the graph compile phase");
 
 		context.InsertResourceBarrier(pResource->GetPhysicalUnsafe(), transition.BeforeState, transition.AfterState, transition.SubResource);
 	}
@@ -573,69 +581,6 @@ DeviceResource* RGResources::GetResource(const RGResource* pResource, D3D12_RESO
 	return pResource->GetPhysicalUnsafe();
 }
 
-Ref<Texture> RGResourcePool::Allocate(const char* pName, const TextureDesc& desc)
-{
-	for (PooledTexture& texture : m_TexturePool)
-	{
-		Ref<Texture>& pTexture = texture.pResource;
-		if (pTexture->GetNumRefs() == 1 && pTexture->GetDesc().IsCompatible(desc))
-		{
-			texture.LastUsedFrame = m_FrameIndex;
-			pTexture->SetName(pName);
-			return pTexture;
-		}
-	}
-	return m_TexturePool.emplace_back(PooledTexture{ GetParent()->CreateTexture(desc, pName), m_FrameIndex }).pResource;
-}
-
-Ref<Buffer> RGResourcePool::Allocate(const char* pName, const BufferDesc& desc)
-{
-	for (PooledBuffer& buffer : m_BufferPool)
-	{
-		Ref<Buffer>& pBuffer = buffer.pResource;
-		if (pBuffer->GetNumRefs() == 1 && pBuffer->GetDesc().IsCompatible(desc))
-		{
-			buffer.LastUsedFrame = m_FrameIndex;
-			pBuffer->SetName(pName);
-			return pBuffer;
-		}
-	}
-	return m_BufferPool.emplace_back(PooledBuffer{ GetParent()->CreateBuffer(desc, pName), m_FrameIndex }).pResource;
-}
-
-void RGResourcePool::Tick()
-{
-	constexpr uint32 numFrameRetention = 5;
-
-	for (uint32 i = 0; i < (uint32)m_TexturePool.size();)
-	{
-		PooledTexture& texture = m_TexturePool[i];
-		if (texture.pResource->GetNumRefs() == 1 && texture.LastUsedFrame + numFrameRetention < m_FrameIndex)
-		{
-			std::swap(m_TexturePool[i], m_TexturePool.back());
-			m_TexturePool.pop_back();
-		}
-		else
-		{
-			++i;
-		}
-	}
-	for (uint32 i = 0; i < (uint32)m_BufferPool.size();)
-	{
-		PooledBuffer& buffer = m_BufferPool[i];
-		if (buffer.pResource->GetNumRefs() == 1 && buffer.LastUsedFrame + numFrameRetention < m_FrameIndex)
-		{
-			std::swap(m_BufferPool[i], m_BufferPool.back());
-			m_BufferPool.pop_back();
-		}
-		else
-		{
-			++i;
-		}
-	}
-	++m_FrameIndex;
-}
-
 namespace RGUtils
 {
 	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget)
@@ -667,9 +612,9 @@ namespace RGUtils
 		if (!pBuffer)
 		{
 			pBuffer = graph.Create(pName, bufferDesc);
-			if(doExport)
-				graph.Export(pBuffer, pStorageTarget);
 		}
+		if(doExport)
+			graph.Export(pBuffer, pStorageTarget);
 		return pBuffer;
 	}
 
@@ -685,9 +630,9 @@ namespace RGUtils
 		if (!pTexture)
 		{
 			pTexture = graph.Create(pName, textureDesc);
-			if(doExport)
-				graph.Export(pTexture, pStorageTarget);
 		}
+		if(doExport)
+			graph.Export(pTexture, pStorageTarget);
 		return pTexture;
 	}
 

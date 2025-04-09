@@ -74,8 +74,6 @@ private:
 	/*		TECHNIQUES		 */
 	/*-----------------------*/
 
-	UniquePtr<RGResourcePool>				m_RenderGraphPool;
-
 	UniquePtr<VolumetricFog>				m_pVolumetricFog;
 	VolumetricFogData						m_FogData;
 	UniquePtr<ForwardRenderer>				m_pForwardRenderer;
