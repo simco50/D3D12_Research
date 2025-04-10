@@ -101,6 +101,9 @@ void CommandContext::InsertResourceBarrier(DeviceResource* pResource, D3D12_RESO
 	gAssert(D3D::IsTransitionAllowed(m_Type, beforeState), "Before state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(beforeState).c_str(), D3D::CommandlistTypeToString(m_Type));
 	gAssert(D3D::IsTransitionAllowed(m_Type, afterState), "After state (%s) is not valid on this commandlist type (%s)", D3D::ResourceStateToString(afterState).c_str(), D3D::CommandlistTypeToString(m_Type));
 
+	if (beforeState == afterState)
+		return;
+
 	ResourceState& localResourceState = m_ResourceStates[pResource];
 	D3D12_RESOURCE_STATES localBeforeState = localResourceState.Get(subResource);
 	gAssert(beforeState == D3D12_RESOURCE_STATE_UNKNOWN || localBeforeState == D3D12_RESOURCE_STATE_UNKNOWN || localBeforeState == beforeState, "Provided before state %s of resource %s does not match with tracked resource state %s",

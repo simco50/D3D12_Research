@@ -227,6 +227,13 @@ private:
 		uint32					SubResource;
 	};
 
+	struct AliasBarrier
+	{
+		RGResource*			  pResource			 = nullptr;
+		bool				  NeedsDiscard		 = false;
+		D3D12_RESOURCE_STATES DiscardSourceState = D3D12_RESOURCE_STATE_UNKNOWN;
+	};
+
 	const char*						pName;
 	RGGraph&						Graph;
 	RGGraphAllocator&				Allocator;
@@ -235,26 +242,27 @@ private:
 	bool							IsCulled			= true;
 
 	// Profiling
-	Array<RGEventID>			EventsToStart;
-	Array<RGEventID>			CPUEventsToStart;
+	Array<RGEventID>				EventsToStart;
+	Array<RGEventID>				CPUEventsToStart;
 	uint32							NumEventsToEnd		= 0;
 	uint32							NumCPUEventsToEnd	= 0;
 
-	Array<RenderTargetAccess> RenderTargets;
+	Array<RenderTargetAccess>		RenderTargets;
 	DepthStencilAccess				DepthStencilTarget{};
 	IRGPassCallback*				pExecuteCallback = nullptr;
 
-	Array<ResourceTransition> Transitions;
-	Array<ResourceAccess>		Accesses;
-	Array<RGPassID>			PassDependencies;
+	Array<ResourceTransition>		Transitions;
+	Array<AliasBarrier>				AliasBarriers;
+	Array<ResourceAccess>			Accesses;
+	Array<RGPassID>					PassDependencies;
 };
 
 struct RGGraphOptions
 {
-	bool ResourceAliasing		= true;
-	bool Jobify					= true;
-	bool PassCulling			= true;
-	bool StateTracking			= true;
+	bool   ResourceAliasing		= true;
+	bool   Jobify				= true;
+	bool   SingleThread			= false;
+	bool   PassCulling			= true;
 	uint32 CommandlistGroupSize = 10;
 };
 
@@ -376,6 +384,7 @@ private:
 	void DestroyData();
 
 	bool						m_IsCompiled		= false;
+	RGGraphOptions				m_Options{};
 	Array<RGEventID>			m_PendingEvents;
 	Array<RGEvent>				m_Events;
 

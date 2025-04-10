@@ -98,7 +98,6 @@ namespace Tweakables
 	ConsoleVariable gRenderGraphJobify("r.RenderGraph.Jobify", true);
 	ConsoleVariable gRenderGraphResourceAliasing("r.RenderGraph.Aliasing", true);
 	ConsoleVariable gRenderGraphPassCulling("r.RenderGraph.PassCulling", true);
-	ConsoleVariable gRenderGraphStateTracking("r.RenderGraph.StateTracking", true);
 	ConsoleVariable gRenderGraphPassGroupSize("r.RenderGraph.PassGroupSize", 10);
 	ConsoleVariable gRenderGraphSingleThread("r.RenderGraph.SingleThread", false);
 	ConsoleVariable gRenderGraphResourceTracker("r.RenderGraph.ResourceTracker", false);
@@ -1258,7 +1257,6 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 		graphOptions.Jobify				  = Tweakables::gRenderGraphJobify;
 		graphOptions.PassCulling		  = Tweakables::gRenderGraphPassCulling;
 		graphOptions.ResourceAliasing	  = Tweakables::gRenderGraphResourceAliasing;
-		graphOptions.StateTracking		  = Tweakables::gRenderGraphStateTracking;
 		graphOptions.CommandlistGroupSize = Tweakables::gRenderGraphPassGroupSize;
 		graphOptions.SingleThread		  = Tweakables::gRenderGraphSingleThread;
 
@@ -2103,7 +2101,6 @@ void Renderer::DrawImGui()
 			ImGui::Checkbox("Single Thread", &Tweakables::gRenderGraphSingleThread.Get());
 			ImGui::Checkbox("Aliasing", &Tweakables::gRenderGraphResourceAliasing.Get());
 			ImGui::Checkbox("Pass Culling", &Tweakables::gRenderGraphPassCulling.Get());
-			ImGui::Checkbox("State Tracking", &Tweakables::gRenderGraphStateTracking.Get());
 			ImGui::SliderInt("Pass Group Size", &Tweakables::gRenderGraphPassGroupSize.Get(), 5, 50);
 		}
 
