@@ -17,11 +17,11 @@ private:
 		TextureDesc			ResourceTextureDesc;
 		BufferDesc			ResourceBufferDesc;
 
-		bool IsCompatible(const RGResource* pResource) const
+		bool IsCompatible(const RGResource* pOtherResource) const
 		{
-			if (pResource->GetType() == RGResourceType::Texture)
-				return ResourceTextureDesc == static_cast<const RGTexture*>(pResource)->GetDesc();
-			return ResourceBufferDesc == static_cast<const RGBuffer*>(pResource)->GetDesc();
+			if (pOtherResource->GetType() == RGResourceType::Texture)
+				return ResourceTextureDesc == static_cast<const RGTexture*>(pOtherResource)->GetDesc();
+			return ResourceBufferDesc == static_cast<const RGBuffer*>(pOtherResource)->GetDesc();
 		}
 	};
 
@@ -30,7 +30,7 @@ private:
 	{
 		uint32							   ID;
 		Array<RGResource*>				   Allocations;
-		uint64							   Size;
+		uint32							   Size;
 		uint32							   LastUsedFrame = 0;
 
 		Array<UniquePtr<RGPhysicalResource>> PhysicalResources;
@@ -62,7 +62,7 @@ public:
 		}
 
 		Array<RGResource*> resources = graphResources.Copy();
-		ComputeResourceAliasing(resources, m_Heaps);
+		AllocateResources(resources, m_Heaps);
 
 		DrawDebugView(resources, m_Heaps);
 	}
@@ -204,8 +204,99 @@ private:
 		return nullptr;
 	}
 
+	bool TryPlaceResourceInHeap(const RGHeap& heap, RGResource* pResource)
+	{
+		struct HeapOffset
+		{
+			uint32 Offset : 31;
+			uint32 IsFreeBegin : 1;
+		};
+		Array<HeapOffset> freeRanges;
 
-	void ComputeResourceAliasing(Array<RGResource*>& resources, Array<RGHeap>& heaps)
+		// If the resource is larger than the heap, bail out. Heaps are sorted by size so if this one doesn't fit, none will
+		if (pResource->Size > heap.Size)
+			return false;
+
+		// Shrinking: If the found heap has no allocations and it's very large for the resource, don't allocate into it and instead continue searching so this heap has the chance to be released
+		if (heap.Allocations.empty() && Math::AlignUp<uint64>(pResource->Size, cHeapAlignment) < heap.Size)
+			return false;
+
+		// Keep track of which memory ranges in the heap for the lifetime of the current resource are free
+		freeRanges.clear();
+
+		// Mark the start as free
+		freeRanges.push_back({ 0, true });
+
+		// For each allocated resource, if the lifetime overlaps, mark it as "not free"
+		for (RGResource* pAllocatedResource : heap.Allocations)
+		{
+			if (pAllocatedResource->GetLifetime().Overlaps(pResource->GetLifetime()))
+			{
+				freeRanges.push_back({ pAllocatedResource->Offset, false });
+				freeRanges.push_back({ pAllocatedResource->Offset + pAllocatedResource->Size, true });
+			}
+		}
+		
+		// Close the open free range
+		freeRanges.push_back({ heap.Size, false });
+
+		// Sort the markup by offset.
+		std::sort(freeRanges.begin(), freeRanges.end(), [](const HeapOffset& a, const HeapOffset& b) { return a.Offset < b.Offset; });
+
+		RGPhysicalResource* pExistingResource = nullptr;
+
+		// Algorithm: Keep track of how many "free" marks we've come across
+		// If we hit the end of a free mark and the range is closed (== 0), then this range is free
+		uint32 freeRangeCounter = 0;
+		uint32 lastBeginOffset = 0;
+		for (HeapOffset& heapOffset : freeRanges)
+		{
+			if (heapOffset.IsFreeBegin)
+			{
+				// Keep track of how many open ranges there are and where it started
+				lastBeginOffset = heapOffset.Offset;
+				++freeRangeCounter;
+			}
+			else
+			{
+				--freeRangeCounter;
+				if (freeRangeCounter == 0)
+				{
+					// Test whether the free region is large enough
+					uint32 alignedOffset = Math::AlignUp(lastBeginOffset, pResource->Alignment);
+					uint32 endOffset = heapOffset.Offset;
+					if (alignedOffset + pResource->Size <= heapOffset.Offset)
+					{
+						// Try to find an already existing physical resource that fits the space and description
+						gAssert(heap.pHeap || heap.PhysicalResources.empty(), "Heap can't have physical resources without an allocated heap");
+						for (const std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
+						{
+							if (pPhysicalResource->LastUsedFrame != m_FrameIndex &&						// Must not already be used by another resource
+								pPhysicalResource->Offset >= alignedOffset &&							// The physical resource must be within the region of the free range
+								pPhysicalResource->Offset + pPhysicalResource->Size <= endOffset &&		// The physical resource must be within the region of the free range
+								pPhysicalResource->IsCompatible(pResource))								// The physical resource description must match the vritual resource
+							{
+								pExistingResource = pPhysicalResource.get();
+								pExistingResource->LastUsedFrame = m_FrameIndex;
+								pResource->Offset = pExistingResource->Offset;
+								pResource->SetResource(pExistingResource->pResource);
+								return true;
+							}
+						}
+
+						// No unused existing resource found, allocate resource in a new region
+						pResource->Offset = alignedOffset;
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+
+	void AllocateResources(Array<RGResource*>& resources, Array<RGHeap>& heaps)
 	{
 		PROFILE_CPU_SCOPE();
 
@@ -247,13 +338,6 @@ private:
 			return a.Size > b.Size;
 		});
 
-		struct HeapOffset
-		{
-			uint64 Offset : 63;
-			uint64 IsFreeBegin : 1;
-		};
-		Array<HeapOffset> freeRanges;
-
 		for (RGResource* pResource : resources)
 		{
 			if (pResource->IsAllocated())
@@ -264,94 +348,9 @@ private:
 			RGHeap* pHeap = nullptr;
 			for (RGHeap& heap : heaps)
 			{
-				// If the resource is larger than the heap, bail out. Heaps are sorted by size so if this one doesn't fit, none will
-				if (pResource->Size > heap.Size)
-					break;
-
-				// Shrinking: If the found heap has no allocations and it's very large for the resource, don't allocate into it and instead continue searching so this heap has the chance to be released
-				if (heap.Allocations.empty() && Math::AlignUp<uint64>(pResource->Size, cHeapAlignment) < heap.Size)
-					continue;
-
-				// Keep track of which memory ranges in the heap for the lifetime of the current resource are free
-				freeRanges.clear();
-
-				// Mark the start as free
-				freeRanges.push_back({ 0, true });
-
-				// For each allocated resource, if the lifetime overlaps, mark it as "not free"
-				for (RGResource* pAllocatedResource : heap.Allocations)
+				if (TryPlaceResourceInHeap(heap, pResource))
 				{
-					if (pAllocatedResource->GetLifetime().Overlaps(pResource->GetLifetime()))
-					{
-						freeRanges.push_back({ pAllocatedResource->Offset, false });
-						freeRanges.push_back({ pAllocatedResource->Offset + pAllocatedResource->Size, true });
-					}
-				}
-
-				// Close the open free range
-				freeRanges.push_back({ (uint64)heap.Size, false });
-
-				// Sort the markup by offset.
-				std::sort(freeRanges.begin(), freeRanges.end(), [](const HeapOffset& a, const HeapOffset& b) { return a.Offset < b.Offset; });
-
-				RGPhysicalResource* pExistingResource = nullptr;
-
-				// Algorithm: Keep track of how many "free" marks we've come across
-				// If we hit the end of a free mark and the range is closed (== 0), then this range is free
-				uint32 freeRangeCounter = 0;
-				uint64 lastBeginOffset = 0;
-				for (HeapOffset& heapOffset : freeRanges)
-				{
-					if (heapOffset.IsFreeBegin)
-					{
-						// Keep track of how many open ranges there are and where it started
-						lastBeginOffset = heapOffset.Offset;
-						++freeRangeCounter;
-					}
-					else
-					{
-						--freeRangeCounter;
-						if (freeRangeCounter == 0)
-						{
-							// Test whether the free region is large enough
-							uint64 alignedOffset = Math::AlignUp<uint64>(lastBeginOffset, pResource->Alignment);
-							uint64 endOffset = heapOffset.Offset;
-							if (alignedOffset + pResource->Size <= heapOffset.Offset)
-							{
-								// Try to find an already existing physical resource that fits the space and description
-								gAssert(heap.pHeap || heap.PhysicalResources.empty(), "Heap can't have physical resources without an allocated heap");
-								for (const std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
-								{
-									if (pPhysicalResource->LastUsedFrame != m_FrameIndex &&						// Must not already be used by another resource
-										pPhysicalResource->Offset >= alignedOffset &&							// The physical resource must be within the region of the free range
-										pPhysicalResource->Offset + pPhysicalResource->Size <= endOffset &&		// The physical resource must be within the region of the free range
-										pPhysicalResource->IsCompatible(pResource))								// The physical resource description must match the vritual resource
-									{
-										pExistingResource = pPhysicalResource.get();
-										pHeap			  = &heap;
-										break;
-									}
-								}
-
-								// No unused existing resource found, allocate resource in a new region
-								pResource->Offset = alignedOffset;
-								pHeap = &heap;
-								break;
-							}
-						}
-					}
-				}
-
-				if (pHeap)
-				{
-					// If an existing resource was found, assign it to the resource and mark it as used
-					if (pExistingResource)
-					{
-						pResource->SetResource(pExistingResource->pResource);
-						pResource->Offset					 = pExistingResource->Offset;
-						pExistingResource->LastUsedFrame = m_FrameIndex;
-					}
-
+					pHeap = &heap;
 					break;
 				}
 			}
@@ -361,7 +360,7 @@ private:
 			{
 				RGHeap& heap = heaps.emplace_back();
 				heap.ID		 = m_HeapID++;
-				heap.Size	 = Math::AlignUp<uint64>(pResource->Size, cHeapAlignment);
+				heap.Size	 = Math::AlignUp(pResource->Size, cHeapAlignment);
 				pHeap		 = &heap;
 			}
 
@@ -372,26 +371,49 @@ private:
 			pHeap->LastUsedFrame = m_FrameIndex;
 		}
 
+
 		// Validation
 		for (RGHeap& heap : heaps)
 		{
 			for (const RGResource* pResource : heap.Allocations)
 			{
-				auto it = std::find_if(heap.Allocations.begin(), heap.Allocations.end(), [pResource](RGResource* pOther) {
+				// Validate whether all allocated resources don't overlap both memory range AND lifetime.
+				// If that happens, something in the placement must've gone wrong.
+				auto it = std::find_if(heap.Allocations.begin(), heap.Allocations.end(), [pResource](const RGResource* pOther) {
 					if (pOther == pResource)
 						return false;
 					return pResource->GetLifetime().Overlaps(pOther->GetLifetime()) && pResource->GetMemoryRange().Overlaps(pOther->GetMemoryRange());
 				});
+
 				RGResource* pOverlappingResource = it == heap.Allocations.end() ? nullptr : *it;
 				gAssert(pOverlappingResource == nullptr,
 					"Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu]) overlaps with Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu])",
 					pResource->pName, pResource->GetLifetime().Begin, pResource->GetLifetime().End, pResource->GetMemoryRange().Begin, pResource->GetMemoryRange().End,
 					pOverlappingResource->pName, pOverlappingResource->GetLifetime().Begin, pOverlappingResource->GetLifetime().End, pOverlappingResource->GetMemoryRange().Begin, pOverlappingResource->GetMemoryRange().End);
+
+				// Test if the alignment is correct
+				gAssert(Math::IsAligned(pResource->Offset, pResource->Alignment));
+
+				// Test if the resource description matches of already allocated resources
+				if (pResource->GetPhysicalUnsafe())
+				{
+					if (pResource->GetType() == RGResourceType::Buffer)
+					{
+						gAssert(static_cast<Buffer*>(pResource->GetPhysicalUnsafe())->GetDesc() == static_cast<const RGBuffer*>(pResource)->GetDesc());
+					}
+					else if (pResource->GetType() == RGResourceType::Texture)
+					{
+						gAssert(static_cast<Texture*>(pResource->GetPhysicalUnsafe())->GetDesc() == static_cast<const RGTexture*>(pResource)->GetDesc());
+					}
+					else
+					{
+						gAssert(false);
+					}
+				}
 			}
 		}
 
-
-
+		// Allocate/create physical resources
 		for (RGHeap& heap : heaps)
 		{
 			if (heap.pHeap == nullptr)
@@ -427,29 +449,36 @@ private:
 						pPhysical->ResourceTextureDesc = pTexture->GetDesc();
 						pPhysical->pResource		   = m_pDevice->CreateTexture(pTexture->GetDesc(), heap.pHeap, pResource->Offset, pResource->GetName());
 					}
-					else
+					else if (pResource->GetType() == RGResourceType::Buffer)
 					{
 						RGBuffer* pBuffer			  = static_cast<RGBuffer*>(pResource);
 						pPhysical->ResourceBufferDesc = pBuffer->GetDesc();
 						pPhysical->pResource		  = m_pDevice->CreateBuffer(pBuffer->GetDesc(), heap.pHeap, pResource->Offset, pResource->GetName());
 					}
+					else
+					{
+						gAssert(false);
+					}
 					pResource->SetResource(pPhysical->pResource);
 				}
+
+				gAssert(pResource->IsAllocated());
+				pResource->GetPhysicalUnsafe()->SetName(pResource->GetName());
 			}
 		}
 	}
 
 
-	GraphicsDevice* m_pDevice			 = nullptr;
-	bool			m_LiveCapture = true;
+	GraphicsDevice* m_pDevice			= nullptr;
+	bool			m_LiveCapture		= true;
 	bool			m_AllocateResources = true;
-	uint32			m_FrameIndex		 = 0;
+	uint32			m_FrameIndex		= 0;
 	Array<RGHeap>	m_Heaps;
 	uint32			m_HeapID = 0;
 
 	static constexpr uint32 cHeapCleanupLatency		= 3;
 	static constexpr uint32 cResourceCleanupLatency = 1024;
-	static constexpr uint64 cHeapAlignment			= 2 * Math::MegaBytesToBytes;
+	static constexpr uint32 cHeapAlignment			= 512 * Math::KilobytesToBytes;
 
 	/****************/
 	/*	 Debug UI	*/
@@ -474,7 +503,7 @@ private:
 		return ImColor(R, G, B, 1.0f);
 	}
 
-	void DrawDebugView(Span<RGResource*> resources, const Array<RGHeap>& heaps)
+	void DrawDebugView(Span<RGResource*> resources, const Array<RGHeap>& heaps) const
 	{
 		PROFILE_CPU_SCOPE();
 

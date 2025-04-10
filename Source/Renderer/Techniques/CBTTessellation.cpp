@@ -164,7 +164,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 			if (!pCBTBuffer)
 			{
 				uint32 size = CBT::ComputeSize(CBTSettings::CBTDepth);
-				pCBTBuffer = RGUtils::CreatePersistent(graph, "CBT", BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), &cbtData.pCBTBuffer, true);
+				pCBTBuffer = RGUtils::CreatePersistent(graph, "CBT", BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), &cbtData.pCBTBuffer);
 
 				graph.AddPass("CBT Upload", RGPassFlag::Copy)
 					.Write({ pCBTBuffer })
@@ -192,7 +192,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 			commonArgs.Depth = CBTSettings::CBTDepth;
 			commonArgs.NumCBTElements = (uint32)pCBTBuffer->GetDesc().Size / sizeof(uint32);
 
-			RGBuffer* pIndirectArgs = RGUtils::CreatePersistent(graph, "CBT.IndirectArgs", BufferDesc::CreateIndirectArguments<IndirectDrawArgs>(1, BufferFlag::UnorderedAccess), &cbtData.pCBTIndirectArgs, true);
+			RGBuffer* pIndirectArgs = RGUtils::CreatePersistent(graph, "CBT.IndirectArgs", BufferDesc::CreateIndirectArguments<IndirectDrawArgs>(1, BufferFlag::UnorderedAccess), &cbtData.pCBTIndirectArgs);
 
 			if (!CBTSettings::MeshShader)
 			{
@@ -345,7 +345,7 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 					ImGui::End();
 				}
 
-				RGTexture* pVisualizeTarget = RGUtils::CreatePersistent(graph, "CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &cbtData.pDebugVisualizeTexture, true);
+				RGTexture* pVisualizeTarget = RGUtils::CreatePersistent(graph, "CBT Visualize Texture", TextureDesc::Create2D(1024, 1024, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &cbtData.pDebugVisualizeTexture);
 				graph.AddPass("CBT Debug Visualize", RGPassFlag::Raster)
 					.Read({ pIndirectArgs })
 					.Write({ pCBTBuffer })

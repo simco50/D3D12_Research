@@ -98,9 +98,16 @@ namespace Math
 	}
 
 	template<typename T>
-	T AlignUp(T value, T alignment)
+	constexpr T AlignUp(T value, T alignment)
 	{
 		return (value + ((T)alignment - 1)) & ~(alignment - 1);
+	}
+
+	template <typename T>
+	constexpr bool IsAligned(T value, int alignment)
+	{
+		gAssert((alignment & (alignment - 1)) == 0, "Alginment is not a power of two");
+		return ((((std::intptr_t)value) & (alignment - 1)) == 0);
 	}
 
 	float Lerp(float t, float a, float b);

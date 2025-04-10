@@ -659,7 +659,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 						depthTarget.y = Math::Max(1u, depthTarget.y / 16);
 					}
 
-					RGBuffer* pReadbackTarget = RGUtils::CreatePersistent(graph, "SDSM Readback", BufferDesc::CreateTyped(2, ResourceFormat::RG32_FLOAT, BufferFlag::Readback), &m_ReductionReadbackTargets[m_Frame % GraphicsDevice::NUM_BUFFERS], true);
+					RGBuffer* pReadbackTarget = RGUtils::CreatePersistent(graph, "SDSM Readback", BufferDesc::CreateTyped(2, ResourceFormat::RG32_FLOAT, BufferFlag::Readback), &m_ReductionReadbackTargets[m_Frame % GraphicsDevice::NUM_BUFFERS]);
 					graph.AddPass("Readback Copy", RGPassFlag::Copy)
 						.Read(pReductionTarget)
 						.Write(pReadbackTarget)
@@ -917,7 +917,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 				Post Processing
 			*/
 
-			RGBuffer* pAverageLuminance = RGUtils::CreatePersistent(graph, "Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)), &m_pAverageLuminance, true);
+			RGBuffer* pAverageLuminance = RGUtils::CreatePersistent(graph, "Average Luminance", BufferDesc::CreateStructured(3, sizeof(float)), &m_pAverageLuminance);
 			{
 				RG_GRAPH_SCOPE("Auto Exposure", graph);
 
@@ -1022,7 +1022,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 				if (Tweakables::gDrawHistogram.Get())
 				{
-					RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_pDebugHistogramTexture, true);
+					RGTexture* pHistogramDebugTexture = RGUtils::CreatePersistent(graph, "Debug Histogram", TextureDesc::Create2D(256 * 4, 256, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &m_pDebugHistogramTexture);
 					graph.AddPass("Draw Histogram", RGPassFlag::Compute)
 						.Read({ pLuminanceHistogram, pAverageLuminance })
 						.Write(pHistogramDebugTexture)

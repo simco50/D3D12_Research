@@ -600,7 +600,7 @@ namespace RGUtils
 			.RenderTarget(pSource, RenderPassColorFlags::None, pTarget);
 	}
 
-	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool doExport)
+	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget)
 	{
 		gAssert(pStorageTarget);
 		RGBuffer* pBuffer = nullptr;
@@ -613,12 +613,11 @@ namespace RGUtils
 		{
 			pBuffer = graph.Create(pName, bufferDesc);
 		}
-		if(doExport)
-			graph.Export(pBuffer, pStorageTarget);
+		graph.Export(pBuffer, pStorageTarget);
 		return pBuffer;
 	}
 
-	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool doExport)
+	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget)
 	{
 		gAssert(pStorageTarget);
 		RGTexture* pTexture = nullptr;
@@ -631,8 +630,7 @@ namespace RGUtils
 		{
 			pTexture = graph.Create(pName, textureDesc);
 		}
-		if(doExport)
-			graph.Export(pTexture, pStorageTarget);
+		graph.Export(pTexture, pStorageTarget);
 		return pTexture;
 	}
 

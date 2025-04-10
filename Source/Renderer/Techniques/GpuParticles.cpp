@@ -86,13 +86,15 @@ void GpuParticles::Simulate(RGGraph& graph, const RenderView* pView, RGTexture* 
 
 	bool needsInitialize = !m_pParticleBuffer;
 
-	RGBuffer* pIndirectArgs = graph.Create("Indirect Arguments", BufferDesc::CreateIndirectArguments<IndirectArgs>());
+	RGBuffer*  pIndirectArgs	  = graph.Create("Indirect Arguments", BufferDesc::CreateIndirectArguments<IndirectArgs>());
 	BufferDesc particleBufferDesc = BufferDesc::CreateStructured(cMaxParticleCount, sizeof(uint32));
-	RGBuffer* pNewAliveList = graph.Create("New Alive List", particleBufferDesc);
-	RGBuffer* pParticlesBuffer = RGUtils::CreatePersistent(graph, "Particles Buffer", BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)), &m_pParticleBuffer, true);
-	RGBuffer* pCurrentAliveList = RGUtils::CreatePersistent(graph, "Current Alive List", particleBufferDesc, &m_pAliveList, false);
-	RGBuffer* pDeadList = RGUtils::CreatePersistent(graph, "Dead List", particleBufferDesc, &m_pDeadList, true);
-	RGBuffer* pCountersBuffer = RGUtils::CreatePersistent(graph, "Particles Counter", BufferDesc::CreateByteAddress(sizeof(uint32) * 4), &m_pCountersBuffer, true);
+	RGBuffer*  pNewAliveList	  = graph.Create("New Alive List", particleBufferDesc);
+	RGBuffer*  pParticlesBuffer	  = RGUtils::CreatePersistent(graph, "Particles Buffer", BufferDesc::CreateStructured(cMaxParticleCount, sizeof(ParticleData)), &m_pParticleBuffer);
+	RGBuffer*  pCurrentAliveList  = graph.TryImport(m_pAliveList);
+	if (!pCurrentAliveList)
+		pCurrentAliveList = graph.Create("Current Alive List", particleBufferDesc);
+	RGBuffer* pDeadList		  = RGUtils::CreatePersistent(graph, "Dead List", particleBufferDesc, &m_pDeadList);
+	RGBuffer* pCountersBuffer = RGUtils::CreatePersistent(graph, "Particles Counter", BufferDesc::CreateByteAddress(sizeof(uint32) * 4), &m_pCountersBuffer);
 	graph.Export(pNewAliveList, &m_pAliveList);
 
 	ParticleBlackboardData& data = graph.Blackboard.Add<ParticleBlackboardData>();

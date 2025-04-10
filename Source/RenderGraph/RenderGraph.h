@@ -420,7 +420,7 @@ namespace RGUtils
 {
 	RGPass&		AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
 	RGPass&		AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
-	RGBuffer*	CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool doExport);
-	RGTexture*	CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool doExport);
+	RGBuffer*	CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget);
+	RGTexture*	CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget);
 	void		DoUpload(RGGraph& graph, RGBuffer* pTarget, const void* pSource, uint32 size);
 }

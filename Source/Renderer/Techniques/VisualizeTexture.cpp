@@ -32,11 +32,11 @@ void CaptureTextureSystem::Capture(RGGraph& graph, CaptureTextureContext& captur
 	captureContext.SourceName = pSource->GetName();
 	captureContext.SourceDesc = pSource->GetDesc();
 
-	RGBuffer* pReadbackTarget = RGUtils::CreatePersistent(graph, "TextureCapture.ReadbackTarget", BufferDesc::CreateReadback(sizeof(Vector4u) * 2), &captureContext.pReadbackBuffer, true);
+	RGBuffer* pReadbackTarget = RGUtils::CreatePersistent(graph, "TextureCapture.ReadbackTarget", BufferDesc::CreateReadback(sizeof(Vector4u) * 2), &captureContext.pReadbackBuffer);
 
 	const TextureDesc& desc = pSource->GetDesc();
 	Vector2u mipSize(desc.Width >> captureContext.MipLevel, desc.Height >> captureContext.MipLevel);
-	RGTexture* pTarget = RGUtils::CreatePersistent(graph, "TextureCapture.Target", TextureDesc::Create2D(mipSize.x, mipSize.y, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &captureContext.pTextureTarget, true);
+	RGTexture* pTarget = RGUtils::CreatePersistent(graph, "TextureCapture.Target", TextureDesc::Create2D(mipSize.x, mipSize.y, ResourceFormat::RGBA8_UNORM, 1, TextureFlag::ShaderResource), &captureContext.pTextureTarget);
 	RGBuffer* pPickingBuffer = graph.Create("TextureCapture.Picking", BufferDesc::CreateStructured(1, sizeof(Vector4u)));
 
 	graph.AddPass("CaptureTexture.Process", RGPassFlag::Compute)
