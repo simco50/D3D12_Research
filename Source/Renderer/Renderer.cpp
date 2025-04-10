@@ -100,6 +100,7 @@ namespace Tweakables
 	ConsoleVariable gRenderGraphPassCulling("r.RenderGraph.PassCulling", true);
 	ConsoleVariable gRenderGraphStateTracking("r.RenderGraph.StateTracking", true);
 	ConsoleVariable gRenderGraphPassGroupSize("r.RenderGraph.PassGroupSize", 10);
+	ConsoleVariable gRenderGraphSingleThread("r.RenderGraph.SingleThread", false);
 	ConsoleVariable gRenderGraphResourceTracker("r.RenderGraph.ResourceTracker", false);
 	ConsoleVariable gRenderGraphPassView("r.RenderGraph.PassView", false);
 
@@ -1254,11 +1255,12 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 		}
 
 		RGGraphOptions graphOptions;
-		graphOptions.Jobify = Tweakables::gRenderGraphJobify;
-		graphOptions.PassCulling = Tweakables::gRenderGraphPassCulling;
-		graphOptions.ResourceAliasing = Tweakables::gRenderGraphResourceAliasing;
-		graphOptions.StateTracking = Tweakables::gRenderGraphStateTracking;
+		graphOptions.Jobify				  = Tweakables::gRenderGraphJobify;
+		graphOptions.PassCulling		  = Tweakables::gRenderGraphPassCulling;
+		graphOptions.ResourceAliasing	  = Tweakables::gRenderGraphResourceAliasing;
+		graphOptions.StateTracking		  = Tweakables::gRenderGraphStateTracking;
 		graphOptions.CommandlistGroupSize = Tweakables::gRenderGraphPassGroupSize;
+		graphOptions.SingleThread		  = Tweakables::gRenderGraphSingleThread;
 
 		// Compile graph
 		graph.Compile(gRenderGraphAllocator, graphOptions);
@@ -2097,11 +2099,12 @@ void Renderer::DrawImGui()
 
 		if (ImGui::CollapsingHeader("Render Graph"))
 		{
-			ImGui::Checkbox("RenderGraph Jobify", &Tweakables::gRenderGraphJobify.Get());
-			ImGui::Checkbox("RenderGraph Aliasing", &Tweakables::gRenderGraphResourceAliasing.Get());
-			ImGui::Checkbox("RenderGraph Pass Culling", &Tweakables::gRenderGraphPassCulling.Get());
-			ImGui::Checkbox("RenderGraph State Tracking", &Tweakables::gRenderGraphStateTracking.Get());
-			ImGui::SliderInt("RenderGraph Pass Group Size", &Tweakables::gRenderGraphPassGroupSize.Get(), 5, 50);
+			ImGui::Checkbox("Jobify", &Tweakables::gRenderGraphJobify.Get());
+			ImGui::Checkbox("Single Thread", &Tweakables::gRenderGraphSingleThread.Get());
+			ImGui::Checkbox("Aliasing", &Tweakables::gRenderGraphResourceAliasing.Get());
+			ImGui::Checkbox("Pass Culling", &Tweakables::gRenderGraphPassCulling.Get());
+			ImGui::Checkbox("State Tracking", &Tweakables::gRenderGraphStateTracking.Get());
+			ImGui::SliderInt("Pass Group Size", &Tweakables::gRenderGraphPassGroupSize.Get(), 5, 50);
 		}
 
 		if (ImGui::CollapsingHeader("Atmosphere"))

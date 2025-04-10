@@ -97,6 +97,8 @@ void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& opti
 
 	gAssert(!m_IsCompiled);
 
+	m_Options = options;
+
 	if (options.PassCulling)
 	{
 		PROFILE_CPU_SCOPE("Pass Culling");
@@ -212,6 +214,12 @@ void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& opti
 			}
 		}
 	}
+
+	// Ensure the resource allocator doesn't account for old references in the export target
+	for (ExportedTexture& exportResource : m_ExportTextures)
+		*exportResource.pTarget = nullptr;
+	for (ExportedBuffer& exportResource : m_ExportBuffers)
+		*exportResource.pTarget = nullptr;
 
 	{
 
@@ -418,15 +426,19 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 			PROFILE_CPU_SCOPE("Schedule Render Jobs");
 			for (Span<const RGPass*> passGroup : m_PassExecuteGroups)
 			{
-				CommandContext* pContext = pDevice->AllocateCommandContext();
-				TaskQueue::Execute([this, passGroup, pContext](int)
-					{
-						for (const RGPass* pPass : passGroup)
-						{
-							if (!pPass->IsCulled)
-								ExecutePass(pPass, *pContext);
-						}
-					}, context);
+				CommandContext* pContext  = pDevice->AllocateCommandContext();
+				auto			executeFn = [this, passGroup, pContext](int) {
+					   for (const RGPass* pPass : passGroup)
+					   {
+						   if (!pPass->IsCulled)
+							   ExecutePass(pPass, *pContext);
+					   };
+				};
+				if (m_Options.SingleThread)
+					executeFn(0);
+				else
+					TaskQueue::Execute(executeFn, context);
+
 				contexts.push_back(pContext);
 			}
 		}
