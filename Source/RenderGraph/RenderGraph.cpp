@@ -313,22 +313,6 @@ void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& opti
 		}
 	}
 
-	// Export resources first so they can be available during pass execution.
-	for (ExportedTexture& exportResource : m_ExportTextures)
-	{
-		gAssert(exportResource.pTexture->GetPhysicalUnsafe(), "Exported texture doesn't have a physical resource assigned");
-		Ref<Texture> pTexture = (Texture*)exportResource.pTexture->GetPhysicalUnsafe();
-		pTexture->SetName(exportResource.pTexture->GetName());
-		*exportResource.pTarget = pTexture;
-	}
-	for (ExportedBuffer& exportResource : m_ExportBuffers)
-	{
-		gAssert(exportResource.pBuffer->GetPhysicalUnsafe(), "Exported buffer doesn't have a physical resource assigned");
-		Ref<Buffer> pBuffer = (Buffer*)exportResource.pBuffer->GetPhysicalUnsafe();
-		pBuffer->SetName(exportResource.pBuffer->GetName());
-		*exportResource.pTarget = pBuffer;
-	}
-
 	{
 		PROFILE_CPU_SCOPE("Event Resolving");
 
@@ -498,11 +482,21 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 
 	pDevice->GetGraphicsQueue()->ExecuteCommandLists(contexts);
 
-	// Update exported resource names
+	// Export resources at the end of execution
 	for (ExportedTexture& exportResource : m_ExportTextures)
-		exportResource.pTexture->GetPhysicalUnsafe()->SetName(exportResource.pTexture->GetName());
+	{
+		gAssert(exportResource.pTexture->GetPhysicalUnsafe(), "Exported texture doesn't have a physical resource assigned");
+		Ref<Texture> pTexture = (Texture*)exportResource.pTexture->GetPhysicalUnsafe();
+		pTexture->SetName(exportResource.pTexture->GetName());
+		*exportResource.pTarget = pTexture;
+	}
 	for (ExportedBuffer& exportResource : m_ExportBuffers)
-		exportResource.pBuffer->GetPhysicalUnsafe()->SetName(exportResource.pBuffer->GetName());
+	{
+		gAssert(exportResource.pBuffer->GetPhysicalUnsafe(), "Exported buffer doesn't have a physical resource assigned");
+		Ref<Buffer> pBuffer = (Buffer*)exportResource.pBuffer->GetPhysicalUnsafe();
+		pBuffer->SetName(exportResource.pBuffer->GetName());
+		*exportResource.pTarget = pBuffer;
+	}
 
 	DestroyData();
 }
