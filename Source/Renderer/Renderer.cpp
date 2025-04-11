@@ -1456,7 +1456,7 @@ void Renderer::GetViewUniforms(const RenderView& view, ShaderInterop::ViewUnifor
 	outUniforms.InstancesBuffer			= m_InstanceBuffer.pBuffer->GetSRV();
 	outUniforms.LightsBuffer			= m_LightBuffer.pBuffer->GetSRV();
 	outUniforms.LightMatricesBuffer		= m_LightMatricesBuffer.pBuffer->GetSRV();
-	outUniforms.SkyTexture				= m_pSky ? m_pSky->GetSRV() : TextureView::Invalid();
+	outUniforms.SkyTexture				= m_pSky ? m_pSky->GetSRV() : GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube)->GetSRV();
 	outUniforms.DDGIVolumesBuffer		= m_DDGIVolumesBuffer.pBuffer->GetSRV();
 	outUniforms.NumDDGIVolumes			= m_DDGIVolumesBuffer.Count;
 

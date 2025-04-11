@@ -22,6 +22,8 @@
 
 #define NODISCARD [[nodiscard]]
 
+#define UNUSED_VAR(x) (void)(x)
+
 #ifdef _DEBUG
 #define IF_DEBUG(x) x
 #else

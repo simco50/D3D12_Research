@@ -306,6 +306,27 @@ void CommandContext::ClearTextureUInt(const Texture* pTexture, const Vector4u& v
 	m_pCommandList->ClearUnorderedAccessViewUint(ptr.GPUHandle, ptr.CPUOpaqueHandle, pTexture->GetResource(), &values.x, 0, nullptr);
 }
 
+void CommandContext::ClearRenderTarget(const Texture* pTexture, const Vector4& values, uint32 mipLevel, uint32 arrayIndex)
+{
+	FlushResourceBarriers();
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv = GetRTV(0, pTexture, mipLevel, arrayIndex);
+	m_pCommandList->ClearRenderTargetView(rtv, &values.x, 0, nullptr);
+}
+
+void CommandContext::ClearDepthStencil(const Texture* pTexture, RenderPassDepthFlags flags, float depth, uint8 stencil, uint32 mipLevel, uint32 arrayIndex)
+{
+	FlushResourceBarriers();
+	D3D12_CPU_DESCRIPTOR_HANDLE dsv = GetDSV(pTexture, flags, mipLevel, arrayIndex);
+
+	D3D12_CLEAR_FLAGS clearFlags = (D3D12_CLEAR_FLAGS)0;
+	if (EnumHasAllFlags(flags, RenderPassDepthFlags::ClearDepth))
+		clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_DEPTH;
+	if (EnumHasAllFlags(flags, RenderPassDepthFlags::ClearStencil))
+		clearFlags |= D3D12_CLEAR_FLAGS::D3D12_CLEAR_FLAG_STENCIL;
+
+	m_pCommandList->ClearDepthStencilView(dsv, clearFlags, depth, stencil, 0, nullptr);
+}
+
 void CommandContext::ClearTextureFloat(const Texture* pTexture, const Vector4& values)
 {
 	gAssert(pTexture);
@@ -467,6 +488,102 @@ void CommandContext::ResolvePendingBarriers(CommandContext& resolveContext)
 	m_PendingBarriers.clear();
 }
 
+D3D12_CPU_DESCRIPTOR_HANDLE CommandContext::GetRTV(uint32 slot, const Texture* pTexture, uint32 mipLevel, uint32 arrayIndex)
+{
+	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+	const TextureDesc&			  desc	  = pTexture->GetDesc();
+	rtvDesc.Format						  = D3D::ConvertFormat(desc.Format);
+	switch (desc.Type)
+	{
+	case TextureType::Texture1D:
+		rtvDesc.Texture1D.MipSlice = mipLevel;
+		rtvDesc.ViewDimension	   = D3D12_RTV_DIMENSION_TEXTURE1D;
+		break;
+	case TextureType::Texture1DArray:
+		rtvDesc.Texture1DArray.ArraySize	   = desc.ArraySize;
+		rtvDesc.Texture1DArray.FirstArraySlice = arrayIndex;
+		rtvDesc.Texture1DArray.MipSlice		   = mipLevel;
+		rtvDesc.ViewDimension				   = D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+		break;
+	case TextureType::Texture2D:
+		rtvDesc.Texture2D.MipSlice	 = mipLevel;
+		rtvDesc.Texture2D.PlaneSlice = 0;
+		rtvDesc.ViewDimension		 = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS : D3D12_RTV_DIMENSION_TEXTURE2D;
+		break;
+	case TextureType::TextureCube:
+	case TextureType::TextureCubeArray:
+	case TextureType::Texture2DArray:
+		rtvDesc.Texture2DArray.MipSlice		   = mipLevel;
+		rtvDesc.Texture2DArray.PlaneSlice	   = 0;
+		rtvDesc.Texture2DArray.ArraySize	   = desc.ArraySize;
+		rtvDesc.Texture2DArray.FirstArraySlice = arrayIndex;
+		rtvDesc.ViewDimension				   = desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY : D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+		break;
+	case TextureType::Texture3D:
+		rtvDesc.Texture3D.FirstWSlice = 0;
+		rtvDesc.Texture3D.MipSlice	  = mipLevel;
+		rtvDesc.Texture3D.WSize		  = desc.Depth;
+		rtvDesc.ViewDimension		  = D3D12_RTV_DIMENSION_TEXTURE3D;
+		break;
+	default:
+		break;
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), slot, m_RTVSize);
+	GetParent()->GetDevice()->CreateRenderTargetView(pTexture->GetResource(), &rtvDesc, rtv);
+	return rtv;
+}
+
+
+D3D12_CPU_DESCRIPTOR_HANDLE CommandContext::GetDSV(const Texture* pTexture, RenderPassDepthFlags flags, uint32 mipLevel, uint32 arrayIndex)
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_pDSVHeap->GetCPUDescriptorHandleForHeapStart();
+
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+	const TextureDesc&			  desc	  = pTexture->GetDesc();
+	dsvDesc.Format						  = D3D::ConvertFormat(desc.Format);
+	switch (desc.Type)
+	{
+	case TextureType::Texture1D:
+		dsvDesc.Texture1D.MipSlice = mipLevel;
+		dsvDesc.ViewDimension	   = D3D12_DSV_DIMENSION_TEXTURE1D;
+		break;
+	case TextureType::Texture1DArray:
+		dsvDesc.Texture1DArray.ArraySize	   = desc.ArraySize;
+		dsvDesc.Texture1DArray.FirstArraySlice = arrayIndex;
+		dsvDesc.Texture1DArray.MipSlice		   = mipLevel;
+		dsvDesc.ViewDimension				   = D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+		break;
+	case TextureType::Texture2D:
+		dsvDesc.Texture2D.MipSlice = mipLevel;
+		dsvDesc.ViewDimension	   = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
+		break;
+	case TextureType::Texture3D:
+	case TextureType::Texture2DArray:
+		dsvDesc.Texture2DArray.ArraySize	   = desc.ArraySize;
+		dsvDesc.Texture2DArray.FirstArraySlice = arrayIndex;
+		dsvDesc.Texture2DArray.MipSlice		   = mipLevel;
+		dsvDesc.ViewDimension				   = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+		break;
+	case TextureType::TextureCube:
+	case TextureType::TextureCubeArray:
+		dsvDesc.Texture2DArray.ArraySize	   = desc.ArraySize * 6;
+		dsvDesc.Texture2DArray.FirstArraySlice = arrayIndex;
+		dsvDesc.Texture2DArray.MipSlice		   = mipLevel;
+		dsvDesc.ViewDimension				   = desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+		break;
+	default:
+		break;
+	}
+	if (EnumHasAllFlags(flags, RenderPassDepthFlags::ReadOnlyDepth))
+		dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+	if (EnumHasAllFlags(flags, RenderPassDepthFlags::ReadOnlyStencil))
+		dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_STENCIL;
+	GetParent()->GetDevice()->CreateDepthStencilView(pTexture->GetResource(), &dsvDesc, dsvHandle);
+	return dsvHandle;
+}
+
+
 void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 {
 	gAssert(!m_InRenderPass, "Already in RenderPass");
@@ -484,50 +601,8 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 
 	if (renderPassInfo.DepthStencilTarget.pTarget)
 	{
-		dsvHandle = m_pDSVHeap->GetCPUDescriptorHandleForHeapStart();
-
-		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
 		const RenderPassInfo::DepthTargetInfo& depthInfo = renderPassInfo.DepthStencilTarget;
-		const TextureDesc& desc = renderPassInfo.DepthStencilTarget.pTarget->GetDesc();
-		dsvDesc.Format = D3D::ConvertFormat(desc.Format);
-		switch (desc.Type)
-		{
-		case TextureType::Texture1D:
-			dsvDesc.Texture1D.MipSlice				= depthInfo.MipLevel;
-			dsvDesc.ViewDimension					= D3D12_DSV_DIMENSION_TEXTURE1D;
-			break;
-		case TextureType::Texture1DArray:
-			dsvDesc.Texture1DArray.ArraySize		= desc.ArraySize;
-			dsvDesc.Texture1DArray.FirstArraySlice	= depthInfo.ArrayIndex;
-			dsvDesc.Texture1DArray.MipSlice			= depthInfo.MipLevel;
-			dsvDesc.ViewDimension					= D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
-			break;
-		case TextureType::Texture2D:
-			dsvDesc.Texture2D.MipSlice				= depthInfo.MipLevel;
-			dsvDesc.ViewDimension					= desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMS : D3D12_DSV_DIMENSION_TEXTURE2D;
-			break;
-		case TextureType::Texture3D:
-		case TextureType::Texture2DArray:
-			dsvDesc.Texture2DArray.ArraySize		= desc.ArraySize;
-			dsvDesc.Texture2DArray.FirstArraySlice	= depthInfo.ArrayIndex;
-			dsvDesc.Texture2DArray.MipSlice			= depthInfo.MipLevel;
-			dsvDesc.ViewDimension					= desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-			break;
-		case TextureType::TextureCube:
-		case TextureType::TextureCubeArray:
-			dsvDesc.Texture2DArray.ArraySize		= desc.ArraySize * 6;
-			dsvDesc.Texture2DArray.FirstArraySlice	= depthInfo.ArrayIndex;
-			dsvDesc.Texture2DArray.MipSlice			= depthInfo.MipLevel;
-			dsvDesc.ViewDimension					= desc.SampleCount > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-			break;
-		default:
-			break;
-		}
-		if(EnumHasAllFlags(renderPassInfo.DepthStencilTarget.Flags, RenderPassDepthFlags::ReadOnlyDepth))
-			dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_DEPTH;
-		if (EnumHasAllFlags(renderPassInfo.DepthStencilTarget.Flags, RenderPassDepthFlags::ReadOnlyStencil))
-			dsvDesc.Flags |= D3D12_DSV_FLAG_READ_ONLY_STENCIL;
-		GetParent()->GetDevice()->CreateDepthStencilView(renderPassInfo.DepthStencilTarget.pTarget->GetResource(), &dsvDesc, dsvHandle);
+		dsvHandle										 = GetDSV(depthInfo.pTarget, depthInfo.Flags, depthInfo.MipLevel, depthInfo.ArrayIndex);
 	}
 
 	if (clearFlags != (D3D12_CLEAR_FLAGS)0)
@@ -541,48 +616,7 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	for (uint32 i = 0; i < renderPassInfo.RenderTargetCount; ++i)
 	{
 		const RenderPassInfo::RenderTargetInfo& data = renderPassInfo.RenderTargets[i];
-
-		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
-		const TextureDesc& desc = data.pTarget->GetDesc();
-		rtvDesc.Format = D3D::ConvertFormat(desc.Format);
-		switch (desc.Type)
-		{
-		case TextureType::Texture1D:
-			rtvDesc.Texture1D.MipSlice					= data.MipLevel;
-			rtvDesc.ViewDimension						= D3D12_RTV_DIMENSION_TEXTURE1D;
-			break;
-		case TextureType::Texture1DArray:
-			rtvDesc.Texture1DArray.ArraySize			= desc.ArraySize;
-			rtvDesc.Texture1DArray.FirstArraySlice		= data.ArrayIndex;
-			rtvDesc.Texture1DArray.MipSlice				= data.MipLevel;
-			rtvDesc.ViewDimension						= D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
-			break;
-		case TextureType::Texture2D:
-			rtvDesc.Texture2D.MipSlice					= data.MipLevel;
-			rtvDesc.Texture2D.PlaneSlice				= 0;
-			rtvDesc.ViewDimension						= desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMS : D3D12_RTV_DIMENSION_TEXTURE2D;
-			break;
-		case TextureType::TextureCube:
-		case TextureType::TextureCubeArray:
-		case TextureType::Texture2DArray:
-			rtvDesc.Texture2DArray.MipSlice				= data.MipLevel;
-			rtvDesc.Texture2DArray.PlaneSlice			= 0;
-			rtvDesc.Texture2DArray.ArraySize			= desc.ArraySize;
-			rtvDesc.Texture2DArray.FirstArraySlice		= data.ArrayIndex;
-			rtvDesc.ViewDimension						= desc.SampleCount > 1 ? D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY : D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-			break;
-		case TextureType::Texture3D:
-			rtvDesc.Texture3D.FirstWSlice				= 0;
-			rtvDesc.Texture3D.MipSlice					= data.MipLevel;
-			rtvDesc.Texture3D.WSize						= desc.Depth;
-			rtvDesc.ViewDimension						= D3D12_RTV_DIMENSION_TEXTURE3D;
-			break;
-		default:
-			break;
-		}
-
-		D3D12_CPU_DESCRIPTOR_HANDLE rtv = CD3DX12_CPU_DESCRIPTOR_HANDLE(m_pRTVHeap->GetCPUDescriptorHandleForHeapStart(), i, m_RTVSize);
-		GetParent()->GetDevice()->CreateRenderTargetView(data.pTarget->GetResource(), &rtvDesc, rtv);
+		D3D12_CPU_DESCRIPTOR_HANDLE				rtv	 = GetRTV(i, data.pTarget, data.MipLevel, data.ArrayIndex);
 
 		if (EnumHasAllFlags(data.Flags, RenderPassColorFlags::Clear))
 		{

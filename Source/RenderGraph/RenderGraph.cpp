@@ -7,12 +7,20 @@
 #include "RHI/CommandQueue.h"
 #include "RenderGraph/RenderGraphAllocator.h"
 
-//#define LOG_RESOURCE_NAME "Depth Stencil"
+#define RG_TRACK_TRANSITIONS 0
 
-#ifdef LOG_RESOURCE_NAME
-#define RG_LOG_RESOURCE_EVENT(resource, fmt, ...) if (strcmp(resource->GetName(), LOG_RESOURCE_NAME) == 0) { E_LOG(Info, "[%s] " fmt, resource->GetName(), __VA_ARGS__); }
+#if RG_TRACK_TRANSITIONS
+constexpr static const char* pLogResourceName = "Depth Stencil";
+constexpr static const char* pLogPassName = "";
+
+static bool sDoLogTransition(const RGPass* pPass, const RGResource* pResource)
+{
+	return (strlen(pLogPassName) == 0 || strcmp(pLogPassName, pPass->GetName()) == 0) && (strlen(pLogResourceName) == 0 || strcmp(pLogResourceName, pResource->GetName()) == 0);
+}
+
+#define RG_LOG_RESOURCE_EVENT(fmt, ...) if (sDoLogTransition(pPass, pResource)) E_LOG(Info, "[%s:%s] " fmt, pPass->GetName(), pResource->GetName(), __VA_ARGS__)
 #else
-#define RG_LOG_RESOURCE_EVENT(...)
+#define RG_LOG_RESOURCE_EVENT(fmt, ...) do { UNUSED_VAR(pResource); UNUSED_VAR(pPass); } while (0)
 #endif
 
 RGPass& RGPass::Read(Span<RGResource*> resources)
@@ -270,9 +278,7 @@ void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& opti
 					D3D12_RESOURCE_STATES afterStateActual = afterState;
 					bool				  need_transition  = D3D::NeedsTransition(beforeState, afterStateActual, true);
 
-					RG_LOG_RESOURCE_EVENT(pResource,
-						"[Pass %s] Desired transition from %s to %s (actual: %s) - Passed: %s",
-						pPass->pName,
+					RG_LOG_RESOURCE_EVENT("Desired transition from %s to %s (actual: %s) - Passed: %s",
 						D3D::ResourceStateToString(beforeState), D3D::ResourceStateToString(afterState),
 						D3D::ResourceStateToString(afterStateActual),
 						need_transition ? "Yes" : "No");
@@ -295,12 +301,12 @@ void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& opti
 							{
 								barrier.NeedsDiscard	   = true;
 								barrier.DiscardSourceState = afterStateActual;
-								RG_LOG_RESOURCE_EVENT(pResource, "[Pass %s] Desired discard", pPass->pName);
+								RG_LOG_RESOURCE_EVENT("Desired discard", pPass->pName);
 							}
 						}
 						pPass->AliasBarriers.push_back(barrier);
 
-						RG_LOG_RESOURCE_EVENT(pResource, "[Pass %s] Desired aliasing barrier", pPass->pName);
+						RG_LOG_RESOURCE_EVENT("Desired aliasing barrier", pPass->pName);
 					}
 				}
 			}
@@ -552,8 +558,9 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 
 	for (const RGPass::AliasBarrier& barrier: pPass->AliasBarriers)
 	{
-		context.InsertAliasingBarrier(barrier.pResource->GetPhysicalUnsafe());
-		RG_LOG_RESOURCE_EVENT(barrier.pResource, "[Pass %s] Actual aliasing barrier", pPass->pName);
+		const RGResource* pResource = barrier.pResource;
+		context.InsertAliasingBarrier(pResource->GetPhysicalUnsafe());
+		RG_LOG_RESOURCE_EVENT("Actual aliasing barrier", pPass->pName);
 	}
 
 	for (const RGPass::ResourceTransition& transition : pPass->Transitions)
@@ -564,7 +571,7 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 
 		context.InsertResourceBarrier(pResource->GetPhysicalUnsafe(), transition.BeforeState, transition.AfterState, transition.SubResource);
 
-		RG_LOG_RESOURCE_EVENT(pResource, "[Pass %s] Actual transition from %s to %s", pPass->pName, D3D::ResourceStateToString(transition.BeforeState), D3D::ResourceStateToString(transition.AfterState));
+		RG_LOG_RESOURCE_EVENT("Actual transition from %s to %s", pPass->pName, D3D::ResourceStateToString(transition.BeforeState), D3D::ResourceStateToString(transition.AfterState));
 	}
 
 	context.FlushResourceBarriers();
@@ -573,7 +580,11 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 	{
 		if (barrier.NeedsDiscard)
 		{
-			RG_LOG_RESOURCE_EVENT(barrier.pResource, "[Pass %s] Discard", pPass->pName);
+			const RGResource* pResource = barrier.pResource;
+
+			RG_LOG_RESOURCE_EVENT("Discard", pPass->pName);
+
+			PROFILE_GPU_SCOPE(context.GetCommandList(), "Discard");
 
 			const RGTexture* pTexture = static_cast<const RGTexture*>(barrier.pResource);
 

@@ -134,6 +134,8 @@ public:
 	void ClearBufferUInt(const Buffer* pBuffer, uint32 value = 0);
 	void ClearTextureFloat(const Texture* pTexture, const Vector4& values = Vector4::Zero);
 	void ClearTextureUInt(const Texture* pTexture, const Vector4u& values = Vector4u::Zero());
+	void ClearRenderTarget(const Texture* pTexture, const Vector4& values = Vector4::Zero, uint32 mipLevel = 0, uint32 arrayIndex = 0);
+	void ClearDepthStencil(const Texture* pTexture, RenderPassDepthFlags flags, float depth = 1.0f, uint8 stencil = 0, uint32 mipLevel = 0, uint32 arrayIndex = 0);
 
 	void SetPipelineState(PipelineState* pPipelineState);
 	void SetPipelineState(StateObject* pStateObject);
@@ -184,6 +186,9 @@ public:
 	void ResolvePendingBarriers(CommandContext& resolveContext);
 
 private:
+	D3D12_CPU_DESCRIPTOR_HANDLE GetRTV(uint32 slot, const Texture* pTexture, uint32 mipLevel = 0, uint32 arrayIndex = 0);
+	D3D12_CPU_DESCRIPTOR_HANDLE GetDSV(const Texture* pTexture, RenderPassDepthFlags flags, uint32 mipLevel = 0, uint32 arrayIndex = 0);
+
 	void PrepareDraw();
 	void ResolveResource(Texture* pSource, uint32 sourceSubResource, Texture* pTarget, uint32 targetSubResource, ResourceFormat format);
 	void AddBarrier(const D3D12_RESOURCE_BARRIER& inBarrier);

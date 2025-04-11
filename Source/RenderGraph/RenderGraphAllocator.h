@@ -1,7 +1,8 @@
 #pragma once
 
 #include <imgui_internal.h>
-#include "RHI/RHI.h"
+
+#include "IconsFontAwesome4.h"
 #include "RenderGraphDefinitions.h"
 
 class RGAllocator
@@ -204,15 +205,8 @@ private:
 		return nullptr;
 	}
 
-	bool TryPlaceResourceInHeap(const RGHeap& heap, RGResource* pResource)
+	bool TryPlaceResourceInHeap(const RGHeap& heap, const RGResource* pResource, uint32* pOutOffset, RGPhysicalResource** pOutPhysicalResource) const
 	{
-		struct HeapOffset
-		{
-			uint32 Offset : 31;
-			uint32 IsFreeBegin : 1;
-		};
-		Array<HeapOffset> freeRanges;
-
 		// If the resource is larger than the heap, bail out. Heaps are sorted by size so if this one doesn't fit, none will
 		if (pResource->Size > heap.Size)
 			return false;
@@ -222,35 +216,41 @@ private:
 			return false;
 
 		// Keep track of which memory ranges in the heap for the lifetime of the current resource are free
-		freeRanges.clear();
+		struct HeapOffset
+		{
+			uint32 Offset : 31;
+			uint32 IsFreeBegin : 1;
+		};
+		StaticArray<HeapOffset, 256> freeRanges;
+		uint32 rangeIndex = 0;
+		auto AddRange = [&](uint32 offset, bool isFreeBegin){ gAssert(rangeIndex + 1 < (uint32)freeRanges.size()); freeRanges[rangeIndex++] = {offset, isFreeBegin}; };
 
 		// Mark the start as free
-		freeRanges.push_back({ 0, true });
+		AddRange(0, true );
 
 		// For each allocated resource, if the lifetime overlaps, mark it as "not free"
 		for (RGResource* pAllocatedResource : heap.Allocations)
 		{
 			if (pAllocatedResource->GetLifetime().Overlaps(pResource->GetLifetime()))
 			{
-				freeRanges.push_back({ pAllocatedResource->Offset, false });
-				freeRanges.push_back({ pAllocatedResource->Offset + pAllocatedResource->Size, true });
+				AddRange(pAllocatedResource->Offset, false);
+				AddRange(pAllocatedResource->Offset + pAllocatedResource->Size, true);
 			}
 		}
-		
+
 		// Close the open free range
-		freeRanges.push_back({ heap.Size, false });
+		AddRange(heap.Size, false);
 
 		// Sort the markup by offset.
-		std::sort(freeRanges.begin(), freeRanges.end(), [](const HeapOffset& a, const HeapOffset& b) { return a.Offset < b.Offset; });
-
-		RGPhysicalResource* pExistingResource = nullptr;
+		std::sort(freeRanges.begin(), freeRanges.begin() + rangeIndex, [](const HeapOffset& a, const HeapOffset& b) { return a.Offset < b.Offset; });
 
 		// Algorithm: Keep track of how many "free" marks we've come across
 		// If we hit the end of a free mark and the range is closed (== 0), then this range is free
 		uint32 freeRangeCounter = 0;
 		uint32 lastBeginOffset = 0;
-		for (HeapOffset& heapOffset : freeRanges)
+		for (uint32 i = 0; i < rangeIndex; ++i)
 		{
+			const HeapOffset& heapOffset = freeRanges[i];
 			if (heapOffset.IsFreeBegin)
 			{
 				// Keep track of how many open ranges there are and where it started
@@ -276,22 +276,19 @@ private:
 								pPhysicalResource->Offset + pPhysicalResource->Size <= endOffset &&		// The physical resource must be within the region of the free range
 								pPhysicalResource->IsCompatible(pResource))								// The physical resource description must match the vritual resource
 							{
-								pExistingResource = pPhysicalResource.get();
-								pExistingResource->LastUsedFrame = m_FrameIndex;
-								pResource->Offset = pExistingResource->Offset;
-								pResource->SetResource(pExistingResource->pResource);
+								*pOutPhysicalResource = pPhysicalResource.get();
+								*pOutOffset = pPhysicalResource->Offset;
 								return true;
 							}
 						}
 
 						// No unused existing resource found, allocate resource in a new region
-						pResource->Offset = alignedOffset;
+						*pOutOffset = alignedOffset;
 						return true;
 					}
 				}
 			}
 		}
-
 		return false;
 	}
 
@@ -348,9 +345,19 @@ private:
 			RGHeap* pHeap = nullptr;
 			for (RGHeap& heap : heaps)
 			{
-				if (TryPlaceResourceInHeap(heap, pResource))
+				RGPhysicalResource* pExistingResource = nullptr;
+				uint32				offset			  = 0;
+				if (TryPlaceResourceInHeap(heap, pResource, &offset, &pExistingResource))
 				{
 					pHeap = &heap;
+
+					pResource->Offset = offset;
+					if (pExistingResource)
+					{
+						pExistingResource->LastUsedFrame = m_FrameIndex;
+						pResource->SetResource(pExistingResource->pResource);
+					}
+
 					break;
 				}
 			}
@@ -365,13 +372,14 @@ private:
 			}
 
 			gAssert(pResource->Offset + pResource->Size <= pHeap->Size);
+			gAssert(Math::IsAligned(pResource->Offset, pResource->Alignment));
 
 			// Assign the resource and mark the heap as used this frame
 			pHeap->Allocations.push_back(pResource);
 			pHeap->LastUsedFrame = m_FrameIndex;
 		}
 
-
+#ifdef _DEBUG
 		// Validation
 		for (RGHeap& heap : heaps)
 		{
@@ -390,28 +398,9 @@ private:
 					"Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu]) overlaps with Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu])",
 					pResource->pName, pResource->GetLifetime().Begin, pResource->GetLifetime().End, pResource->GetMemoryRange().Begin, pResource->GetMemoryRange().End,
 					pOverlappingResource->pName, pOverlappingResource->GetLifetime().Begin, pOverlappingResource->GetLifetime().End, pOverlappingResource->GetMemoryRange().Begin, pOverlappingResource->GetMemoryRange().End);
-
-				// Test if the alignment is correct
-				gAssert(Math::IsAligned(pResource->Offset, pResource->Alignment));
-
-				// Test if the resource description matches of already allocated resources
-				if (pResource->GetPhysicalUnsafe())
-				{
-					if (pResource->GetType() == RGResourceType::Buffer)
-					{
-						gAssert(static_cast<Buffer*>(pResource->GetPhysicalUnsafe())->GetDesc() == static_cast<const RGBuffer*>(pResource)->GetDesc());
-					}
-					else if (pResource->GetType() == RGResourceType::Texture)
-					{
-						gAssert(static_cast<Texture*>(pResource->GetPhysicalUnsafe())->GetDesc() == static_cast<const RGTexture*>(pResource)->GetDesc());
-					}
-					else
-					{
-						gAssert(false);
-					}
-				}
 			}
 		}
+#endif
 
 		// Allocate/create physical resources
 		for (RGHeap& heap : heaps)
@@ -555,7 +544,7 @@ private:
 			}
 
 			float width = ImGui::GetContentRegionAvail().x;
-			float widthScale = width / lastPassID;
+			float widthScale = width / (float)lastPassID;
 			for (const RGHeap& heap : heaps)
 			{
 				ImGui::Text("Heap (Size: %s - Allocations: %d - Resources: %d)", Math::PrettyPrintDataSize(heap.Size).c_str(), heap.Allocations.size(), heap.PhysicalResources.size());
@@ -584,6 +573,15 @@ private:
 							color.Value.z *= 1.5f;
 							ImGui::Text("Name: %s", pResource->pName);
 							ImGui::Text("Size: %s", Math::PrettyPrintDataSize(pResource->Size).c_str());
+
+							ImGui::Text("Export:");
+							ImGui::SameLine();
+							ImGui::TextColored(pResource->IsExported ? ImColor(0.0f, 1.0f, 0.0f, 1.0f) : ImColor(1.0f, 0.0f, 0.0f, 1.0f), pResource->IsExported ? ICON_FA_CHECK : ICON_FA_TIMES);
+							ImGui::SameLine();
+							ImGui::Text("Import:");
+							ImGui::SameLine();
+							ImGui::TextColored(pResource->IsImported ? ImColor(0.0f, 1.0f, 0.0f, 1.0f) : ImColor(1.0f, 0.0f, 0.0f, 1.0f), pResource->IsImported ? ICON_FA_CHECK : ICON_FA_TIMES);
+
 							ImGui::EndTooltip();
 						}
 

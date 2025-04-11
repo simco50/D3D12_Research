@@ -408,6 +408,15 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		VERIFY_HR_EX(pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, true), GetDevice());
 		E_LOG(Warning, "D3D Validation Break on Severity Enabled");
 
+		D3D12_MESSAGE_ID ignoreIDs[] = {
+			D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+		};
+
+		D3D12_INFO_QUEUE_FILTER filter{};
+		filter.DenyList.NumIDs	= ARRAYSIZE(ignoreIDs);
+		filter.DenyList.pIDList = ignoreIDs;
+		pInfoQueue->AddStorageFilterEntries(&filter);
+
 		Ref<ID3D12InfoQueue1> pInfoQueue1;
 		if (pInfoQueue.As(&pInfoQueue1))
 		{
