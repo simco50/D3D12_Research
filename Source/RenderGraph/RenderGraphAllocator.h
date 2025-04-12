@@ -36,6 +36,14 @@ private:
 
 		Array<UniquePtr<RGPhysicalResource>> PhysicalResources;
 		Ref<ID3D12Heap>					   pHeap;
+
+		// Keep track of which memory ranges in the heap for the lifetime of the current resource are free
+		struct HeapOffset
+		{
+			uint32 Offset	   : 31;
+			uint32 IsFreeBegin : 1;
+		};
+		Array<HeapOffset> FreeRanges;
 	};
 
 public:
@@ -166,9 +174,21 @@ private:
 			RGHeap& heap = heaps[heapIndex];
 			if (heap.LastUsedFrame + cHeapCleanupLatency < m_FrameIndex)
 			{
-				std::swap(heaps[heapIndex], heaps[heaps.size() - 1]);
-				heaps.pop_back();
-				continue;
+				bool canDelete = true;
+				for (std::unique_ptr<RGPhysicalResource>& pRes : heap.PhysicalResources)
+				{
+					if (pRes->pResource->GetNumRefs() > 1)
+					{
+						canDelete = false;
+						break;
+					}
+				}
+				if (canDelete)
+				{
+					std::swap(heaps[heapIndex], heaps[heaps.size() - 1]);
+					heaps.pop_back();
+					continue;
+				}
 			}
 
 			++heapIndex;
@@ -180,9 +200,12 @@ private:
 				RGPhysicalResource* pResource = heap.PhysicalResources[resourceIndex].get();
 				if (pResource->LastUsedFrame + cResourceCleanupLatency < m_FrameIndex)
 				{
-					std::swap(heap.PhysicalResources[resourceIndex], heap.PhysicalResources[heap.PhysicalResources.size() - 1]);
-					heap.PhysicalResources.pop_back();
-					continue;
+					if (pResource->pResource->GetNumRefs() == 1)
+					{
+						std::swap(heap.PhysicalResources[resourceIndex], heap.PhysicalResources[heap.PhysicalResources.size() - 1]);
+						heap.PhysicalResources.pop_back();
+						continue;
+					}
 				}
 				++resourceIndex;
 			}
@@ -205,9 +228,8 @@ private:
 		return nullptr;
 	}
 
-	bool TryPlaceResourceInHeap(const RGHeap& heap, const RGResource* pResource, uint32* pOutOffset, RGPhysicalResource** pOutPhysicalResource) const
+	bool TryPlaceResourceInHeap(RGHeap& heap, const RGResource* pResource, uint32* pOutOffset, RGPhysicalResource** pOutPhysicalResource) const
 	{
-		// If the resource is larger than the heap, bail out. Heaps are sorted by size so if this one doesn't fit, none will
 		if (pResource->Size > heap.Size)
 			return false;
 
@@ -215,42 +237,43 @@ private:
 		if (heap.Allocations.empty() && Math::AlignUp<uint64>(pResource->Size, cHeapAlignment) < heap.Size)
 			return false;
 
-		// Keep track of which memory ranges in the heap for the lifetime of the current resource are free
-		struct HeapOffset
-		{
-			uint32 Offset : 31;
-			uint32 IsFreeBegin : 1;
-		};
-		StaticArray<HeapOffset, 256> freeRanges;
-		uint32 rangeIndex = 0;
-		auto AddRange = [&](uint32 offset, bool isFreeBegin){ gAssert(rangeIndex + 1 < (uint32)freeRanges.size()); freeRanges[rangeIndex++] = {offset, isFreeBegin}; };
-
+		heap.FreeRanges.clear();
+		
 		// Mark the start as free
-		AddRange(0, true );
+		heap.FreeRanges.push_back({ 0, true });
+
+		// If an existing resource is referenced externally, mark the range as occupied
+		for (std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
+		{
+			if (pPhysicalResource->pResource->GetNumRefs() > 1)
+			{
+				heap.FreeRanges.push_back({ pPhysicalResource->Offset, false });
+				heap.FreeRanges.push_back({ pPhysicalResource->Offset + pPhysicalResource->Size, true });
+			}
+		}
 
 		// For each allocated resource, if the lifetime overlaps, mark it as "not free"
 		for (RGResource* pAllocatedResource : heap.Allocations)
 		{
 			if (pAllocatedResource->GetLifetime().Overlaps(pResource->GetLifetime()))
 			{
-				AddRange(pAllocatedResource->Offset, false);
-				AddRange(pAllocatedResource->Offset + pAllocatedResource->Size, true);
+				heap.FreeRanges.push_back({ pAllocatedResource->Offset, false });
+				heap.FreeRanges.push_back({pAllocatedResource->Offset + pAllocatedResource->Size, true});
 			}
 		}
 
 		// Close the open free range
-		AddRange(heap.Size, false);
+		heap.FreeRanges.push_back({heap.Size, false});
 
 		// Sort the markup by offset.
-		std::sort(freeRanges.begin(), freeRanges.begin() + rangeIndex, [](const HeapOffset& a, const HeapOffset& b) { return a.Offset < b.Offset; });
+		std::sort(heap.FreeRanges.begin(), heap.FreeRanges.end(), [](const RGHeap::HeapOffset& a, const RGHeap::HeapOffset& b) { return a.Offset < b.Offset; });
 
 		// Algorithm: Keep track of how many "free" marks we've come across
 		// If we hit the end of a free mark and the range is closed (== 0), then this range is free
 		uint32 freeRangeCounter = 0;
 		uint32 lastBeginOffset = 0;
-		for (uint32 i = 0; i < rangeIndex; ++i)
+		for (const RGHeap::HeapOffset& heapOffset : heap.FreeRanges)
 		{
-			const HeapOffset& heapOffset = freeRanges[i];
 			if (heapOffset.IsFreeBegin)
 			{
 				// Keep track of how many open ranges there are and where it started
@@ -271,7 +294,7 @@ private:
 						gAssert(heap.pHeap || heap.PhysicalResources.empty(), "Heap can't have physical resources without an allocated heap");
 						for (const std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
 						{
-							if (pPhysicalResource->LastUsedFrame != m_FrameIndex &&						// Must not already be used by another resource
+							if (pPhysicalResource->LastUsedFrame != m_FrameIndex &&
 								pPhysicalResource->Offset >= alignedOffset &&							// The physical resource must be within the region of the free range
 								pPhysicalResource->Offset + pPhysicalResource->Size <= endOffset &&		// The physical resource must be within the region of the free range
 								pPhysicalResource->IsCompatible(pResource))								// The physical resource description must match the vritual resource
@@ -313,19 +336,26 @@ private:
 				{
 					pResource->Offset = pPhysicalResource->Offset;
 					pHeap->Allocations.push_back(pResource);
+
+					//E_LOG(Warning, "[%s] Existing Imported Resource. Heap %d - Lifetime [%d, %d] - Memory [%llu, %llu]", pResource->pName, pHeap->ID, pResource->GetLifetime().Begin, pResource->GetLifetime().End, pResource->GetMemoryRange().Begin, pResource->GetMemoryRange().End);
 				}
 			}
 		}
 
 		// Sort resources largest to smallest, then largest alignment to smallest.
+		// Exported resources always come first so that they don't cause fragmentation
 		std::sort(resources.begin(), resources.end(), [](const RGResource* a, const RGResource* b) {
-			if (a->Size == b->Size)
+			if (a->IsExported == b->IsExported)
 			{
-				if (a->Alignment == b->Alignment)
-					return a->ID.GetIndex() < b->ID.GetIndex();
-				return a->Alignment > b->Alignment;
+				if (a->Size == b->Size)
+				{
+					if (a->Alignment == b->Alignment)
+						return a->ID.GetIndex() < b->ID.GetIndex();
+					return a->Alignment > b->Alignment;
+				}
+				return a->Size > b->Size;
 			}
-			return a->Size > b->Size;
+			return a->IsExported > b->IsExported;
 		});
 
 		// Sort heaps largest to smallest, so smaller heaps can be removed.
@@ -345,6 +375,10 @@ private:
 			RGHeap* pHeap = nullptr;
 			for (RGHeap& heap : heaps)
 			{
+				// If the resource is larger than the heap, bail out. Heaps are sorted by size so if this one doesn't fit, none will
+				if (pResource->Size > heap.Size)
+					break;
+
 				RGPhysicalResource* pExistingResource = nullptr;
 				uint32				offset			  = 0;
 				if (TryPlaceResourceInHeap(heap, pResource, &offset, &pExistingResource))
@@ -377,6 +411,8 @@ private:
 			// Assign the resource and mark the heap as used this frame
 			pHeap->Allocations.push_back(pResource);
 			pHeap->LastUsedFrame = m_FrameIndex;
+
+			//E_LOG(Warning, "[%s] Placed Resource. Heap %d - Lifetime [%d, %d] - Memory [%llu, %llu]", pResource->pName, pHeap->ID, pResource->GetLifetime().Begin, pResource->GetLifetime().End, pResource->GetMemoryRange().Begin, pResource->GetMemoryRange().End);
 		}
 
 #ifdef _DEBUG
@@ -466,8 +502,8 @@ private:
 	uint32			m_HeapID = 0;
 
 	static constexpr uint32 cHeapCleanupLatency		= 3;
-	static constexpr uint32 cResourceCleanupLatency = 1024;
-	static constexpr uint32 cHeapAlignment			= 512 * Math::KilobytesToBytes;
+	static constexpr uint32 cResourceCleanupLatency = 120;
+	static constexpr uint32 cHeapAlignment			= 32 * Math::MegaBytesToBytes;
 
 	/****************/
 	/*	 Debug UI	*/
@@ -547,7 +583,7 @@ private:
 			float widthScale = width / (float)lastPassID;
 			for (const RGHeap& heap : heaps)
 			{
-				ImGui::Text("Heap (Size: %s - Allocations: %d - Resources: %d)", Math::PrettyPrintDataSize(heap.Size).c_str(), heap.Allocations.size(), heap.PhysicalResources.size());
+				ImGui::Text("Heap %d (Size: %s - Allocations: %d - Resources: %d)", heap.ID, Math::PrettyPrintDataSize(heap.Size).c_str(), heap.Allocations.size(), heap.PhysicalResources.size());
 				ImDrawList* pDraw = ImGui::GetWindowDrawList();
 
 				ImVec2 cursor = ImGui::GetCursorScreenPos();
@@ -581,6 +617,8 @@ private:
 							ImGui::Text("Import:");
 							ImGui::SameLine();
 							ImGui::TextColored(pResource->IsImported ? ImColor(0.0f, 1.0f, 0.0f, 1.0f) : ImColor(1.0f, 0.0f, 0.0f, 1.0f), pResource->IsImported ? ICON_FA_CHECK : ICON_FA_TIMES);
+
+							ImGui::Text("%p", pResource->pPhysicalResource);
 
 							ImGui::EndTooltip();
 						}

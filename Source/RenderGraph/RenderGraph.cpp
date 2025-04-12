@@ -218,33 +218,19 @@ void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& opti
 		{
 			if (pResource->IsExported)
 			{
-				// TEMP: Shouldn't have to extend the lifetime of an exported resource to the start of the frame
-				pResource->FirstAccess = firstPass;
+				//pResource->FirstAccess = firstPass;
 				pResource->LastAccess  = lastPass;
 			}
 			if (pResource->IsImported)
 			{
-				// TEMP: Shouldn't have to extend the lifetime of an imported resource to the end of the frame
 				pResource->FirstAccess = firstPass;
-				pResource->LastAccess  = lastPass;
+				//pResource->LastAccess  = lastPass;
 			}
 		}
 	}
 
-	// Ensure the resource allocator doesn't account for old references in the export target
-	for (ExportedTexture& exportResource : m_ExportTextures)
-		*exportResource.pTarget = nullptr;
-	for (ExportedBuffer& exportResource : m_ExportBuffers)
-		*exportResource.pTarget = nullptr;
-
 	{
-
 		PROFILE_CPU_SCOPE("Resource Allocation");
-
-		// Go through all resources accesses and allocate on first access and de-allocate on last access
-		// It's important to make the distinction between the Ref allocation and the Raw resource itself.
-		// A de-allocate returns the resource back to the pool by resetting the Ref however the Raw resource keeps a reference to it to use during execution.
-		// This is how we can "alias" resources (exact match only for now) and allocate our resources during compilation so that execution is thread-safe.
 
 		Array<RGResource*> activeResources;
 		for (RGPass* pPass : m_Passes)
@@ -269,45 +255,45 @@ void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& opti
 
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
-				RGResource* pResource = access.pResource;
-				if (pResource->GetPhysicalUnsafe()->UseStateTracking())
+				// Record resource transition
+				RGResource*			  pResource	 = access.pResource;
+				D3D12_RESOURCE_STATES afterState = access.Access;
+				DeviceResource*		  pPhysical	 = pResource->GetPhysicalUnsafe();
+				if (pPhysical->UseStateTracking())
 				{
 					uint32 subResource = 0xFFFFFFFF;
-					D3D12_RESOURCE_STATES beforeState = pResource->GetPhysicalUnsafe()->GetResourceState(subResource);
-					D3D12_RESOURCE_STATES afterState  = access.Access;
-					D3D12_RESOURCE_STATES afterStateActual = afterState;
-					bool				  need_transition  = D3D::NeedsTransition(beforeState, afterStateActual, true);
+					D3D12_RESOURCE_STATES beforeState = pPhysical->GetResourceState(subResource);
 
-					RG_LOG_RESOURCE_EVENT("Desired transition from %s to %s (actual: %s) - Passed: %s",
-						D3D::ResourceStateToString(beforeState), D3D::ResourceStateToString(afterState),
-						D3D::ResourceStateToString(afterStateActual),
-						need_transition ? "Yes" : "No");
-
-					if (need_transition)
+					if (D3D::NeedsTransition(beforeState, afterState, true))
 					{
-						pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = beforeState, .AfterState = afterStateActual, .SubResource = subResource });
-						pResource->GetPhysicalUnsafe()->SetResourceState(afterStateActual, subResource);
+						RG_LOG_RESOURCE_EVENT("Recorded transition from %s to %s", D3D::ResourceStateToString(beforeState), D3D::ResourceStateToString(afterState));
+
+						pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = beforeState, .AfterState = afterState, .SubResource = subResource });
+						pPhysical->SetResourceState(afterState, subResource);
 					}
+				}
 
-					if (!pResource->IsImported && pResource->FirstAccess == pPass->ID)
+				// If the resource is not imported, it will require an aliasing barrier on the first use
+				if (!pResource->IsImported && pResource->FirstAccess == pPass->ID)
+				{
+					RGPass::AliasBarrier barrier;
+					barrier.pResource = pResource;
+
+					// If the resource is a rendertarget/depthstencil, it will need a discard
+					if (pResource->GetType() == RGResourceType::Texture)
 					{
-						RGPass::AliasBarrier barrier;
-						barrier.pResource = pResource;
-
-						if (pResource->GetType() == RGResourceType::Texture)
+						RGTexture* pTexture = static_cast<RGTexture*>(access.pResource);
+						if (EnumHasAnyFlags(pTexture->GetDesc().Flags, TextureFlag::RenderTarget | TextureFlag::DepthStencil))
 						{
-							RGTexture* pTexture = static_cast<RGTexture*>(access.pResource);
-							if (EnumHasAnyFlags(pTexture->GetDesc().Flags, TextureFlag::RenderTarget | TextureFlag::DepthStencil))
-							{
-								barrier.NeedsDiscard	   = true;
-								barrier.DiscardSourceState = afterStateActual;
-								RG_LOG_RESOURCE_EVENT("Desired discard", pPass->pName);
-							}
-						}
-						pPass->AliasBarriers.push_back(barrier);
+							barrier.NeedsDiscard	   = true;
+							barrier.DiscardSourceState = afterState;
 
-						RG_LOG_RESOURCE_EVENT("Desired aliasing barrier", pPass->pName);
+							RG_LOG_RESOURCE_EVENT("Recorder discard", pPass->pName);
+						}
 					}
+					pPass->AliasBarriers.push_back(barrier);
+
+					RG_LOG_RESOURCE_EVENT("Recorded aliasing barrier", pPass->pName);
 				}
 			}
 		}
@@ -343,7 +329,8 @@ void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& opti
 				pLastActivePass = pPass;
 			}
 		}
-		pLastActivePass->NumEventsToEnd += eventsToEnd;
+		if (pLastActivePass)
+			pLastActivePass->NumEventsToEnd += eventsToEnd;
 		gAssert(eventsToStart.empty());
 	}
 
@@ -391,7 +378,8 @@ void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& opti
 		}
 		if (currentGroupSize > 0)
 			m_PassExecuteGroups.push_back(Span<const RGPass*>(&m_Passes[firstPass.GetIndex()], (uint32)m_Passes.size() - firstPass.GetIndex()));
-		pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
+		if (pLastPass)
+			pLastPass->NumCPUEventsToEnd += (uint32)activeEvents.size();
 	}
 
 	m_IsCompiled = true;
@@ -554,7 +542,7 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 	{
 		const RGResource* pResource = barrier.pResource;
 		context.InsertAliasingBarrier(pResource->GetPhysicalUnsafe());
-		RG_LOG_RESOURCE_EVENT("Actual aliasing barrier", pPass->pName);
+		RG_LOG_RESOURCE_EVENT("Executed aliasing barrier");
 	}
 
 	for (const RGPass::ResourceTransition& transition : pPass->Transitions)
@@ -565,7 +553,7 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 
 		context.InsertResourceBarrier(pResource->GetPhysicalUnsafe(), transition.BeforeState, transition.AfterState, transition.SubResource);
 
-		RG_LOG_RESOURCE_EVENT("Actual transition from %s to %s", pPass->pName, D3D::ResourceStateToString(transition.BeforeState), D3D::ResourceStateToString(transition.AfterState));
+		RG_LOG_RESOURCE_EVENT("Executed transition from %s to %s", D3D::ResourceStateToString(transition.BeforeState), D3D::ResourceStateToString(transition.AfterState));
 	}
 
 	context.FlushResourceBarriers();
@@ -576,7 +564,7 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 		{
 			const RGResource* pResource = barrier.pResource;
 
-			RG_LOG_RESOURCE_EVENT("Discard", pPass->pName);
+			RG_LOG_RESOURCE_EVENT("Executed discard");
 
 			PROFILE_GPU_SCOPE(context.GetCommandList(), "Discard");
 
@@ -651,7 +639,7 @@ namespace RGUtils
 			.RenderTarget(pSource, RenderPassColorFlags::None, pTarget);
 	}
 
-	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget)
+	RGBuffer* CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool* pOutIsNew)
 	{
 		gAssert(pStorageTarget);
 		RGBuffer* pBuffer = nullptr;
@@ -660,6 +648,8 @@ namespace RGUtils
 			if (pStorageTarget->Get()->GetDesc().IsCompatible(bufferDesc))
 				pBuffer = graph.Import(*pStorageTarget);
 		}
+		if (pOutIsNew)
+			*pOutIsNew = pBuffer == nullptr;
 		if (!pBuffer)
 		{
 			pBuffer = graph.Create(pName, bufferDesc);
@@ -668,7 +658,7 @@ namespace RGUtils
 		return pBuffer;
 	}
 
-	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget)
+	RGTexture* CreatePersistent(RGGraph& graph, const char* pName, const TextureDesc& textureDesc, Ref<Texture>* pStorageTarget, bool* pOutIsNew)
 	{
 		gAssert(pStorageTarget);
 		RGTexture* pTexture = nullptr;
@@ -677,6 +667,8 @@ namespace RGUtils
 			if (pStorageTarget->Get()->GetDesc().IsCompatible(textureDesc))
 				pTexture = graph.TryImport(*pStorageTarget);
 		}
+		if (pOutIsNew)
+			*pOutIsNew = pTexture == nullptr;
 		if (!pTexture)
 		{
 			pTexture = graph.Create(pName, textureDesc);

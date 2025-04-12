@@ -71,8 +71,6 @@ public:
 
 	~RGResource()
 	{
-		if (Allocated)
-			pPhysicalResource->Release();
 	}
 
 	const char*			GetName() const				{ return pName; }
@@ -87,7 +85,6 @@ protected:
 	{
 		gAssert(!pPhysicalResource);
 		pPhysicalResource = resource;
-		pPhysicalResource->AddRef();
 		Allocated = true;
 	}
 
@@ -95,7 +92,6 @@ protected:
 	{
 		gAssert(pPhysicalResource);
 		gAssert(Allocated);
-		gVerify(pPhysicalResource->Release(), > 1, "This reference should never be the last one");
 		Allocated = false;
 	}
 
@@ -110,6 +106,7 @@ protected:
 	uint32					Size = 0;
 	uint32					Offset = 0;
 	uint32					Alignment = 0;
+
 
 	// Compile-time data
 	RGPassID				FirstAccess;			///< First non-culled pass that accesses this resource

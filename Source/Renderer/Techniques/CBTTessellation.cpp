@@ -160,12 +160,11 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 	auto cbt_view = pView->pWorld->Registry.view<CBTData>();
 	cbt_view.each([&](CBTData& cbtData)
 		{
-			RGBuffer* pCBTBuffer = graph.TryImport(cbtData.pCBTBuffer);
-			if (!pCBTBuffer)
+			uint32 size = CBT::ComputeSize(CBTSettings::CBTDepth);
+			bool isNew = false;
+			RGBuffer* pCBTBuffer = RGUtils::CreatePersistent(graph, "CBT", BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), &cbtData.pCBTBuffer, &isNew);
+			if (isNew)
 			{
-				uint32 size = CBT::ComputeSize(CBTSettings::CBTDepth);
-				pCBTBuffer = RGUtils::CreatePersistent(graph, "CBT", BufferDesc::CreateByteAddress(size, BufferFlag::ShaderResource | BufferFlag::UnorderedAccess), &cbtData.pCBTBuffer);
-
 				graph.AddPass("CBT Upload", RGPassFlag::Copy)
 					.Write({ pCBTBuffer })
 					.Bind([=](CommandContext& context, const RGResources& resources)
