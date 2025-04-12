@@ -18,7 +18,7 @@ static bool sDoLogTransition(const RGPass* pPass, const RGResource* pResource)
 	return (strlen(pLogPassName) == 0 || strcmp(pLogPassName, pPass->GetName()) == 0) && (strlen(pLogResourceName) == 0 || strcmp(pLogResourceName, pResource->GetName()) == 0);
 }
 
-#define RG_LOG_RESOURCE_EVENT(fmt, ...) if (sDoLogTransition(pPass, pResource)) E_LOG(Info, "[%s:%s] " fmt, pPass->GetName(), pResource->GetName(), __VA_ARGS__)
+#define RG_LOG_RESOURCE_EVENT(fmt, ...) if (sDoLogTransition(pPass, pResource)) E_LOG(Warning, "[%s:%s] " fmt, pPass->GetName(), pResource->GetName(), __VA_ARGS__)
 #else
 #define RG_LOG_RESOURCE_EVENT(fmt, ...) do { UNUSED_VAR(pResource); UNUSED_VAR(pPass); } while (0)
 #endif
@@ -441,11 +441,15 @@ void RGGraph::Execute(GraphicsDevice* pDevice)
 							   ExecutePass(pPass, *pContext);
 					   };
 				};
+#if RG_TRACK_TRANSITIONS
+				executeFn(0);
+#else
+
 				if (m_Options.SingleThread)
 					executeFn(0);
 				else
 					TaskQueue::Execute(executeFn, context);
-
+#endif
 				contexts.push_back(pContext);
 			}
 		}

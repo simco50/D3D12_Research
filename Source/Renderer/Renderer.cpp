@@ -590,6 +590,9 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 										}
 									});
 						}
+
+						graph.AddPass("Transition Shadow Map", RGPassFlag::Raster | RGPassFlag::NeverCull)
+							.Read(pShadowmap);
 					}
 				}
 

@@ -13,7 +13,7 @@ struct PassParams
 	Texture2DH<float4>					PreviousSceneColor;
 	Texture3DH<float4>					Fog;
 	StructuredBufferH<MeshletCandidate> VisibleMeshlets;
-	StructuredBufferH<uint> 			LightGrid;
+	TypedBufferH<uint> 					LightGrid;
 
 	// For compute
 	RWTexture2DH<float4> 				ColorTarget;
