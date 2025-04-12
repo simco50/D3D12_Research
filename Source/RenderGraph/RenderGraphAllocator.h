@@ -82,11 +82,6 @@ public:
 		++m_FrameIndex;
 	}
 
-	void DrawDebugView()
-	{
-		//DrawDebugView(m_Heaps);
-	}
-
 	void ClearAll()
 	{
 		m_Heaps.clear();
@@ -163,52 +158,48 @@ private:
 		}
 	}
 private:
+	template<typename T, typename Fn>
+	void SwapRemoveIf(Array<T>& arr, Fn fn)
+	{
+		uint32 i = 0;
+		while (i < arr.size())
+		{
+			if (fn(arr[i]))
+			{
+				std::swap(arr[i], arr.back());
+				arr.pop_back();
+			}
+			else
+			{
+				++i;
+			}
+		}
+	}
+
 	void ClearUnusedResources(Array<RGHeap>& heaps)
 	{
 		PROFILE_CPU_SCOPE();
 
-		uint32 heapIndex = 0;
-		while (heapIndex < (uint32)heaps.size())
-		{
-			// Retire heap if it hasn't been used for a while
-			RGHeap& heap = heaps[heapIndex];
+		SwapRemoveIf(heaps, [this](const RGHeap& heap) {
 			if (heap.LastUsedFrame + cHeapCleanupLatency < m_FrameIndex)
 			{
-				bool canDelete = true;
-				for (std::unique_ptr<RGPhysicalResource>& pRes : heap.PhysicalResources)
+				// Can't delete a heap if it has resources inside it that are still references
+				for (const std::unique_ptr<RGPhysicalResource>& pRes : heap.PhysicalResources)
 				{
 					if (pRes->pResource->GetNumRefs() > 1)
-					{
-						canDelete = false;
-						break;
-					}
+						return false;
 				}
-				if (canDelete)
-				{
-					std::swap(heaps[heapIndex], heaps[heaps.size() - 1]);
-					heaps.pop_back();
-					continue;
-				}
+				return true;
 			}
+			return false;
+		});
 
-			++heapIndex;
-
-			// Retire physical resource if it hasn't been used for a while
-			uint32 resourceIndex = 0;
-			while (resourceIndex < (uint32)heap.PhysicalResources.size())
-			{
-				RGPhysicalResource* pResource = heap.PhysicalResources[resourceIndex].get();
-				if (pResource->LastUsedFrame + cResourceCleanupLatency < m_FrameIndex)
-				{
-					if (pResource->pResource->GetNumRefs() == 1)
-					{
-						std::swap(heap.PhysicalResources[resourceIndex], heap.PhysicalResources[heap.PhysicalResources.size() - 1]);
-						heap.PhysicalResources.pop_back();
-						continue;
-					}
-				}
-				++resourceIndex;
-			}
+		for (RGHeap& heap : heaps)
+		{
+			SwapRemoveIf(heap.PhysicalResources, [this](const UniquePtr<RGPhysicalResource>& pResource) {
+				// Can't delete a resources that is still referenced externally
+				return pResource->LastUsedFrame + cResourceCleanupLatency < m_FrameIndex && pResource->pResource->GetNumRefs() == 1;
+			});
 		}
 	}
 
@@ -228,7 +219,7 @@ private:
 		return nullptr;
 	}
 
-	bool TryPlaceResourceInHeap(RGHeap& heap, const RGResource* pResource, uint32* pOutOffset, RGPhysicalResource** pOutPhysicalResource) const
+	bool TryPlaceResourceInHeap(RGHeap& heap, RGResource* pResource) const
 	{
 		if (pResource->Size > heap.Size)
 			return false;
@@ -287,26 +278,34 @@ private:
 				{
 					// Test whether the free region is large enough
 					uint32 alignedOffset = Math::AlignUp(lastBeginOffset, pResource->Alignment);
-					uint32 endOffset = heapOffset.Offset;
 					if (alignedOffset + pResource->Size <= heapOffset.Offset)
 					{
+						pResource->Offset = alignedOffset;
+
 						// Try to find an already existing physical resource that fits the space and description
 						gAssert(heap.pHeap || heap.PhysicalResources.empty(), "Heap can't have physical resources without an allocated heap");
 						for (const std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
 						{
 							if (pPhysicalResource->LastUsedFrame != m_FrameIndex &&
-								pPhysicalResource->Offset >= alignedOffset &&							// The physical resource must be within the region of the free range
-								pPhysicalResource->Offset + pPhysicalResource->Size <= endOffset &&		// The physical resource must be within the region of the free range
+								pPhysicalResource->Offset == alignedOffset &&							// The physical resource must be within the region of the free range
 								pPhysicalResource->IsCompatible(pResource))								// The physical resource description must match the vritual resource
 							{
-								*pOutPhysicalResource = pPhysicalResource.get();
-								*pOutOffset = pPhysicalResource->Offset;
-								return true;
+								pPhysicalResource->LastUsedFrame = m_FrameIndex;
+								pResource->SetResource(pPhysicalResource->pResource);
+								break;
 							}
 						}
 
-						// No unused existing resource found, allocate resource in a new region
-						*pOutOffset = alignedOffset;
+						// Sanity check
+						gAssert(pResource->Offset + pResource->Size <= heap.Size);
+						gAssert(Math::IsAligned(pResource->Offset, pResource->Alignment));
+
+						// Assign the resource and mark the heap as used this frame
+						heap.Allocations.push_back(pResource);
+						heap.LastUsedFrame = m_FrameIndex;
+
+						// E_LOG(Warning, "[%s] Placed Resource in Heap %d - Lifetime [%d, %d] - Memory [%llu, %llu]", pResource->pName, heap.ID, pResource->GetLifetime().Begin, pResource->GetLifetime().End, pResource->GetMemoryRange().Begin, pResource->GetMemoryRange().End);
+
 						return true;
 					}
 				}
@@ -372,47 +371,31 @@ private:
 
 			gAssert(pResource->Size != 0);
 
-			RGHeap* pHeap = nullptr;
+			bool success = false;
 			for (RGHeap& heap : heaps)
 			{
 				// If the resource is larger than the heap, bail out. Heaps are sorted by size so if this one doesn't fit, none will
 				if (pResource->Size > heap.Size)
 					break;
 
-				RGPhysicalResource* pExistingResource = nullptr;
-				uint32				offset			  = 0;
-				if (TryPlaceResourceInHeap(heap, pResource, &offset, &pExistingResource))
+				if (TryPlaceResourceInHeap(heap, pResource))
 				{
-					pHeap = &heap;
-
-					pResource->Offset = offset;
-					if (pExistingResource)
-					{
-						pExistingResource->LastUsedFrame = m_FrameIndex;
-						pResource->SetResource(pExistingResource->pResource);
-					}
-
+					success = true;
 					break;
 				}
 			}
 
 			// If no heap was found, that means the resource wasn't placed and a new heap is needed
-			if (!pHeap)
+			if (!success)
 			{
 				RGHeap& heap = heaps.emplace_back();
 				heap.ID		 = m_HeapID++;
 				heap.Size	 = Math::AlignUp(pResource->Size, cHeapAlignment);
-				pHeap		 = &heap;
+
+				// E_LOG(Warning, "New Heap %d - Size: %s", heap.ID, Math::PrettyPrintDataSize(heap.Size));
+
+				gVerify(TryPlaceResourceInHeap(heap, pResource), == true);
 			}
-
-			gAssert(pResource->Offset + pResource->Size <= pHeap->Size);
-			gAssert(Math::IsAligned(pResource->Offset, pResource->Alignment));
-
-			// Assign the resource and mark the heap as used this frame
-			pHeap->Allocations.push_back(pResource);
-			pHeap->LastUsedFrame = m_FrameIndex;
-
-			//E_LOG(Warning, "[%s] Placed Resource. Heap %d - Lifetime [%d, %d] - Memory [%llu, %llu]", pResource->pName, pHeap->ID, pResource->GetLifetime().Begin, pResource->GetLifetime().End, pResource->GetMemoryRange().Begin, pResource->GetMemoryRange().End);
 		}
 
 #ifdef _DEBUG
