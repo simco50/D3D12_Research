@@ -8,7 +8,7 @@
 
 class RGGraph;
 class RGPass;
-class RGAllocator;
+class RGResourceAllocator;
 
 // Flags assigned to a pass that can determine various things
 enum class RGPassFlag : uint8
@@ -275,7 +275,7 @@ public:
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
-	void Compile(RGAllocator& resourceAllocator, const RGGraphOptions& options);
+	void Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptions& options);
 
 	void Execute(GraphicsDevice* pDevice);
 

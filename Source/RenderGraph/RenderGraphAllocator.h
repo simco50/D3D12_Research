@@ -5,7 +5,7 @@
 #include "IconsFontAwesome4.h"
 #include "RenderGraphDefinitions.h"
 
-class RGAllocator
+class RGResourceAllocator
 {
 private:
 	// Represents a physical resources
@@ -75,4 +75,4 @@ private:
 
 };
 
-extern RGAllocator gRenderGraphAllocator;
+extern RGResourceAllocator gRenderGraphAllocator;

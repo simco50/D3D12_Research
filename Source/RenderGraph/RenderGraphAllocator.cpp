@@ -4,7 +4,7 @@
 #include "RHI/Device.h"
 
 
-RGAllocator gRenderGraphAllocator;
+RGResourceAllocator gRenderGraphAllocator;
 
 
 static D3D12_RESOURCE_DESC sGetResourceDesc(const RGResource* pResource)
@@ -77,19 +77,19 @@ static D3D12_RESOURCE_DESC sGetResourceDesc(const RGResource* pResource)
 }
 
 
-void RGAllocator::Init(GraphicsDevice* pDevice)
+void RGResourceAllocator::Init(GraphicsDevice* pDevice)
 {
 	m_pDevice = pDevice;
 }
 
 
-void RGAllocator::Shutdown()
+void RGResourceAllocator::Shutdown()
 {
 	ClearAll();
 }
 
 
-void RGAllocator::AllocateResources(Span<RGResource*> graphResources)
+void RGResourceAllocator::AllocateResources(Span<RGResource*> graphResources)
 {
 	PROFILE_CPU_SCOPE();
 
@@ -109,20 +109,20 @@ void RGAllocator::AllocateResources(Span<RGResource*> graphResources)
 }
 
 
-void RGAllocator::Tick()
+void RGResourceAllocator::Tick()
 {
 	ClearUnusedResources(m_Heaps);
 	++m_FrameIndex;
 }
 
 
-void RGAllocator::ClearAll()
+void RGResourceAllocator::ClearAll()
 {
 	m_Heaps.clear();
 }
 
 
-void RGAllocator::ClearUnusedResources(Array<RGHeap>& heaps)
+void RGResourceAllocator::ClearUnusedResources(Array<RGHeap>& heaps)
 {
 	PROFILE_CPU_SCOPE();
 
@@ -130,7 +130,7 @@ void RGAllocator::ClearUnusedResources(Array<RGHeap>& heaps)
 		if (heap.LastUsedFrame + cHeapCleanupLatency < m_FrameIndex)
 		{
 			// Can't delete a heap if it has resources inside it that are still references
-			for (const std::unique_ptr<RGPhysicalResource>& pRes : heap.PhysicalResources)
+			for (const UniquePtr<RGPhysicalResource>& pRes : heap.PhysicalResources)
 			{
 				if (pRes->pResource->GetNumRefs() > 1)
 					return false;
@@ -150,7 +150,7 @@ void RGAllocator::ClearUnusedResources(Array<RGHeap>& heaps)
 }
 
 
-RGAllocator::RGPhysicalResource* RGAllocator::FindExistingResource(const DeviceResource* pResource, RGHeap** pOutHeap)
+RGResourceAllocator::RGPhysicalResource* RGResourceAllocator::FindExistingResource(const DeviceResource* pResource, RGHeap** pOutHeap)
 {
 	for (RGHeap& heap : m_Heaps)
 	{
@@ -167,7 +167,7 @@ RGAllocator::RGPhysicalResource* RGAllocator::FindExistingResource(const DeviceR
 }
 
 
-bool RGAllocator::TryPlaceResourceInHeap(RGHeap& heap, RGResource* pResource) const
+bool RGResourceAllocator::TryPlaceResourceInHeap(RGHeap& heap, RGResource* pResource) const
 {
 	if (pResource->Size > heap.Size)
 		return false;
@@ -229,7 +229,7 @@ bool RGAllocator::TryPlaceResourceInHeap(RGHeap& heap, RGResource* pResource) co
 
 					// Try to find an already existing physical resource that fits the space and description
 					gAssert(heap.pHeap || heap.PhysicalResources.empty(), "Heap can't have physical resources without an allocated heap");
-					for (const std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
+					for (const UniquePtr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
 					{
 						if (pPhysicalResource->LastUsedFrame != m_FrameIndex &&
 							pPhysicalResource->Offset == alignedOffset && // The physical resource must be within the region of the free range
@@ -259,7 +259,8 @@ bool RGAllocator::TryPlaceResourceInHeap(RGHeap& heap, RGResource* pResource) co
 	return false;
 }
 
-void RGAllocator::AllocateResources(Array<RGResource*>& resources, Array<RGHeap>& heaps)
+
+void RGResourceAllocator::AllocateResources(Array<RGResource*>& resources, Array<RGHeap>& heaps)
 {
 	PROFILE_CPU_SCOPE();
 
@@ -270,7 +271,7 @@ void RGAllocator::AllocateResources(Array<RGResource*>& resources, Array<RGHeap>
 		heap.ExternalResources.clear();
 
 		// If an existing resource is referenced externally, mark the resource as external
-		for (std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
+		for (UniquePtr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
 		{
 			if (pPhysicalResource->pResource->GetNumRefs() > 1)
 			{
@@ -457,7 +458,7 @@ static ImColor sGetResourceColor(const RGResource* pResource)
 }
 
 
-void RGAllocator::DrawDebugView(Span<RGResource*> resources, const Array<RGHeap>& heaps) const
+void RGResourceAllocator::DrawDebugView(Span<RGResource*> resources, const Array<RGHeap>& heaps) const
 {
 	PROFILE_CPU_SCOPE();
 

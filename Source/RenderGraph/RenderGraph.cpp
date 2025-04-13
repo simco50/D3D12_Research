@@ -107,7 +107,7 @@ RGGraph::~RGGraph()
 	DestroyData();
 }
 
-void RGGraph::Compile(RGAllocator& resourceAllocator, const RGGraphOptions& options)
+void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptions& options)
 {
 	PROFILE_CPU_SCOPE();
 

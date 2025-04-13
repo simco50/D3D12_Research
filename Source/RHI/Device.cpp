@@ -305,12 +305,12 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	}
 
 	UINT flags = 0;
-	if (options.UseDebugDevice)
+	if (options.UseDebugDevice || options.UseGPUValidation)
 		flags |= DXGI_CREATE_FACTORY_DEBUG;
 
 	VERIFY_HR(CreateDXGIFactory2(flags, IID_PPV_ARGS(m_pFactory.GetAddressOf())));
 
-	if (options.UseDebugDevice)
+	if (options.UseDebugDevice || options.UseGPUValidation)
 	{
 		Ref<ID3D12Debug6> pDebugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
@@ -390,15 +390,15 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 	if (options.UseGPUValidation)
 	{
 		Ref<ID3D12DebugDevice2> pDebugDevice;
-		m_pDevice.As(&pDebugDevice);
-
-		D3D12_DEBUG_DEVICE_GPU_BASED_VALIDATION_SETTINGS validationSettings
+		if (m_pDevice.As(&pDebugDevice))
 		{
-			.MaxMessagesPerCommandList = 256,
-			.DefaultShaderPatchMode	   = D3D12_GPU_BASED_VALIDATION_SHADER_PATCH_MODE_UNGUARDED_VALIDATION,
-			.PipelineStateCreateFlags  = D3D12_GPU_BASED_VALIDATION_PIPELINE_STATE_CREATE_FLAG_NONE,
-		};
-		pDebugDevice->SetDebugParameter(D3D12_DEBUG_DEVICE_PARAMETER_GPU_BASED_VALIDATION_SETTINGS, &validationSettings, sizeof(validationSettings));
+			D3D12_DEBUG_DEVICE_GPU_BASED_VALIDATION_SETTINGS validationSettings{
+				.MaxMessagesPerCommandList = 256,
+				.DefaultShaderPatchMode	   = D3D12_GPU_BASED_VALIDATION_SHADER_PATCH_MODE_UNGUARDED_VALIDATION,
+				.PipelineStateCreateFlags  = D3D12_GPU_BASED_VALIDATION_PIPELINE_STATE_CREATE_FLAG_NONE,
+			};
+			pDebugDevice->SetDebugParameter(D3D12_DEBUG_DEVICE_PARAMETER_GPU_BASED_VALIDATION_SETTINGS, &validationSettings, sizeof(validationSettings));
+		}
 	}
 
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
