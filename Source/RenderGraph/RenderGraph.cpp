@@ -570,8 +570,6 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 
 			RG_LOG_RESOURCE_EVENT("Executed discard");
 
-			PROFILE_GPU_SCOPE(context.GetCommandList(), "Discard");
-
 			const RGTexture* pTexture = static_cast<const RGTexture*>(barrier.pResource);
 
 			D3D12_RESOURCE_STATES state		  = barrier.DiscardSourceState;

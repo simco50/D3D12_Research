@@ -34,6 +34,7 @@ private:
 		uint32							   Size;
 		uint32							   LastUsedFrame = 0;
 
+		Array<RGPhysicalResource*>			ExternalResources;
 		Array<UniquePtr<RGPhysicalResource>> PhysicalResources;
 		Ref<ID3D12Heap>					   pHeap;
 

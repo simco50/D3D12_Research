@@ -182,13 +182,10 @@ bool RGAllocator::TryPlaceResourceInHeap(RGHeap& heap, RGResource* pResource) co
 	heap.FreeRanges.push_back({ 0, true });
 
 	// If an existing resource is referenced externally, mark the range as occupied
-	for (std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
+	for (RGPhysicalResource* pPhysicalResource : heap.ExternalResources)
 	{
-		if (pPhysicalResource->pResource->GetNumRefs() > 1)
-		{
-			heap.FreeRanges.push_back({ pPhysicalResource->Offset, false });
-			heap.FreeRanges.push_back({ pPhysicalResource->Offset + pPhysicalResource->Size, true });
-		}
+		heap.FreeRanges.push_back({ pPhysicalResource->Offset, false });
+		heap.FreeRanges.push_back({ pPhysicalResource->Offset + pPhysicalResource->Size, true });
 	}
 
 	// For each allocated resource, if the lifetime overlaps, mark it as "not free"
@@ -268,7 +265,19 @@ void RGAllocator::AllocateResources(Array<RGResource*>& resources, Array<RGHeap>
 
 	// Clear all allocations and mark imported resources as allocations
 	for (RGHeap& heap : m_Heaps)
+	{
 		heap.Allocations.clear();
+		heap.ExternalResources.clear();
+
+		// If an existing resource is referenced externally, mark the resource as external
+		for (std::unique_ptr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
+		{
+			if (pPhysicalResource->pResource->GetNumRefs() > 1)
+			{
+				heap.ExternalResources.push_back(pPhysicalResource.get());
+			}
+		}
+	}
 
 	for (RGResource* pResource : resources)
 	{
@@ -346,24 +355,28 @@ void RGAllocator::AllocateResources(Array<RGResource*>& resources, Array<RGHeap>
 	}
 
 #ifdef _DEBUG
-	// Validation
-	for (RGHeap& heap : heaps)
 	{
-		for (const RGResource* pResource : heap.Allocations)
-		{
-			// Validate whether all allocated resources don't overlap both memory range AND lifetime.
-			// If that happens, something in the placement must've gone wrong.
-			auto it = std::find_if(heap.Allocations.begin(), heap.Allocations.end(), [pResource](const RGResource* pOther) {
-				if (pOther == pResource)
-					return false;
-				return pResource->GetLifetime().Overlaps(pOther->GetLifetime()) && pResource->GetMemoryRange().Overlaps(pOther->GetMemoryRange());
-			});
+		PROFILE_CPU_SCOPE("Validate");
 
-			RGResource* pOverlappingResource = it == heap.Allocations.end() ? nullptr : *it;
-			gAssert(pOverlappingResource == nullptr,
-					"Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu]) overlaps with Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu])",
-					pResource->pName, pResource->GetLifetime().Begin, pResource->GetLifetime().End, pResource->GetMemoryRange().Begin, pResource->GetMemoryRange().End,
-					pOverlappingResource->pName, pOverlappingResource->GetLifetime().Begin, pOverlappingResource->GetLifetime().End, pOverlappingResource->GetMemoryRange().Begin, pOverlappingResource->GetMemoryRange().End);
+		// Validation
+		for (RGHeap& heap : heaps)
+		{
+			for (const RGResource* pResource : heap.Allocations)
+			{
+				// Validate whether all allocated resources don't overlap both memory range AND lifetime.
+				// If that happens, something in the placement must've gone wrong.
+				auto it = std::find_if(heap.Allocations.begin(), heap.Allocations.end(), [pResource](const RGResource* pOther) {
+					if (pOther == pResource)
+						return false;
+					return pResource->GetLifetime().Overlaps(pOther->GetLifetime()) && pResource->GetMemoryRange().Overlaps(pOther->GetMemoryRange());
+				});
+
+				RGResource* pOverlappingResource = it == heap.Allocations.end() ? nullptr : *it;
+				gAssert(pOverlappingResource == nullptr,
+						"Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu]) overlaps with Resource '%s' (Lifetime: [%d, %d], Memory: [%llu, %llu])",
+						pResource->pName, pResource->GetLifetime().Begin, pResource->GetLifetime().End, pResource->GetMemoryRange().Begin, pResource->GetMemoryRange().End,
+						pOverlappingResource->pName, pOverlappingResource->GetLifetime().Begin, pOverlappingResource->GetLifetime().End, pOverlappingResource->GetMemoryRange().Begin, pOverlappingResource->GetMemoryRange().End);
+			}
 		}
 	}
 #endif
