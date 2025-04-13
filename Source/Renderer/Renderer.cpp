@@ -46,8 +46,6 @@
 #include <IconsFontAwesome4.h>
 #include "RenderGraph/RenderGraphAllocator.h"
 
-RGAllocator gRenderGraphAllocator;
-
 namespace Tweakables
 {
 	// Post processing

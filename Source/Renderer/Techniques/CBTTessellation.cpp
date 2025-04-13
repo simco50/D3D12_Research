@@ -339,8 +339,8 @@ void CBTTessellation::RasterMain(RGGraph& graph, const RenderView* pView, const 
 				if (cbtData.pDebugVisualizeTexture)
 				{
 					ImGui::Begin("CBT");
-					ImVec2 size = ImGui::GetAutoSize(ImVec2((float)cbtData.pDebugVisualizeTexture->GetWidth(), (float)cbtData.pDebugVisualizeTexture->GetHeight()));
-					ImGui::Image((ImTextureID)cbtData.pDebugVisualizeTexture.Get(), size);
+					ImVec2 imgSize = ImGui::GetAutoSize(ImVec2((float)cbtData.pDebugVisualizeTexture->GetWidth(), (float)cbtData.pDebugVisualizeTexture->GetHeight()));
+					ImGui::Image((ImTextureID)cbtData.pDebugVisualizeTexture.Get(), imgSize);
 					ImGui::End();
 				}
 
