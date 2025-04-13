@@ -312,11 +312,17 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 	if (options.UseDebugDevice)
 	{
-		Ref<ID3D12Debug> pDebugController;
+		Ref<ID3D12Debug6> pDebugController;
 		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
 		{
 			pDebugController->EnableDebugLayer();
 			E_LOG(Warning, "D3D12 Debug Layer Enabled");
+
+			if (options.UseGPUValidation)
+			{
+				pDebugController->SetEnableGPUBasedValidation(true);
+				E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
+			}
 		}
 	}
 
@@ -330,16 +336,6 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 			pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			pDredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			E_LOG(Warning, "DRED Enabled");
-		}
-	}
-
-	if (options.UseGPUValidation)
-	{
-		Ref<ID3D12Debug1> pDebugController;
-		if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebugController.GetAddressOf()))))
-		{
-			pDebugController->SetEnableGPUBasedValidation(true);
-			E_LOG(Warning, "D3D12 GPU Based Validation Enabled");
 		}
 	}
 
@@ -389,6 +385,20 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 		E_LOG(Warning, "No D3D12 Adapter selected. Falling back to WARP");
 		m_pFactory->EnumWarpAdapter(IID_PPV_ARGS(pAdapter.GetAddressOf()));
 		VERIFY_HR(D3D12CreateDevice(pAdapter, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(m_pDevice.ReleaseAndGetAddressOf())));
+	}
+
+	if (options.UseGPUValidation)
+	{
+		Ref<ID3D12DebugDevice2> pDebugDevice;
+		m_pDevice.As(&pDebugDevice);
+
+		D3D12_DEBUG_DEVICE_GPU_BASED_VALIDATION_SETTINGS validationSettings
+		{
+			.MaxMessagesPerCommandList = 256,
+			.DefaultShaderPatchMode	   = D3D12_GPU_BASED_VALIDATION_SHADER_PATCH_MODE_UNGUARDED_VALIDATION,
+			.PipelineStateCreateFlags  = D3D12_GPU_BASED_VALIDATION_PIPELINE_STATE_CREATE_FLAG_NONE,
+		};
+		pDebugDevice->SetDebugParameter(D3D12_DEBUG_DEVICE_PARAMETER_GPU_BASED_VALIDATION_SETTINGS, &validationSettings, sizeof(validationSettings));
 	}
 
 	D3D::SetObjectName(m_pDevice.Get(), "Main Device");
