@@ -227,6 +227,10 @@ bool RGResourceAllocator::TryPlaceResourceInHeap(RGHeap& heap, RGResource* pReso
 				{
 					pResource->Offset = alignedOffset;
 
+					// Sanity check
+					gAssert(pResource->Offset + pResource->Size <= heap.Size);
+					gAssert(Math::IsAligned(pResource->Offset, pResource->Alignment));
+
 					// Try to find an already existing physical resource that fits the space and description
 					gAssert(heap.pHeap || heap.PhysicalResources.empty(), "Heap can't have physical resources without an allocated heap");
 					for (const UniquePtr<RGPhysicalResource>& pPhysicalResource : heap.PhysicalResources)
@@ -240,10 +244,6 @@ bool RGResourceAllocator::TryPlaceResourceInHeap(RGHeap& heap, RGResource* pReso
 							break;
 						}
 					}
-
-					// Sanity check
-					gAssert(pResource->Offset + pResource->Size <= heap.Size);
-					gAssert(Math::IsAligned(pResource->Offset, pResource->Alignment));
 
 					// Assign the resource and mark the heap as used this frame
 					heap.Allocations.push_back(pResource);
