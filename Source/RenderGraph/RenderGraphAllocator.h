@@ -5,74 +5,124 @@
 #include "IconsFontAwesome4.h"
 #include "RenderGraphDefinitions.h"
 
-class RGResourceAllocator
+class RGHeap;
+
+// Represents a physical resources
+class RGPhysicalResource
 {
-private:
-	// Represents a physical resources
-	struct RGPhysicalResource
+public:
+	Ref<DeviceResource> pResource;
+	uint32				PaddingBegin = 0;
+	uint32				Offset;
+	uint32				Size;
+	uint32				LastUsedFrame = 0;
+	URange				LifeTime;
+	TextureDesc			ResourceTextureDesc;
+	BufferDesc			ResourceBufferDesc;
+	RGHeap*				pHeap = nullptr;
+	bool				IsAllocated = false;
+
+	bool IsCompatible(const RGResource* pOtherResource) const
 	{
-		Ref<DeviceResource> pResource;
+		if (pOtherResource->GetType() == RGResourceType::Texture)
+			return ResourceTextureDesc == static_cast<const RGTexture*>(pOtherResource)->GetDesc();
+		return ResourceBufferDesc == static_cast<const RGBuffer*>(pOtherResource)->GetDesc();
+	}
+};
+
+
+// Represents a physical resource heap
+class RGHeap
+{
+public:
+	RGHeap(GraphicsDevice* pDevice, uint32 size);
+	RGPhysicalResource* AllocateTexture(const char* pName, const TextureDesc& textureDesc);
+	RGPhysicalResource* AllocateBuffer(const char* pName, const BufferDesc& bufferDesc);
+	void				ReleaseResource(RGPhysicalResource* pResource);
+
+	RGPhysicalResource* Find(const DeviceResource* pDeviceResource)
+	{
+		for (UniquePtr<RGPhysicalResource>& pResource : PhysicalResources)
+		{
+			if (pResource->pResource == pDeviceResource)
+				return pResource.get();
+		}
+		return nullptr;
+	}
+
+	friend class RGResourceAllocator;
+
+private:
+	struct Allocation
+	{
+		uint32 Size;
+		uint32 Offset;
+		uint32 PaddingBegin;
+	};
+
+	using RangeIndex						  = uint32;
+	static constexpr RangeIndex sInvalidRange = ~0u;
+
+	struct ResourceRange
+	{
 		uint32				Offset;
 		uint32				Size;
-		uint32				LastUsedFrame = 0;
-		TextureDesc			ResourceTextureDesc;
-		BufferDesc			ResourceBufferDesc;
-
-		bool IsCompatible(const RGResource* pOtherResource) const
-		{
-			if (pOtherResource->GetType() == RGResourceType::Texture)
-				return ResourceTextureDesc == static_cast<const RGTexture*>(pOtherResource)->GetDesc();
-			return ResourceBufferDesc == static_cast<const RGBuffer*>(pOtherResource)->GetDesc();
-		}
+		RangeIndex			PrevRange = sInvalidRange;
+		RangeIndex			NextRange = sInvalidRange;
+		RGPhysicalResource* pResource = nullptr;
 	};
 
-	// Represents a physical resource heap
-	struct RGHeap
+	void Release(const Allocation& allocation, RGPhysicalResource* pResource);
+	bool Allocate(uint32 size, uint32 alignment, Allocation& outAllocation, Array<RGPhysicalResource*>& outOverlaps);
+
+	RangeIndex GetFirstRange() const
 	{
-		uint32							   ID;
-		Array<RGResource*>				   Allocations;
-		uint32							   Size;
-		uint32							   LastUsedFrame = 0;
+		return Ranges[FrontIndex].NextRange;
+	}
 
-		Array<RGPhysicalResource*>			ExternalResources;
-		Array<UniquePtr<RGPhysicalResource>> PhysicalResources;
-		Ref<ID3D12Heap>					   pHeap;
+	RangeIndex InsertRange(RangeIndex prevIndex, RGPhysicalResource* pResource, uint32 offset, uint32 size);
+	void	   RemoveRange(RangeIndex index);
+	RangeIndex NewRange();
+	void	   VerifyState() const;
 
-		// Keep track of which memory ranges in the heap for the lifetime of the current resource are free
-		struct HeapOffset
-		{
-			uint32 Offset	   : 31;
-			uint32 IsFreeBegin : 1;
-		};
-		Array<HeapOffset> FreeRanges;
-	};
+	GraphicsDevice*						 pDevice;
+	Array<ResourceRange>				 Ranges;
+	Array<RangeIndex>					 FreeList;
+	uint32								 FrameIndex	   = 0;
+	RangeIndex							 FrontIndex	   = sInvalidRange;
+	uint32								 AllocatedSize = 0;
+	uint32								 Size;
+	uint32								 LastUsedFrame = 0;
+	Array<UniquePtr<RGPhysicalResource>> PhysicalResources;
+	Ref<ID3D12Heap>						 pHeap;
+};
 
+
+class RGResourceAllocator
+{
 public:
 	void				Init(GraphicsDevice* pDevice);
 	void				Shutdown();
-	void				AllocateResources(Span<RGResource*> graphResources);
+
+	void				AllocateResource(RGResource* pResource);
+	void				ReleaseResource(RGResource* pResource);
+
 	void				Tick();
 	void				ClearAll();
+	void				DrawDebugView(URange lifetimeRange) const;
 
 private:
-	void				ClearUnusedResources(Array<RGHeap>& heaps);
-	RGPhysicalResource* FindExistingResource(const DeviceResource* pResource, RGHeap** pOutHeap);
-	bool				TryPlaceResourceInHeap(RGHeap& heap, RGResource* pResource) const;
-	void				AllocateResources(Array<RGResource*>& resources, Array<RGHeap>& heaps);
+	RGPhysicalResource* FindExistingResource(const DeviceResource* pResource);
 
-	void				DrawDebugView(Span<RGResource*> resources, const Array<RGHeap>& heaps) const;
-
-	GraphicsDevice*		m_pDevice			= nullptr;
-	bool				m_LiveCapture		= true;
-	bool				m_AllocateResources = true;
-	uint32				m_FrameIndex		= 0;
-	Array<RGHeap>		m_Heaps;
-	uint32				m_HeapID = 0;
+	GraphicsDevice*			 m_pDevice			 = nullptr;
+	bool					 m_LiveCapture		 = true;
+	bool					 m_AllocateResources = true;
+	uint32					 m_FrameIndex		 = 0;
+	Array<UniquePtr<RGHeap>> m_Heaps;
 
 	static constexpr uint32 cHeapCleanupLatency		= 3;
 	static constexpr uint32 cResourceCleanupLatency = 120;
-	static constexpr uint32 cHeapAlignment			= 32 * Math::MegaBytesToBytes;
-
+	static constexpr uint32 cHeapAlignment			= 128 * Math::MegaBytesToBytes;
 };
 
 extern RGResourceAllocator gRenderGraphAllocator;

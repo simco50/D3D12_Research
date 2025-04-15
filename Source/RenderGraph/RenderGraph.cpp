@@ -171,17 +171,11 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 	{
 		PROFILE_CPU_SCOPE("Compute Resource Usage");
 
-		RGPassID firstPass(0xFFFF);
-		RGPassID lastPass(0);
-
 		// Tell the resources when they're first/last accessed and apply usage flags
 		for (const RGPass* pPass : m_Passes)
 		{
 			if (pPass->IsCulled)
 				continue;
-
-			firstPass = pPass->ID.GetIndex() < firstPass.GetIndex() ? pPass->ID : firstPass;
-			lastPass  = pPass->ID.GetIndex() > lastPass.GetIndex() ? pPass->ID : lastPass;
 
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
@@ -212,41 +206,10 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 				}
 			}
 		}
-
-		// Extend the lifetime of Imported and Exported resources
-		for (RGResource* pResource : m_Resources)
-		{
-			if (pResource->IsExported)
-			{
-				//pResource->FirstAccess = firstPass;
-				pResource->LastAccess  = lastPass;
-			}
-			if (pResource->IsImported)
-			{
-				pResource->FirstAccess = firstPass;
-				//pResource->LastAccess  = lastPass;
-			}
-		}
 	}
 
 	{
 		PROFILE_CPU_SCOPE("Resource Allocation");
-
-		Array<RGResource*> activeResources;
-		for (RGPass* pPass : m_Passes)
-		{
-			if (pPass->IsCulled)
-				continue;
-
-			for (const RGPass::ResourceAccess& access : pPass->Accesses)
-			{
-				RGResource* pResource = access.pResource;
-				if (std::find(activeResources.begin(), activeResources.end(), pResource) == activeResources.end())
-					activeResources.push_back(pResource);
-			}
-		}
-
-		resourceAllocator.AllocateResources(activeResources);
 
 		for (RGPass* pPass : m_Passes)
 		{
@@ -256,7 +219,11 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 			for (const RGPass::ResourceAccess& access : pPass->Accesses)
 			{
 				// Record resource transition
-				RGResource*			  pResource	 = access.pResource;
+				RGResource* pResource = access.pResource;
+
+				if (pResource->FirstAccess == pPass->ID)
+					resourceAllocator.AllocateResource(pResource);
+
 				D3D12_RESOURCE_STATES afterState = access.Access;
 				DeviceResource*		  pPhysical	 = pResource->GetPhysicalUnsafe();
 				if (pPhysical->UseStateTracking())
@@ -296,8 +263,18 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 					RG_LOG_RESOURCE_EVENT("Recorded aliasing barrier", pPass->pName);
 				}
 			}
+
+			for (const RGPass::ResourceAccess& access : pPass->Accesses)
+			{
+				RGResource* pResource = access.pResource;
+
+				if (pResource->LastAccess == pPass->ID)
+					resourceAllocator.ReleaseResource(pResource);
+			}
 		}
 	}
+
+	resourceAllocator.DrawDebugView(URange(0, (uint32)m_Passes.size()));
 
 	{
 		PROFILE_CPU_SCOPE("Event Resolving");

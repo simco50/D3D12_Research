@@ -51,8 +51,9 @@ namespace Utils
 	};
 
 	template <typename T, typename Fn>
-	void gSwapRemoveIf(Array<T>& arr, Fn fn)
+	uint32 gSwapRemoveIf(Array<T>& arr, Fn fn)
 	{
+		uint32 removed = 0;
 		uint32 i = 0;
 		while (i < arr.size())
 		{
@@ -60,11 +61,13 @@ namespace Utils
 			{
 				std::swap(arr[i], arr.back());
 				arr.pop_back();
+				++removed;
 			}
 			else
 			{
 				++i;
 			}
 		}
+		return removed;
 	}
 }

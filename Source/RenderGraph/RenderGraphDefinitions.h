@@ -7,6 +7,7 @@ class RGGraph;
 class RGPass;
 class RGGraph;
 class RGResource;
+class RGPhysicalResource;
 
 enum class RGResourceType : uint8
 {
@@ -78,7 +79,15 @@ public:
 	RGResourceType		GetType() const				{ return (RGResourceType)Type; }
 	bool				IsAllocated() const			{ return Allocated; }
 	URange				GetLifetime() const			{ return URange(FirstAccess.GetIndex(), LastAccess.GetIndex() + 1); }
-	TRange<uint64>		GetMemoryRange() const		{ return TRange<uint64>(Offset, Offset + Size); }
+	URange				GetLifetimeActual() const
+	{
+		URange lifetime = GetLifetime();
+		if (IsExported)
+			lifetime.End = 0xFFFFFFFF;
+		if (IsImported)
+			lifetime.Begin = 0;
+		return lifetime;
+	}
 
 protected:
 	void SetResource(DeviceResource* resource)
@@ -97,16 +106,13 @@ protected:
 
 	const char*				pName;
 	DeviceResource*			pPhysicalResource = nullptr;
+	RGPhysicalResource*		pRGPhysicalResource = nullptr;
 
 	RGResourceID			ID;
 	uint32					Allocated			: 1;
 	uint32					IsImported			: 1;
 	uint32					IsExported			: 1;
 	uint32					Type				: 1;
-	uint32					Size = 0;
-	uint32					Offset = 0;
-	uint32					Alignment = 0;
-
 
 	// Compile-time data
 	RGPassID				FirstAccess;			///< First non-culled pass that accesses this resource

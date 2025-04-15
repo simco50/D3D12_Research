@@ -96,5 +96,23 @@
 		<DisplayString>{HeapIndex}</DisplayString>
 	</Type>
 
+	<Type Name="RGHeap">
+		<Expand>
+			<CustomListItems MaxItemsPerView="5000" ExcludeView="Test">
+				<Variable Name="rangeIndex" InitialValue="Ranges[FrontIndex].NextRange" />
+				<Size>Ranges.size() - FreeList.size() - 1</Size>
+				<Loop>
+					<Item>Ranges[rangeIndex],na</Item>
+					<Exec>rangeIndex = Ranges[rangeIndex].NextRange</Exec>
+				</Loop>
+			</CustomListItems>
+		</Expand>
+	</Type>
+
+	<Type Name="RGHeap::ResourceRange">
+		<DisplayString>Range [{Offset}, {Offset+Size}]</DisplayString>
+	</Type>
+
+
 
 </AutoVisualizer>
