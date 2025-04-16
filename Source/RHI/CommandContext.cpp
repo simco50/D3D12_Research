@@ -631,7 +631,8 @@ void CommandContext::BeginRenderPass(const RenderPassInfo& renderPassInfo)
 	m_CurrentRenderPassInfo = renderPassInfo;
 
 	Texture* pTargetTexture = renderPassInfo.DepthStencilTarget.pTarget ? renderPassInfo.DepthStencilTarget.pTarget : renderPassInfo.RenderTargets[0].pTarget;
-	SetViewport(FloatRect(0, 0, (float)pTargetTexture->GetWidth(), (float)pTargetTexture->GetHeight()), 0, 1);
+	if (pTargetTexture)
+		SetViewport(FloatRect(0, 0, (float)pTargetTexture->GetWidth(), (float)pTargetTexture->GetHeight()), 0, 1);
 }
 
 void CommandContext::EndRenderPass()

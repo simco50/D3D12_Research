@@ -93,8 +93,12 @@ void DDGI::Execute(RGGraph& graph, const RenderView* pView)
 				graph.Export(pDepthTarget, &ddgi.pDepthHistory);
 
 				RGBuffer* pRayBuffer = graph.Create("DDGI Ray Buffer", BufferDesc::CreateTyped(numProbes * ddgi.MaxNumRays, ResourceFormat::RGBA16_FLOAT));
-				RGBuffer* pProbeStates = RGUtils::CreatePersistent(graph, "DDGI States Buffer", BufferDesc::CreateTyped(numProbes, ResourceFormat::R8_UINT), &ddgi.pProbeStates);
 				RGBuffer* pProbeOffsets = RGUtils::CreatePersistent(graph, "DDGI Probe Offsets", BufferDesc::CreateTyped(numProbes, ResourceFormat::RGBA16_FLOAT), &ddgi.pProbeOffset);
+
+				bool	  newStates	   = false;
+				RGBuffer* pProbeStates = RGUtils::CreatePersistent(graph, "DDGI States Buffer", BufferDesc::CreateTyped(numProbes, ResourceFormat::R8_UINT), &ddgi.pProbeStates, &newStates);
+				if (newStates)
+					RGUtils::AddClearPass(graph, pProbeStates);
 
 				graph.AddPass("Raytrace", RGPassFlag::Compute)
 					.Read(pProbeStates)

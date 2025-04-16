@@ -288,6 +288,8 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 				// If the resource is not imported, it will require an aliasing barrier on the first use
 				if (!pResource->IsImported && pResource->FirstAccess == pPass->ID)
 				{
+					gAssert(D3D::HasWriteResourceState(finalState), "First access should write to the resource");
+
 					RGPass::AliasBarrier barrier;
 					barrier.pResource = pResource;
 
@@ -658,6 +660,15 @@ DeviceResource* RGResources::GetResource(const RGResource* pResource, D3D12_RESO
 
 namespace RGUtils
 {
+	RGPass& AddClearPass(RGGraph& graph, RGBuffer* pBuffer)
+	{
+		return graph.AddPass(Sprintf("Clear [%s]", pBuffer->GetName()).c_str(), RGPassFlag::Raster)
+			.Write(pBuffer)
+			.Bind([=](CommandContext& context, const RGResources& resources) {
+				context.ClearBufferUInt(resources.Get(pBuffer));
+			});
+	}
+
 	RGPass& AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget)
 	{
 		return graph.AddPass(Sprintf("Copy [%s -> %s]", pSource->GetName(), pTarget->GetName()).c_str(), RGPassFlag::Copy)
