@@ -50,6 +50,13 @@ namespace Utils
 		LARGE_INTEGER m_StartTime, m_Frequency;
 	};
 
+	template<typename T>
+	void gSwapRemove(Array<T>& arr, uint32 index)
+	{
+		std::swap(arr[index], arr.back());
+		arr.pop_back();
+	}
+
 	template <typename T, typename Fn>
 	void gSwapRemoveIf(Array<T>& arr, Fn fn)
 	{
@@ -57,14 +64,9 @@ namespace Utils
 		while (i < arr.size())
 		{
 			if (fn(arr[i]))
-			{
-				std::swap(arr[i], arr.back());
-				arr.pop_back();
-			}
+				gSwapRemove(arr, i);
 			else
-			{
 				++i;
-			}
 		}
 	}
 }
