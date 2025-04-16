@@ -8,6 +8,13 @@
 #include "RenderGraph/RenderGraphAllocator.h"
 
 #define RG_TRACK_TRANSITIONS 0
+#define RG_BREAK_ON_TRANSITION 0
+
+#if RG_BREAK_ON_TRANSITION
+#define TRANSITION_BREAK __debugbreak()
+#else
+#define TRANSITION_BREAK
+#endif
 
 #if RG_TRACK_TRANSITIONS
 constexpr static const char* pLogResourceName = "Depth Stencil";
@@ -18,7 +25,16 @@ static bool sDoLogTransition(const RGPass* pPass, const RGResource* pResource)
 	return (strlen(pLogPassName) == 0 || strcmp(pLogPassName, pPass->GetName()) == 0) && (strlen(pLogResourceName) == 0 || strcmp(pLogResourceName, pResource->GetName()) == 0);
 }
 
-#define RG_LOG_RESOURCE_EVENT(fmt, ...) if (sDoLogTransition(pPass, pResource)) E_LOG(Warning, "[%s:%s] " fmt, pPass->GetName(), pResource->GetName(), __VA_ARGS__)
+#define RG_LOG_RESOURCE_EVENT(fmt, ...)                                                          \
+	do                                                                                           \
+	{                                                                                            \
+		if (sDoLogTransition(pPass, pResource))                                                  \
+		{                                                                                        \
+			E_LOG(Warning, "[%s:%s] " fmt, pPass->GetName(), pResource->GetName(), __VA_ARGS__); \
+			TRANSITION_BREAK;                                                                    \
+		}                                                                                        \
+	} while (0)
+
 #else
 #define RG_LOG_RESOURCE_EVENT(fmt, ...) do { UNUSED_VAR(pResource); UNUSED_VAR(pPass); } while (0)
 #endif
@@ -257,20 +273,16 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 			{
 				// Record resource transition
 				RGResource*			  pResource	 = access.pResource;
-				D3D12_RESOURCE_STATES afterState = access.Access;
+				uint32				  subResource = 0xFFFFFFFF;
+				D3D12_RESOURCE_STATES finalState = access.Access;
+				D3D12_RESOURCE_STATES afterState = finalState;
 				DeviceResource*		  pPhysical	 = pResource->GetPhysicalUnsafe();
+
+				D3D12_RESOURCE_STATES currentState = D3D12_RESOURCE_STATE_UNKNOWN; 
 				if (pPhysical->UseStateTracking())
 				{
-					uint32 subResource = 0xFFFFFFFF;
-					D3D12_RESOURCE_STATES beforeState = pPhysical->GetResourceState(subResource);
-
-					if (D3D::NeedsTransition(beforeState, afterState, true))
-					{
-						RG_LOG_RESOURCE_EVENT("Recorded transition from %s to %s", D3D::ResourceStateToString(beforeState), D3D::ResourceStateToString(afterState));
-
-						pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = beforeState, .AfterState = afterState, .SubResource = subResource });
-						pPhysical->SetResourceState(afterState, subResource);
-					}
+					currentState = pPhysical->GetResourceState(subResource);
+					D3D::NeedsTransition(currentState, finalState, true);
 				}
 
 				// If the resource is not imported, it will require an aliasing barrier on the first use
@@ -285,15 +297,41 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 						RGTexture* pTexture = static_cast<RGTexture*>(access.pResource);
 						if (EnumHasAnyFlags(pTexture->GetDesc().Flags, TextureFlag::RenderTarget | TextureFlag::DepthStencil))
 						{
-							barrier.NeedsDiscard	   = true;
-							barrier.DiscardSourceState = afterState;
+							barrier.NeedsDiscard = true;
 
-							RG_LOG_RESOURCE_EVENT("Recorder discard", pPass->pName);
+							// Resource must be transitioned to a discardable state
+							afterState = EnumHasAnyFlags(pTexture->GetDesc().Flags, TextureFlag::RenderTarget) ? D3D12_RESOURCE_STATE_RENDER_TARGET : D3D12_RESOURCE_STATE_DEPTH_WRITE;
+							D3D::NeedsTransition(currentState, afterState, true);
+
+							// Store the transition to do after the discard to put the resource in the final desired state
+							finalState = access.Access;
+							if (D3D::NeedsTransition(afterState, finalState, true))
+							{
+								barrier.PostDiscardBeforeState = afterState;
+								barrier.PostDiscardAfterState  = finalState;
+							}
+
+							RG_LOG_RESOURCE_EVENT("Recorded discard transition from %s to %s", D3D::ResourceStateToString(barrier.DiscardSourceState), D3D::ResourceStateToString(barrier.DiscardFinalState));
+							RG_LOG_RESOURCE_EVENT("Recorded discard");
 						}
 					}
 					pPass->AliasBarriers.push_back(barrier);
 
 					RG_LOG_RESOURCE_EVENT("Recorded aliasing barrier", pPass->pName);
+				}
+
+
+				if (pPhysical->UseStateTracking())
+				{
+					if (D3D::NeedsTransition(currentState, afterState, true))
+					{
+						RG_LOG_RESOURCE_EVENT("Recorded transition from %s to %s", D3D::ResourceStateToString(currentState), D3D::ResourceStateToString(afterState));
+
+						gAssert(currentState != D3D12_RESOURCE_STATE_UNKNOWN);
+						pPass->Transitions.push_back({ .pResource = pResource, .BeforeState = currentState, .AfterState = afterState, .SubResource = subResource });
+					}
+
+					pPhysical->SetResourceState(finalState, subResource);
 				}
 			}
 		}
@@ -551,7 +589,7 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 
 	for (const RGPass::ResourceTransition& transition : pPass->Transitions)
 	{
-		RGResource* pResource = transition.pResource;
+		const RGResource* pResource = transition.pResource;
 
 		gAssert(pResource->GetPhysicalUnsafe(), "Resource was not allocated during the graph compile phase");
 
@@ -567,18 +605,14 @@ void RGGraph::PrepareResources(const RGPass* pPass, CommandContext& context) con
 		if (barrier.NeedsDiscard)
 		{
 			const RGResource* pResource = barrier.pResource;
-
 			RG_LOG_RESOURCE_EVENT("Executed discard");
 
+			gAssert(pResource->GetType() == RGResourceType::Texture);
 			const RGTexture* pTexture = static_cast<const RGTexture*>(barrier.pResource);
-
-			D3D12_RESOURCE_STATES state		  = barrier.DiscardSourceState;
-			D3D12_RESOURCE_STATES targetState = EnumHasAllFlags(pTexture->GetDesc().Flags, TextureFlag::RenderTarget) ? D3D12_RESOURCE_STATE_RENDER_TARGET : D3D12_RESOURCE_STATE_DEPTH_WRITE;
-
-			context.InsertResourceBarrier(pTexture->GetPhysicalUnsafe(), state, targetState);
-			context.FlushResourceBarriers();
 			context.GetCommandList()->DiscardResource(pTexture->GetPhysicalUnsafe()->GetResource(), nullptr);
-			context.InsertResourceBarrier(pTexture->GetPhysicalUnsafe(), targetState, state);
+
+			if (barrier.PostDiscardBeforeState != D3D12_RESOURCE_STATE_UNKNOWN)
+				context.InsertResourceBarrier(pTexture->GetPhysicalUnsafe(), barrier.PostDiscardBeforeState, barrier.PostDiscardAfterState);
 		}
 	}
 }

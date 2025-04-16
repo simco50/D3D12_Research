@@ -221,7 +221,7 @@ private:
 
 	struct ResourceTransition
 	{
-		RGResource*				pResource;
+		const RGResource*		pResource;
 		D3D12_RESOURCE_STATES	BeforeState;
 		D3D12_RESOURCE_STATES	AfterState;
 		uint32					SubResource;
@@ -229,9 +229,10 @@ private:
 
 	struct AliasBarrier
 	{
-		RGResource*			  pResource			 = nullptr;
-		bool				  NeedsDiscard		 = false;
-		D3D12_RESOURCE_STATES DiscardSourceState = D3D12_RESOURCE_STATE_UNKNOWN;
+		const RGResource*			  pResource				 = nullptr;
+		bool				  NeedsDiscard			 = false;
+		D3D12_RESOURCE_STATES PostDiscardBeforeState = D3D12_RESOURCE_STATE_UNKNOWN;
+		D3D12_RESOURCE_STATES PostDiscardAfterState	 = D3D12_RESOURCE_STATE_UNKNOWN;
 	};
 
 	const char*						pName;

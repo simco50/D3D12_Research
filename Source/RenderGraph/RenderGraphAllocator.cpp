@@ -518,7 +518,7 @@ void RGResourceAllocator::DrawDebugView(Span<RGResource*> resources, const Array
 
 			ImVec2 cursor = ImGui::GetCursorScreenPos();
 
-			float heapHeight   = log2f((float)heap.Size + 1);
+			float heapHeight   = 5 * log2f((float)heap.Size + 1);
 			auto  GetBarHeight = [&](uint64 size) { return (float)size / heap.Size * heapHeight; };
 
 			pDraw->AddRectFilled(cursor, cursor + ImVec2(widthScale * (lastPassID + 1), heapHeight), ImColor(1.0f, 1.0f, 1.0f, 0.2f));
