@@ -229,7 +229,7 @@ private:
 
 	struct AliasBarrier
 	{
-		const RGResource*			  pResource				 = nullptr;
+		const RGResource*	  pResource				 = nullptr;
 		bool				  NeedsDiscard			 = false;
 		D3D12_RESOURCE_STATES PostDiscardBeforeState = D3D12_RESOURCE_STATE_UNKNOWN;
 		D3D12_RESOURCE_STATES PostDiscardAfterState	 = D3D12_RESOURCE_STATE_UNKNOWN;
@@ -260,11 +260,11 @@ private:
 
 struct RGGraphOptions
 {
-	bool   ResourceAliasing		= true;
-	bool   Jobify				= true;
-	bool   SingleThread			= false;
-	bool   PassCulling			= true;
-	uint32 CommandlistGroupSize = 10;
+	bool   Jobify				 = true;
+	bool   SingleThread			 = false;
+	bool   PassCulling			 = true;
+	bool   TrashAliasedResources = false;
+	uint32 CommandlistGroupSize	 = 10;
 };
 
 class RGGraph
@@ -428,6 +428,7 @@ private:
 
 namespace RGUtils
 {
+	RGPass&		AddClearPass(RGGraph& graph, RGBuffer* pBuffer);
 	RGPass&		AddCopyPass(RGGraph& graph, RGResource* pSource, RGResource* pTarget);
 	RGPass&		AddResolvePass(RGGraph& graph, RGTexture* pSource, RGTexture* pTarget);
 	RGBuffer*	CreatePersistent(RGGraph& graph, const char* pName, const BufferDesc& bufferDesc, Ref<Buffer>* pStorageTarget, bool* pOutIsNew = nullptr);

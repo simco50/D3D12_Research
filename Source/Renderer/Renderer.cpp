@@ -94,6 +94,7 @@ namespace Tweakables
 
 	// Render Graph
 	ConsoleVariable gRenderGraphJobify("r.RenderGraph.Jobify", true);
+	ConsoleVariable gRenderGraphTrashAliasedResources("r.RenderGraph.TrashAliasedResources", false);
 	ConsoleVariable gRenderGraphPassCulling("r.RenderGraph.PassCulling", true);
 	ConsoleVariable gRenderGraphPassGroupSize("r.RenderGraph.PassGroupSize", 10);
 	ConsoleVariable gRenderGraphSingleThread("r.RenderGraph.SingleThread", false);
@@ -1254,10 +1255,11 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 		}
 
 		RGGraphOptions graphOptions;
-		graphOptions.Jobify				  = Tweakables::gRenderGraphJobify;
-		graphOptions.PassCulling		  = Tweakables::gRenderGraphPassCulling;
-		graphOptions.CommandlistGroupSize = Tweakables::gRenderGraphPassGroupSize;
-		graphOptions.SingleThread		  = Tweakables::gRenderGraphSingleThread;
+		graphOptions.Jobify				   = Tweakables::gRenderGraphJobify;
+		graphOptions.PassCulling		   = Tweakables::gRenderGraphPassCulling;
+		graphOptions.TrashAliasedResources = Tweakables::gRenderGraphTrashAliasedResources;
+		graphOptions.CommandlistGroupSize  = Tweakables::gRenderGraphPassGroupSize;
+		graphOptions.SingleThread		   = Tweakables::gRenderGraphSingleThread;
 
 		// Compile graph
 		graph.Compile(gRenderGraphAllocator, graphOptions);
@@ -2097,6 +2099,7 @@ void Renderer::DrawImGui()
 		{
 			ImGui::Checkbox("Jobify", &Tweakables::gRenderGraphJobify.Get());
 			ImGui::Checkbox("Single Thread", &Tweakables::gRenderGraphSingleThread.Get());
+			ImGui::Checkbox("Trash Aliased Resources", &Tweakables::gRenderGraphTrashAliasedResources.Get());
 			ImGui::Checkbox("Pass Culling", &Tweakables::gRenderGraphPassCulling.Get());
 			ImGui::SliderInt("Pass Group Size", &Tweakables::gRenderGraphPassGroupSize.Get(), 5, 50);
 		}

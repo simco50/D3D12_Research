@@ -140,10 +140,10 @@ public:
 	Ref<PipelineState>			CreatePipeline(const PipelineStateInitializer& psoDesc);
 	Ref<PipelineState>			CreateComputePipeline(RootSignature* pRootSignature, const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
 	Ref<StateObject>			CreateStateObject(const StateObjectInitializer& stateDesc);
-	BufferView					CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc);
-	RWBufferView				CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc);
-	TextureView					CreateSRV(Texture* pTexture, const TextureSRVDesc& desc);
-	RWTextureView				CreateUAV(Texture* pTexture, const TextureUAVDesc& desc);
+	BufferView					CreateSRV(const Buffer* pBuffer, const BufferSRVDesc& desc);
+	RWBufferView				CreateUAV(const Buffer* pBuffer, const BufferUAVDesc& desc);
+	TextureView					CreateSRV(const Texture* pTexture, const TextureSRVDesc& desc);
+	RWTextureView				CreateUAV(const Texture* pTexture, const TextureUAVDesc& desc);
 	Ref<CommandSignature>		CreateCommandSignature(const CommandSignatureInitializer& signatureDesc, const char* pName, RootSignature* pRootSignature = nullptr);
 
 	void						DeferReleaseObject(ID3D12Object* pObject);

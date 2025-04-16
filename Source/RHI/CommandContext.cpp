@@ -272,26 +272,45 @@ void CommandContext::ClearBufferFloat(const Buffer* pBuffer, float value)
 {
 	gAssert(pBuffer);
 	DescriptorHandle gpuHandle = pBuffer->GetUAV();
+	DescriptorHandle dynamicGPUHandle;
+	if (!gpuHandle.IsValid() || pBuffer->GetDesc().IsStructured())
+	{
+		dynamicGPUHandle = GetParent()->CreateUAV(pBuffer, BufferUAVDesc(ResourceFormat::Unknown, true));
+		gpuHandle		 = dynamicGPUHandle;
+	}
 	gAssert(gpuHandle.IsValid());
-	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
 	float values[4] = { value, value, value, value };
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 	m_pCommandList->ClearUnorderedAccessViewFloat(ptr.GPUHandle, ptr.CPUOpaqueHandle, pBuffer->GetResource(), values, 0, nullptr);
+
+	if (dynamicGPUHandle.IsValid())
+		GetParent()->ReleaseResourceDescriptor(dynamicGPUHandle);
+
 }
 
 void CommandContext::ClearBufferUInt(const Buffer* pBuffer, uint32 value)
 {
 	gAssert(pBuffer);
 	DescriptorHandle gpuHandle = pBuffer->GetUAV();
+	DescriptorHandle dynamicGPUHandle;
+	if (!gpuHandle.IsValid() || pBuffer->GetDesc().IsStructured())
+	{
+		dynamicGPUHandle = GetParent()->CreateUAV(pBuffer, BufferUAVDesc(ResourceFormat::Unknown, true));
+		gpuHandle		 = dynamicGPUHandle;
+	}
 	gAssert(gpuHandle.IsValid());
-	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 
 	FlushResourceBarriers();
 
 	uint32 values[4] = { value, value, value, value };
+	DescriptorPtr ptr = GetParent()->FindResourceDescriptorPtr(gpuHandle);
 	m_pCommandList->ClearUnorderedAccessViewUint(ptr.GPUHandle, ptr.CPUOpaqueHandle, pBuffer->GetResource(), values, 0, nullptr);
+
+	if (dynamicGPUHandle.IsValid())
+		GetParent()->ReleaseResourceDescriptor(dynamicGPUHandle);
 }
 
 void CommandContext::ClearTextureUInt(const Texture* pTexture, const Vector4u& values)

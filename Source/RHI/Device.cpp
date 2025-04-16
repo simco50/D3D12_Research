@@ -420,6 +420,7 @@ GraphicsDevice::GraphicsDevice(GraphicsDeviceOptions options)
 
 		D3D12_MESSAGE_ID ignoreIDs[] = {
 			D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+			D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE,
 		};
 
 		D3D12_INFO_QUEUE_FILTER filter{};
@@ -870,7 +871,7 @@ Ref<StateObject> GraphicsDevice::CreateStateObject(const StateObjectInitializer&
 	return pSO;
 }
 
-BufferView GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)
+BufferView GraphicsDevice::CreateSRV(const Buffer* pBuffer, const BufferSRVDesc& desc)
 {
 	gAssert(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
@@ -914,7 +915,7 @@ BufferView GraphicsDevice::CreateSRV(Buffer* pBuffer, const BufferSRVDesc& desc)
 	return BufferView(descriptor);
 }
 
-RWBufferView GraphicsDevice::CreateUAV(Buffer* pBuffer, const BufferUAVDesc& desc)
+RWBufferView GraphicsDevice::CreateUAV(const Buffer* pBuffer, const BufferUAVDesc& desc)
 {
 	gAssert(pBuffer);
 	const BufferDesc& bufferDesc = pBuffer->GetDesc();
@@ -945,7 +946,7 @@ RWBufferView GraphicsDevice::CreateUAV(Buffer* pBuffer, const BufferUAVDesc& des
 	return RWBufferView(descriptor);
 }
 
-TextureView GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& desc)
+TextureView GraphicsDevice::CreateSRV(const Texture* pTexture, const TextureSRVDesc& desc)
 {
 	gAssert(pTexture);
 	const TextureDesc& textureDesc = pTexture->GetDesc();
@@ -1029,7 +1030,7 @@ TextureView GraphicsDevice::CreateSRV(Texture* pTexture, const TextureSRVDesc& d
 	return TextureView(descriptor);
 }
 
-RWTextureView GraphicsDevice::CreateUAV(Texture* pTexture, const TextureUAVDesc& desc)
+RWTextureView GraphicsDevice::CreateUAV(const Texture* pTexture, const TextureUAVDesc& desc)
 {
 	gAssert(pTexture);
 	const TextureDesc& textureDesc = pTexture->GetDesc();

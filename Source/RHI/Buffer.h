@@ -88,6 +88,11 @@ struct BufferDesc
 			Format == rhs.Format &&
 			EnumHasAllFlags(Flags, rhs.Flags);
 	}
+
+	bool IsStructured() const
+	{
+		return Format == ResourceFormat::Unknown && !EnumHasAnyFlags(Flags, BufferFlag::ByteAddress);
+	}
 };
 
 
