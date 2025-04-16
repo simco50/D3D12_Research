@@ -1239,6 +1239,11 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 							});
 				}
 			}
+			else
+			{
+				graph.AddPass("Clear Depth", RGPassFlag::Raster)
+					.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::Clear);
+			}
 
 			DebugRenderer::Get()->Render(graph, pView, sceneTextures.pColorTarget, sceneTextures.pDepth);
 
