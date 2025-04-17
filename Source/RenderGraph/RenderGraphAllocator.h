@@ -45,6 +45,7 @@ private:
 		bool						TryAllocate(GraphicsDevice* pDevice, uint32 frameIndex, RGResource* pResource);
 		void						FreeUnused(uint32 frameIndex);
 		bool						IsUnused(uint32 frameIndex) const;
+		void						UpdateExternals();
 
 		uint32						GetUsedSize() const;
 		uint32						GetSize() const { return Size; }

@@ -232,7 +232,7 @@ bool RGResourceAllocator::RGHeap::IsUnused(uint32 frameIndex) const
 		// Can't delete a heap if it has resources inside it that are still references
 		for (const RGPhysicalResource* pRes : Allocations)
 		{
-			if (pRes->pResource->GetNumRefs() > 1)
+			if (pRes->IsExternal)
 				return false;
 		}
 		return true;
@@ -249,7 +249,6 @@ void RGResourceAllocator::RGHeap::FreeUnused(uint32 frameIndex)
 	{
 		// If an allocation has no external refs, it can be forfeited and moved back into the cache
 		RGPhysicalResource* pResource = Allocations[i];
-		pResource->IsExternal = pResource->pResource->GetNumRefs() > 1;
 		if (!pResource->IsExternal)
 		{
 			Utils::gSwapRemove(Allocations, i);
@@ -269,6 +268,17 @@ void RGResourceAllocator::RGHeap::FreeUnused(uint32 frameIndex)
 }
 
 
+void RGResourceAllocator::RGHeap::UpdateExternals()
+{
+	for (uint32 i = 0; i < (uint32)Allocations.size(); ++i)
+	{
+		// If an allocation has no external refs, it can be forfeited
+		RGPhysicalResource* pResource = Allocations[i];
+		pResource->IsExternal		  = pResource->pResource->GetNumRefs() > 1;
+	}
+}
+
+
 void RGResourceAllocator::Init(GraphicsDevice* pDevice)
 {
 	m_pDevice = pDevice;
@@ -285,6 +295,9 @@ void RGResourceAllocator::AllocateResources(Span<RGResource*> graphResources)
 {
 	PROFILE_CPU_SCOPE();
 
+	for (const UniquePtr<RGHeap>& pHeap : m_Heaps)
+		pHeap->UpdateExternals();
+
 	Array<RGResource*> resources = graphResources.Copy();
 
 	// Compute Size/Alignment requirement of each resource
@@ -297,10 +310,10 @@ void RGResourceAllocator::AllocateResources(Span<RGResource*> graphResources)
 	}
 
 	// If the resource is imported, find whether the physical resource was allocated by this allocated to mark it as used
-	// Also record the lifetime so that other resources may alias with it
+	// Also assign the correct lifetime
 	for (RGResource* pResource : resources)
 	{
-		if (pResource->IsImported)
+		if (pResource->IsImported && pResource->IsAccessed)
 		{
 			gAssert(pResource->pPhysicalResource);
 
@@ -332,7 +345,7 @@ void RGResourceAllocator::AllocateResources(Span<RGResource*> graphResources)
 
 	for (RGResource* pResource : resources)
 	{
-		if (pResource->IsAllocated())
+		if (pResource->IsAllocated() || !pResource->IsAccessed)
 			continue;
 
 		gAssert(pResource->Size != 0);
@@ -403,6 +416,9 @@ void RGResourceAllocator::ClearUnusedResources()
 {
 	PROFILE_CPU_SCOPE();
 
+	for (const UniquePtr<RGHeap>& pHeap : m_Heaps)
+		pHeap->UpdateExternals();
+
 	Utils::gSwapRemoveIf(m_Heaps, [this](const UniquePtr<RGHeap>& pHeap) {
 		return pHeap->IsUnused(m_FrameIndex);
 	});
@@ -470,7 +486,8 @@ void RGResourceAllocator::DrawDebugView(bool& enabled) const
 			totalAliasedResourcesSize += pHeap->GetUsedSize();
 			for (RGPhysicalResource* pResource : pHeap->GetAllocations())
 			{
-				lastPassID = Math::Max(pResource->Lifetime.End, lastPassID);
+				if (!pResource->IsExternal)
+					lastPassID = Math::Max(pResource->Lifetime.End, lastPassID);
 				totalResourcesSize += pResource->Size;
 			}
 		}
@@ -514,9 +531,6 @@ void RGResourceAllocator::DrawDebugView(bool& enabled) const
 			for (const RGPhysicalResource* pResource : pHeap->GetAllocations())
 			{
 				URange lifetime = pResource->Lifetime;
-				if (pResource->IsExternal)
-					lifetime = URange(0, lastPassID);
-
 				ImRect barRect(
 					cursor + ImVec2(widthScale * lifetime.Begin, GetBarHeight(pResource->Offset)),
 					cursor + ImVec2(widthScale * lifetime.End, GetBarHeight(pResource->Size + pResource->Offset)));
@@ -531,6 +545,7 @@ void RGResourceAllocator::DrawDebugView(bool& enabled) const
 						color.Value.z *= 1.5f;
 						ImGui::Text("Name: %s", pResource->pResource->GetName().c_str());
 						ImGui::Text("Size: %s", Math::PrettyPrintDataSize(pResource->Size).c_str());
+						ImGui::Text("Resource: %p", pResource);
 
 						ImGui::EndTooltip();
 					}

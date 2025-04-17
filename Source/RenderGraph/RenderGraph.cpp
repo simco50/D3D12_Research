@@ -204,6 +204,7 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 				RGResource* pResource  = access.pResource;
 				pResource->FirstAccess = pResource->FirstAccess.IsValid() ? pResource->FirstAccess : pPass->ID;
 				pResource->LastAccess  = pPass->ID;
+				pResource->IsAccessed  = true;
 
 				D3D12_RESOURCE_STATES state = access.Access;
 				if (pResource->GetType() == RGResourceType::Buffer)
@@ -248,21 +249,14 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 	{
 		PROFILE_CPU_SCOPE("Resource Allocation");
 
-		Array<RGResource*> activeResources;
-		for (RGPass* pPass : m_Passes)
-		{
-			if (pPass->IsCulled)
-				continue;
+		// Release refs of export targets
+		// If there is only one ref to the export target, that means nothing else still needs this resource and it can be returned to the allocator
+		for (ExportedTexture& exportResource : m_ExportTextures)
+			*exportResource.pTarget = nullptr;
+		for (ExportedBuffer& exportResource : m_ExportBuffers)
+			*exportResource.pTarget = nullptr;
 
-			for (const RGPass::ResourceAccess& access : pPass->Accesses)
-			{
-				RGResource* pResource = access.pResource;
-				if (std::find(activeResources.begin(), activeResources.end(), pResource) == activeResources.end())
-					activeResources.push_back(pResource);
-			}
-		}
-
-		resourceAllocator.AllocateResources(activeResources);
+		resourceAllocator.AllocateResources(m_Resources);
 
 		for (RGPass* pPass : m_Passes)
 		{

@@ -63,7 +63,7 @@ public:
 	friend class RGResourceAllocator;
 
 	RGResource(const char* pName, RGResourceID id, RGResourceType type, DeviceResource* pPhysicalResource = nullptr)
-		: pName(pName), ID(id), IsImported(!!pPhysicalResource), IsExported(false), Type((uint32)type), pPhysicalResource(nullptr)
+		: pName(pName), ID(id), IsImported(!!pPhysicalResource), IsExported(false), Type((uint32)type), pPhysicalResource(nullptr), IsAccessed(false)
 	{
 		if (pPhysicalResource)
 			SetResource(pPhysicalResource);
@@ -92,6 +92,7 @@ protected:
 	RGResourceID			ID;
 	uint32					IsImported			: 1;
 	uint32					IsExported			: 1;
+	uint32					IsAccessed			: 1;
 	uint32					Type				: 1;
 
 
