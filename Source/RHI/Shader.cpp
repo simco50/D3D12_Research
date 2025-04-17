@@ -8,6 +8,7 @@
 #include "D3D.h"
 #include "Core/Stream.h"
 #include "Core/Profiler.h"
+#include "Core/Utils.h"
 
 namespace ShaderCompiler
 {

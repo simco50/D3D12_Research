@@ -14,6 +14,7 @@
 #include "pix3.h"
 #include "dxgidebug.h"
 #include "Core/Commandline.h"
+#include "Core/Callstack.h"
 
 // Setup the Agility D3D12 SDK
 extern "C" { _declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_SDK_VERSION; }
@@ -580,53 +581,6 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, const char* 
 
 Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, Span<D3D12_SUBRESOURCE_DATA> initData)
 {
-	auto GetResourceDesc = [](const TextureDesc& textureDesc)
-	{
-		DXGI_FORMAT format = D3D::ConvertFormat(textureDesc.Format);
-
-		D3D12_RESOURCE_DESC desc{};
-		switch (textureDesc.Type)
-		{
-		case TextureType::Texture1D:
-		case TextureType::Texture1DArray:
-			desc = CD3DX12_RESOURCE_DESC::Tex1D(format, textureDesc.Width, (uint16)textureDesc.ArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
-			break;
-		case TextureType::Texture2D:
-		case TextureType::Texture2DArray:
-			desc = CD3DX12_RESOURCE_DESC::Tex2D(format, textureDesc.Width, textureDesc.Height, (uint16)textureDesc.ArraySize, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
-			break;
-		case TextureType::TextureCube:
-		case TextureType::TextureCubeArray:
-			desc = CD3DX12_RESOURCE_DESC::Tex2D(format, textureDesc.Width, textureDesc.Height, (uint16)textureDesc.ArraySize * 6, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
-			break;
-		case TextureType::Texture3D:
-			desc = CD3DX12_RESOURCE_DESC::Tex3D(format, textureDesc.Width, textureDesc.Height, (uint16)textureDesc.Depth, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
-			break;
-		default:
-			gUnreachable();
-			break;
-		}
-
-		if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::UnorderedAccess))
-		{
-			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		}
-		if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::RenderTarget))
-		{
-			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-		}
-		if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::DepthStencil))
-		{
-			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-			if (!EnumHasAnyFlags(textureDesc.Flags, TextureFlag::ShaderResource))
-			{
-				//I think this can be a significant optimization on some devices because then the depth buffer can never be (de)compressed
-				desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-			}
-		}
-		return desc;
-	};
-
 	D3D12_RESOURCE_STATES resourceState = D3D12_RESOURCE_STATE_COMMON;
 	gAssert(EnumHasAllFlags(desc.Flags, TextureFlag::RenderTarget | TextureFlag::DepthStencil) == false);
 
@@ -650,7 +604,7 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 		pClearValue = &clearValue;
 	}
 
-	D3D12_RESOURCE_DESC resourceDesc = GetResourceDesc(desc);
+	D3D12_RESOURCE_DESC resourceDesc = D3D::GetResourceDesc(desc);
 	ID3D12ResourceX* pResource = CreateD3D12Resource(m_pDevice, resourceDesc, D3D12_HEAP_TYPE_DEFAULT, resourceState, pClearValue, pHeap, offset);
 	Texture* pTexture = new Texture(this, desc, pResource);
 	pTexture->SetName(pName);
@@ -727,14 +681,14 @@ Ref<Texture> GraphicsDevice::CreateTexture(const TextureDesc& desc, ID3D12Heap* 
 Ref<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12ResourceX* pSwapchainResource, uint32 index)
 {
 	D3D12_RESOURCE_DESC resourceDesc = pSwapchainResource->GetDesc();
-	TextureDesc desc{
-		.Width = (uint32)resourceDesc.Width,
-		.Height = (uint32)resourceDesc.Height,
-		.Mips = resourceDesc.MipLevels,
-		.SampleCount = resourceDesc.SampleDesc.Count,
-		.Format = ResourceFormat::Unknown,
-		.Flags = TextureFlag::RenderTarget,
-		.ClearBindingValue = ClearBinding(Colors::Black),
+	TextureDesc			desc{
+				.Width			   = (uint32)resourceDesc.Width,
+				.Height			   = (uint32)resourceDesc.Height,
+				.Mips			   = resourceDesc.MipLevels,
+				.SampleCount	   = resourceDesc.SampleDesc.Count,
+				.Format			   = ResourceFormat::Unknown,
+				.Flags			   = TextureFlag::RenderTarget,
+				.ClearBindingValue = ClearBinding(Colors::Black),
 	};
 
 	Texture* pTexture = new Texture(this, desc, pSwapchainResource);
@@ -750,18 +704,8 @@ Ref<Texture> GraphicsDevice::CreateTextureForSwapchain(ID3D12ResourceX* pSwapcha
 
 Ref<Buffer> GraphicsDevice::CreateBuffer(const BufferDesc& desc, ID3D12Heap* pHeap, uint64 offset, const char* pName, const void* pInitData)
 {
-	auto GetResourceDesc = [](const BufferDesc& bufferDesc)
-	{
-		D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferDesc.Size, D3D12_RESOURCE_FLAG_NONE);
-		if (EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::UnorderedAccess))
-			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		if (EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::AccelerationStructure))
-			desc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
-		return desc;
-	};
-
-	D3D12_RESOURCE_DESC resourceDesc = GetResourceDesc(desc);
-	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT;
+	D3D12_RESOURCE_DESC	  resourceDesc = D3D::GetResourceDesc(desc);
+	D3D12_HEAP_TYPE		  heapType	   = D3D12_HEAP_TYPE_DEFAULT;
 	D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_UNKNOWN;
 
 	if (EnumHasAnyFlags(desc.Flags, BufferFlag::Readback))

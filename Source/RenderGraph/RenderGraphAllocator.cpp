@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "RenderGraphAllocator.h"
 #include "Core/Profiler.h"
+#include "Core/Utils.h"
 #include "RHI/Device.h"
 
 #include <imgui_internal.h>
@@ -17,66 +18,13 @@ static D3D12_RESOURCE_DESC sGetResourceDesc(const RGResource* pResource)
 	{
 		const RGTexture*   pTexture = (RGTexture*)pResource;
 		const TextureDesc& desc		= pTexture->GetDesc();
-
-		auto GetResourceDesc = [](const TextureDesc& textureDesc) {
-			DXGI_FORMAT format = D3D::ConvertFormat(textureDesc.Format);
-
-			D3D12_RESOURCE_DESC desc{};
-			switch (textureDesc.Type)
-			{
-			case TextureType::Texture1D:
-			case TextureType::Texture1DArray:
-				desc = CD3DX12_RESOURCE_DESC::Tex1D(format, textureDesc.Width, (uint16)textureDesc.ArraySize, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
-				break;
-			case TextureType::Texture2D:
-			case TextureType::Texture2DArray:
-				desc = CD3DX12_RESOURCE_DESC::Tex2D(format, textureDesc.Width, textureDesc.Height, (uint16)textureDesc.ArraySize, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
-				break;
-			case TextureType::TextureCube:
-			case TextureType::TextureCubeArray:
-				desc = CD3DX12_RESOURCE_DESC::Tex2D(format, textureDesc.Width, textureDesc.Height, (uint16)textureDesc.ArraySize * 6, (uint16)textureDesc.Mips, textureDesc.SampleCount, 0, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
-				break;
-			case TextureType::Texture3D:
-				desc = CD3DX12_RESOURCE_DESC::Tex3D(format, textureDesc.Width, textureDesc.Height, (uint16)textureDesc.Depth, (uint16)textureDesc.Mips, D3D12_RESOURCE_FLAG_NONE, D3D12_TEXTURE_LAYOUT_UNKNOWN);
-				break;
-			default:
-				gUnreachable();
-				break;
-			}
-
-			if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::UnorderedAccess))
-			{
-				desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-			}
-			if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::RenderTarget))
-			{
-				desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-			}
-			if (EnumHasAnyFlags(textureDesc.Flags, TextureFlag::DepthStencil))
-			{
-				desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-				if (!EnumHasAnyFlags(textureDesc.Flags, TextureFlag::ShaderResource))
-				{
-					// I think this can be a significant optimization on some devices because then the depth buffer can never be (de)compressed
-					desc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-				}
-			}
-			return desc;
-		};
-
-		return GetResourceDesc(desc);
+		return D3D::GetResourceDesc(desc);
 	}
 	else
 	{
 		const RGBuffer*	 pBuffer	= (RGBuffer*)pResource;
 		const BufferDesc bufferDesc = pBuffer->GetDesc();
-
-		D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufferDesc.Size, D3D12_RESOURCE_FLAG_NONE);
-		if (EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::UnorderedAccess))
-			desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-		if (EnumHasAnyFlags(bufferDesc.Flags, BufferFlag::AccelerationStructure))
-			desc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
-		return desc;
+		return D3D::GetResourceDesc(bufferDesc);
 	}
 }
 

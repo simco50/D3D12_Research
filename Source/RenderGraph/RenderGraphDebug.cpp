@@ -2,7 +2,8 @@
 #include "RenderGraph.h"
 #include "Core/Stream.h"
 #include "Core/Profiler.h"
-
+#include "Core/Paths.h"
+#include "Core/Utils.h"
 #include <imgui_internal.h>
 #include <IconsFontAwesome4.h>
 
