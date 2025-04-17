@@ -402,101 +402,102 @@ void RGGraph::DrawPassView(bool& enabled) const
 	if (!enabled)
 		return;
 
-	struct TreeNode
-	{
-		const char* pName;
-		RGPassID			Pass;
-		Array<int>	Children;
-
-		void DrawNode(Span<const TreeNode> nodes, const RGGraph& graph, int depth = 0) const
-		{
-			ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns;
-
-			ImGui::TableNextRow();
-			ImGui::TableNextColumn();
-
-			if (Pass.IsValid())
-			{
-				ImGui::PushID(Pass.GetIndex());
-				const RGPass* pPass = graph.m_Passes[Pass.GetIndex()];
-				bool open = ImGui::TreeNodeEx(pPass->GetName(), flags);
-
-				ImGui::TableNextColumn();
-				ImGui::TextDisabled(PassFlagToString(pPass->Flags).c_str());
-				ImGui::TableNextColumn();
-
-				if (open)
-				{
-					for (const RGPass::ResourceAccess& access : pPass->Accesses)
-					{
-						ImGui::TableNextRow();
-						ImGui::TableNextColumn();
-
-						ImGui::TreeNodeEx(access.pResource->GetName(), flags | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen);
-						ImGui::TableNextColumn();
-						ImGui::Text(D3D::ResourceStateToString(access.Access).c_str());
-					}
-					ImGui::TreePop();
-				}
-				ImGui::PopID();
-			}
-			else
-			{
-				if (depth == 0)
-					flags |= ImGuiTreeNodeFlags_DefaultOpen;
-
-				bool open = ImGui::TreeNodeEx(pName, flags, ICON_FA_FOLDER " %s", pName);
-				ImGui::TableNextColumn();
-				ImGui::TextDisabled("--");
-				ImGui::TableNextColumn();
-
-				if (open)
-				{
-					for (int i : Children)
-					{
-						nodes[i].DrawNode(nodes, graph, depth + 1);
-					}
-					ImGui::TreePop();
-				}
-			}
-		}
-	};
-
-	Array<TreeNode> nodes(1);
-	Array<int> nodeStack;
-	nodeStack.push_back(0);
-
-	for (RGPass* pPass : m_Passes)
-	{
-		if (pPass->IsCulled)
-			continue;
-
-		for (RGEventID eventID : pPass->EventsToStart)
-		{
-			uint32 newIndex = (uint32)nodes.size();
-			nodes[nodeStack.back()].Children.push_back(newIndex);
-			TreeNode& newNode = nodes.emplace_back();
-			newNode.pName = m_Events[eventID.GetIndex()].pName;
-			nodeStack.push_back(newIndex);
-		}
-
-		uint32 newIndex = (uint32)nodes.size();
-		TreeNode& newNode = nodes.emplace_back();
-		nodes[nodeStack.back()].Children.push_back(newIndex);
-		newNode.Pass = pPass->ID;
-
-		for (uint32 i = 0; i < pPass->NumEventsToEnd; ++i)
-		{
-			nodeStack.pop_back();
-		}
-	}
-
-	gAssert(nodeStack.size() == 1);
-
-	Span<int> rootNodes = nodes[0].Children;
-
 	if (ImGui::Begin("Passes", &enabled))
 	{
+
+		struct TreeNode
+		{
+			const char* pName;
+			RGPassID	Pass;
+			Array<int>	Children;
+
+			void DrawNode(Span<const TreeNode> nodes, const RGGraph& graph, int depth = 0) const
+			{
+				ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAllColumns;
+
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+
+				if (Pass.IsValid())
+				{
+					ImGui::PushID(Pass.GetIndex());
+					const RGPass* pPass = graph.m_Passes[Pass.GetIndex()];
+					bool		  open	= ImGui::TreeNodeEx(pPass->GetName(), flags);
+
+					ImGui::TableNextColumn();
+					ImGui::TextDisabled(PassFlagToString(pPass->Flags).c_str());
+					ImGui::TableNextColumn();
+
+					if (open)
+					{
+						for (const RGPass::ResourceAccess& access : pPass->Accesses)
+						{
+							ImGui::TableNextRow();
+							ImGui::TableNextColumn();
+
+							ImGui::TreeNodeEx(access.pResource->GetName(), flags | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen);
+							ImGui::TableNextColumn();
+							ImGui::Text(D3D::ResourceStateToString(access.Access).c_str());
+						}
+						ImGui::TreePop();
+					}
+					ImGui::PopID();
+				}
+				else
+				{
+					if (depth == 0)
+						flags |= ImGuiTreeNodeFlags_DefaultOpen;
+
+					bool open = ImGui::TreeNodeEx(pName, flags, ICON_FA_FOLDER " %s", pName);
+					ImGui::TableNextColumn();
+					ImGui::TextDisabled("--");
+					ImGui::TableNextColumn();
+
+					if (open)
+					{
+						for (int i : Children)
+						{
+							nodes[i].DrawNode(nodes, graph, depth + 1);
+						}
+						ImGui::TreePop();
+					}
+				}
+			}
+		};
+
+		Array<TreeNode> nodes(1);
+		Array<int>		nodeStack;
+		nodeStack.push_back(0);
+
+		for (RGPass* pPass : m_Passes)
+		{
+			if (pPass->IsCulled)
+				continue;
+
+			for (RGEventID eventID : pPass->EventsToStart)
+			{
+				uint32 newIndex = (uint32)nodes.size();
+				nodes[nodeStack.back()].Children.push_back(newIndex);
+				TreeNode& newNode = nodes.emplace_back();
+				newNode.pName	  = m_Events[eventID.GetIndex()].pName;
+				nodeStack.push_back(newIndex);
+			}
+
+			uint32	  newIndex = (uint32)nodes.size();
+			TreeNode& newNode  = nodes.emplace_back();
+			nodes[nodeStack.back()].Children.push_back(newIndex);
+			newNode.Pass = pPass->ID;
+
+			for (uint32 i = 0; i < pPass->NumEventsToEnd; ++i)
+			{
+				nodeStack.pop_back();
+			}
+		}
+
+		gAssert(nodeStack.size() == 1);
+
+		Span<int> rootNodes = nodes[0].Children;
+
 		if (ImGui::BeginTable("Passes", 2, ImGuiTableFlags_Resizable))
 		{
 			ImGui::TableSetupColumn("Name");

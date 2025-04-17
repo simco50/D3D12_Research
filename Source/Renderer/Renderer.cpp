@@ -99,6 +99,7 @@ namespace Tweakables
 	ConsoleVariable gRenderGraphPassGroupSize("r.RenderGraph.PassGroupSize", 10);
 	ConsoleVariable gRenderGraphSingleThread("r.RenderGraph.SingleThread", false);
 	ConsoleVariable gRenderGraphResourceTracker("r.RenderGraph.ResourceTracker", false);
+	ConsoleVariable gRenderGraphResourceAllocatorView("r.RenderGraph.ResourceAllocatorView", false);
 	ConsoleVariable gRenderGraphPassView("r.RenderGraph.PassView", false);
 
 	bool gDumpRenderGraphNextFrame = false;
@@ -1272,6 +1273,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 		// Debug options
 		graph.DrawResourceTracker(Tweakables::gRenderGraphResourceTracker.Get());
 		graph.DrawPassView(Tweakables::gRenderGraphPassView.Get());
+		gRenderGraphAllocator.DrawDebugView(Tweakables::gRenderGraphResourceAllocatorView.Get());
 
 		if (Tweakables::gDumpRenderGraphNextFrame)
 		{
@@ -1959,6 +1961,8 @@ void Renderer::DrawImGui()
 				Tweakables::gRenderGraphResourceTracker = !Tweakables::gRenderGraphResourceTracker;
 			if (ImGui::MenuItem("RenderGraph Pass View", "Ctrl + T", Tweakables::gRenderGraphPassView))
 				Tweakables::gRenderGraphPassView = !Tweakables::gRenderGraphPassView;
+			if (ImGui::MenuItem("RenderGraph Resource Allocator", "Ctrl + Y", Tweakables::gRenderGraphResourceAllocatorView))
+				Tweakables::gRenderGraphResourceAllocatorView = !Tweakables::gRenderGraphResourceAllocatorView;
 			if (ImGui::MenuItem("Luminance Histogram", 0, Tweakables::gDrawHistogram))
 				Tweakables::gDrawHistogram = !Tweakables::gDrawHistogram;
 			ImGui::EndMenu();
@@ -2050,7 +2054,8 @@ void Renderer::DrawImGui()
 		Tweakables::gRenderGraphResourceTracker = !Tweakables::gRenderGraphResourceTracker;
 	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_T))
 		Tweakables::gRenderGraphPassView = !Tweakables::gRenderGraphPassView;
-
+	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl) && ImGui::IsKeyPressed(ImGuiKey_Y))
+		Tweakables::gRenderGraphResourceAllocatorView = !Tweakables::gRenderGraphResourceAllocatorView;
 
 	if (ImGui::Begin("Settings"))
 	{

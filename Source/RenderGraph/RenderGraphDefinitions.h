@@ -63,7 +63,7 @@ public:
 	friend class RGResourceAllocator;
 
 	RGResource(const char* pName, RGResourceID id, RGResourceType type, DeviceResource* pPhysicalResource = nullptr)
-		: pName(pName), ID(id), Allocated(false), IsImported(!!pPhysicalResource), IsExported(false), Type((uint32)type), pPhysicalResource(nullptr)
+		: pName(pName), ID(id), IsImported(!!pPhysicalResource), IsExported(false), Type((uint32)type), pPhysicalResource(nullptr)
 	{
 		if (pPhysicalResource)
 			SetResource(pPhysicalResource);
@@ -76,42 +76,31 @@ public:
 	const char*			GetName() const				{ return pName; }
 	DeviceResource*		GetPhysicalUnsafe() const	{ return pPhysicalResource; }
 	RGResourceType		GetType() const				{ return (RGResourceType)Type; }
-	bool				IsAllocated() const			{ return Allocated; }
+	bool				IsAllocated() const			{ return pPhysicalResource != nullptr; }
 	URange				GetLifetime() const			{ return URange(FirstAccess.GetIndex(), LastAccess.GetIndex() + 1); }
-	TRange<uint64>		GetMemoryRange() const		{ return TRange<uint64>(Offset, Offset + Size); }
 
 protected:
 	void SetResource(DeviceResource* resource)
 	{
 		gAssert(!pPhysicalResource);
 		pPhysicalResource = resource;
-		Allocated = true;
-	}
-
-	void Release()
-	{
-		gAssert(pPhysicalResource);
-		gAssert(Allocated);
-		Allocated = false;
 	}
 
 	const char*				pName;
 	DeviceResource*			pPhysicalResource = nullptr;
 
 	RGResourceID			ID;
-	uint32					Allocated			: 1;
 	uint32					IsImported			: 1;
 	uint32					IsExported			: 1;
 	uint32					Type				: 1;
-	uint32					Size = 0;
-	uint32					Offset = 0;
-	uint32					Alignment = 0;
 
 
 	// Compile-time data
 	RGPassID				FirstAccess;			///< First non-culled pass that accesses this resource
 	RGPassID				LastAccess;				///< Last non-culled pass that accesses this resource
 	RGPassID				LastWrite;				///< Last pass that wrote to this resource. Used for pass culling
+	uint32					Size		= 0;
+	uint32					Alignment	= 0;
 };
 
 template<typename T>
