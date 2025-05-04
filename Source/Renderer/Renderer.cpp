@@ -38,13 +38,13 @@
 #include "Renderer/Techniques/ImGuiRenderer.h"
 
 #include "RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraphAllocator.h"
 
 #include "Scene/World.h"
 #include "Scene/Camera.h"
 
 #include <imgui_internal.h>
 #include <IconsFontAwesome4.h>
-#include "RenderGraph/RenderGraphAllocator.h"
 
 namespace Tweakables
 {
@@ -158,8 +158,6 @@ void Renderer::Shutdown()
 
 void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Texture* pTarget)
 {
-	gRenderGraphAllocator.Tick();
-
 	uint32 w = pTarget->GetWidth();
 	uint32 h = pTarget->GetHeight();
 
@@ -171,6 +169,8 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 	{
 		PROFILE_CPU_SCOPE("Update");
+
+		gRenderGraphAllocator.Tick();
 
 		constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
 		if (m_RenderPath == RenderPath::Visibility)

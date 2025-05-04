@@ -106,7 +106,7 @@ namespace Math
 	template <typename T>
 	constexpr bool IsAligned(T value, int alignment)
 	{
-		gAssert((alignment & (alignment - 1)) == 0, "Alginment is not a power of two");
+		gAssert((alignment & (alignment - 1)) == 0, "Alignment is not a power of two");
 		return ((((std::intptr_t)value) & (alignment - 1)) == 0);
 	}
 
