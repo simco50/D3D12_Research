@@ -172,7 +172,6 @@ private:
 
 	// Visibility buffer
 	Ref<PipelineState>						m_pVisibilityShadingGraphicsPSO;
-	Ref<PipelineState>						m_pVisibilityDebugRenderPSO;
 
 	Ref<PipelineState>						m_pVisibilityGBufferPSO;
 	Ref<PipelineState>						m_pDeferredShadePSO;

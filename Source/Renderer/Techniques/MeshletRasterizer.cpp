@@ -164,6 +164,9 @@ MeshletRasterizer::MeshletRasterizer(GraphicsDevice* pDevice)
 	// Debug PSOs
 	m_pPrintStatsPSO					= pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "MeshletCull.hlsl", "PrintStatsCS", *defines);
 
+	m_pVisibilityDebugRenderPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
+
+
 	if (m_pDevice->GetCapabilities().SupportsWorkGraphs())
 	{
 		{
@@ -788,6 +791,38 @@ void MeshletRasterizer::PrintStats(RGGraph& graph, const Vector2& position, cons
 				Renderer::BindViewUniforms(context, *pView);
 				context.Dispatch(1);
 			});
+}
+
+void MeshletRasterizer::RenderVisibilityDebug(RGGraph& graph, const RenderView* pView, const RasterResult& rasterResult, uint32 debugMode, RGTexture* pTarget)
+{
+	graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
+		.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, rasterResult.pDebugData })
+		.Write({ pTarget })
+		.Bind([=](CommandContext& context, const RGResources& resources) {
+			Texture* pColorTarget = resources.Get(pTarget);
+
+			context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
+			context.SetPipelineState(m_pVisibilityDebugRenderPSO);
+
+			struct
+			{
+				uint32		  Mode;
+				TextureView	  VisibilityTexture;
+				BufferView	  MeshletCandidates;
+				TextureView	  DebugData;
+				RWTextureView Output;
+			} params;
+			params.Mode				 = debugMode;
+			params.VisibilityTexture = resources.GetSRV(rasterResult.pVisibilityBuffer),
+			params.MeshletCandidates = resources.GetSRV(rasterResult.pVisibleMeshlets),
+			params.DebugData		 = resources.GetSRV(rasterResult.pDebugData),
+			params.Output			 = pColorTarget->GetUAV();
+			context.BindRootSRV(BindingSlot::PerInstance, params);
+
+			Renderer::BindViewUniforms(context, *pView);
+
+			context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
+		});
 }
 
 RGTexture* MeshletRasterizer::InitHZB(RGGraph& graph, const Vector2u& viewDimensions) const

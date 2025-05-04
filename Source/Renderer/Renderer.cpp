@@ -109,8 +109,10 @@ namespace Tweakables
 	ConsoleCommand<const char*> gVisualizeTexture("vis", [](const char* pName) { VisualizeTextureName = pName; });
 }
 
+
 Renderer::Renderer() = default;
 Renderer::~Renderer() = default;
+
 
 void Renderer::Init(GraphicsDevice* pDevice, World* pWorld)
 {
@@ -148,11 +150,126 @@ void Renderer::Init(GraphicsDevice* pDevice, World* pWorld)
 	m_pSky = pDevice->CreateTexture(TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT, 1, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "Sky");
 }
 
+
 void Renderer::Shutdown()
 {
 	DebugRenderer::Get()->Shutdown();
 
 	gRenderGraphAllocator.Shutdown();
+}
+
+
+void Renderer::InitializePipelines()
+{
+	// Depth-only raster PSOs
+
+	{
+		ShaderDefineHelper defines;
+		defines.Set("DEPTH_ONLY", true);
+
+		{
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
+			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
+			psoDesc.SetDepthOnlyTarget(Renderer::DepthStencilFormat, 1);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
+			psoDesc.SetName("Depth Prepass Opaque");
+			m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
+
+			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			psoDesc.SetName("Depth Prepass Alpha Mask");
+			m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
+
+		{
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
+			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
+			psoDesc.SetDepthOnlyTarget(Renderer::ShadowFormat, 1);
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			psoDesc.SetDepthBias(-10, 0, -4.0f);
+			psoDesc.SetName("Shadow Mapping Opaque");
+			m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
+
+			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
+			psoDesc.SetName("Shadow Mapping Alpha Mask");
+			m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
+		}
+	}
+
+	ShaderDefineHelper tonemapperDefines;
+	tonemapperDefines.Set("NUM_HISTOGRAM_BINS", 256);
+	m_pLuminanceHistogramPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
+	m_pDrawHistogramPSO		 = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
+	m_pAverageLuminancePSO	 = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
+	m_pToneMapPSO			 = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
+	m_pDownsampleColorPSO	 = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/DownsampleColor.hlsl", "CSMain");
+
+	m_pPrepareReduceDepthPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
+	m_pReduceDepthPSO		 = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
+
+	m_pCameraMotionPSO	  = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
+	m_pTemporalResolvePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
+
+	// Sky
+	{
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
+		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
+		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, Renderer::DepthStencilFormat, 1);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+		psoDesc.SetDepthWrite(false);
+		psoDesc.SetName("Skybox");
+		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
+
+		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ProceduralSky.hlsl", "ComputeSkyCS");
+	}
+
+	// Bloom
+	m_pBloomDownsamplePSO			  = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
+	m_pBloomDownsampleKarisAveragePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", { "KARIS_AVERAGE=1" });
+	m_pBloomUpsamplePSO				  = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
+
+	// Visibility Shading
+	{
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
+		psoDesc.SetPixelShader("VisibilityShading.hlsl", "ShadePS");
+		psoDesc.SetRenderTargetFormats(Renderer::GBufferFormat, Renderer::DepthStencilFormat, 1);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
+		psoDesc.SetDepthWrite(false);
+		psoDesc.SetDepthEnabled(false);
+		psoDesc.SetName("Visibility Shading");
+		m_pVisibilityShadingGraphicsPSO = m_pDevice->CreatePipeline(psoDesc);
+	}
+
+	{
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
+		psoDesc.SetPixelShader("VisibilityGBuffer.hlsl", "ShadePS");
+		psoDesc.SetRenderTargetFormats(Renderer::DeferredGBufferFormat, Renderer::DepthStencilFormat, 1);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
+		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
+		psoDesc.SetDepthWrite(false);
+		psoDesc.SetDepthEnabled(false);
+		psoDesc.SetName("Visibility Shading");
+		m_pVisibilityGBufferPSO = m_pDevice->CreatePipeline(psoDesc);
+
+		m_pDeferredShadePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DeferredShading.hlsl", "ShadeCS");
+	}
+
+	{
+		m_pSkinPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "Skinning.hlsl", "CSMain");
+	}
 }
 
 
@@ -1206,35 +1323,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 				if ((m_RenderPath == RenderPath::Visibility || m_RenderPath == RenderPath::VisibilityDeferred) && Tweakables::gVisibilityDebugMode > 0)
 				{
-					graph.AddPass("Visibility Debug Render", RGPassFlag::Compute)
-						.Read({ rasterResult.pVisibilityBuffer, rasterResult.pVisibleMeshlets, rasterResult.pDebugData })
-						.Write({ sceneTextures.pColorTarget })
-						.Bind([=](CommandContext& context, const RGResources& resources)
-							{
-								Texture* pColorTarget = resources.Get(sceneTextures.pColorTarget);
-
-								context.SetComputeRootSignature(GraphicsCommon::pCommonRS);
-								context.SetPipelineState(m_pVisibilityDebugRenderPSO);
-
-								struct
-								{
-									uint32		  Mode;
-									TextureView	  VisibilityTexture;
-									BufferView	  MeshletCandidates;
-									TextureView	  DebugData;
-									RWTextureView Output;
-								} params;
-								params.Mode				 = Tweakables::gVisibilityDebugMode;
-								params.VisibilityTexture = resources.GetSRV(rasterResult.pVisibilityBuffer),
-								params.MeshletCandidates = resources.GetSRV(rasterResult.pVisibleMeshlets),
-								params.DebugData		 = resources.GetSRV(rasterResult.pDebugData),
-								params.Output			 = pColorTarget->GetUAV();
-								context.BindRootSRV(BindingSlot::PerInstance, params);
-
-								Renderer::BindViewUniforms(context, *pView);
-
-								context.Dispatch(ComputeUtils::GetNumThreadGroups(pColorTarget->GetWidth(), 8, pColorTarget->GetHeight(), 8));
-							});
+					m_pMeshletRasterizer->RenderVisibilityDebug(graph, pView, rasterResult, Tweakables::gVisibilityDebugMode, sceneTextures.pColorTarget);
 				}
 			}
 			else
@@ -1286,123 +1375,6 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 	{
 		++m_Frame;
 		m_MainView.CameraCut = false;
-	}
-}
-
-void Renderer::InitializePipelines()
-{
-	// Depth-only raster PSOs
-
-	{
-		ShaderDefineHelper defines;
-		defines.Set("DEPTH_ONLY", true);
-
-		{
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
-			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
-			psoDesc.SetDepthOnlyTarget(Renderer::DepthStencilFormat, 1);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
-			psoDesc.SetName("Depth Prepass Opaque");
-			m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
-
-			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			psoDesc.SetName("Depth Prepass Alpha Mask");
-			m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-
-		{
-			PipelineStateInitializer psoDesc;
-			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
-			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
-			psoDesc.SetDepthOnlyTarget(Renderer::ShadowFormat, 1);
-			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
-			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-			psoDesc.SetDepthBias(-10, 0, -4.0f);
-			psoDesc.SetName("Shadow Mapping Opaque");
-			m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
-
-			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
-			psoDesc.SetName("Shadow Mapping Alpha Mask");
-			m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
-		}
-
-	}
-
-	ShaderDefineHelper tonemapperDefines;
-	tonemapperDefines.Set("NUM_HISTOGRAM_BINS", 256);
-	m_pLuminanceHistogramPSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "LuminanceHistogram.hlsl", "CSMain", *tonemapperDefines);
-	m_pDrawHistogramPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DrawLuminanceHistogram.hlsl", "DrawLuminanceHistogram", *tonemapperDefines);
-	m_pAverageLuminancePSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "AverageLuminance.hlsl", "CSMain", *tonemapperDefines);
-	m_pToneMapPSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Tonemapping.hlsl", "CSMain", *tonemapperDefines);
-	m_pDownsampleColorPSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/DownsampleColor.hlsl", "CSMain");
-
-	m_pPrepareReduceDepthPSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "PrepareReduceDepth");
-	m_pReduceDepthPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ReduceDepth.hlsl", "ReduceDepth");
-
-	m_pCameraMotionPSO			= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "CameraMotionVectors.hlsl", "CSMain");
-	m_pTemporalResolvePSO		= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/TemporalResolve.hlsl", "CSMain");
-
-
-	//Sky
-	{
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-		psoDesc.SetVertexShader("ProceduralSky.hlsl", "VSMain");
-		psoDesc.SetPixelShader("ProceduralSky.hlsl", "PSMain");
-		psoDesc.SetRenderTargetFormats(ResourceFormat::RGBA16_FLOAT, Renderer::DepthStencilFormat, 1);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetName("Skybox");
-		m_pSkyboxPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		m_pRenderSkyPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "ProceduralSky.hlsl", "ComputeSkyCS");
-	}
-
-	//Bloom
-	m_pBloomDownsamplePSO				= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS");
-	m_pBloomDownsampleKarisAveragePSO	= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "DownsampleCS", { "KARIS_AVERAGE=1" });
-	m_pBloomUpsamplePSO					= m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "PostProcessing/Bloom.hlsl", "UpsampleCS");
-
-	//Visibility Shading
-	{
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
-		psoDesc.SetPixelShader("VisibilityShading.hlsl", "ShadePS");
-		psoDesc.SetRenderTargetFormats(Renderer::GBufferFormat, Renderer::DepthStencilFormat, 1);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
-		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetDepthEnabled(false);
-		psoDesc.SetName("Visibility Shading");
-		m_pVisibilityShadingGraphicsPSO = m_pDevice->CreatePipeline(psoDesc);
-	}
-
-	m_pVisibilityDebugRenderPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "VisibilityDebugView.hlsl", "DebugRenderCS");
-
-	{
-		PipelineStateInitializer psoDesc;
-		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-		psoDesc.SetVertexShader("FullScreenTriangle.hlsl", "WithTexCoordVS");
-		psoDesc.SetPixelShader("VisibilityGBuffer.hlsl", "ShadePS");
-		psoDesc.SetRenderTargetFormats(Renderer::DeferredGBufferFormat, Renderer::DepthStencilFormat, 1);
-		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_ALWAYS);
-		psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_EQUAL, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, (uint8)StencilBit::VisibilityBuffer, 0x0);
-		psoDesc.SetDepthWrite(false);
-		psoDesc.SetDepthEnabled(false);
-		psoDesc.SetName("Visibility Shading");
-		m_pVisibilityGBufferPSO = m_pDevice->CreatePipeline(psoDesc);
-
-		m_pDeferredShadePSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "DeferredShading.hlsl", "ShadeCS");
-	}
-
-	{
-		m_pSkinPSO = m_pDevice->CreateComputePipeline(GraphicsCommon::pCommonRS, "Skinning.hlsl", "CSMain");
 	}
 }
 

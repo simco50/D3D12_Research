@@ -44,6 +44,7 @@ public:
 	MeshletRasterizer(GraphicsDevice* pDevice);
 	void Render(RGGraph& graph, const RenderView* pView, RasterContext& context, RasterResult& outResult);
 	void PrintStats(RGGraph& graph, const Vector2& position, const RenderView* pView, const RasterContext& rasterContext);
+	void RenderVisibilityDebug(RGGraph& graph, const RenderView* pView, const RasterResult& rasterResult, uint32 debugMode, RGTexture* pTarget);
 
 private:
 	enum class RasterPhase
@@ -90,7 +91,9 @@ private:
 
 	Ref<PipelineState> m_pClearCountersPSO;
 
-	Buffer* m_pWorkGraphBuffer[2]{};
+	Ref<PipelineState> m_pVisibilityDebugRenderPSO;
+
+	Buffer*			   m_pWorkGraphBuffer[2]{};
 	Ref<StateObject> m_pWorkGraphSO[2];
 	Ref<StateObject> m_pWorkGraphNoOcclusionSO;
 	Ref<PipelineState> m_pClearRasterBins;
