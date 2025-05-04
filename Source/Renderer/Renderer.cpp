@@ -144,6 +144,8 @@ void Renderer::Init(GraphicsDevice* pDevice, World* pWorld)
 	m_AccelerationStructure.Init(m_pDevice);
 
 	m_pLensDirtTexture = GraphicsCommon::CreateTextureFromFile(m_pDevice, "Resources/Textures/LensDirt.dds", true, "Lens Dirt");
+
+	m_pSky = pDevice->CreateTexture(TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT, 1, TextureFlag::UnorderedAccess | TextureFlag::ShaderResource), "Sky");
 }
 
 void Renderer::Shutdown()
@@ -513,10 +515,9 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 					m_pCBTTessellation->RasterMain(graph, pView, sceneTextures);
 			}
 
-			RGTexture* pSky = graph.Import(GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube));
 			if (Tweakables::gSky)
 			{
-				pSky = graph.Create("Sky", TextureDesc::CreateCube(64, 64, ResourceFormat::RGBA16_FLOAT));
+				RGTexture* pSky = graph.Import(m_pSky);
 				graph.AddPass("Compute Sky", RGPassFlag::Compute)
 					.Write(pSky)
 					.Bind([=](CommandContext& context, const RGResources& resources)
@@ -542,9 +543,6 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 				graph.AddPass("Transition Sky", RGPassFlag::Raster | RGPassFlag::NeverCull)
 					.Read(pSky);
 			}
-
-			// Export makes sure the target texture is filled in during pass execution.
-			graph.Export(pSky, &m_pSky, TextureFlag::ShaderResource);
 
 			if (m_RenderPath != RenderPath::PathTracing)
 			{
@@ -842,7 +840,6 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 				m_pParticles->Render(graph, pView, sceneTextures);
 
 				graph.AddPass("Render Sky", RGPassFlag::Raster)
-					.Read(pSky)
 					.DepthStencil(sceneTextures.pDepth, RenderPassDepthFlags::ReadOnly)
 					.RenderTarget(sceneTextures.pColorTarget)
 					.Bind([=](CommandContext& context, const RGResources& resources)
@@ -1463,7 +1460,7 @@ void Renderer::GetViewUniforms(const RenderView& view, ShaderInterop::ViewUnifor
 	outUniforms.InstancesBuffer			= m_InstanceBuffer.pBuffer->GetSRV();
 	outUniforms.LightsBuffer			= m_LightBuffer.pBuffer->GetSRV();
 	outUniforms.LightMatricesBuffer		= m_LightMatricesBuffer.pBuffer->GetSRV();
-	outUniforms.SkyTexture				= m_pSky ? m_pSky->GetSRV() : GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube)->GetSRV();
+	outUniforms.SkyTexture				= Tweakables::gSky ? m_pSky->GetSRV() : GraphicsCommon::GetDefaultTexture(DefaultTexture::BlackCube)->GetSRV();
 	outUniforms.DDGIVolumesBuffer		= m_DDGIVolumesBuffer.pBuffer->GetSRV();
 	outUniforms.NumDDGIVolumes			= m_DDGIVolumesBuffer.Count;
 
