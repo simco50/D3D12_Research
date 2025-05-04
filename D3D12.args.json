@@ -41,10 +41,6 @@
         {
           "Id": "fbcec7df-5d3f-4382-a66a-34bcdbe45a10",
           "Command": "-immediate_pso"
-        },
-        {
-          "Id": "7576e3a6-e829-451c-8062-75e4ba00a0ef",
-          "Command": "-render_graph_no_reuse"
         }
       ]
     },
