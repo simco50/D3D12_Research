@@ -116,8 +116,8 @@ workspace (PROJECT_NAME)
 
 		-- D3D12
 		includedirs "$(SolutionDir)ThirdParty/D3D12/include"
-		runtimeDependency("D3D12/bin/D3D12Core.dll", "D3D12")
-		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll", "D3D12")
+		runtimeDependency("D3D12/bin/D3D12Core.dll", "")
+		runtimeDependency("D3D12/bin/d3d12SDKLayers.dll", "")
 		links {	"d3d12.lib", "dxgi", "dxguid" }
 
 		-- D3D12 Warp
@@ -132,7 +132,6 @@ workspace (PROJECT_NAME)
 		-- DXC
 		includedirs "$(SolutionDir)ThirdParty/Dxc/include"
 		runtimeDependency ("Dxc/bin/dxcompiler.dll", "")
-		runtimeDependency ("Dxc/bin/dxil.dll", "")
 
 		-- DirectXMath
 		includedirs "$(SolutionDir)ThirdParty/DirectXMath/include"
