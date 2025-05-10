@@ -15,6 +15,7 @@
 
 #include "Renderer/RenderTypes.h"
 #include "Renderer/Techniques/ImGuiRenderer.h"
+#include "RenderGraph/RenderGraphAllocator.h"
 
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
@@ -74,6 +75,8 @@ static SuperluminalAPI sSuperluminal;
 #endif
 
 
+App::App() = default;
+App::~App() = default;
 
 int App::Run()
 {
@@ -188,6 +191,7 @@ void App::Init_Internal()
 	InitializeProfiler(m_pDevice);
 
 	m_pSwapchain = new SwapChain(m_pDevice, DisplayMode::SDR, 3, m_Window.GetNativeWindow());
+	gRenderGraphAllocator.Init(m_pDevice);
 
 	GraphicsCommon::Create(m_pDevice);
 
@@ -200,6 +204,9 @@ void App::Update_Internal()
 {
 	Time::Tick();
 	ImGuiRenderer::NewFrame();
+
+	m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
+	gRenderGraphAllocator.Tick();
 
 	Update();
 	Input::Instance().Update();
@@ -231,6 +238,7 @@ void App::Shutdown_Internal()
 	gGPUProfiler.Shutdown();
 	gCPUProfiler.Shutdown();
 
+	gRenderGraphAllocator.Shutdown();
 	ImGuiRenderer::Shutdown();
 	GraphicsCommon::Destroy();
 

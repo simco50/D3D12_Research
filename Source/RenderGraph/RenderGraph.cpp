@@ -123,7 +123,7 @@ RGGraph::~RGGraph()
 	DestroyData();
 }
 
-void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptions& options)
+void RGGraph::Compile(const RGGraphOptions& options)
 {
 	PROFILE_CPU_SCOPE();
 
@@ -256,7 +256,7 @@ void RGGraph::Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptio
 		for (ExportedBuffer& exportResource : m_ExportBuffers)
 			*exportResource.pTarget = nullptr;
 
-		resourceAllocator.AllocateResources(m_Resources);
+		gRenderGraphAllocator.AllocateResources(m_Resources);
 
 		for (RGPass* pPass : m_Passes)
 		{

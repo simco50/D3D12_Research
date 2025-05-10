@@ -7,6 +7,8 @@ class SwapChain;
 class App
 {
 public:
+	App();
+	virtual ~App();
 	int Run();
 
 protected:

@@ -276,7 +276,7 @@ public:
 	RGGraph(const RGGraph& other) = delete;
 	RGGraph& operator=(const RGGraph& other) = delete;
 
-	void Compile(RGResourceAllocator& resourceAllocator, const RGGraphOptions& options);
+	void Compile(const RGGraphOptions& options);
 
 	void Execute(GraphicsDevice* pDevice);
 

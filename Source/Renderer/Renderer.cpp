@@ -119,8 +119,6 @@ void Renderer::Init(GraphicsDevice* pDevice, World* pWorld)
 	m_pDevice = pDevice;
 	m_pWorld = pWorld;
 
-	gRenderGraphAllocator.Init(pDevice);
-
 	DebugRenderer::Get()->Initialize(m_pDevice);
 	m_pShaderDebugRenderer	= std::make_unique<ShaderDebugRenderer>(m_pDevice);
 	m_pMeshletRasterizer	= std::make_unique<MeshletRasterizer>(m_pDevice);
@@ -154,8 +152,6 @@ void Renderer::Init(GraphicsDevice* pDevice, World* pWorld)
 void Renderer::Shutdown()
 {
 	DebugRenderer::Get()->Shutdown();
-
-	gRenderGraphAllocator.Shutdown();
 }
 
 
@@ -287,15 +283,11 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 	{
 		PROFILE_CPU_SCOPE("Update");
 
-		gRenderGraphAllocator.Tick();
-
 		constexpr RenderPath defaultRenderPath = RenderPath::Clustered;
 		if (m_RenderPath == RenderPath::Visibility)
 			m_RenderPath = m_pDevice->GetCapabilities().SupportsMeshShading() ? m_RenderPath : defaultRenderPath;
 		if (m_RenderPath == RenderPath::PathTracing)
 			m_RenderPath = m_pDevice->GetCapabilities().SupportsRaytracing() ? m_RenderPath : defaultRenderPath;
-
-		m_pDevice->GetShaderManager()->ConditionallyReloadShaders();
 
 		RenderPath newRenderPath = m_RenderPath;
 		if (!ImGui::IsAnyItemActive())
@@ -1354,7 +1346,7 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 		graphOptions.SingleThread		   = Tweakables::gRenderGraphSingleThread;
 
 		// Compile graph
-		graph.Compile(gRenderGraphAllocator, graphOptions);
+		graph.Compile(graphOptions);
 
 		// Debug options
 		graph.DrawResourceTracker(Tweakables::gRenderGraphResourceTracker.Get());

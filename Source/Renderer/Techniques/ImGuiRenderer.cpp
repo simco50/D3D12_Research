@@ -192,7 +192,7 @@ static void RenderDrawData(const ImDrawData* pDrawData, CommandContext& context)
 				if (!pTexture)
 					pTexture = sFontTexture;
 
-				gAssert(pTexture->GetSRV());
+				gAssert(pTexture->GetSRV().IsValid());
 				params.Texture = pTexture->GetSRV();
 
 				context.BindRootSRV(BindingSlot::PerInstance, params);
