@@ -39,7 +39,7 @@ private:
 	class RGHeap
 	{
 	public:
-		RGHeap(GraphicsDevice* pDevice, uint32 size);
+		RGHeap(GraphicsDevice* pDevice, uint32 size, D3D12_HEAP_TYPE heapType);
 		~RGHeap();
 
 		bool						TryAllocate(GraphicsDevice* pDevice, uint32 frameIndex, RGResource* pResource);
@@ -51,8 +51,10 @@ private:
 		uint32						GetSize() const { return Size; }
 		Span<RGPhysicalResource*>	GetAllocations() const { return Allocations; }
 		uint32						GetNumResources() const { return (uint32)Allocations.size() + (uint32)ResourceCache.size(); }
+		D3D12_HEAP_TYPE				GetHeapType() const { return HeapType; }
 
 	private:
+		D3D12_HEAP_TYPE				HeapType;
 		uint32						LastUsedFrame = 0;
 		uint32						Size = 0;
 		Ref<ID3D12Heap>				pHeap;

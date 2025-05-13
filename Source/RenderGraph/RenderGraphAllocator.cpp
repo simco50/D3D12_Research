@@ -10,7 +10,33 @@ RGResourceAllocator gRenderGraphAllocator;
 
 static constexpr uint32 cHeapCleanupLatency		= 3;
 static constexpr uint32 cResourceCleanupLatency = 120;
-static constexpr uint32 cHeapAlignment			= 32 * Math::MegaBytesToBytes;
+
+static constexpr uint32 sGetMinHeapSize(D3D12_HEAP_TYPE heapType)
+{
+	switch (heapType)
+	{
+	case D3D12_HEAP_TYPE_UPLOAD:
+	case D3D12_HEAP_TYPE_READBACK:
+		return 4 * Math::MegaBytesToBytes;
+	default:
+		return 32 * Math::MegaBytesToBytes;
+	}
+}
+
+
+static D3D12_HEAP_TYPE sGetHeapType(const RGResource* pResource)
+{
+	if (pResource->GetType() == RGResourceType::Buffer)
+	{
+		const RGBuffer*	 pBuffer	= (RGBuffer*)pResource;
+		const BufferDesc bufferDesc = pBuffer->GetDesc();
+		if (EnumHasAllFlags(bufferDesc.Flags, BufferFlag::Readback))
+			return D3D12_HEAP_TYPE_READBACK;
+		if (EnumHasAllFlags(bufferDesc.Flags, BufferFlag::Upload))
+			return D3D12_HEAP_TYPE_UPLOAD;
+	}
+	return D3D12_HEAP_TYPE_DEFAULT;
+}
 
 static D3D12_RESOURCE_DESC sGetResourceDesc(const RGResource* pResource)
 {
@@ -29,13 +55,13 @@ static D3D12_RESOURCE_DESC sGetResourceDesc(const RGResource* pResource)
 }
 
 
-RGResourceAllocator::RGHeap::RGHeap(GraphicsDevice* pDevice, uint32 size)
-	: Size(Math::AlignUp(size, cHeapAlignment))
+RGResourceAllocator::RGHeap::RGHeap(GraphicsDevice* pDevice, uint32 size, D3D12_HEAP_TYPE heapType)
+	: Size(Math::AlignUp(size, sGetMinHeapSize(heapType))), HeapType(heapType)
 {
 	D3D12_HEAP_DESC heapDesc{
 		.SizeInBytes = Size,
 		.Properties{
-			.Type				  = D3D12_HEAP_TYPE_DEFAULT,
+			.Type				  = heapType,
 			.CPUPageProperty	  = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
 			.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
 			.CreationNodeMask	  = 0,
@@ -109,8 +135,11 @@ bool RGResourceAllocator::RGHeap::TryAllocate(GraphicsDevice* pDevice, uint32 fr
 	if (pResource->Size > Size)
 		return false;
 
+	if (sGetHeapType(pResource) != HeapType)
+		return false;
+
 	// Shrinking: If the found heap has no allocations and it's very large for the resource, don't allocate into it and instead continue searching so this heap has the chance to be released
-	if (Allocations.empty() && Math::AlignUp<uint64>(pResource->Size, cHeapAlignment) < Size)
+	if (Allocations.empty() && Math::AlignUp<uint64>(pResource->Size, sGetMinHeapSize(HeapType)) < Size)
 		return false;
 
 	FreeRanges.clear();
@@ -367,7 +396,7 @@ void RGResourceAllocator::AllocateResources(Span<RGResource*> graphResources)
 		// If no heap was found, that means the resource wasn't placed and a new heap is needed
 		if (!success)
 		{
-			m_Heaps.push_back(std::make_unique<RGHeap>(m_pDevice, pResource->Size));
+			m_Heaps.push_back(std::make_unique<RGHeap>(m_pDevice, pResource->Size, sGetHeapType(pResource)));
 			RGHeap* pHeap = m_Heaps.back().get();
 			// E_LOG(Warning, "New Heap %d - Size: %s", heap.ID, Math::PrettyPrintDataSize(heap.Size));
 
