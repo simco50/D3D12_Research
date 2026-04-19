@@ -29,6 +29,7 @@
 
 struct MeshData
 {
+	String			Name;
 	Array<Vector3> PositionsStream;
 	Array<Vector3> NormalsStream;
 	Array<Vector4> TangentsStream;
@@ -286,6 +287,8 @@ static void UploadMesh(GraphicsDevice* pDevice, const MeshData& meshData, Mesh& 
 	outMesh.NumMeshlets = (uint32)meshData.Meshlets.size();
 
 	outMesh.pBuffer = pGeometryData;
+
+	outMesh.Name = meshData.Name;
 
 	allocation.pContext->CopyBuffer(allocation.pBackingResource, pGeometryData, bufferSize, allocation.Offset, 0);
 	pDevice->GetRingBuffer()->Free(allocation);
@@ -678,6 +681,7 @@ static bool LoadGltf(const char* pFilePath, GraphicsDevice* pDevice, World& worl
 			TaskQueue::Execute([&](int)
 				{
 					meshData.Indices.resize(primitive.indices->count);
+					meshData.Name = mesh.name;
 
 					constexpr int indexMap[] = { 0, 2, 1 };
 					for (size_t i = 0; i < primitive.indices->count; i += 3)

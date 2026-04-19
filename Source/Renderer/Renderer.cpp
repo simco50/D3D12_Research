@@ -1695,6 +1695,7 @@ void Renderer::DrawScene(CommandContext& context, Span<const Batch> batches, con
 	{
 		if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 		{
+			PROFILE_GPU_SCOPE(context.GetCommandList(), b.pMesh->Name.c_str());
 			context.BindRootSRV(BindingSlot::PerInstance, b.InstanceID);
 			if (!context.GetPipelineState()->GetDesc().m_ShaderDescs[(int)ShaderType::Mesh].EntryPoint.empty())
 			{

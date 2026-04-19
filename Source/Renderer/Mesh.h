@@ -89,6 +89,8 @@ struct Mesh
 {
 	bool IsAnimated() const { return SkinnedPositionStreamLocation.IsValid(); }
 
+	String Name;
+
 	ResourceFormat PositionsFormat = ResourceFormat::RGB32_FLOAT;
 	VertexBufferView PositionStreamLocation;
 	VertexBufferView SkinnedPositionStreamLocation;

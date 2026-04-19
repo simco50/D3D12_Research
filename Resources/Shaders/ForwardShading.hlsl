@@ -189,7 +189,7 @@ void ASMain(uint threadId : SV_DispatchThreadID)
 
 #ifdef __SHADER_STAGE_MESH
 
-#define NUM_MESHLET_THREADS 32
+static const uint NUM_MESHLET_THREADS = 32;
 
 [outputtopology("triangle")]
 [numthreads(NUM_MESHLET_THREADS, 1, 1)]
@@ -218,6 +218,7 @@ void MSMain(
 
 	SetMeshOutputCounts(meshlet.VertexCount, meshlet.TriangleCount);
 
+#if 1
 	for(uint i = groupThreadID; i < meshlet.VertexCount; i += NUM_MESHLET_THREADS)
 	{
 		uint vertexId = mesh.DataBuffer.LoadStructure<uint>(i + meshlet.VertexOffset, mesh.MeshletVertexOffset);
@@ -230,6 +231,27 @@ void MSMain(
 		Meshlet::Triangle tri = mesh.DataBuffer.LoadStructure<Meshlet::Triangle>(i + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
 		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
 	}
+#else
+
+	uint vertLoopCount = (MESHLET_MAX_VERTICES + NUM_MESHLET_THREADS - 1) / NUM_MESHLET_THREADS;
+	[unroll]
+	for(uint i = 0; i < vertLoopCount; ++i)
+	{
+		int index = min(groupThreadID * vertLoopCount + i, meshlet.VertexCount - 1);
+		uint vertexId = mesh.DataBuffer.LoadStructure<uint>(index + meshlet.VertexOffset, mesh.MeshletVertexOffset);
+		InterpolantsVSToPS result = LoadVertex(mesh, instance.LocalToWorld, vertexId);
+		verts[index] = result;
+	}
+
+	uint triLoopCount = (MESHLET_MAX_TRIANGLES + NUM_MESHLET_THREADS - 1) / NUM_MESHLET_THREADS;
+	[unroll]
+	for(uint i = 0; i < triLoopCount; ++i)
+	{
+		int index = min(groupThreadID * triLoopCount + i, meshlet.TriangleCount - 1);
+		Meshlet::Triangle tri = mesh.DataBuffer.LoadStructure<Meshlet::Triangle>(index + meshlet.TriangleOffset, mesh.MeshletTriangleOffset);
+		triangles[index] = uint3(tri.V0, tri.V1, tri.V2);
+	}
+#endif
 }
 
 #endif
