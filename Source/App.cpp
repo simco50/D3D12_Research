@@ -95,8 +95,8 @@ int App::Run()
 static void InitializeProfiler(GraphicsDevice* pDevice)
 {
 	const uint32 frameHistory = 8;
-	const uint32 maxGPUEvents = 2048;
-	const uint32 maxGPUCopyEvents = 2048;
+	const uint32 maxGPUEvents = 2048*10;
+	const uint32 maxGPUCopyEvents = 2048*10;
 	const uint32 maxGPUActiveCmdLists = 64;
 
 	gCPUProfiler.Initialize(frameHistory);

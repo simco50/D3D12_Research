@@ -13,6 +13,11 @@
 #include "Renderer/Techniques/LightCulling.h"
 #include "RenderGraph/RenderGraph.h"
 
+namespace Tweakables
+{
+	extern ConsoleVariable<bool> gUseMeshShader;
+}
+
 ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 	: m_pDevice(pDevice)
 {
@@ -22,7 +27,7 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
 		psoDesc.SetBlendMode(BlendMode::Replace, false);
-		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "CLUSTERED_FORWARD" });
+		//psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "CLUSTERED_FORWARD" });
 		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "CLUSTERED_FORWARD" });
 		psoDesc.SetPixelShader("ForwardShading.hlsl", "ShadePS", { "CLUSTERED_FORWARD" });
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
@@ -49,7 +54,7 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 		//Opaque
 		PipelineStateInitializer psoDesc;
 		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-		psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "TILED_FORWARD" });
+		//psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", { "TILED_FORWARD" });
 		psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", { "TILED_FORWARD" });
 		psoDesc.SetPixelShader("ForwardShading.hlsl", "ShadePS", { "TILED_FORWARD" });
 		psoDesc.SetRenderTargetFormats(Renderer::GBufferFormat, Renderer::DepthStencilFormat, 1);
@@ -57,20 +62,43 @@ ForwardRenderer::ForwardRenderer(GraphicsDevice* pDevice)
 		psoDesc.SetDepthWrite(false);
 
 		psoDesc.SetName("Forward - Opaque");
-		m_pTiledForwardPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pTiledForwardPSO[0] = m_pDevice->CreatePipeline(psoDesc);
 
 		//Alpha Mask
 		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 		psoDesc.SetName("Forward - Opaque Masked");
-		m_pTiledForwardMaskedPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pTiledForwardMaskedPSO[0] = m_pDevice->CreatePipeline(psoDesc);
 
 		//Transparant
 		psoDesc.SetBlendMode(BlendMode::Alpha, false);
 		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
 		psoDesc.SetName("Forward - Transparent");
-		m_pTiledForwardAlphaBlendPSO = m_pDevice->CreatePipeline(psoDesc);
+		m_pTiledForwardAlphaBlendPSO[0] = m_pDevice->CreatePipeline(psoDesc);
 	}
+	{
+		// Opaque
+		PipelineStateInitializer psoDesc;
+		psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+		psoDesc.SetVertexShader("ForwardShading.hlsl", "VSMain", { "TILED_FORWARD" });
+		psoDesc.SetPixelShader("ForwardShading.hlsl", "ShadePS", { "TILED_FORWARD" });
+		psoDesc.SetRenderTargetFormats(Renderer::GBufferFormat, Renderer::DepthStencilFormat, 1);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_EQUAL);
+		psoDesc.SetDepthWrite(false);
 
+		psoDesc.SetName("Forward - Opaque");
+		m_pTiledForwardPSO[1] = m_pDevice->CreatePipeline(psoDesc);
+
+		// Alpha Mask
+		psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+		psoDesc.SetName("Forward - Opaque Masked");
+		m_pTiledForwardMaskedPSO[1] = m_pDevice->CreatePipeline(psoDesc);
+
+		// Transparant
+		psoDesc.SetBlendMode(BlendMode::Alpha, false);
+		psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER_EQUAL);
+		psoDesc.SetName("Forward - Transparent");
+		m_pTiledForwardAlphaBlendPSO[1] = m_pDevice->CreatePipeline(psoDesc);
+	}
 }
 
 ForwardRenderer::~ForwardRenderer()
@@ -174,13 +202,13 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
-						context.SetPipelineState(m_pTiledForwardPSO);
+						context.SetPipelineState(m_pTiledForwardPSO[Tweakables::gUseMeshShader ? 0 : 1]);
 						Renderer::DrawScene(context, *pView, Batch::Blending::Opaque);
 					}
 
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque Masked");
-						context.SetPipelineState(m_pTiledForwardMaskedPSO);
+						context.SetPipelineState(m_pTiledForwardMaskedPSO[Tweakables::gUseMeshShader ? 0 : 1]);
 						Renderer::DrawScene(context, *pView, Batch::Blending::AlphaMask);
 					}
 				}
@@ -195,7 +223,7 @@ void ForwardRenderer::RenderForwardTiled(RGGraph& graph, const RenderView* pView
 
 					{
 						PROFILE_GPU_SCOPE(context.GetCommandList(), "Transparant");
-						context.SetPipelineState(m_pTiledForwardAlphaBlendPSO);
+						context.SetPipelineState(m_pTiledForwardAlphaBlendPSO[Tweakables::gUseMeshShader ? 0 : 1]);
 						Renderer::DrawScene(context, *pView, Batch::Blending::AlphaBlend);
 					}
 				}

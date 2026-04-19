@@ -141,6 +141,8 @@ public:
 	void SetPipelineState(StateObject* pStateObject);
 	void SetProgram(const D3D12_SET_PROGRAM_DESC& programDesc);
 
+	const PipelineState* GetPipelineState() const { return m_pCurrentPSO; }
+
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY type);
 	void SetVertexBuffers(Span<VertexBufferView> buffers);
 	void SetIndexBuffer(const IndexBufferView& indexBuffer);

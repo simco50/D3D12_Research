@@ -63,6 +63,10 @@
     {
       "Id": "9f57378d-62ba-4e1e-8011-4f5b70cb33b1",
       "Command": "-scene=\"D:\\References\\ldraw\\76989 - Horizon Forbidden West Tallneck.mpd\""
+    },
+    {
+      "Id": "be11faa4-3f76-4414-b56a-916ea131119b",
+      "Command": "-scene=\"D:\\References\\GltfScenes\\Bistro_Godot\\Bistro_Godot.gltf\""
     }
   ]
 }

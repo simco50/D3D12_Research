@@ -82,7 +82,7 @@ void DemoApp::SetupScene(const char* pFilePath)
 	Camera& camera = m_World.Registry.emplace<Camera>(m_World.Camera);
 	camera.FOV = 60.0f * Math::PI / 180;
 	Transform& cameraTransform = m_World.Registry.emplace<Transform>(m_World.Camera);
-	cameraTransform.Position = Vector3(-1.3f, 1.4f, -1.5f);
+	cameraTransform.Position = Vector3(-11.32f, 6.82f, -4.26f);
 	cameraTransform.Rotation = Quaternion::CreateFromYawPitchRoll(Math::PI_DIV_4, Math::PI_DIV_4 * 0.5f, 0);
 
 	SceneLoader::Load(pFilePath, m_pDevice, m_World);

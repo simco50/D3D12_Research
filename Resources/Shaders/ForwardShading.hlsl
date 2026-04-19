@@ -5,6 +5,10 @@
 #include "HZB.hlsli"
 #include "Noise.hlsli"
 
+#ifndef USE_AMPLIFICATION
+#define USE_AMPLIFICATION 0
+#endif
+
 struct PassParams
 {
 #if CLUSTERED_FORWARD
@@ -130,10 +134,27 @@ InterpolantsVSToPS LoadVertex(MeshData mesh, float4x4 world, uint vertexId)
 	return result;
 }
 
+
+#ifdef __SHADER_STAGE_VERTEX
+
+void VSMain(uint vertexId : SV_VertexID, out InterpolantsVSToPS output)
+{
+	InstanceData instance = GetInstance(cInstanceParams.ID);
+	MeshData mesh = GetMesh(instance.MeshIndex);
+	output = LoadVertex(mesh, instance.LocalToWorld, vertexId);
+}
+
+#endif
+
+#if USE_AMPLIFICATION
+
+
 struct PayloadData
 {
 	uint Indices[32];
 };
+
+#ifdef __SHADER_STAGE_AMPLIFICATION
 
 groupshared PayloadData gsPayload;
 
@@ -162,13 +183,21 @@ void ASMain(uint threadId : SV_DispatchThreadID)
 	DispatchMesh(visibleCount, 1, 1, gsPayload);
 }
 
+#endif
+
+#endif
+
+#ifdef __SHADER_STAGE_MESH
+
 #define NUM_MESHLET_THREADS 32
 
 [outputtopology("triangle")]
 [numthreads(NUM_MESHLET_THREADS, 1, 1)]
 void MSMain(
 	in uint groupThreadID : SV_GroupIndex,
+#if USE_AMPLIFICATION
 	in payload PayloadData payload,
+#endif
 	in uint groupID : SV_GroupID,
 	out vertices InterpolantsVSToPS verts[MESHLET_MAX_VERTICES],
 	out indices uint3 triangles[MESHLET_MAX_TRIANGLES])
@@ -176,7 +205,12 @@ void MSMain(
 	InstanceData instance = GetInstance(cInstanceParams.ID);
 	MeshData mesh = GetMesh(instance.MeshIndex);
 
+#if USE_AMPLIFICATION
 	uint meshletIndex = payload.Indices[groupID];
+#else
+	uint meshletIndex = groupID;
+#endif
+
 	if(meshletIndex >= mesh.MeshletCount)
 		return;
 
@@ -197,6 +231,8 @@ void MSMain(
 		triangles[i] = uint3(tri.V0, tri.V1, tri.V2);
 	}
 }
+
+#endif
 
 #ifdef DEPTH_ONLY
 

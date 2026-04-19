@@ -97,7 +97,7 @@ private:
 	Array<Ref<Texture>>						m_ShadowHZBs;
 
 	uint32									m_Frame			= 0;
-	RenderPath								m_RenderPath	= RenderPath::Visibility;
+	RenderPath								m_RenderPath	= RenderPath::Tiled;
 	RenderView								m_MainView{};
 
 	GraphicsDevice*							m_pDevice		= nullptr;
@@ -131,12 +131,12 @@ private:
 	/*-----------------------*/
 
 	// Shadow mapping
-	Ref<PipelineState>						m_pShadowsOpaquePSO;
-	Ref<PipelineState>						m_pShadowsAlphaMaskPSO;
+	Ref<PipelineState>						m_pShadowsOpaquePSO[2];
+	Ref<PipelineState>						m_pShadowsAlphaMaskPSO[2];
 
 	// Depth Prepass
-	Ref<PipelineState>						m_pDepthPrepassOpaquePSO;
-	Ref<PipelineState>						m_pDepthPrepassAlphaMaskPSO;
+	Ref<PipelineState>						m_pDepthPrepassOpaquePSO[2];
+	Ref<PipelineState>						m_pDepthPrepassAlphaMaskPSO[2];
 
 	// Tonemapping
 	Ref<PipelineState>						m_pToneMapPSO;

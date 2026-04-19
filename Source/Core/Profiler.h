@@ -189,7 +189,7 @@ class ProfilerEventData
 {
 public:
 	ProfilerEventData()
-		: Allocator(1 << 16)
+		: Allocator(1 << 22)
 	{}
 
 	Span<const ProfilerEvent> GetEvents() const						{ return Span<const ProfilerEvent>(Events.data(), NumEvents); }

@@ -49,6 +49,7 @@ public:
 	void SetCullMode(D3D12_CULL_MODE cullMode);
 	void SetLineAntialias(bool lineAntiAlias);
 	void SetDepthBias(int depthBias, float depthBiasClamp, float slopeScaledDepthBias);
+	void SetConservativeRasterization(bool enabled);
 
 	void SetInputLayout(Span<VertexElementDesc> layout);
 	void SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY_TYPE topology);
@@ -68,6 +69,8 @@ public:
 	void SetComputeShader(const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
 	void SetMeshShader(const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
 	void SetAmplificationShader(const char* pShaderPath, const char* entryPoint = "", Span<ShaderDefine> defines = {});
+
+	StaticArray<ShaderDesc, (int)ShaderType::MAX> m_ShaderDescs{};
 
 private:
 #pragma warning(push)
@@ -113,7 +116,6 @@ private:
 
 	String m_Name;
 	Array<D3D12_INPUT_ELEMENT_DESC> m_IlDesc;
-	StaticArray<ShaderDesc, (int)ShaderType::MAX> m_ShaderDescs{};
 };
 
 class PipelineState : public DeviceObject
@@ -125,6 +127,8 @@ public:
 	~PipelineState();
 	ID3D12PipelineState* GetPipelineState() const { return m_pPipelineState; }
 	void ConditionallyReload();
+
+	const PipelineStateInitializer& GetDesc() const { return m_Desc; }
 
 private:
 	friend class GraphicsDevice;

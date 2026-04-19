@@ -60,7 +60,7 @@ namespace Tweakables
 	// Shadows
 	ConsoleVariable gSDSM("r.Shadows.SDSM", false);
 	ConsoleVariable gVisualizeShadowCascades("vis.ShadowCascades", false);
-	ConsoleVariable gShadowCascades("r.Shadows.CascadeCount", 4);
+	ConsoleVariable gShadowCascades("r.Shadows.CascadeCount", 2);
 	ConsoleVariable gPSSMFactor("r.Shadow.PSSMFactor", 0.85f);
 	ConsoleVariable gShadowsGPUCull("r.Shadows.GPUCull", true);
 	ConsoleVariable gShadowsOcclusionCulling("r.Shadows.OcclusionCull", true);
@@ -74,11 +74,11 @@ namespace Tweakables
 
 	// Misc Lighting
 	ConsoleVariable gSky("r.Sky", true);
-	ConsoleVariable gVolumetricFog("r.VolumetricFog", true);
+	ConsoleVariable gVolumetricFog("r.VolumetricFog", false);
 	ConsoleVariable gClouds("r.Clouds", true);
 	ConsoleVariable gRaytracedAO("r.Raytracing.AO", false);
 	ConsoleVariable gVisualizeLightDensity("vis.LightDensity", false);
-	ConsoleVariable gEnableDDGI("r.DDGI", true);
+	ConsoleVariable gEnableDDGI("r.DDGI", false);
 	ConsoleVariable gVisualizeDDGI("vis.DDGI", false);
 	ConsoleVariable gRenderObjectBounds("r.vis.ObjectBounds", false);
 
@@ -101,6 +101,8 @@ namespace Tweakables
 	ConsoleVariable gRenderGraphResourceTracker("r.RenderGraph.ResourceTracker", false);
 	ConsoleVariable gRenderGraphResourceAllocatorView("r.RenderGraph.ResourceAllocatorView", false);
 	ConsoleVariable gRenderGraphPassView("r.RenderGraph.PassView", false);
+
+	ConsoleVariable gUseMeshShader("r.UseMeshShader", true);
 
 	bool gDumpRenderGraphNextFrame = false;
 	ConsoleCommand<> gDumpRenderGraph("DumpRenderGraph", []() { gDumpRenderGraphNextFrame = true; });
@@ -166,35 +168,72 @@ void Renderer::InitializePipelines()
 		{
 			PipelineStateInitializer psoDesc;
 			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
+			//psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
 			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
 			psoDesc.SetDepthOnlyTarget(Renderer::DepthStencilFormat, 1);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
 			psoDesc.SetName("Depth Prepass Opaque");
-			m_pDepthPrepassOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
+			m_pDepthPrepassOpaquePSO[0] = m_pDevice->CreatePipeline(psoDesc);
 
 			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
 			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 			psoDesc.SetName("Depth Prepass Alpha Mask");
-			m_pDepthPrepassAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
+			m_pDepthPrepassAlphaMaskPSO[0] = m_pDevice->CreatePipeline(psoDesc);
 		}
 
 		{
 			PipelineStateInitializer psoDesc;
 			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
-			psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
+			//psoDesc.SetAmplificationShader("ForwardShading.hlsl", "ASMain", *defines);
 			psoDesc.SetMeshShader("ForwardShading.hlsl", "MSMain", *defines);
 			psoDesc.SetDepthOnlyTarget(Renderer::ShadowFormat, 1);
 			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
 			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
 			psoDesc.SetDepthBias(-10, 0, -4.0f);
 			psoDesc.SetName("Shadow Mapping Opaque");
-			m_pShadowsOpaquePSO = m_pDevice->CreatePipeline(psoDesc);
+			m_pShadowsOpaquePSO[0] = m_pDevice->CreatePipeline(psoDesc);
 
 			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
 			psoDesc.SetName("Shadow Mapping Alpha Mask");
-			m_pShadowsAlphaMaskPSO = m_pDevice->CreatePipeline(psoDesc);
+			m_pShadowsAlphaMaskPSO[0] = m_pDevice->CreatePipeline(psoDesc);
+		}
+	}
+
+	{
+		ShaderDefineHelper defines;
+		defines.Set("DEPTH_ONLY", true);
+
+		{
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+			psoDesc.SetVertexShader("ForwardShading.hlsl", "VSMain", *defines);
+			psoDesc.SetDepthOnlyTarget(Renderer::DepthStencilFormat, 1);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			psoDesc.SetStencilTest(true, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, 0x0, (uint8)StencilBit::SurfaceTypeMask);
+			psoDesc.SetName("Depth Prepass Opaque");
+			m_pDepthPrepassOpaquePSO[1] = m_pDevice->CreatePipeline(psoDesc);
+
+			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			psoDesc.SetName("Depth Prepass Alpha Mask");
+			m_pDepthPrepassAlphaMaskPSO[1] = m_pDevice->CreatePipeline(psoDesc);
+		}
+
+		{
+			PipelineStateInitializer psoDesc;
+			psoDesc.SetRootSignature(GraphicsCommon::pCommonRS);
+			psoDesc.SetVertexShader("ForwardShading.hlsl", "VSMain", *defines);
+			psoDesc.SetDepthOnlyTarget(Renderer::ShadowFormat, 1);
+			psoDesc.SetCullMode(D3D12_CULL_MODE_NONE);
+			psoDesc.SetDepthTest(D3D12_COMPARISON_FUNC_GREATER);
+			psoDesc.SetDepthBias(-10, 0, -4.0f);
+			psoDesc.SetName("Shadow Mapping Opaque");
+			m_pShadowsOpaquePSO[1] = m_pDevice->CreatePipeline(psoDesc);
+
+			psoDesc.SetPixelShader("ForwardShading.hlsl", "DepthOnlyPS", *defines);
+			psoDesc.SetName("Shadow Mapping Alpha Mask");
+			m_pShadowsAlphaMaskPSO[1] = m_pDevice->CreatePipeline(psoDesc);
 		}
 	}
 
@@ -609,12 +648,12 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 								Renderer::BindViewUniforms(context, *pView);
 								{
 									PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
-									context.SetPipelineState(m_pDepthPrepassOpaquePSO);
+									context.SetPipelineState(m_pDepthPrepassOpaquePSO[Tweakables::gUseMeshShader ? 0 : 1]);
 									DrawScene(context, *pView, Batch::Blending::Opaque);
 								}
 								{
 									PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
-									context.SetPipelineState(m_pDepthPrepassAlphaMaskPSO);
+									context.SetPipelineState(m_pDepthPrepassAlphaMaskPSO[Tweakables::gUseMeshShader ? 0 : 1]);
 									DrawScene(context, *pView, Batch::Blending::AlphaMask);
 								}
 							});
@@ -686,12 +725,12 @@ void Renderer::Render(const Transform& cameraTransform, const Camera& camera, Te
 
 										{
 											PROFILE_GPU_SCOPE(context.GetCommandList(), "Opaque");
-											context.SetPipelineState(m_pShadowsOpaquePSO);
+											context.SetPipelineState(m_pShadowsOpaquePSO[Tweakables::gUseMeshShader ? 0 : 1]);
 											DrawScene(context, m_Batches, view.VisibilityMask, Batch::Blending::Opaque);
 										}
 										{
 											PROFILE_GPU_SCOPE(context.GetCommandList(), "Masked");
-											context.SetPipelineState(m_pShadowsAlphaMaskPSO);
+											context.SetPipelineState(m_pShadowsAlphaMaskPSO[Tweakables::gUseMeshShader ? 0 : 1]);
 											DrawScene(context, m_Batches, view.VisibilityMask, Batch::Blending::AlphaMask | Batch::Blending::AlphaBlend);
 										}
 									});
@@ -1657,7 +1696,18 @@ void Renderer::DrawScene(CommandContext& context, Span<const Batch> batches, con
 		if (EnumHasAnyFlags(b.BlendMode, blendModes) && visibility.GetBit(b.InstanceID))
 		{
 			context.BindRootSRV(BindingSlot::PerInstance, b.InstanceID);
-			context.DispatchMesh(Math::DivideAndRoundUp(b.pMesh->NumMeshlets, 32));
+			if (!context.GetPipelineState()->GetDesc().m_ShaderDescs[(int)ShaderType::Mesh].EntryPoint.empty())
+			{
+				if (!context.GetPipelineState()->GetDesc().m_ShaderDescs[(int)ShaderType::Amplification].EntryPoint.empty())
+					context.DispatchMesh(Math::DivideAndRoundUp(b.pMesh->NumMeshlets, 32));
+				else
+					context.DispatchMesh(b.pMesh->NumMeshlets);
+			}
+			else
+			{
+				context.SetIndexBuffer(IndexBufferView(b.pMesh->pBuffer->GetGPUAddress() + b.pMesh->IndicesLocation.OffsetFromStart, b.pMesh->IndicesLocation.Elements, b.pMesh->IndicesLocation.Format, 0));
+				context.DrawIndexedInstanced(b.pMesh->IndicesLocation.Elements, 0, 1, 0, 0);
+			}
 		}
 	}
 }
@@ -2022,6 +2072,7 @@ void Renderer::DrawImGui()
 	{
 		if (ImGui::CollapsingHeader("General"))
 		{
+			ImGui::Checkbox("Mesh Shader", &Tweakables::gUseMeshShader.Get());
 			static constexpr const char* pPathNames[] =
 			{
 				"Tiled",

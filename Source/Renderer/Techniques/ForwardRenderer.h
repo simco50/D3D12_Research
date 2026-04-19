@@ -25,7 +25,7 @@ private:
 	Ref<PipelineState> m_pClusteredForwardAlphaBlendPSO;
 
 	// Tiled
-	Ref<PipelineState> m_pTiledForwardPSO;
-	Ref<PipelineState> m_pTiledForwardMaskedPSO;
-	Ref<PipelineState> m_pTiledForwardAlphaBlendPSO;
+	Ref<PipelineState> m_pTiledForwardPSO[2];
+	Ref<PipelineState> m_pTiledForwardMaskedPSO[2];
+	Ref<PipelineState> m_pTiledForwardAlphaBlendPSO[2];
 };
